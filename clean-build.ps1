@@ -2,15 +2,6 @@
 # Completely clean build (removes all previous build files)
 
 # ============================================
-# Check for admin rights and elevate if needed
-# ============================================
-if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
-    Write-Host "Requesting administrator privileges..." -ForegroundColor Yellow
-    Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
-    exit
-}
-
-# ============================================
 # USER CONFIGURATION - Edit these paths
 # ============================================
 $SourceRepoPath = ""
@@ -61,8 +52,35 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "`n=== Building Firestorm (this will take a while) ===" -ForegroundColor Cyan
 autobuild build -A 64 -c ReleaseFS_open --no-configure
 
+# Check if main executable was built (ignore autobuild errors - they're often false positives)
+$mainExeBuilt = Test-Path "build-vc170-64\newview\Release\firestorm-bin.exe"
+
+if (-not $mainExeBuilt) {
+    Write-Host "`n=== Main build incomplete, attempting to build failing projects individually ===" -ForegroundColor Yellow
+    Set-Location "build-vc170-64"
+    
+    # Build the projects that commonly fail due to race conditions
+    $projects = @(
+        "llplugin\slplugin\SLPlugin.vcxproj",
+        "llwebrtc\llwebrtc.vcxproj",
+        "media_plugins\cef\media_plugin_cef.vcxproj",
+        "media_plugins\libvlc\media_plugin_libvlc.vcxproj",
+        "newview\firestorm-bin.vcxproj"
+    )
+    
+    foreach ($project in $projects) {
+        if (Test-Path $project) {
+            Write-Host "Building $project..." -ForegroundColor Cyan
+            msbuild $project /p:Configuration=Release /v:minimal /nologo
+        }
+    }
+    
+    Set-Location ".."
+    $mainExeBuilt = Test-Path "build-vc170-64\newview\Release\firestorm-bin.exe"
+}
+
 # Check if the executable was built
-if (Test-Path "build-vc170-64\newview\Release\firestorm-bin.exe") {
+if ($mainExeBuilt) {
     Write-Host "`n=== Build completed, running packaging step ===" -ForegroundColor Green
     
     Set-Location "build-vc170-64"
