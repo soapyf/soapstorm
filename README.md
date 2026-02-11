@@ -2,7 +2,24 @@
 
 **[Firestorm](https://www.firestormviewer.org) is a free client for 3D virtual worlds such as Second Life and various OpenSim worlds where users can create, connect and chat with others from around the world.**
 
-This repository contains the official source code for the Firestorm viewer.
+## About This Fork
+
+**This is a modified fork of the Firestorm viewer that allows users to leave any joined experience, including privileged Second Life experiences.**
+
+In the standard Firestorm viewer, users cannot leave or manage privileged experiences once joined. This fork removes that restriction by making minimal changes to the experience profile interface code, giving users full control over their experience participation.
+
+### What's Changed
+
+- Users can now click "Forget" to leave privileged experiences
+- Users can block privileged experiences if desired
+- The "Privileged" label still displays for transparency
+- Only 2 conditional checks removed in `llfloaterexperienceprofile.cpp`
+
+This demonstrates that the restriction is purely client-side UI logic and can be removed to respect user autonomy.
+
+---
+
+This repository is based on the official Firestorm viewer source code.
 
 ## Open Source
 

@@ -91,7 +91,7 @@ else (ADDRESS_SIZE EQUAL 32)
             "import platform; print( platform.machine() )"
             OUTPUT_VARIABLE ARCH OUTPUT_STRIP_TRAILING_WHITESPACE)
     string( REGEX MATCH ".*(64)$" RE_MATCH "${ARCH}" )
-    if( RE_MATCH AND ${CMAKE_MATCH_1} STREQUAL "64" )
+    if( RE_MATCH AND "${CMAKE_MATCH_1}" STREQUAL "64" )
       set(ADDRESS_SIZE 64)
       set(ARCH x86_64)
     else()
