@@ -19,6 +19,7 @@
 *~
 
 # Specific paths and/or names
+clean-build.ps1
 CMakeCache.txt
 cmake_install.cmake
 LICENSES
