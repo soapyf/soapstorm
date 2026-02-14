@@ -87,10 +87,10 @@ Name ${INSTNAME}
 ;SubCaption 0 $(LicenseSubTitleSetup)	# Override "license agreement" text
 
 # <FS:Ansariel> FIRE-24335: Use different icon for OpenSim version
-#!define MUI_ICON   "%%SOURCE%%\installers\windows\firestorm_icon_os.ico"
-#!define MUI_UNICON "%%SOURCE%%\installers\windows\firestorm_icon_os.ico"
-!define MUI_ICON   "%%SOURCE%%\installers\windows\firestorm_icon${ICON_SUFFIX}.ico"
-!define MUI_UNICON "%%SOURCE%%\installers\windows\firestorm_icon${ICON_SUFFIX}.ico"
+#!define MUI_ICON   "%%SOURCE%%\installers\windows\soapstorm_icon_os.ico"
+#!define MUI_UNICON "%%SOURCE%%\installers\windows\soapstorm_icon_os.ico"
+!define MUI_ICON   "%%SOURCE%%\installers\windows\soapstorm_icon${ICON_SUFFIX}.ico"
+!define MUI_UNICON "%%SOURCE%%\installers\windows\soapstorm_icon${ICON_SUFFIX}.ico"
 # </FS:Ansariel>
 
 BrandingText " "						# Bottom of window text

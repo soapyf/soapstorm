@@ -1869,7 +1869,7 @@ if (DARWIN)
 
   # Add resource files to the project.
   set(viewer_RESOURCE_FILES
-    firestorm_icon.icns
+    soapstorm_icon.icns
     Info-Firestorm.plist
     Firestorm.xib
     # CMake doesn't seem to support Xcode language variants well just yet
@@ -1938,8 +1938,8 @@ if (LINUX)
     message(STATUS "Copying icons for ${ICON_PATH}")
     execute_process(
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/icons/${ICON_PATH}/firestorm_256.bmp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/res-sdl/firestorm_icon.BMP"
+        "${CMAKE_CURRENT_SOURCE_DIR}/icons/${ICON_PATH}/soapstorm_256.bmp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/res-sdl/soapstorm_icon.BMP"
       )
 endif (LINUX)
 
@@ -1993,18 +1993,18 @@ if (WINDOWS)
     message(STATUS "Copying icons for ${ICON_PATH}")
     execute_process(
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/icons/${ICON_PATH}/firestorm_icon.ico"
-        "${CMAKE_CURRENT_SOURCE_DIR}/res/firestorm_icon.ico"
+        "${CMAKE_CURRENT_SOURCE_DIR}/icons/${ICON_PATH}/soapstorm_icon.ico"
+        "${CMAKE_CURRENT_SOURCE_DIR}/res/soapstorm_icon.ico"
       )
     execute_process(
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/icons/${ICON_PATH}/firestorm_256.BMP"
-        "${CMAKE_CURRENT_SOURCE_DIR}/res/firestorm_icon.BMP"
+        "${CMAKE_CURRENT_SOURCE_DIR}/icons/${ICON_PATH}/soapstorm_256.BMP"
+        "${CMAKE_CURRENT_SOURCE_DIR}/res/soapstorm_icon.BMP"
       )
     execute_process(
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/icons/${ICON_PATH}/firestorm_256.BMP"
-        "${CMAKE_CURRENT_SOURCE_DIR}/res-sdl/firestorm_icon.BMP"
+        "${CMAKE_CURRENT_SOURCE_DIR}/icons/${ICON_PATH}/soapstorm_256.BMP"
+        "${CMAKE_CURRENT_SOURCE_DIR}/res-sdl/soapstorm_icon.BMP"
       )
 
     # Add resource files to the project.
@@ -2040,9 +2040,9 @@ if (WINDOWS)
         res/lltooltranslate.cur
         res/lltoolzoomin.cur
         res/lltoolzoomout.cur
-        res/firestorm_icon.BMP
-        res/firestorm_icon.ico
-        res-sdl/firestorm_icon.BMP
+        res/soapstorm_icon.BMP
+        res/soapstorm_icon.ico
+        res-sdl/soapstorm_icon.BMP
         res/ll_icon_small.ico
         res/resource.h
         res/toolpickobject.cur
@@ -2770,7 +2770,7 @@ if (DARWIN)
   set(product "Firestorm")
   set(MACOSX_EXECUTABLE_NAME "Firestorm")
   set(MACOSX_BUNDLE_INFO_STRING "Firestorm Viewer")
-  set(MACOSX_BUNDLE_ICON_FILE "firestorm_icon.icns")
+  set(MACOSX_BUNDLE_ICON_FILE "soapstorm_icon.icns")
   set(MACOSX_BUNDLE_GUI_IDENTIFIER "org.firestormviewer.firestorm")
   set(MACOSX_BUNDLE_LONG_VERSION_STRING "${VIEWER_CHANNEL} ${VIEWER_SHORT_VERSION}.${VIEWER_VERSION_REVISION}")
   set(MACOSX_BUNDLE_BUNDLE_NAME "Firestorm")
