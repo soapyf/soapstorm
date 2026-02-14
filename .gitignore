@@ -13,7 +13,6 @@
 *.depend
 *.stamp
 *.rc
-*.ps1
 
 *.tar.bz2
 *.code-workspace
