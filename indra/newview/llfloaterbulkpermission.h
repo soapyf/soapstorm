@@ -36,6 +36,27 @@
 #include "llfloater.h"
 #include "llscrolllistctrl.h"
 
+// Structure to track objects pending permission changes
+struct PendingObject
+{
+    LLUUID object_id;
+    std::vector<LLUUID> child_ids;
+    bool processed;
+    
+    PendingObject() : processed(false) {}
+};
+
+// Structure to track rezzed temporary objects for recursive operations
+struct RezzedObjectInfo
+{
+    LLUUID temp_id;
+    LLUUID original_parent_id;
+    std::vector<LLUUID> child_ids;
+    bool contents_received;
+    
+    RezzedObjectInfo() : contents_received(false) {}
+};
+
 class LLFloaterBulkPermission : public LLFloater, public LLVOInventoryListener
 {
     friend class LLFloaterReg;
@@ -105,12 +126,21 @@ private:
     bool mBulkChangeIncludeTextures;
     bool mBulkChangeIncludeSettings;
     bool mBulkChangeIncludeMaterials;
+    bool mBulkChangeRecursive;
 
     bool mBulkChangeShareWithGroup;
     bool mBulkChangeEveryoneCopy;
     bool mBulkChangeNextOwnerModify;
     bool mBulkChangeNextOwnerCopy;
     bool mBulkChangeNextOwnerTransfer;
+
+    // Recursive permission methods (currently disabled)
+    // void processRecursiveObject(const LLUUID& object_id);
+    // void handleRezzedObject(LLViewerObject* object);
+    // void derezTemporaryObject(const LLUUID& object_id);
+    
+    // std::map<LLUUID, PendingObject> mPendingObjects;
+    // std::map<LLUUID, RezzedObjectInfo> mRezzedObjects;
 
     LLUUID mID;
 

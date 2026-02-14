@@ -77,6 +77,7 @@ bool LLFloaterBulkPermission::postBuild()
     mBulkChangeIncludeTextures = gSavedSettings.getBOOL("BulkChangeIncludeTextures");
     mBulkChangeIncludeSettings = gSavedSettings.getBOOL("BulkChangeIncludeSettings");
     mBulkChangeIncludeMaterials = gSavedSettings.getBOOL("BulkChangeIncludeMaterials");
+    mBulkChangeRecursive = gSavedSettings.getBOOL("BulkChangeRecursive");
 
     mBulkChangeShareWithGroup = gSavedSettings.getBOOL("BulkChangeShareWithGroup");
     mBulkChangeEveryoneCopy = gSavedSettings.getBOOL("BulkChangeEveryoneCopy");

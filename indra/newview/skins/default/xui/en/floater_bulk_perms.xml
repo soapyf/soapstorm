@@ -184,6 +184,15 @@
     name="icon_materials"
     tool_tip="Materials"
     left_pad="2" />
+  <check_box
+    control_name="BulkChangeRecursive"
+    height="16"
+    label="Recursive (Experimental)"
+    name="check_recursive"
+    tool_tip="Apply permissions to nested objects (Warning: Experimental feature, may cause issues)"
+    top_pad="5"
+    left="10"
+    width="200" />
     <button
       height="23"
     layout="topleft"
