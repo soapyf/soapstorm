@@ -2,7 +2,7 @@
 
 ## About This Fork
 
-**This is a modified fork of the Firestorm viewer that I am using to mess with ideas and learning. If you've arrived here in search of the offical firestorm viewer you can find it at [official website](https://www.firestormviewer.org/choose-your-platform/)**
+**This is a modified fork of the Firestorm viewer that I am using to mess with ideas and learning. If you've arrived here in search of the offical firestorm viewer you can find it at the [official website](https://www.firestormviewer.org/choose-your-platform/)**
 
 ### What's Changed
 
