@@ -529,7 +529,7 @@
          follows="left|top"
          height="10"
          layout="topleft"
-         left_delta="-152"
+         left_delta="-312"
          name="MouselookZoomTransition"
          top_pad="10"
          width="160">
@@ -537,6 +537,7 @@
         </text>
         <slider
          control_name="MouselookZoomTransitionSpeed"
+         can_edit_text="true"
          decimal_digits="0"
          follows="left|top"
          enabled_control="EnableMouselook"
