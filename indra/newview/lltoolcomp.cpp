@@ -706,6 +706,7 @@ LLToolCompGun::LLToolCompGun()
       mTargetFOV(0.f),
       mCurrentFOV(0.f),
       mIsZoomTransitioning(false),
+      mIsZoomed(false),
       mBaseFOV(0.f),
       mZoomedFOV(0.f),
       mZoomProportion(1.f)
@@ -853,20 +854,22 @@ bool LLToolCompGun::handleRightMouseDown(S32 x, S32 y, MASK mask)
     // NaCl - Rightclick-mousewheel zoom
     if (!(gKeyboard->currentMask(true) & MASK_ALT))
     {
-        LLVector3 _NACL_MLFovValues = gSavedSettings.getVector3("_NACL_MLFovValues");
-        F32 CameraAngle = gSavedSettings.getF32("CameraAngle");
-        _NACL_MLFovValues.mV[VX] = CameraAngle;
-        _NACL_MLFovValues.mV[VZ] = 1.0f;
-        gSavedSettings.setVector3("_NACL_MLFovValues", _NACL_MLFovValues);
+        // Only capture base FOV if we're not zoomed AND not transitioning
+        // This prevents capturing mid-transition FOV if user clicks during zoom-out
+        if (!mIsZoomed && !mIsZoomTransitioning)
+        {
+            mBaseFOV = gSavedSettings.getF32("CameraAngle");
+            
+            // Get zoomed FOV from settings
+            LLVector3 _NACL_MLFovValues = gSavedSettings.getVector3("_NACL_MLFovValues");
+            mZoomedFOV = _NACL_MLFovValues.mV[VY];
+        }
         
-        // Store base and target FOVs for proportional zoom-out
-        mBaseFOV = CameraAngle;
-        mZoomedFOV = _NACL_MLFovValues.mV[VY];
-        
-        // Set target for smooth transition
+        // Start zoom-in transition
         mTargetFOV = mZoomedFOV;
-        mCurrentFOV = CameraAngle;
+        mCurrentFOV = gSavedSettings.getF32("CameraAngle");
         mIsZoomTransitioning = true;
+        mIsZoomed = true;
         mZoomProportion = 1.f; // Full zoom expected
 
         return true;
@@ -881,16 +884,11 @@ bool LLToolCompGun::handleRightMouseDown(S32 x, S32 y, MASK mask)
 // NaCl - Rightclick-mousewheel zoom
 bool LLToolCompGun::handleRightMouseUp(S32 x, S32 y, MASK mask)
 {
-    LLVector3 _NACL_MLFovValues = gSavedSettings.getVector3("_NACL_MLFovValues");
-    // Only reset if zoomed
-    if (_NACL_MLFovValues.mV[VZ] == 1.0f)
+    // Only zoom out if we're currently zoomed in
+    if (mIsZoomed)
     {
-        // Get current actual FOV (from ongoing transition or final value)
+        // Get current actual FOV
         F32 currentActualFOV = gSavedSettings.getF32("CameraAngle");
-        
-        _NACL_MLFovValues.mV[VY] = currentActualFOV;
-        _NACL_MLFovValues.mV[VZ] = 0.0f;
-        gSavedSettings.setVector3("_NACL_MLFovValues", _NACL_MLFovValues);
         
         // Calculate zoom proportion (how far did we actually zoom)
         // If base=60, zoomed=30, current=45: proportion = (60-45)/(60-30) = 0.5
@@ -906,10 +904,11 @@ bool LLToolCompGun::handleRightMouseUp(S32 x, S32 y, MASK mask)
             mZoomProportion = 1.f; // No zoom distance, treat as full
         }
         
-        // Set target for smooth transition back from current position
-        mTargetFOV = _NACL_MLFovValues.mV[VX];
-        mCurrentFOV = currentActualFOV; // Start from where we currently are
+        // Start zoom-out transition from current position
+        mTargetFOV = mBaseFOV;
+        mCurrentFOV = currentActualFOV;
         mIsZoomTransitioning = true;
+        mIsZoomed = false;  // No longer in zoomed state
     }
     return true;
 }
@@ -952,20 +951,15 @@ void    LLToolCompGun::handleDeselect()
 
 void LLToolCompGun::resetZoom()
 {
-    // Reset NaCl zoom state
-    LLVector3 _NACL_MLFovValues = gSavedSettings.getVector3("_NACL_MLFovValues");
-    if (_NACL_MLFovValues.mV[VZ] == 1.0f) // Only reset if zoomed
+    // Reset NaCl zoom state - immediately restore base FOV if zoomed
+    if (mIsZoomed || mIsZoomTransitioning)
     {
-        // Restore base FOV immediately
-        gSavedSettings.setF32("CameraAngle", _NACL_MLFovValues.mV[VX]);
-        
-        // Clear zoom flag
-        _NACL_MLFovValues.mV[VZ] = 0.0f;
-        gSavedSettings.setVector3("_NACL_MLFovValues", _NACL_MLFovValues);
+        gSavedSettings.setF32("CameraAngle", mBaseFOV);
     }
     
     // Reset transition state
     mIsZoomTransitioning = false;
+    mIsZoomed = false;
     mTargetFOV = 0.f;
     mCurrentFOV = 0.f;
     mBaseFOV = 0.f;
@@ -976,14 +970,28 @@ void LLToolCompGun::resetZoom()
 bool LLToolCompGun::handleScrollWheel(S32 x, S32 y, S32 clicks)
 {
     // NaCl - Rightclick-mousewheel zoom
-    LLVector3 _NACL_MLFovValues = gSavedSettings.getVector3("_NACL_MLFovValues");
-    F32 CameraAngle = gSavedSettings.getF32("CameraAngle");
-    _NACL_MLFovValues.mV[VY] = CameraAngle;
-    if (_NACL_MLFovValues.mV[VZ] > 0.0f)
+    if (mIsZoomed)
     {
-        _NACL_MLFovValues.mV[VY] = llclamp(_NACL_MLFovValues.mV[VY] + (F32)(clicks * 0.1f), LLViewerCamera::getInstance()->getMinView(), LLViewerCamera::getInstance()->getMaxView());
+        // Get current FOV
+        F32 currentFOV = gSavedSettings.getF32("CameraAngle");
+        
+        // Adjust FOV by scroll amount
+        F32 newFOV = llclamp(currentFOV + (F32)(clicks * 0.1f), 
+                             LLViewerCamera::getInstance()->getMinView(), 
+                             LLViewerCamera::getInstance()->getMaxView());
+        
+        // Apply immediately for responsive feel
+        gSavedSettings.setF32("CameraAngle", newFOV);
+        
+        // Update our zoom target and current position
+        mZoomedFOV = newFOV;
+        mTargetFOV = newFOV;
+        mCurrentFOV = newFOV;
+        
+        // Save the zoomed FOV to settings for next time
+        LLVector3 _NACL_MLFovValues = gSavedSettings.getVector3("_NACL_MLFovValues");
+        _NACL_MLFovValues.mV[VY] = newFOV;
         gSavedSettings.setVector3("_NACL_MLFovValues", _NACL_MLFovValues);
-        gSavedSettings.setF32("CameraAngle", _NACL_MLFovValues.mV[VY]);
     }
     else if (clicks > 0 && gSavedSettings.getBOOL("FSScrollWheelExitsMouselook"))
     // NaCl End

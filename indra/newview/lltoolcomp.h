@@ -257,6 +257,7 @@ protected:
     F32 mTargetFOV;
     F32 mCurrentFOV;
     bool mIsZoomTransitioning;
+    bool mIsZoomed;  // Are we currently in zoomed state?
     F32 mBaseFOV;  // FOV when zoom started
     F32 mZoomedFOV; // Target zoomed FOV
     F32 mZoomProportion; // How far we got into the zoom (0-1)
