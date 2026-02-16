@@ -529,7 +529,7 @@
          follows="left|top"
          height="10"
          layout="topleft"
-         left_delta="-10"
+         left_delta="-152"
          name="MouselookZoomTransition"
          top_pad="10"
          width="160">
