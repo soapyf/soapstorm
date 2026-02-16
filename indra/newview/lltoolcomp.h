@@ -247,9 +247,19 @@ public:
     virtual LLTool*         getOverrideTool(MASK mask) override { return NULL; }
 
 protected:
+    void                    resetZoom(); // Reset zoom state when exiting mouselook
+    
     LLToolGun*          mGun;
     LLToolGrabBase*     mGrab;
     LLTool*             mNull;
+    
+    // Smooth zoom transition
+    F32 mTargetFOV;
+    F32 mCurrentFOV;
+    bool mIsZoomTransitioning;
+    F32 mBaseFOV;  // FOV when zoom started
+    F32 mZoomedFOV; // Target zoomed FOV
+    F32 mZoomProportion; // How far we got into the zoom (0-1)
 };
 
 // Subclass of LLToolComposite

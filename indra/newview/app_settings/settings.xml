@@ -8668,6 +8668,17 @@
       <key>Value</key>
       <real>3.0</real>
     </map>
+    <key>MouselookZoomTransitionSpeed</key>
+    <map>
+      <key>Comment</key>
+      <string>Controls the speed of FOV transitions when zooming in mouselook (0 = instant, 100 = slowest)</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0</real>
+    </map>
     <key>MouseSmooth</key>
     <map>
       <key>Comment</key>
