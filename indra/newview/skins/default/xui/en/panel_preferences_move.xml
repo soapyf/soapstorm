@@ -505,23 +505,39 @@
          follows="left|top"
          enabled_control="EnableMouselook"
          height="15"
-         initial_value="2"
+         initial_value="20"
          layout="topleft"
-         show_text="false"
+         show_text="true"
+         can_edit_text="true"
+         decimal_digits="0"
          left_pad="5"
-         max_val="15"
+         max_val="100"
          name="mouse_sensitivity"
          top_delta="1"
-         width="145" />
+         width="120" />
+        <button
+         follows="left|top"
+         name="Def_MouseSensitivity"
+         height="20"
+         label="D"
+         layout="topleft"
+         left_pad="2"
+         top_delta="-2"
+         width="20"
+         tool_tip="Reset to default value">
+            <button.commit_callback
+             function="ResetControl"
+             parameter="MouseSensitivity"/>
+        </button>
         <check_box
          control_name="InvertMouse"
          enabled_control="EnableMouselook"
          height="16"
          label="Invert"
          layout="topleft"
-         left_pad="2"
+         left_pad="3"
          name="invert_mouse"
-         top_delta="0"
+         top_delta="2"
          width="128" />
         <text
          type="string"
@@ -529,7 +545,48 @@
          follows="left|top"
          height="10"
          layout="topleft"
-         left_delta="-312"
+         left_delta="-310"
+         name="Mouse Sensitivity Zoomed"
+         top_pad="10"
+         width="160">
+         Mouselook zoomed sensitivity:
+        </text>
+        <slider
+         control_name="MouseSensitivityZoomed"
+         follows="left|top"
+         enabled_control="EnableMouselook"
+         height="15"
+         initial_value="10"
+         layout="topleft"
+         show_text="true"
+         can_edit_text="true"
+         decimal_digits="0"
+         left_pad="5"
+         max_val="100"
+         name="mouse_sensitivity_zoomed"
+         top_delta="1"
+         width="120" />
+        <button
+         follows="left|top"
+         name="Def_MouseSensitivityZoomed"
+         height="20"
+         label="D"
+         layout="topleft"
+         left_pad="2"
+         top_delta="-2"
+         width="20"
+         tool_tip="Reset to default value">
+            <button.commit_callback
+             function="ResetControl"
+             parameter="MouseSensitivityZoomed"/>
+        </button>
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         height="10"
+         layout="topleft"
+         left_delta="-287"
          name="MouselookZoomTransition"
          top_pad="10"
          width="160">

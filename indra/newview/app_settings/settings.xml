@@ -8666,7 +8666,18 @@
       <key>Type</key>
       <string>F32</string>
       <key>Value</key>
-      <real>3.0</real>
+      <real>20.0</real>
+    </map>
+    <key>MouseSensitivityZoomed</key>
+    <map>
+      <key>Comment</key>
+      <string>Controls responsiveness of mouse when zoomed in mouselook mode (fraction or multiple of default mouse sensitivity)</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>10.0</real>
     </map>
     <key>MouselookZoomTransitionSpeed</key>
     <map>
