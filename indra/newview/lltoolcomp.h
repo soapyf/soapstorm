@@ -246,6 +246,8 @@ public:
     virtual void            handleDeselect() override;
     virtual LLTool*         getOverrideTool(MASK mask) override { return NULL; }
 
+    bool                    isZoomed() const { return mIsZoomed; }
+
 protected:
     void                    resetZoom(); // Reset zoom state when exiting mouselook
     
