@@ -741,8 +741,8 @@ bool LLToolCompGun::handleHover(S32 x, S32 y, MASK mask)
     if (mIsZoomTransitioning)
     {
         static LLCachedControl<F32> transitionDuration(gSavedSettings, "MouselookZoomTransitionSpeed");
-        // Setting is now the total transition time in seconds (0 = instant, up to 10)
-        F32 duration = llclamp((F32)transitionDuration, 0.f, 10.f);
+        // Setting is in milliseconds (0 = instant, slider 0-1000ms, text entry up to 5000ms)
+        F32 duration = llclamp((F32)transitionDuration, 0.f, 5000.f) / 1000.f;
 
         if (duration <= 0.f)
         {

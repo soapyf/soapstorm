@@ -19,6 +19,7 @@
 *~
 
 # Specific paths and/or names
+performanceroadmap.md
 CMakeCache.txt
 cmake_install.cmake
 LICENSES
