@@ -595,7 +595,7 @@
         <slider
          control_name="MouselookZoomTransitionSpeed"
          can_edit_text="true"
-         decimal_digits="0"
+         decimal_digits="2"
          follows="left|top"
          enabled_control="EnableMouselook"
          height="15"
@@ -603,7 +603,7 @@
          layout="topleft"
          show_text="true"
          left_pad="5"
-         max_val="100"
+         max_val="10"
          min_val="0"
          name="mouselook_zoom_transition_speed"
          top_delta="1"

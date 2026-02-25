@@ -52,6 +52,7 @@
 #include "llagentcamera.h"
 #include "llfloatertools.h"
 #include "llviewercontrol.h"
+#include "llsmoothstep.h"
 
 // NaCl - Rightclick-mousewheel zoom
 #include "llviewercamera.h"
@@ -705,6 +706,7 @@ LLToolCompGun::LLToolCompGun()
     : LLToolComposite(std::string("Mouselook")),
       mTargetFOV(0.f),
       mCurrentFOV(0.f),
+      mTransitionStartFOV(0.f),
       mIsZoomTransitioning(false),
       mIsZoomed(false),
       mBaseFOV(0.f),
@@ -738,45 +740,43 @@ bool LLToolCompGun::handleHover(S32 x, S32 y, MASK mask)
     // Smooth FOV transition for mouselook zoom
     if (mIsZoomTransitioning)
     {
-        static LLCachedControl<F32> zoomSpeed(gSavedSettings, "MouselookZoomTransitionSpeed");
-        F32 speed_factor = llclamp((F32)zoomSpeed / 100.f, 0.f, 1.f);
-        
-        if (speed_factor > 0.f)
+        static LLCachedControl<F32> transitionDuration(gSavedSettings, "MouselookZoomTransitionSpeed");
+        // Setting is now the total transition time in seconds (0 = instant, up to 10)
+        F32 duration = llclamp((F32)transitionDuration, 0.f, 10.f);
+
+        if (duration <= 0.f)
         {
-            // Calculate interpolation factor based on speed setting
-            // 0 = instant, 100 = very slow
-            F32 lerp_factor = 1.f - (speed_factor * 0.95f); // 0.05 to 1.0 range
-            lerp_factor = llclamp(lerp_factor, 0.05f, 1.0f);
-            
-            // Adjust lerp factor by zoom proportion for proportional zoom-out
-            // If we only zoomed 50% of the way, zoom-out will be twice as fast
-            if (mZoomProportion < 1.f && mZoomProportion > 0.f)
-            {
-                lerp_factor = lerp_factor + (1.f - lerp_factor) * (1.f - mZoomProportion);
-                lerp_factor = llclamp(lerp_factor, 0.05f, 1.0f);
-            }
-            
-            // Interpolate towards target
-            mCurrentFOV = mCurrentFOV + (mTargetFOV - mCurrentFOV) * lerp_factor;
-            
-            // Check if we're close enough to target
-            if (fabsf(mTargetFOV - mCurrentFOV) < 0.001f)
-            {
-                mCurrentFOV = mTargetFOV;
-                mIsZoomTransitioning = false;
-                mZoomProportion = 1.f; // Reset for next zoom
-            }
-            
-            // Apply the interpolated FOV
+            // Instant transition
+            mCurrentFOV = mTargetFOV;
+            mIsZoomTransitioning = false;
+            mZoomProportion = 1.f;
             gSavedSettings.setF32("CameraAngle", mCurrentFOV);
         }
         else
         {
-            // Instant transition if speed is 0
-            gSavedSettings.setF32("CameraAngle", mTargetFOV);
-            mCurrentFOV = mTargetFOV;
-            mIsZoomTransitioning = false;
-            mZoomProportion = 1.f; // Reset for next zoom
+            // Scale duration by how far we actually zoomed so that a
+            // partial zoom-out finishes proportionally faster.
+            F32 effectiveDuration = duration * llclamp(mZoomProportion, 0.f, 1.f);
+            if (effectiveDuration <= 0.f)
+            {
+                effectiveDuration = duration;
+            }
+
+            F32 elapsed = (F32)mTransitionTimer.getElapsedTimeF32();
+            F32 t = llclamp(elapsed / effectiveDuration, 0.f, 1.f);
+
+            // Smooth-step for a more natural feel
+            F32 smooth_t = llsmoothstep(0.f, 1.f, t);
+            mCurrentFOV = mTransitionStartFOV + (mTargetFOV - mTransitionStartFOV) * smooth_t;
+
+            if (t >= 1.f)
+            {
+                mCurrentFOV = mTargetFOV;
+                mIsZoomTransitioning = false;
+                mZoomProportion = 1.f;
+            }
+
+            gSavedSettings.setF32("CameraAngle", mCurrentFOV);
         }
     }
     
@@ -868,6 +868,8 @@ bool LLToolCompGun::handleRightMouseDown(S32 x, S32 y, MASK mask)
         // Start zoom-in transition
         mTargetFOV = mZoomedFOV;
         mCurrentFOV = gSavedSettings.getF32("CameraAngle");
+        mTransitionStartFOV = mCurrentFOV;
+        mTransitionTimer.reset();
         mIsZoomTransitioning = true;
         mIsZoomed = true;
         mZoomProportion = 1.f; // Full zoom expected
@@ -907,6 +909,8 @@ bool LLToolCompGun::handleRightMouseUp(S32 x, S32 y, MASK mask)
         // Start zoom-out transition from current position
         mTargetFOV = mBaseFOV;
         mCurrentFOV = currentActualFOV;
+        mTransitionStartFOV = mCurrentFOV;
+        mTransitionTimer.reset();
         mIsZoomTransitioning = true;
         mIsZoomed = false;  // No longer in zoomed state
     }

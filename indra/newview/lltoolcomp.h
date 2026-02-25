@@ -28,6 +28,7 @@
 #define LL_TOOLCOMP_H
 
 #include "lltool.h"
+#include "lltimer.h"
 
 class LLManip;
 class LLToolSelectRect;
@@ -258,11 +259,13 @@ protected:
     // Smooth zoom transition
     F32 mTargetFOV;
     F32 mCurrentFOV;
+    F32 mTransitionStartFOV;  // FOV at the moment a transition began
     bool mIsZoomTransitioning;
     bool mIsZoomed;  // Are we currently in zoomed state?
     F32 mBaseFOV;  // FOV when zoom started
     F32 mZoomedFOV; // Target zoomed FOV
     F32 mZoomProportion; // How far we got into the zoom (0-1)
+    LLTimer mTransitionTimer; // Tracks elapsed time since transition start
 };
 
 // Subclass of LLToolComposite
