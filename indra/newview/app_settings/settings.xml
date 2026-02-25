@@ -8682,7 +8682,7 @@
     <key>MouselookZoomTransitionSpeed</key>
     <map>
       <key>Comment</key>
-      <string>Duration of FOV transitions when zooming in mouselook, in seconds (0.00 = instant, 10.00 = slowest)</string>
+      <string>Duration of FOV transitions when zooming in mouselook, in milliseconds (0 = instant, slider max 1000ms, text entry up to 5000ms)</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
