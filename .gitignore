@@ -13,6 +13,9 @@
 *.depend
 *.stamp
 *.rc
+*.txt
+*.log
+*.ps1
 
 *.tar.bz2
 *.code-workspace
@@ -132,3 +135,4 @@ firestorm.code-workspace
 .github/release.yaml
 
 checks.json
+

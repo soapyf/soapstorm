@@ -180,7 +180,11 @@ if ($Configure -or $All) {
 # Build
 if ($Build -or $All) {
     Write-Host "`n=== Building solution ===" -ForegroundColor Yellow
-    
+
+    # Kill processes that can lock build outputs
+    Get-Process -Name "firestorm-bin" -ErrorAction SilentlyContinue | Stop-Process -Force
+    Get-Process -Name "makensis" -ErrorAction SilentlyContinue | Stop-Process -Force
+
     if (-not (Test-Path $buildDir)) {
         Write-Error "Build directory $buildDir doesn't exist. Run configure first."
         exit 1
