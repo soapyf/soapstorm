@@ -25,6 +25,7 @@ cmake_install.cmake
 LICENSES
 build-darwin-*
 build-linux-*
+build-recursive-perms/
 debian/files
 debian/secondlife-appearance-utility*
 debian/secondlife-viewer*
