@@ -173,7 +173,6 @@ if ($Configure -or $All) {
         Write-Error "Autobuild configure failed with exit code $LASTEXITCODE"
         exit $LASTEXITCODE
     }
-    
     Write-Host "Configure completed successfully" -ForegroundColor Green
 }
 
