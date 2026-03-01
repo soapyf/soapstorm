@@ -182,13 +182,13 @@ void LLWorldMapMessage::processMapBlockReply(LLMessageSystem* msg, void**)
     // </FS:humbletim>
 
     // Accept LAYER_FLAG (0x02, terrain) for normal map block responses.
-    // Accept 0x01 (prims) which comes back from sendNamedRegionRequest for the
-    // FIRE-31645 SLURL fix — handle the SLURL not-found callback then return.
+    // Accept 0x01 (prims) which comes back from sendNamedRegionRequest (FIRE-31645 fix).
+    // Both are valid and should have their block data processed normally.
     // <FS:Zi> FIRE-31645 - Copy SLURL can fail, let the user know
-    if (agent_flags == 0x01)
+    if (agent_flags != 0x01 && agent_flags != LAYER_FLAG)
     {
-        // Named region prims-layer response: region may not exist.
-        // Fire the SLURL not-found callback if one is pending.
+        LL_WARNS() << "Invalid map image type returned! layer = " << agent_flags << LL_ENDL;
+        // Fire the SLURL not-found callback if one is pending
         url_callback_t callback = LLWorldMapMessage::getInstance()->mSLURLCallback;
         if (callback != NULL)
         {
@@ -200,11 +200,6 @@ void LLWorldMapMessage::processMapBlockReply(LLMessageSystem* msg, void**)
         return;
     }
     // </FS:Zi>
-    if (agent_flags != LAYER_FLAG)
-    {
-        LL_WARNS() << "Invalid map image type returned! layer = " << agent_flags << LL_ENDL;
-        return;
-    }
 
     S32 num_blocks = msg->getNumberOfBlocksFast(_PREHASH_Data);
     //LL_INFOS("WorldMap") << "num_blocks = " << num_blocks << LL_ENDL;
