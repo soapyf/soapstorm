@@ -695,7 +695,7 @@ class Windows_x86_64_Manifest(ViewerManifest):
 
             # Get fmodstudio dll if needed
             # if self.args['fmodstudio'] == 'ON':
-            if self.args['fmodstudio'].lower() == 'on':
+            if self.args['fmodstudio'].lower() in ('on', 'true', '1', 'yes'):
                 if(self.args['buildtype'].lower() == 'debug'):
                     self.path("fmodL.dll")
                 else:

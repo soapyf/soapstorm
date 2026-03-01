@@ -6,7 +6,7 @@ param(
     [switch]$Configure,
     [switch]$Build,
     [switch]$All,
-    [string]$Config = "ReleaseFS_open",
+    [string]$Config = "ReleaseFS",
     [bool]$UseCache = $false,
     [int]$Jobs = 0,
     [string]$Channel = "Release",
@@ -138,6 +138,32 @@ if ($Configure -or $All) {
     Write-Host "AUTOBUILD_WIN_VSPLATFORM  = $($env:AUTOBUILD_WIN_VSPLATFORM)" -ForegroundColor Gray
     Write-Host "AUTOBUILD_ADDRSIZE        = $($env:AUTOBUILD_ADDRSIZE)" -ForegroundColor Gray
 
+    # Install packages - exclude proprietary/unavailable packages by parsing autobuild.xml (LLSD format)
+    $excludedPackages = @('fmodstudio', 'havok-source', 'kdu', 'llphysicsextensions_source', 'llphysicsextensions_tpv', 'discord-rpc', 'discord_sdk')
+    [xml]$autobuildXml = Get-Content (Join-Path $PSScriptRoot "autobuild.xml") -Raw
+    $abNodes = $autobuildXml.llsd.map.ChildNodes
+    $packageList = @()
+    for ($i = 0; $i -lt $abNodes.Count; $i++) {
+        if ($abNodes[$i].LocalName -eq 'key' -and $abNodes[$i].InnerText -eq 'installables') {
+            $packageList = $abNodes[$i+1].ChildNodes |
+                Where-Object { $_.LocalName -eq 'key' } |
+                ForEach-Object { $_.InnerText } |
+                Where-Object { $_ -notin $excludedPackages }
+            break
+        }
+    }
+    if ($packageList.Count -eq 0) {
+        Write-Error "Failed to parse package list from autobuild.xml"
+        exit 1
+    }
+    Write-Host "Running: autobuild install (excluding: $($excludedPackages -join ', '))" -ForegroundColor Cyan
+    Write-Host "Installing $($packageList.Count) packages" -ForegroundColor Gray
+    & autobuild install @packageList
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Autobuild install failed with exit code $LASTEXITCODE"
+        exit $LASTEXITCODE
+    }
+
     # Run autobuild configure
     $autobuildArgs = @(
         "configure",
@@ -165,6 +191,12 @@ if ($Configure -or $All) {
     }
     
     $autobuildArgs += "-DLL_TESTS:BOOL=FALSE"
+    $autobuildArgs += "-DUSE_FMODSTUDIO:BOOL=TRUE"
+    $autobuildArgs += "-DFMODSTUDIO_LIBRARY=C:/fmod_lib/fmod_vc.lib"
+    $autobuildArgs += "-DFMODSTUDIO_INCLUDE_DIR=C:/fmod_include"
+    $autobuildArgs += "-DHAVOK:BOOL=FALSE"
+    $autobuildArgs += "-DUSE_KDU:BOOL=FALSE"
+    $autobuildArgs += "-DOPENSIM:BOOL=FALSE"
     
     Write-Host "Running: autobuild $($autobuildArgs -join ' ')" -ForegroundColor Cyan
     & autobuild @autobuildArgs
@@ -218,7 +250,25 @@ if ($Build -or $All) {
     }
     
     Write-Host "Using MSBuild: $msbuildPath" -ForegroundColor Gray
-    
+
+    # Seed fmod.dll into the CMake shared-libs staging directory so the build's
+    # copy_win_scripts step (and NSIS packager) can find it.
+    $fmodSrcDll = "C:\fmod_lib\fmod.dll"
+    $fmodStagingDir = Join-Path $buildDir "sharedlibs\Release"
+    if (Test-Path $fmodSrcDll) {
+        New-Item -ItemType Directory -Force $fmodStagingDir | Out-Null
+        Copy-Item $fmodSrcDll (Join-Path $fmodStagingDir "fmod.dll") -Force
+        Write-Host "Staged fmod.dll -> $fmodStagingDir" -ForegroundColor Gray
+
+        # Also seed packages/lib/release so CMake's Copy3rdPartyLibs step can find it
+        $fmodPkgDir = Join-Path $buildDir "packages\lib\release"
+        New-Item -ItemType Directory -Force $fmodPkgDir | Out-Null
+        Copy-Item $fmodSrcDll (Join-Path $fmodPkgDir "fmod.dll") -Force
+        Write-Host "Staged fmod.dll -> $fmodPkgDir" -ForegroundColor Gray
+    } else {
+        Write-Warning "fmod.dll not found at $fmodSrcDll - build may fail or run without audio"
+    }
+
     # Map autobuild config names to VS solution config names
     $vsConfig = "Release"  # All autobuild configs map to Release in the solution
     
