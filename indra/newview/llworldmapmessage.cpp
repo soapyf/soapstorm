@@ -150,11 +150,7 @@ void LLWorldMapMessage::sendMapBlockRequest(U16 min_x, U16 min_y, U16 max_x, U16
     msg->nextBlockFast(_PREHASH_AgentData);
     msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
     msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
-    // <FS:Zi> FIRE-31645 - Copy SLURL can fail, let the user know
-    // - use 0x01 (prims) because LAYER_FLAG (terrain) does not come back on nonexistent
-    // U32 flags = LAYER_FLAG;
-    U32 flags = 0x01;
-    // </FS:Zi>
+    U32 flags = LAYER_FLAG;
     flags |= (return_nonexistent ? 0x10000 : 0);
     msg->addU32Fast(_PREHASH_Flags, flags);
     msg->addU32Fast(_PREHASH_EstateID, 0); // Filled in on sim
@@ -185,26 +181,28 @@ void LLWorldMapMessage::processMapBlockReply(LLMessageSystem* msg, void**)
 #endif
     // </FS:humbletim>
 
-    // There's only one flag that we ever use here
+    // Accept LAYER_FLAG (0x02, terrain) for normal map block responses.
+    // Accept 0x01 (prims) which comes back from sendNamedRegionRequest for the
+    // FIRE-31645 SLURL fix — handle the SLURL not-found callback then return.
     // <FS:Zi> FIRE-31645 - Copy SLURL can fail, let the user know
-    // - use 0x01 (prims) because LAYER_FLAG (terrain) does not come back on nonexistent
-    // if (agent_flags != LAYER_FLAG)
-    if (agent_flags != 0x01)
-    // <FS:Zi>
+    if (agent_flags == 0x01)
     {
-        LL_WARNS() << "Invalid map image type returned! layer = " << agent_flags << LL_ENDL;
-        // <FS:Zi> FIRE-31645 - Copy SLURL can fail, let the user know
-        // Handle the SLURL callback if any
+        // Named region prims-layer response: region may not exist.
+        // Fire the SLURL not-found callback if one is pending.
         url_callback_t callback = LLWorldMapMessage::getInstance()->mSLURLCallback;
-        if(callback != NULL)
+        if (callback != NULL)
         {
             LLWorldMapMessage::getInstance()->mSLURLCallback = NULL;
             LLWorldMapMessage::getInstance()->mSLURLRegionName.clear();
             LLWorldMapMessage::getInstance()->mSLURLRegionHandle = 0;
-
             callback(0, LLWorldMapMessage::getInstance()->mSLURL, LLUUID::null, false);
         }
-        // </FS:Zi>
+        return;
+    }
+    // </FS:Zi>
+    if (agent_flags != LAYER_FLAG)
+    {
+        LL_WARNS() << "Invalid map image type returned! layer = " << agent_flags << LL_ENDL;
         return;
     }
 
