@@ -87,10 +87,7 @@ void LLWorldMapMessage::sendNamedRegionRequest(std::string region_name)
     msg->nextBlockFast(_PREHASH_AgentData);
     msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
     msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
-    // <FS:Zi> FIRE-31645 - Copy SLURL can fail, let the user know
-    // - use 0x01 (prims) because LAYER_FLAG (terrain) does not come back on nonexistent
-    // msg->addU32Fast(_PREHASH_Flags, LAYER_FLAG);
-    msg->addU32Fast(_PREHASH_Flags, 0x01);
+    msg->addU32Fast(_PREHASH_Flags, LAYER_FLAG);
     msg->addU32Fast(_PREHASH_EstateID, 0); // Filled in on sim
     msg->addBOOLFast(_PREHASH_Godlike, false); // Filled in on sim
     msg->nextBlockFast(_PREHASH_NameData);
@@ -181,25 +178,12 @@ void LLWorldMapMessage::processMapBlockReply(LLMessageSystem* msg, void**)
 #endif
     // </FS:humbletim>
 
-    // Accept LAYER_FLAG (0x02, terrain) for normal map block responses.
-    // Accept 0x01 (prims) which comes back from sendNamedRegionRequest (FIRE-31645 fix).
-    // Both are valid and should have their block data processed normally.
-    // <FS:Zi> FIRE-31645 - Copy SLURL can fail, let the user know
-    if (agent_flags != 0x01 && agent_flags != LAYER_FLAG)
+    // There's only one flag that we ever use here
+    if (agent_flags != LAYER_FLAG)
     {
         LL_WARNS() << "Invalid map image type returned! layer = " << agent_flags << LL_ENDL;
-        // Fire the SLURL not-found callback if one is pending
-        url_callback_t callback = LLWorldMapMessage::getInstance()->mSLURLCallback;
-        if (callback != NULL)
-        {
-            LLWorldMapMessage::getInstance()->mSLURLCallback = NULL;
-            LLWorldMapMessage::getInstance()->mSLURLRegionName.clear();
-            LLWorldMapMessage::getInstance()->mSLURLRegionHandle = 0;
-            callback(0, LLWorldMapMessage::getInstance()->mSLURL, LLUUID::null, false);
-        }
         return;
     }
-    // </FS:Zi>
 
     S32 num_blocks = msg->getNumberOfBlocksFast(_PREHASH_Data);
     //LL_INFOS("WorldMap") << "num_blocks = " << num_blocks << LL_ENDL;
