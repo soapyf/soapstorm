@@ -905,6 +905,9 @@ Podczas otwierania pliku w przeglądarce zabrakło pamięci. Plik może być za 
 	<notification name="LandmarkAlreadyExists">
 		Posiadasz już landmark dla tej lokalizacji.
 	</notification>
+	<notification name="LandmarkLocationUnknown">
+		Przeglądarka nie była w stanie pobrać lokalizacji regionu. Region może być tymczasowo niedostępny lub został usunięty.
+	</notification>
 	<notification name="CannotCreateLandmarkNotOwner">
 		Nie możesz zapamiętać tego miejsca (LM) ponieważ właściciel działki nie pozwala na to.
 	</notification>
@@ -2645,12 +2648,6 @@ Na pewno chcesz kontynuować?
 Zamieść go na stronie internetowej żeby umożliwić innym łatwy dostęp do tego miejsca, albo wklej go do panelu adresu Twojej przeglądarki, żeby go otworzyć.
 		<form name="form">
 			<ignore name="ignore" text="SLurl skopiowany do schowka"/>
-		</form>
-	</notification>
-	<notification name="CopySLURLEmpty">
-		Wystąpił problem z kopiowaniem tego SLurl. Region docelowy może już nie istnieć.
-		<form name="form">
-			<ignore name="ignore" text="Kopiowanie SLurl nie powiodło się" />
 		</form>
 	</notification>
 	<notification name="WLSavePresetAlert">
