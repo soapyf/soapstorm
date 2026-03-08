@@ -888,11 +888,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>a459e2967306ff56a835a321dc00718c</string>
+              <string>74097f66856f1056fbec923d6965f7db</string>
               <key>hash_algorithm</key>
               <string>md5</string>
               <key>url</key>
-              <string>file:///opt/firestorm/fmodstudio-2.03.07-linux64-251121739.tar.bz2</string>
+              <string>file:///opt/firestorm/fmodstudio-2.03.12-linux64-251121739.tar.bz2</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -919,7 +919,7 @@
         <key>copyright</key>
         <string>FMOD Studio by Firelight Technologies Pty Ltd.</string>
         <key>version</key>
-        <string>2.02.20</string>
+        <string>2.03.12</string>
         <key>name</key>
         <string>fmodstudio</string>
         <key>description</key>

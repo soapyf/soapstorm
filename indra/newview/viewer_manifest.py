@@ -2139,7 +2139,7 @@ class Linux_i686_Manifest(LinuxManifest):
                 pass
 
             # if self.args['fmodstudio'] == 'ON':
-            if self.args['fmodstudio'].lower() == 'on':
+            if self.args['fmodstudio'].lower() in ('on', 'true', '1', 'yes'):
                 try:
                     self.path("libfmod.so")
                     self.path("libfmod.so*")
@@ -2181,7 +2181,7 @@ class Linux_x86_64_Manifest(LinuxManifest):
             # self.path("libopenal32.so", "libvivoxoal.so.1") # vivox's sdk expects this soname
 
             # if self.args['fmodstudio'] == 'ON':
-            if self.args['fmodstudio'].lower() == 'on':
+            if self.args['fmodstudio'].lower() in ('on', 'true', '1', 'yes'):
                 try:
                     self.path("libfmod.so")
                     self.path("libfmod.so*")
