@@ -17,6 +17,7 @@
 *.log
 *.ps1
 
+*.rpm
 *.tar.bz2
 *.code-workspace
 *~
