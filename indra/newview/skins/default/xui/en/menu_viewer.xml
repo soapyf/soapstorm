@@ -2355,8 +2355,7 @@
             <menu_item_call
              label="Image..."
              layout="topleft"
-             name="Upload Image"
-             shortcut="control|U">
+             name="Upload Image">
                 <menu_item_call.on_click
                  function="File.UploadImage"
                  parameter="" />
@@ -2417,7 +2416,8 @@
 	   <menu_item_call
              label="Bulk..."
              layout="topleft"
-             name="Bulk Upload">
+             name="Bulk Upload"
+             shortcut="control|U">
                 <menu_item_call.on_visible
                  function="Upload.CalculateCosts"
                  parameter="Bulk Upload,texture" />
