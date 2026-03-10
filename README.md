@@ -20,6 +20,12 @@
 - Fixed bug where camera stays zoomed after death or teleport
 - Preserves user's mousewheel-adjusted zoom preferences across sessions
 
+**Texture Synchronization Improvements:**
+- Added "Sync" button to texture panels for explicit per-face material synchronization
+- Button copies diffuse texture offset, repeats, and rotation to normal and specular for all selected faces
+
+**Keybinding Changes:**
+- Changed Ctrl+U keyboard shortcut from single image upload to bulk uploader
 
 ---
 
