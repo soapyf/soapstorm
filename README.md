@@ -10,7 +10,6 @@
 - Users can now click "Forget" to leave privileged experiences
 - Users can block privileged experiences if desired
 - The "Privileged" label still displays for transparency
-- Only 2 conditional checks removed in `llfloaterexperienceprofile.cpp`
 
 **Mouselook Zoom Improvements:**
 - Added smooth FOV transitions for right-click zoom in mouselook
