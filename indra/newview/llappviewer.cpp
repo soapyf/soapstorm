@@ -102,6 +102,7 @@
 #include "llvocache.h"
 #include "lldiskcache.h"
 #include "llvopartgroup.h"
+#include "llautoupdatechecker.h"
 // [SL:KB] - Patch: Appearance-Misc | Checked: 2013-02-12 (Catznip-3.4)
 #include "llappearancemgr.h"
 // [/SL:KB]
@@ -5856,6 +5857,7 @@ void LLAppViewer::idle()
         }
         gGLActive = false;
     }
+    // Note: Auto-update check moved to login screen (STATE_LOGIN_SHOW in llstartup.cpp)
 
 
     F32 yaw = 0.f;              // radians

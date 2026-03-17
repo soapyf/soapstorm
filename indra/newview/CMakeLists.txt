@@ -231,6 +231,7 @@ set(viewer_SOURCE_FILES
     llattachmentsmgr.cpp
     llaudiosourcevo.cpp
     llautoreplace.cpp
+    llautoupdatechecker.cpp
     llavataractions.cpp
     llavatariconctrl.cpp
     llavatarlist.cpp
@@ -1091,6 +1092,7 @@ set(viewer_HEADER_FILES
     llattachmentsmgr.h
     llaudiosourcevo.h
     llautoreplace.h
+    llautoupdatechecker.h
     llavataractions.h
     llavatariconctrl.h
     llavatarlist.h
