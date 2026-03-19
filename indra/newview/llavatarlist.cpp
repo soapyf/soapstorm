@@ -41,6 +41,7 @@
 #include "llavatarnamecache.h"
 #include "llcallingcard.h" // for LLAvatarTracker
 #include "llcachename.h"
+#include "llinventory.h" // <FS:PP> FIRE-31146 Contact Sets - drag-and-drop support
 #include "lllistcontextmenu.h"
 #include "llrecentpeople.h"
 #include "lluuid.h"
@@ -194,6 +195,7 @@ LLAvatarList::LLAvatarList(const Params& p)
 , mShowUsername(gSavedSettings.getBOOL("NameTagShowUsernames"))
 , mShowDisplayName(gSavedSettings.getBOOL("UseDisplayNames"))
 , mUseContactSetColors(false) // <FS:PP> FIRE-32748 Colorize Friends List with Contact Sets
+, mUseContactSetListStyle(false) // <FS:PP> FIRE-31733: Make contact sets lists more readable
 {
     setCommitOnSelectionChange(true);
 
@@ -223,6 +225,12 @@ LLAvatarList::LLAvatarList(const Params& p)
 void LLAvatarList::setUseContactSetColors(bool use_colors)
 {
     mUseContactSetColors = use_colors;
+    mNeedUpdateNames = true;
+}
+
+void LLAvatarList::setUseContactSetListStyle(bool use_style)
+{
+    mUseContactSetListStyle = use_style;
     mNeedUpdateNames = true;
 }
 // </FS:PP>
@@ -506,6 +514,7 @@ void LLAvatarList::updateAvatarNames()
     {
         LLAvatarListItem* item = static_cast<LLAvatarListItem*>(*it);
         item->setUseContactSetColors(mUseContactSetColors); // <FS:PP> FIRE-32748 Colorize Friends List with Contact Sets
+        item->setUseContactSetListStyle(mUseContactSetListStyle); // <FS:PP> FIRE-31733: Make contact sets lists more readable
         item->setShowCompleteName(mShowCompleteName, mForceCompleteName);
         item->updateAvatarName();
     }
@@ -607,6 +616,7 @@ void LLAvatarList::addNewItem(const LLUUID& id, const std::string& name, bool is
     item->showUsername(mShowUsername);
     item->showDisplayName(mShowDisplayName);
     item->setUseContactSetColors(mUseContactSetColors); // <FS:PP> FIRE-32748 Colorize Friends List with Contact Sets
+    item->setUseContactSetListStyle(mUseContactSetListStyle); // <FS:PP> FIRE-31733: Make contact sets lists more readable
 
     item->setDoubleClickCallback(boost::bind(&LLAvatarList::onItemDoubleClicked, this, _1, _2, _3, _4));
     item->setMouseDownCallback(boost::bind(&LLAvatarList::onItemClicked, this, _1, _2, _3, _4));
@@ -680,6 +690,46 @@ bool LLAvatarList::handleHover(S32 x, S32 y, MASK mask)
 
     return handled;
 }
+
+// <FS:PP> FIRE-31146 Contact Sets - drag-and-drop support
+bool LLAvatarList::handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop, EDragAndDropType cargo_type, void* cargo_data, EAcceptance* accept, std::string& tooltip_msg)
+{
+    if (!mAvatarDropCallback)
+    {
+        return LLFlatListViewEx::handleDragAndDrop(x, y, mask, drop, cargo_type, cargo_data, accept, tooltip_msg);
+    }
+
+    LLUUID avatar_id;
+    if (cargo_type == DAD_PERSON)
+    {
+        if (cargo_data)
+        {
+            avatar_id = *static_cast<LLUUID*>(cargo_data);
+        }
+    }
+    else if (cargo_type == DAD_CALLINGCARD)
+    {
+        if (LLInventoryItem* item = static_cast<LLInventoryItem*>(cargo_data); item)
+        {
+            avatar_id = item->getCreatorUUID();
+        }
+    }
+    else
+    {
+        *accept = ACCEPT_NO;
+        return true;
+    }
+
+    if (avatar_id.isNull())
+    {
+        *accept = ACCEPT_NO;
+        return true;
+    }
+
+    *accept = mAvatarDropCallback(avatar_id, drop) ? ACCEPT_YES_MULTI : ACCEPT_NO;
+    return true;
+}
+// </FS:PP>
 
 void LLAvatarList::setVisible(bool visible)
 {
