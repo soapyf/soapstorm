@@ -34,4 +34,9 @@
 		<check_box label="Chat basierend auf Kontakt-Set einfärben" name="FSContactSetsColorizeChat"/>
 		<check_box label="Freundesliste basierend auf Kontakt-Set einfärben" name="FSContactSetsColorizeFriends"/>
 	</panel>
+	<panel name="side_panel">
+		<check_box label="Benutzerdefinierte Busy-Antwort für dieses Set verwenden" name="set_autoresponse_busy_enabled"/>
+		<check_box label="Benutzerdefinierte Autoresponse-Nachricht für dieses Set verwenden" name="set_autoresponse_mode_enabled"/>
+		<check_box label="Benutzerdefinierte Autoresponse für Nicht-Freunde in diesem Set verwenden" name="set_autoresponse_nonfriends_enabled"/>
+	</panel>
 </floater>

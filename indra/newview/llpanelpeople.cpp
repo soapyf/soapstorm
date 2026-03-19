@@ -861,6 +861,9 @@ bool LLPanelPeople::postBuild()
     mContactSetList = getChild<LLAvatarList>("contact_list");
     if (mContactSetList)
     {
+        mContactSetList->setUseContactSetColors(true);
+        mContactSetList->setUseContactSetListStyle(true);
+        mContactSetList->setAvatarDropCallback(boost::bind(&LLPanelPeople::handleAvatarDropToCurrentContactSet, this, _1, _2));
         mContactSetList->setCommitCallback(boost::bind(&LLPanelPeople::updateButtons, this));
         mContactSetList->setItemDoubleClickCallback(boost::bind(&LLPanelPeople::onAvatarListDoubleClicked, this, _1));
         mContactSetList->setNoItemsCommentText(getString("empty_list"));
@@ -1987,6 +1990,28 @@ bool LLPanelPeople::shouldSortByOnlineStatusForCurrentSet() const
     return LGGContactSets::getInstance()->getSortByOnlineStatusForSet(set_name);
 }
 
+bool LLPanelPeople::handleAvatarDropToCurrentContactSet(const LLUUID& avatar_id, bool drop)
+{
+    if (!mContactSetCombo || avatar_id.isNull())
+    {
+        return false;
+    }
+
+    const std::string set_name = mContactSetCombo->getValue().asString();
+    if (LGGContactSets::getInstance()->isInternalSetName(set_name))
+    {
+        return false;
+    }
+
+    if (drop)
+    {
+        uuid_vec_t ids{ avatar_id };
+        LGGContactSets::instance().addToSet(ids, set_name);
+    }
+
+    return true;
+}
+
 bool LLPanelPeople::onContactSetsEnable(const LLSD& userdata)
 {
     std::string item = userdata.asString();
@@ -2072,6 +2097,10 @@ void LLPanelPeople::onContactSetsMenuItemClicked(const LLSD& userdata)
         }
         LLNotificationsUtil::add((selected_size > 1 ? "RemoveContactsFromSet" : "RemoveContactFromSet"), args, payload, &LGGContactSets::handleRemoveAvatarFromSetCallback);
     }
+    else if (chosen_item == "move_contact")
+    {
+        moveSelectedContactsToSet();
+    }
     else if (chosen_item == "set_config")
     {
         LLFloater* root_floater = gFloaterView->getParentFloater(this);
@@ -2120,9 +2149,20 @@ void LLPanelPeople::onContactSetsMenuItemClicked(const LLSD& userdata)
         if (selected_uuids.empty()) return;
 
         LLSD payload, args;
-        args["AVATAR"] = LLSLURL("agent", selected_uuids.front(), "about").getSLURLString();
-        payload["id"] = selected_uuids.front();
-        LLNotificationsUtil::add("SetAvatarPseudonym", args, payload, &LGGContactSets::handleSetAvatarPseudonymCallback);
+        if (selected_uuids.size() == 1)
+        {
+            args["AVATAR"] = LLSLURL("agent", selected_uuids.front(), "about").getSLURLString();
+            payload["id"] = selected_uuids.front();
+        }
+        else
+        {
+            args["COUNT"] = llformat("%d", static_cast<S32>(selected_uuids.size()));
+            for (const LLUUID& id : selected_uuids)
+            {
+                payload["ids"].append(id);
+            }
+        }
+        LLNotificationsUtil::add((selected_uuids.size() > 1 ? "SetAvatarPseudonymMultiple" : "SetAvatarPseudonym"), args, payload, &LGGContactSets::handleSetAvatarPseudonymCallback);
     }
     else if (chosen_item == "remove_pseudonym")
     {
@@ -2162,6 +2202,29 @@ void LLPanelPeople::handlePickerCallback(const uuid_vec_t& ids, const std::strin
     }
 
     LGGContactSets::instance().addToSet(ids, set);
+}
+
+void LLPanelPeople::moveSelectedContactsToSet()
+{
+    if (!mContactSetCombo)
+    {
+        return;
+    }
+
+    const std::string source_set = mContactSetCombo->getValue().asString();
+    if (LGGContactSets::getInstance()->isInternalSetName(source_set))
+    {
+        return;
+    }
+
+    uuid_vec_t selected_uuids;
+    getCurrentItemIDs(selected_uuids);
+    if (selected_uuids.empty())
+    {
+        return;
+    }
+
+    LLAvatarActions::moveToContactSet(selected_uuids, source_set);
 }
 // [/FS:CR]
 
