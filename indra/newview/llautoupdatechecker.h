@@ -24,11 +24,8 @@ public:
     // Main entry point - checks for updates
     void checkForUpdate();
     
-    // Start downloading the update installer
-    void startDownload();
-    
-    // Cancel ongoing download
-    void cancelDownload();
+    // Open browser to download the update installer
+    void openDownloadPage();
     
     // Skip the current available version
     void skipThisVersion();
@@ -38,19 +35,10 @@ public:
     
     // Check if an update is available
     bool isUpdateAvailable() const { return mUpdateAvailable; }
-    
-    // Check if download is in progress
-    bool isDownloading() const { return mDownloadInProgress; }
-    
-    // Get download progress (0.0 to 1.0)
-    F32 getDownloadProgress() const { return mDownloadProgress; }
 
 private:
     // Coroutine for checking updates
     void checkUpdateCoro();
-    
-    // Coroutine for downloading installer
-    void downloadInstallerCoro(const std::string& url, const std::string& filename);
     
     // Compare version strings
     bool isNewerVersion(const std::string& remote_version, const std::string& current_version);
@@ -60,19 +48,10 @@ private:
     
     // Show update notification to user
     void showUpdateNotification();
-    
-    // Launch the installer
-    void launchInstaller(const std::string& installer_path);
-    
-    // Verify downloaded file checksum
-    bool verifyChecksum(const std::string& filepath, const std::string& expected_sha256);
 
 private:
     LLSD mUpdateInfo;
     bool mUpdateAvailable;
-    bool mDownloadInProgress;
-    F32 mDownloadProgress;
-    std::string mDownloadedInstallerPath;
     bool mCheckInProgress;
 };
 

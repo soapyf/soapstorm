@@ -15043,10 +15043,10 @@ Would you like to download and install the update?
   <notification
    icon="notify.tga"
    name="FSUpdateDownloading"
-   type="notify">
+   type="alertmodal">
 Downloading update...
 
-Please wait while the installer is being downloaded.
+Please wait while the installer is being downloaded. This may take a minute or two.
     <tag>confirm</tag>
     <usetemplate
      name="okbutton"

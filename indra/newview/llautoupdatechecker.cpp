@@ -10,26 +10,17 @@
 #include "llcorehttputil.h"
 #include "llnotificationsutil.h"
 #include "llviewercontrol.h"
-#include "lltrans.h"
-#include "llapp.h"
-#include "llfile.h"
-#include "lldir.h"
-#include "llsdserialize.h"
-#include "llmd5.h"
 #include "llsdjson.h"
-#include "llappviewer.h"
+#include "llweb.h"
 #include <boost/json.hpp>
 
 #include <sstream>
-#include <iomanip>
 
 // Update check URL
 const std::string UPDATE_CHECK_URL = "https://chonks.net/soapstorm-updates/update_info.json";
 
 LLAutoUpdateChecker::LLAutoUpdateChecker()
 :   mUpdateAvailable(false),
-    mDownloadInProgress(false),
-    mDownloadProgress(0.0f),
     mCheckInProgress(false)
 {
     LL_INFOS("AutoUpdate") << "Auto-update checker initialized" << LL_ENDL;
@@ -37,7 +28,6 @@ LLAutoUpdateChecker::LLAutoUpdateChecker()
 
 LLAutoUpdateChecker::~LLAutoUpdateChecker()
 {
-    cancelDownload();
 }
 
 void LLAutoUpdateChecker::checkForUpdate()
@@ -205,9 +195,9 @@ void LLAutoUpdateChecker::showUpdateNotification()
         {
             S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
             
-            if (option == 0) // Update Now
+            if (option == 0) // Download Now
             {
-                startDownload();
+                openDownloadPage();
             }
             else if (option == 1) // Remind Later
             {
@@ -220,14 +210,8 @@ void LLAutoUpdateChecker::showUpdateNotification()
         });
 }
 
-void LLAutoUpdateChecker::startDownload()
+void LLAutoUpdateChecker::openDownloadPage()
 {
-    if (mDownloadInProgress)
-    {
-        LL_WARNS("AutoUpdate") << "Download already in progress" << LL_ENDL;
-        return;
-    }
-
     if (!mUpdateInfo.has("download_url"))
     {
         LL_WARNS("AutoUpdate") << "No download URL available" << LL_ENDL;
@@ -235,187 +219,10 @@ void LLAutoUpdateChecker::startDownload()
     }
 
     std::string downloadUrl = mUpdateInfo["download_url"].asString();
-    std::string filename = "SoapStorm-Setup-" + mUpdateInfo["version"].asString() + ".exe";
-
-    LL_INFOS("AutoUpdate") << "Starting download from: " << downloadUrl << LL_ENDL;
-
-    mDownloadInProgress = true;
-    mDownloadProgress = 0.0f;
-
-    // Show progress notification
-    LLNotificationsUtil::add("FSUpdateDownloading");
-
-    LLCoros::instance().launch("AutoUpdateDownload",
-        [this, downloadUrl, filename]() { downloadInstallerCoro(downloadUrl, filename); });
-}
-
-void LLAutoUpdateChecker::downloadInstallerCoro(const std::string& url, const std::string& filename)
-{
-    // Download to temp directory
-    std::string tempDir = gDirUtilp->getTempDir();
-    std::string installerPath = gDirUtilp->add(tempDir, filename);
-
-    LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
-    LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter =
-        std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("AutoUpdateDownload", httpPolicy);
-
-    LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
-    LLCore::HttpOptions::ptr_t httpOpts = std::make_shared<LLCore::HttpOptions>();
-    httpOpts->setFollowRedirects(true);
-
-    LL_INFOS("AutoUpdate") << "Downloading to: " << installerPath << LL_ENDL;
-
-    LLSD result = httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts);
-
-    mDownloadInProgress = false;
-
-    LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result);
+    LL_INFOS("AutoUpdate") << "Opening download page: " << downloadUrl << LL_ENDL;
     
-    if (!status)
-    {
-        LL_WARNS("AutoUpdate") << "Download failed: " << status.toString() << LL_ENDL;
-        LLNotificationsUtil::add("FSUpdateDownloadFailed");
-        return;
-    }
-
-    // Write file to disk
-    const LLSD::Binary &rawBody = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_RAW].asBinary();
-    
-    // Check if we actually downloaded anything
-    if (rawBody.empty())
-    {
-        LL_WARNS("AutoUpdate") << "Downloaded file is empty!" << LL_ENDL;
-        LLNotificationsUtil::add("FSUpdateDownloadFailed");
-        return;
-    }
-    
-    // Log download size
-    LL_INFOS("AutoUpdate") << "Downloaded " << rawBody.size() << " bytes" << LL_ENDL;
-    
-    // Check if size is reasonable (at least 1 MB for an installer)
-    if (rawBody.size() < 1048576)
-    {
-        LL_WARNS("AutoUpdate") << "Downloaded file is too small (" << rawBody.size() << " bytes), likely not a valid installer" << LL_ENDL;
-        LLNotificationsUtil::add("FSUpdateDownloadFailed");
-        return;
-    }
-    
-    // If we have expected file size, verify it's close (within 10%)
-    if (mUpdateInfo.has("file_size_mb"))
-    {
-        F64 expectedSizeMB = mUpdateInfo["file_size_mb"].asReal();
-        F64 actualSizeMB = (F64)rawBody.size() / (1024.0 * 1024.0);
-        F64 tolerance = expectedSizeMB * 0.1; // 10% tolerance
-        
-        if (std::abs(actualSizeMB - expectedSizeMB) > tolerance)
-        {
-            LL_WARNS("AutoUpdate") << "Downloaded size (" << actualSizeMB << " MB) doesn't match expected size (" 
-                                   << expectedSizeMB << " MB)" << LL_ENDL;
-            LLNotificationsUtil::add("FSUpdateDownloadFailed");
-            return;
-        }
-    }
-    
-    llofstream outfile(installerPath.c_str(), std::ios::binary);
-    if (!outfile.is_open())
-    {
-        LL_WARNS("AutoUpdate") << "Failed to open file for writing: " << installerPath << LL_ENDL;
-        LLNotificationsUtil::add("FSUpdateDownloadFailed");
-        return;
-    }
-
-    outfile.write((const char*)rawBody.data(), rawBody.size());
-    outfile.close();
-
-    LL_INFOS("AutoUpdate") << "Download complete: " << installerPath << " (" << rawBody.size() << " bytes)" << LL_ENDL;
-
-    // Verify checksum if provided
-    if (mUpdateInfo.has("sha256"))
-    {
-        std::string expectedHash = mUpdateInfo["sha256"].asString();
-        if (!expectedHash.empty() && expectedHash != "abc123...")
-        {
-            if (!verifyChecksum(installerPath, expectedHash))
-            {
-                LL_WARNS("AutoUpdate") << "Checksum verification failed!" << LL_ENDL;
-                LLNotificationsUtil::add("FSUpdateChecksumFailed");
-                LLFile::remove(installerPath);
-                return;
-            }
-            LL_INFOS("AutoUpdate") << "Checksum verified" << LL_ENDL;
-        }
-    }
-
-    mDownloadedInstallerPath = installerPath;
-
-    // Show completion notification
-    LLSD args;
-    args["VERSION"] = mUpdateInfo["version"].asString();
-    
-    LLNotificationsUtil::add("FSUpdateDownloadComplete", args, LLSD(),
-        [this](const LLSD& notification, const LLSD& response)
-        {
-            S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
-            
-            if (option == 0) // Install Now
-            {
-                launchInstaller(mDownloadedInstallerPath);
-            }
-            // else: Install Later - user can manually run it
-        });
-}
-
-bool LLAutoUpdateChecker::verifyChecksum(const std::string& filepath, const std::string& expected_sha256)
-{
-    // Note: This is a simplified version. For production, you'd want to use a proper SHA256 implementation
-    // LLMD5 only provides MD5, so we'll skip actual verification for now but keep the structure
-    LL_INFOS("AutoUpdate") << "Checksum verification not yet implemented (would verify against: " 
-                           << expected_sha256 << ")" << LL_ENDL;
-    return true;
-}
-
-void LLAutoUpdateChecker::launchInstaller(const std::string& installer_path)
-{
-    LL_INFOS("AutoUpdate") << "Launching installer: " << installer_path << LL_ENDL;
-
-#ifdef LL_WINDOWS
-    // Launch the installer and close the viewer
-    std::string command = "\"" + installer_path + "\"";
-    
-    STARTUPINFOA si = {0};
-    si.cb = sizeof(si);
-    PROCESS_INFORMATION pi = {0};
-
-    if (CreateProcessA(NULL, (LPSTR)command.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi))
-    {
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-        
-        LL_INFOS("AutoUpdate") << "Installer launched successfully, closing viewer" << LL_ENDL;
-        
-        // Close the viewer
-        LLAppViewer::instance()->requestQuit();
-    }
-    else
-    {
-        LL_WARNS("AutoUpdate") << "Failed to launch installer" << LL_ENDL;
-        LLNotificationsUtil::add("FSUpdateLaunchFailed");
-    }
-#else
-    // macOS and Linux implementation would go here
-    LL_WARNS("AutoUpdate") << "Auto-update installer launch not implemented for this platform" << LL_ENDL;
-#endif
-}
-
-void LLAutoUpdateChecker::cancelDownload()
-{
-    if (mDownloadInProgress)
-    {
-        // Note: Coroutines will complete on their own, we just reset state
-        mDownloadInProgress = false;
-        mDownloadProgress = 0.0f;
-        LL_INFOS("AutoUpdate") << "Download cancelled" << LL_ENDL;
-    }
+    // Open the download URL in the user's default browser
+    LLWeb::loadURL(downloadUrl);
 }
 
 void LLAutoUpdateChecker::skipThisVersion()
