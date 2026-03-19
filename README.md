@@ -13,7 +13,7 @@
 
 **Mouselook Zoom Improvements:**
 - Added smooth FOV transitions for right-click zoom in mouselook
-- New preference slider: "Mouselook zoom transition" (0-100) under Move & View > Mouselook tab
+- New preference slider: "Mouselook zoom transition" (0-5000ms) under Move & View > Mouselook tab
 - New preference slider: "Mouselook zoomed sensitivity" (0-100) under Move & View > Mouselook tab
 - Proportional zoom-out timing: Partial zooms return faster (e.g., 50% zoom = 2x faster zoom-out)
 - Fixed bug where camera stays zoomed after death or teleport
