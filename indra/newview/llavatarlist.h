@@ -107,7 +107,7 @@ public:
     /*virtual*/ bool handleHover(S32 x, S32 y, MASK mask);
 
     // <FS:PP> FIRE-31146 Contact Sets - drag-and-drop support
-    bool handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop, EDragAndDropType cargo_type, void* cargo_data, EAcceptance* accept, std::string& tooltip_msg) override;
+    bool handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop, EDragAndDropType cargo_type, void* cargo_data, EAcceptance* accept, std::string& tooltip_msg);
     void setAvatarDropCallback(const avatar_drop_cb_t& cb) { mAvatarDropCallback = cb; }
     // </FS:PP>
 
@@ -206,6 +206,7 @@ public:
     virtual bool compare(const LLPanel* item1, const LLPanel* item2) const;
 
 protected:
+    static std::string getComparableName(const LLAvatarListItem* avatar_item); // <FS:PP> FIRE-36478: Ignore alias quotation marks when comparing names from contact sets
 
     /**
      * Returns true if avatar_item1 < avatar_item2, false otherwise
