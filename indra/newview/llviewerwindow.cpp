@@ -3469,6 +3469,18 @@ bool LLViewerWindow::handleKey(KEY key, MASK mask)
             return true;
         } else {
             LL_DEBUGS() << "LLviewerWindow::handleKey - in 'traverse up' - no loops seen... just called keyboard_focus->handleKey an it returned false" << LL_ENDL;
+            
+            // <FS> Prevent gestures from triggering when typing in text input controls
+            // Even if the control didn't explicitly consume the key (returned false),
+            // we should prevent gesture triggers to avoid keys like +/- activating gestures
+            // while typing in script editors, chat, etc.
+            LLUICtrl* cur_focus = dynamic_cast<LLUICtrl*>(keyboard_focus);
+            if (cur_focus && cur_focus->acceptsTextInput())
+            {
+                LL_DEBUGS() << "LLviewerWindow::handleKey - blocking gesture trigger, text input has focus" << LL_ENDL;
+                return true;
+            }
+            // </FS>
         }
     }
 
