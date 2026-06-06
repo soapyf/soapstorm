@@ -235,6 +235,7 @@
 #include "utilitybar.h"     // <FS:Zi> Support for the classic V1 style buttons in some skins
 #include "llnetmap.h"
 #include "lggcontactsets.h"
+#include "fsfloaterkillfeed.h"
 #include "fspanellogin.h"
 
 #include "lltracerecording.h"
@@ -3055,6 +3056,11 @@ void LLViewerWindow::draw()
         // <exodus> Draw HUD stuff.
         bool inMouselook = gAgentCamera.cameraMouselook();
         static LLCachedControl<bool> fsMouselookCombatFeatures(gSavedSettings, "FSMouselookCombatFeatures", true);
+
+        // Kill feed: text-only overlay, positioned and scaled via the Kill
+        // Feed settings floater. Renders in and out of mouselook.
+        FSFloaterKillFeed::drawOverlay();
+
         if (inMouselook && fsMouselookCombatFeatures)
         {
             S32 windowWidth = gViewerWindow->getWorldViewRectScaled().getWidth();
