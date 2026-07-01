@@ -16,8 +16,11 @@
 
 #include <sstream>
 
+#include <algorithm>
+#include <cctype>
+
 // Update check URL
-const std::string UPDATE_CHECK_URL = "https://chonks.net/soapstorm/update_info.json";
+const std::string UPDATE_CHECK_URL = "https://api.github.com/repos/soapyf/soapstorm/releases/latest";
 
 LLAutoUpdateChecker::LLAutoUpdateChecker()
 :   mUpdateAvailable(false),
@@ -74,8 +77,12 @@ void LLAutoUpdateChecker::checkUpdateCoro()
 
     LL_INFOS("AutoUpdate") << "Fetching update info from: " << UPDATE_CHECK_URL << LL_ENDL;
 
+    // Add headers for User-Agent (required by GitHub API)
+    LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>();
+    headers->append(HTTP_OUT_HEADER_USER_AGENT, "Soapstorm-Viewer-Updater");
+
     // Use getRawAndSuspend to get raw JSON instead of getAndSuspend which expects LLSD format
-    LLSD result = httpAdapter->getRawAndSuspend(httpRequest, UPDATE_CHECK_URL, httpOpts);
+    LLSD result = httpAdapter->getRawAndSuspend(httpRequest, UPDATE_CHECK_URL, httpOpts, headers);
 
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result);
     
@@ -94,8 +101,6 @@ void LLAutoUpdateChecker::checkUpdateCoro()
     LL_DEBUGS("AutoUpdate") << "Response body: " << body << LL_ENDL;
     
     // Parse JSON using boost::json with error handling
-    // Note: Server doesn't send Content-Length (Cloudflare tunnel workaround),
-    // but boost::json::parse can handle complete strings
     boost::system::error_code ec;
     boost::json::value jsonVal = boost::json::parse(body, ec);
     
@@ -106,17 +111,125 @@ void LLAutoUpdateChecker::checkUpdateCoro()
         return;
     }
     
-    LLSD updateData = LlsdFromJson(jsonVal);
-
-    if (!updateData.has("version") || !updateData.has("download_url"))
+    if (!jsonVal.is_object())
     {
-        LL_WARNS("AutoUpdate") << "Update info missing required fields" << LL_ENDL;
+        LL_WARNS("AutoUpdate") << "Parsed JSON is not an object" << LL_ENDL;
+        mCheckInProgress = false;
+        return;
+    }
+
+    const auto& jsonObj = jsonVal.as_object();
+    
+    LLSD updateData;
+    std::string remoteVersion;
+    std::string downloadUrl;
+    double fileSizeMB = 0.0;
+    
+    if (jsonObj.contains("tag_name"))
+    {
+        std::string tagName;
+        if (jsonObj.at("tag_name").is_string())
+        {
+            tagName = jsonObj.at("tag_name").as_string().c_str();
+        }
+        
+        if (!tagName.empty())
+        {
+            remoteVersion = tagName;
+            if (remoteVersion[0] == 'v')
+            {
+                remoteVersion = remoteVersion.substr(1);
+            }
+        }
+    }
+    
+    // Choose appropriate file extension based on client OS
+    std::string targetExt;
+#if defined(LL_WINDOWS)
+    targetExt = ".exe";
+#elif defined(LL_LINUX)
+    targetExt = ".tar.xz";
+#endif
+
+    if (jsonObj.contains("assets") && jsonObj.at("assets").is_array())
+    {
+        for (const auto& assetVal : jsonObj.at("assets").as_array())
+        {
+            if (assetVal.is_object())
+            {
+                const auto& assetObj = assetVal.as_object();
+                if (assetObj.contains("name") && assetObj.contains("browser_download_url"))
+                {
+                    std::string assetName;
+                    if (assetObj.at("name").is_string())
+                    {
+                        assetName = assetObj.at("name").as_string().c_str();
+                    }
+                    
+                    std::string assetNameLower = assetName;
+                    std::transform(assetNameLower.begin(), assetNameLower.end(), assetNameLower.begin(), ::tolower);
+                    
+                    bool match = false;
+                    if (!targetExt.empty() && assetNameLower.size() >= targetExt.size())
+                    {
+                        if (assetNameLower.compare(assetNameLower.size() - targetExt.size(), targetExt.size(), targetExt) == 0)
+                        {
+                            match = true;
+                        }
+                    }
+                    
+                    if (match)
+                    {
+                        if (assetObj.at("browser_download_url").is_string())
+                        {
+                            downloadUrl = assetObj.at("browser_download_url").as_string().c_str();
+                        }
+                        
+                        if (assetObj.contains("size"))
+                        {
+                            double sizeBytes = 0.0;
+                            if (assetObj.at("size").is_number())
+                            {
+                                sizeBytes = assetObj.at("size").as_double();
+                            }
+                            else if (assetObj.at("size").is_int64())
+                            {
+                                sizeBytes = (double)assetObj.at("size").as_int64();
+                            }
+                            else if (assetObj.at("size").is_uint64())
+                            {
+                                sizeBytes = (double)assetObj.at("size").as_uint64();
+                            }
+                            fileSizeMB = sizeBytes / (1024.0 * 1024.0);
+                        }
+                        break; // Match found
+                    }
+                }
+            }
+        }
+    }
+    
+    // Fallback: if no OS-specific asset was found, use the release page URL
+    if (downloadUrl.empty() && jsonObj.contains("html_url") && jsonObj.at("html_url").is_string())
+    {
+        downloadUrl = jsonObj.at("html_url").as_string().c_str();
+    }
+    
+    updateData["version"] = remoteVersion;
+    updateData["download_url"] = downloadUrl;
+    if (fileSizeMB > 0.0)
+    {
+        updateData["file_size_mb"] = fileSizeMB;
+    }
+
+    if (remoteVersion.empty() || downloadUrl.empty())
+    {
+        LL_WARNS("AutoUpdate") << "Update info missing version or download URL" << LL_ENDL;
         mCheckInProgress = false;
         return;
     }
 
     mUpdateInfo = updateData;
-    std::string remoteVersion = updateData["version"].asString();
     std::string currentVersion = LLVersionInfo::instance().getVersion();
 
     LL_INFOS("AutoUpdate") << "Remote version: " << remoteVersion 
