@@ -4,6 +4,9 @@
 
 set -euo pipefail
 
+# Add user's local bin to PATH for user-installed tools like autobuild
+export PATH="$HOME/.local/bin:$PATH"
+
 # ============================================================
 # USER CONFIGURATION
 # ============================================================
@@ -142,10 +145,10 @@ if $CONFIGURE || $ALL; then
     echo "VIEWER_REVISION          = $VIEWER_REVISION"
 
     # ------------------------------------------------------------------
-    # Auto-detect fmodstudio: include it only when the prebuilt package
-    # exists at the path configured in autobuild.xml.
-    # ------------------------------------------------------------------
-    FMOD_PACKAGE=$(find /opt/firestorm -maxdepth 1 -name "fmodstudio-*-linux64-*.tar.bz2" 2>/dev/null | sort -r | head -n 1)
+    FMOD_PACKAGE=""
+    if [[ -d "/opt/firestorm" ]]; then
+        FMOD_PACKAGE=$(find /opt/firestorm -maxdepth 1 -name "fmodstudio-*-linux64-*.tar.bz2" 2>/dev/null | sort -r | head -n 1 || true)
+    fi
     if [[ -n "$FMOD_PACKAGE" && -f "$FMOD_PACKAGE" ]]; then
         FMOD_ENABLED=true
         echo "FMOD Studio package found: $FMOD_PACKAGE"
