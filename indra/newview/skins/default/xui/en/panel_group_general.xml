@@ -164,7 +164,7 @@ Hover your mouse over the options for more help.
     <name_list
      left="0"
      top_pad="4"
-     height="115"
+     height="83"
      column_padding="0"
      draw_heading="true"
      heading_height="23"
