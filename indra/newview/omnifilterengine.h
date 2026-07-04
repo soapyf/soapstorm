@@ -72,40 +72,44 @@ class OmnifilterEngine
         class Haystack
         {
             public:
-                std::string mSenderName;
-                std::string mContent;
-                std::string mRegionName;
+                // Set all the default values
+                std::string mSenderName = "";
+                std::string mContent = "";
+                std::string mRegionName = "";
 
-                LLUUID mOwnerID;
+                LLUUID mOwnerID = LLUUID::null;
 
-                eType mType;
+                eType mType = TYPES_MAX;
         };
 
         class Needle
         {
             public:
-                std::string mSenderName;
-                std::string mContent;
-                std::string mRegionName;
+                // Set all the default values
+                std::string mSenderName = "";
+                std::string mContent = "";
+                std::string mRegionName = "";
 
-                std::string mChatReplace;
-                std::string mButtonReply;
-                std::string mTextBoxReply;
+                std::string mChatReplace = "";
+                std::string mButtonReply = "";
+                std::string mTextBoxReply = "";
+                F32 mReplyDelay = 0.0f;
 
-                eMatchType mSenderNameMatchType;
-                eMatchType mContentMatchType;
+                eMatchType mSenderNameMatchType = eMatchType::Substring;
+                eMatchType mContentMatchType = eMatchType::Substring;
 
-                LLUUID mOwnerID;
+                LLUUID mOwnerID = LLUUID::null;
 
                 std::set<eType> mTypes;
 
-                bool mEnabled;
+                bool mEnabled = false;
                 bool mSenderNameCaseInsensitive = false;
                 bool mContentCaseInsensitive = false;
         };
 
-        const S32 VERSION = 3; // Current version of Omnifilter xml format.
-        const std::string HEADER = "omnifilter_rule_set"; // Header used to verify the notecard xml data is valid
+        static const S32 VERSION; // Current version of Omnifilter xml format.
+        static const std::string HEADER; // Header used to verify the notecard xml data is valid
+        static const std::string FILTER_NAME; // Item name filter used to show only Omnifilter Notecards
 
         typedef std::map<std::string, OmnifilterEngine::OmnifilterEngine::Needle, std::less<>> needle_list_t;
         needle_list_t& getNeedleList();
@@ -167,6 +171,10 @@ class OmnifilterEngine
         }
         void onRuleSetsUpdated();
         rule_set_updated_signal_t mRuleSetUpdatedCallback;
+
+        // New delay response which is to fix issue FIRE-36590 - The Omnifilter Dialog Button Reply needs a 1 second delay
+        void createDelayedResponse(LLNotificationPtr notification, LLSD response, F32 delay);
+        void sendDelayedResponse(LLNotificationPtr notification, LLSD response);
 
     protected:
         const Needle* logMatch(const std::string& needle_name, const Needle& needle);

@@ -37,6 +37,7 @@ class LLComboBox;
 class LLLineEditor;
 class LLPanel;
 class LLTextEditor;
+class LLSpinCtrl;
 
 class Omnifilter : public LLFloater
 {
@@ -53,7 +54,7 @@ public:
     LLScrollListItem* addNeedle(const std::string& name, const OmnifilterEngine::Needle& needle);
     // Supports Notecard drag and drop for importing.
     bool handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop, EDragAndDropType cargo_type, void* cargo_data, EAcceptance* accept,
-                           std::string& tooltip_msg);
+                           std::string& tooltip_msg) override;
 
 protected:
     OmnifilterEngine::Needle* getSelectedNeedle();
@@ -70,6 +71,7 @@ protected:
     void onRemoveRuleSetClicked();
     void onExportRuleSetClicked();
     void onImportRuleSetClicked();
+    void onMatchDialogButtonLabelClicked();
     void onNewRuleSetNameSelectedCallback(const LLSD& notification, const LLSD& response);
     void onCloneRuleSetNameSelectedCallback(const LLSD& notification, const LLSD& response);
     void onRemoveRuleSetConfirmedCallback(const LLSD& notification, const LLSD& response);
@@ -107,6 +109,7 @@ protected:
     LLTextEditor*     mContentCtrl{ nullptr };
     LLCheckBoxCtrl*   mContentCaseSensitiveCheck{ nullptr };
     LLComboBox*       mContentMatchTypeCombo{ nullptr };
+    LLButton*         mMatchDialogButtonLabelBtn { nullptr }; // Helper button to add the text "button_name=BUTTON_NAME" to the content editor.
     LLLineEditor*     mRegionNameCtrl{ nullptr };
     LLLineEditor*     mOwnerCtrl{ nullptr };
 
@@ -128,6 +131,7 @@ protected:
     LLLineEditor* mChatReplaceCtrl{ nullptr };
     LLLineEditor* mButtonReplyCtrl{ nullptr };
     LLTextEditor* mTextBoxReplyCtrl{ nullptr };
+    LLSpinCtrl*   mReplyDelayCtrl{ nullptr }; // For modifying the reply deplay
 
     LLTextValidate::Validator mPrevalidator;
 };

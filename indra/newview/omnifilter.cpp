@@ -29,6 +29,7 @@
 #include "llcombobox.h"
 #include "lllineeditor.h"
 #include "lltexteditor.h"
+#include "llspinctrl.h"
 #include "llviewercontrol.h" // Needed for gSavedSettings
 #include "llnotificationsutil.h" // Needed for Notifications
 #include "llfloaterreg.h" // Needed for LLFloaterReg::showInstance
@@ -157,6 +158,7 @@ void Omnifilter::onSelectNeedle()
     mChatReplaceCtrl->setText(needle->mChatReplace);
     mButtonReplyCtrl->setText(needle->mButtonReply);
     mTextBoxReplyCtrl->setText(needle->mTextBoxReply);
+    mReplyDelayCtrl->setValue(needle->mReplyDelay);
 
     mContentCtrl->setFocus(true);
 }
@@ -198,6 +200,7 @@ void Omnifilter::onNeedleChanged()
     needle->mChatReplace = mChatReplaceCtrl->getValue().asString();
     needle->mButtonReply = mButtonReplyCtrl->getValue().asString();
     needle->mTextBoxReply = mTextBoxReplyCtrl->getValue().asString();
+    needle->mReplyDelay = static_cast<F32>(mReplyDelayCtrl->getValue().asReal());
 
     OmnifilterEngine::getInstance()->setDirty(true);
 }
@@ -342,6 +345,14 @@ void Omnifilter::onImportRuleSetClicked()
     LLUUID notecard_category_uuid = gInventory.findCategoryUUIDForType(LLFolderType::FT_NOTECARD);
     // Show the inventory, showing only notecards and highlight the new notecard created.
     LLPanelMainInventory::newFolderWindow(notecard_category_uuid);
+
+    // Try to get the active inventory panel
+    LLInventoryPanel* active_panel = LLInventoryPanel::getActiveInventoryPanel();
+    if (active_panel)
+    {
+        // If found, assign the FILTER_NAME ([Omnifilter]) to the item names.
+        active_panel->setFilterSubString(OmnifilterEngine::FILTER_NAME);
+    }
     
     // Display an instruction notification to the end user.
     LLNotificationsUtil::add("OmnifilterImportInstructions", LLSD(), LLSD());
@@ -536,6 +547,14 @@ void Omnifilter::onExportRuleSetNotecardCallback(const LLUUID& notecard_uuid)
     LL_INFOS() << "Export Notecard UUID:" << actual_notecard_uuid.asString() << LL_ENDL;
     // Show the inventory, showing only notecards and highlight the new notecard created.
     LLPanelMainInventory::newFolderWindow(notecard_category_uuid, actual_notecard_uuid);
+
+    // Try to get the active inventory panel
+    LLInventoryPanel* active_panel = LLInventoryPanel::getActiveInventoryPanel();
+    if (active_panel)
+    {
+        // If found, assign the FILTER_NAME ([Omnifilter]) to the item names.
+        active_panel->setFilterSubString(OmnifilterEngine::FILTER_NAME);
+    }
 }
 
 bool Omnifilter::handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop, EDragAndDropType cargo_type, void* cargo_data,
@@ -795,6 +814,8 @@ bool Omnifilter::postBuild()
     mSenderCaseSensitiveCheck = getChild<LLCheckBoxCtrl>("sender_case");
     mSenderMatchTypeCombo = getChild<LLComboBox>("sender_match_type");
     mContentCtrl = getChild<LLTextEditor>("content");
+    // Helper button to add match button label special string to the content editor
+    mMatchDialogButtonLabelBtn = getChild<LLButton>("btn_match_dlg_btn_lbl");
     // Add the preset controls
     mRuleSetsCmb = getChild<LLComboBox>("cmb_rule_sets"); // Rule Set Drop Down
     mNewRuleSetBtn = getChild<LLButton>("btn_rule_set_new"); // New Rule Set
@@ -825,6 +846,7 @@ bool Omnifilter::postBuild()
     mChatReplaceCtrl = getChild<LLLineEditor>("chat_replace");
     mButtonReplyCtrl = getChild<LLLineEditor>("button_reply");
     mTextBoxReplyCtrl = getChild<LLTextEditor>("text_box_reply");
+    mReplyDelayCtrl = getChild<LLSpinCtrl>("reply_delay_slider");
 
     mNeedleListCtrl->setSearchColumn(NEEDLE_NAME_COLUMN);
     mNeedleListCtrl->deleteAllItems();
@@ -885,10 +907,12 @@ bool Omnifilter::postBuild()
     mContentCtrl->setCommitCallback(boost::bind(&Omnifilter::onNeedleChanged, this));
     mContentCaseSensitiveCheck->setCommitCallback(boost::bind(&Omnifilter::onNeedleChanged, this));
     mContentMatchTypeCombo->setCommitCallback(boost::bind(&Omnifilter::onNeedleChanged, this));
+    mMatchDialogButtonLabelBtn->setCommitCallback(boost::bind(&Omnifilter::onMatchDialogButtonLabelClicked, this));
     mRegionNameCtrl->setCommitCallback(boost::bind(&Omnifilter::onNeedleChanged, this));
     mChatReplaceCtrl->setCommitCallback(boost::bind(&Omnifilter::onNeedleChanged, this));
     mButtonReplyCtrl->setCommitCallback(boost::bind(&Omnifilter::onNeedleChanged, this));
     mTextBoxReplyCtrl->setCommitCallback(boost::bind(&Omnifilter::onNeedleChanged, this));
+    mReplyDelayCtrl->setCommitCallback(boost::bind(&Omnifilter::onNeedleChanged, this));
     mOwnerCtrl->setCommitCallback(boost::bind(&Omnifilter::onNeedleChanged, this));
     mOwnerCtrl->setKeystrokeCallback(boost::bind(&Omnifilter::onOwnerChanged, this), nullptr);
     mTypeNearbyBtn->setCommitCallback(boost::bind(&Omnifilter::onNeedleChanged, this));
@@ -923,6 +947,25 @@ void Omnifilter::onVisibilityChange(bool visible)
         mRuleSetsCmb->selectByValue(LLSD(gSavedSettings.getS32("OmnifilterRuleSetID")));
         // Need to also reload the UI of the rules editor to match the change.
         reloadRule();
+    }
+}
+
+// Callback which will add the text "button_name=" which allows for the label text
+// to be searched for as content for matching. Allows buttons being present on Script
+// Dialog floaters to trigger an action.
+void Omnifilter::onMatchDialogButtonLabelClicked()
+{
+    // Get the current contents of the content editor
+    const std::string content = mContentCtrl->getText();
+    // If there is no content currently, want to add the button_name= with the translated BUTTON_NAME string.
+    if (content.empty())
+    {
+        mContentCtrl->setText("button_name=" + LLTrans::getString("OmnifilterButtonLabel"));
+    }
+    //  Else there is some text, so do the same as above, but just add a newline character at between the old content and the button_name=.
+    else
+    {
+        mContentCtrl->setText(content + "\nbutton_name=" + LLTrans::getString("OmnifilterButtonLabel"));
     }
 }
 

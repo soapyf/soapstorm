@@ -24,6 +24,7 @@
 
 #include "llviewerprecompiledheaders.h"
 
+#include "llcallbacklist.h"
 #include "omnifilterengine.h"
 
 #include "fsyspath.h"
@@ -38,6 +39,10 @@
 
 #include <fstream>
 #include <filesystem>
+
+const S32 OmnifilterEngine::VERSION = 4; // Current version of Omnifilter xml format.
+const std::string OmnifilterEngine::HEADER = "omnifilter_rule_set"; // Header used to verify the notecard xml data is valid
+const std::string OmnifilterEngine::FILTER_NAME = "[Omnifilter]"; // Item name filter used to show only Omnifilter Notecards
 
 OmnifilterEngine::OmnifilterEngine()
     : LLSingleton<OmnifilterEngine>()
@@ -446,6 +451,9 @@ OmnifilterEngine::rule_set_t OmnifilterEngine::importRuleSetFromLLSD(const LLSD&
             new_needle.mSenderNameCaseInsensitive = needle_data["sender_name_case_insensitive"].asBoolean();
         if (needle_data.has("content_case_insensitive"))
             new_needle.mContentCaseInsensitive = needle_data["content_case_insensitive"].asBoolean();
+        // Used to fix issue FIRE-36590. Added for version 4
+        if (needle_data.has("reply_delay"))
+            new_needle.mReplyDelay = static_cast<F32>(needle_data["reply_delay"].asReal());
 
         if (needle_data.has("enabled"))
         {
@@ -537,6 +545,7 @@ LLSD OmnifilterEngine::exportToLLSD(const std::string& rule_set_name)
             needles_llsd[needle_name]["enabled"]                      = needle.mEnabled;
             needles_llsd[needle_name]["sender_name_case_insensitive"] = needle.mSenderNameCaseInsensitive;
             needles_llsd[needle_name]["content_case_insensitive"]     = needle.mContentCaseInsensitive;
+            needles_llsd[needle_name]["reply_delay"]                  = needle.mReplyDelay; // Added for version 4
         }
     }
 
@@ -727,13 +736,16 @@ S32 OmnifilterEngine::exportRuleSetToNotecard(std::string_view new_name, LLPoint
         return -1;
     }
 
+    // Add [Omnifilter] to help find Omnifilter notecards.
+    std::string output_name = FILTER_NAME + " " + mExportName;
+
     // If the a notecard already exists with the given name, then return a duplicate name error
     LLViewerInventoryCategory::cat_array_t cats;
     LLViewerInventoryItem::item_array_t    items;
     gInventory.collectDescendents(notecard_category_uuid, cats, items, false);
     for (auto iter = items.begin(); iter != items.end(); iter++)
     {
-        if ((*iter)->getName() == mExportName)
+        if ((*iter)->getName() == output_name) // Compare notecard names with output name with [Omnifilter] added
         {
             return -2;
         }
@@ -776,6 +788,7 @@ void OmnifilterEngine::exportNotecardCreatedCallback(const LLUUID& notecard_uuid
                                           // version 1 = Original Omnifilter with no rule set
                                           // version 2 = Original Omnifilter with no rule set, but with Order added to rule sets
                                           // version 3 = Omnifilter with Rule Set and Order in the actual rules.
+                                          // version 4 = Added reply_delay value to needles.
         final_output_llsd["rule_set"] = output_rule_set_llsd;
         final_output_llsd["name"] = mExportName;
 
@@ -794,7 +807,7 @@ void OmnifilterEngine::exportNotecardCreatedCallback(const LLUUID& notecard_uuid
 
         // Rename the notecard to the name specified by the user that is already validated
         LLSD updates;
-        updates["name"] = mExportName;
+        updates["name"] = FILTER_NAME + " " + mExportName; // Add [Omnifilter] to help find Omnifilter notecards.
         // Update the description to show that this notecard is for a omnifilter rule set
         LLSD args;
         args["REPLACEMENT"] = mExportName;
@@ -847,8 +860,8 @@ bool OmnifilterEngine::validateImportNotecard(const LLUUID& notecard_uuid)
                 // Check if the rule_set_llsd contains a header, version and rule_set values
                 if (rule_set_llsd.has("header") && rule_set_llsd.has("version") && rule_set_llsd.has("rule_set") && rule_set_llsd.has("name"))
                 {
-                    // Check the actual value of the header and version, if they match, then
-                    if (rule_set_llsd["header"].asString() == HEADER && rule_set_llsd["version"].asInteger() == VERSION)
+                    // Check the actual value of the header and is an existing version, if they match, then
+                    if (rule_set_llsd["header"].asString() == HEADER && rule_set_llsd["version"].asInteger() <= VERSION)
                     {
                         // Read in the actual rule set data, to be added after the user picks a valid name.
                         mImportNotecardRuleSet = importRuleSetFromLLSD(rule_set_llsd["rule_set"]);
@@ -1141,4 +1154,23 @@ bool OmnifilterEngine::tick()
 void OmnifilterEngine::onRuleSetsUpdated()
 {
     mRuleSetUpdatedCallback();
+}
+
+// Creates a delayed response using a notification and response. Delay can be between 0.1 and 3.0 seconds.
+// If 0.0 is used, the code skips the delay and calls the response directly.
+void OmnifilterEngine::createDelayedResponse(LLNotificationPtr notification, LLSD response, F32 delay)
+{
+    // Based upon the LLCallbackList 
+    doAfterInterval(boost::bind(&OmnifilterEngine::sendDelayedResponse, this, notification, response), delay);
+}
+
+// Callback method for the delayed response.
+void OmnifilterEngine::sendDelayedResponse(LLNotificationPtr notification, LLSD response)
+{
+    // If the notification pointer is still valid, then call its respond method with the reponse passed in.
+    if (notification)
+    {
+        // Send the delayed response
+        notification->respond(response);
+    }
 }
