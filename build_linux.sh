@@ -73,7 +73,24 @@ fi
 # Locate script's own directory (repo root)
 # ============================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+ORIG_DIR="$SCRIPT_DIR"
+
+if [[ "$SCRIPT_DIR" == /mnt/c/* ]] || [[ "$SCRIPT_DIR" == /mnt/d/* ]] || [[ "$SCRIPT_DIR" == /mnt/e/* ]]; then
+    # We are on a Windows mount, which has NTFS symlink issues in WSL.
+    # Sync to a native Linux temp directory for the build.
+    NATIVE_SRC_DIR="/tmp/soapstorm-src-$(basename "$SCRIPT_DIR")"
+    echo "Syncing source to native Linux filesystem: $NATIVE_SRC_DIR"
+    mkdir -p "$NATIVE_SRC_DIR"
+    # Use tar pipe instead of rsync since rsync might not be installed
+    # Do not exclude .git since the versioning scripts require it
+    set +e
+    tar -cf - --exclude='build-*' --exclude='.vs' --exclude='packages' -C "$SCRIPT_DIR" . | tar -xf - -C "$NATIVE_SRC_DIR"
+    set -e
+    cd "$NATIVE_SRC_DIR"
+    SCRIPT_DIR="$NATIVE_SRC_DIR"
+else
+    cd "$SCRIPT_DIR"
+fi
 
 # ============================================================
 # Git branch detection
@@ -118,7 +135,7 @@ if $CONFIGURE || $ALL; then
     echo "=== Configuring with autobuild ==="
 
     # AUTOBUILD_VARIABLES_FILE must point to the fs-build-variables file
-    VARS_FILE="$(realpath "$SCRIPT_DIR/../fs-build-variables/variables")"
+    VARS_FILE="$(realpath "$ORIG_DIR/../fs-build-variables/variables")"
     if [[ ! -f "$VARS_FILE" ]]; then
         echo "ERROR: fs-build-variables not found at: $VARS_FILE"
         echo "Clone it alongside the repo: git clone https://vcs.firestormviewer.org/fs-build-variables ../fs-build-variables"
@@ -217,6 +234,10 @@ PYEOF
     # ------------------------------------------------------------------
     # Build the autobuild configure argument list
     # ------------------------------------------------------------------
+    
+    # GCC 12+ has a known false positive with std::function array bounds which breaks the build due to -Werror.
+    export CXXFLAGS="${CXXFLAGS:-} -Wno-error=array-bounds"
+
     AUTOBUILD_ARGS=(
         "configure"
         "-c" "$CONFIG"
@@ -458,6 +479,16 @@ PYEOF
         echo ""
         echo "Note: Skipping RPM creation because --no-package was set (no .tar.xz to repack)"
     fi
+fi
+
+# If we built in a temp dir, copy the artifacts back
+if [[ "$SCRIPT_DIR" != "$ORIG_DIR" ]]; then
+    echo ""
+    echo "=== Copying artifacts back to Windows ==="
+    mkdir -p "$ORIG_DIR/$BUILD_DIR/newview"
+    cp "$BUILD_DIR/newview/"*.tar.xz "$ORIG_DIR/$BUILD_DIR/newview/" 2>/dev/null || true
+    cp "$BUILD_DIR/newview/"*.rpm "$ORIG_DIR/$BUILD_DIR/newview/" 2>/dev/null || true
+    echo "Copied .tar.xz and .rpm files to $ORIG_DIR/$BUILD_DIR/newview/"
 fi
 
 echo ""

@@ -186,6 +186,7 @@ if (LINUX)
       -msse2
       -mfpmath=sse
       -pthread
+      -Wno-error=array-bounds
       )
 
   # force this platform to accept TOS via external browser <FS:ND> No, do not.
