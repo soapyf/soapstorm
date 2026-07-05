@@ -2089,6 +2089,43 @@ void LLWindowSDL::gatherInput()
 #endif // LL_X11
 }
 
+static int getCursorScaleFactor()
+{
+    int scale = 1;
+    // Check manual environment override
+    char* env_scale = getenv("FS_CURSOR_SCALE");
+    if (!env_scale) env_scale = getenv("SOAPSTORM_CURSOR_SCALE");
+    if (env_scale)
+    {
+        int env_val = atoi(env_scale);
+        if (env_val >= 1 && env_val <= 8)
+        {
+            scale = env_val;
+            LL_INFOS() << "getCursorScaleFactor: Using manual override scale=" << scale << " (from FS_CURSOR_SCALE/SOAPSTORM_CURSOR_SCALE)" << LL_ENDL;
+            return scale;
+        }
+    }
+
+    // Check standard X11 cursor size environment variable
+    char* env_size = getenv("XCURSOR_SIZE");
+    if (env_size)
+    {
+        int size = atoi(env_size);
+        if (size > 0)
+        {
+            // Standard cursor is 24px. Calculate scale factor.
+            scale = size / 24;
+            if (scale < 1) scale = 1;
+            if (scale > 8) scale = 8;
+            LL_INFOS() << "getCursorScaleFactor: Calculated scale=" << scale << " from XCURSOR_SIZE=" << size << LL_ENDL;
+            return scale;
+        }
+    }
+
+    LL_INFOS() << "getCursorScaleFactor: Using default scale=" << scale << LL_ENDL;
+    return scale; // Default no scaling
+}
+
 static SDL_Cursor *makeSDLCursorFromBMP(const char *filename, int hotx, int hoty)
 {
     SDL_Cursor *sdlcursor = NULL;
@@ -2096,7 +2133,7 @@ static SDL_Cursor *makeSDLCursorFromBMP(const char *filename, int hotx, int hoty
 
     // Load cursor pixel data from BMP file
     bmpsurface = Load_BMP_Resource(filename);
-    if (bmpsurface && bmpsurface->w%8==0)
+    if (bmpsurface)
     {
         SDL_Surface *cursurface;
         LL_DEBUGS() << "Loaded cursor file " << filename << " "
@@ -2116,41 +2153,73 @@ static SDL_Cursor *makeSDLCursorFromBMP(const char *filename, int hotx, int hoty
         if (0 == SDL_BlitSurface(bmpsurface, NULL,
                                  cursurface, NULL))
         {
-            // n.b. we already checked that width is a multiple of 8.
-            const int bitmap_bytes = (cursurface->w * cursurface->h) / 8;
-            unsigned char *cursor_data = new unsigned char[bitmap_bytes];
-            unsigned char *cursor_mask = new unsigned char[bitmap_bytes];
-            memset(cursor_data, 0, bitmap_bytes);
-            memset(cursor_mask, 0, bitmap_bytes);
-            int i,j;
-            // Walk the RGBA cursor pixel data, extracting both data and
-            // mask to build SDL-friendly cursor bitmaps from.  The mask
-            // is inferred by color-keying against 200,200,200
-            for (i=0; i<cursurface->h; ++i) {
-                for (j=0; j<cursurface->w; ++j) {
-                    U8 *pixelp =
-                        ((U8*)cursurface->pixels)
-                        + cursurface->pitch * i
-                        + j*cursurface->format->BytesPerPixel;
-                    U8 srcred = pixelp[0];
-                    U8 srcgreen = pixelp[1];
-                    U8 srcblue = pixelp[2];
-                    bool mask_bit = (srcred != 200)
-                        || (srcgreen != 200)
-                        || (srcblue != 200);
-                    bool data_bit = mask_bit && (srcgreen <= 80);//not 0x80
-                    unsigned char bit_offset = (cursurface->w/8) * i
-                        + j/8;
-                    cursor_data[bit_offset] |= (data_bit) << (7 - (j&7));
-                    cursor_mask[bit_offset] |= (mask_bit) << (7 - (j&7));
+            const int scale = getCursorScaleFactor();
+            const int scaled_w = cursurface->w * scale;
+            const int scaled_h = cursurface->h * scale;
+
+            SDL_Surface *scaled_surface = SDL_CreateRGBSurface(SDL_SWSURFACE,
+                                                               scaled_w,
+                                                               scaled_h,
+                                                               32,
+                                                               SDL_SwapLE32(0xFFU),
+                                                               SDL_SwapLE32(0xFF00U),
+                                                               SDL_SwapLE32(0xFF0000U),
+                                                               SDL_SwapLE32(0xFF000000U));
+            
+            if (scaled_surface)
+            {
+                SDL_FillRect(scaled_surface, NULL, SDL_SwapLE32(0x00000000U));
+                
+                int i, j;
+                for (i = 0; i < scaled_h; ++i) {
+                    for (j = 0; j < scaled_w; ++j) {
+                        int orig_i = i / scale;
+                        int orig_j = j / scale;
+                        
+                        U8 *src_pixel = ((U8*)cursurface->pixels)
+                            + cursurface->pitch * orig_i
+                            + orig_j * 4;
+                        U8 *dst_pixel = ((U8*)scaled_surface->pixels)
+                            + scaled_surface->pitch * i
+                            + j * 4;
+
+                        U8 srcred = src_pixel[0];
+                        U8 srcgreen = src_pixel[1];
+                        U8 srcblue = src_pixel[2];
+
+                        if (srcred == 200 && srcgreen == 200 && srcblue == 200)
+                        {
+                            // Transparent
+                            dst_pixel[0] = 0;
+                            dst_pixel[1] = 0;
+                            dst_pixel[2] = 0;
+                            dst_pixel[3] = 0;
+                        }
+                        else
+                        {
+                            // Opaque
+                            dst_pixel[0] = srcred;
+                            dst_pixel[1] = srcgreen;
+                            dst_pixel[2] = srcblue;
+                            dst_pixel[3] = 255;
+                        }
+                    }
                 }
+
+                sdlcursor = SDL_CreateColorCursor(scaled_surface, hotx * scale, hoty * scale);
+                if (!sdlcursor)
+                {
+                    LL_WARNS() << "SDL_CreateColorCursor failed for " << filename 
+                               << " with scaled size " << scaled_w << "x" << scaled_h 
+                               << ", error: " << SDL_GetError() << LL_ENDL;
+                }
+                else
+                {
+                    LL_INFOS() << "SDL_CreateColorCursor success for " << filename 
+                               << " with scaled size " << scaled_w << "x" << scaled_h << LL_ENDL;
+                }
+                SDL_FreeSurface(scaled_surface);
             }
-            sdlcursor = SDL_CreateCursor((Uint8*)cursor_data,
-                                         (Uint8*)cursor_mask,
-                                         cursurface->w, cursurface->h,
-                                         hotx, hoty);
-            delete[] cursor_data;
-            delete[] cursor_mask;
         } else {
             LL_WARNS() << "CURSOR BLIT FAILURE, cursurface: " << cursurface << LL_ENDL;
         }

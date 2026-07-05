@@ -137,3 +137,7 @@ firestorm.code-workspace
 
 checks.json
 
+local_tools/
+.venv/
+
+

@@ -250,6 +250,8 @@ PYEOF
         "-DHAVOK:BOOL=FALSE"
         "-DUSE_KDU:BOOL=FALSE"
         "-DOPENSIM:BOOL=FALSE"
+        "-DGCC_DISABLE_FATAL_WARNINGS:BOOL=TRUE"
+        "-DCLANG_DISABLE_FATAL_WARNINGS:BOOL=TRUE"
     )
 
     echo "Running: autobuild ${AUTOBUILD_ARGS[*]}"
