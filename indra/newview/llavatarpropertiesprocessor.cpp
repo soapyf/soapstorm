@@ -660,7 +660,20 @@ void LLAvatarPropertiesProcessor::notifyObservers(const LLUUID& id, void* data, 
         // didn't know the agent ID and passed a NULL id.
         if (agent_id == id || agent_id.isNull())
         {
-            observer->processProperties(data, type);
+            // An observer called earlier in this loop may have removed (and
+            // possibly deleted) this one, but the snapshot taken above would
+            // still hold the stale pointer. Only dispatch if the registration
+            // is still present in the live map.
+            const auto range = mObservers.equal_range(agent_id);
+            const bool still_registered = std::any_of(range.first, range.second,
+                [&](const observer_multimap_t::value_type& entry)
+                {
+                    return entry.second == observer;
+                });
+            if (still_registered)
+            {
+                observer->processProperties(data, type);
+            }
         }
     }
 }
