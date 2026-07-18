@@ -667,39 +667,51 @@ LLPointer<LLVorbisDecodeState> beginDecodingAndWritingAudio(const LLUUID &decode
     // </FS:Ansariel>
     LLPointer<LLVorbisDecodeState> decode_state = new LLVorbisDecodeState(decode_id, d_path);
 
-    if (!decode_state->initDecode())
+    try
     {
+        if (!decode_state->initDecode())
+        {
+            return NULL;
+        }
+
+        // Decode in a loop until we're done
+        while (!decode_state->decodeSection())
+        {
+            // decodeSection does all of the work above
+        }
+
+        if (!decode_state->isDone())
+        {
+            // Decode stopped early, or something bad happened to the file
+            // during decoding.
+            LL_WARNS("AudioEngine") << decode_id << " has invalid vorbis data or decode has been canceled, aborting decode" << LL_ENDL;
+            decode_state->flushBadFile();
+            return NULL;
+        }
+
+        if (!decode_state->isValid())
+        {
+            // We had an error when decoding, abort.
+            LL_WARNS("AudioEngine") << decode_id << " has invalid vorbis data, aborting decode" << LL_ENDL;
+            decode_state->flushBadFile();
+            return NULL;
+        }
+
+        // Kick off the writing of the decoded audio to the disk cache.
+        // The receiving thread can then cheaply call finishDecode() again to check
+        // if writing has finished. Someone has to hold on to the refcounted
+        // decode_state to prevent it from getting destroyed during write.
+        decode_state->finishDecode();
+    }
+    catch (const std::bad_alloc&)
+    {
+        LL_WARNS("AudioEngine") << "Out of memory during decoding sound " << decode_id << LL_ENDL;
+        if (decode_state)
+        {
+            decode_state->flushBadFile();
+        }
         return NULL;
     }
-
-    // Decode in a loop until we're done
-    while (!decode_state->decodeSection())
-    {
-        // decodeSection does all of the work above
-    }
-
-    if (!decode_state->isDone())
-    {
-        // Decode stopped early, or something bad happened to the file
-        // during decoding.
-        LL_WARNS("AudioEngine") << decode_id << " has invalid vorbis data or decode has been canceled, aborting decode" << LL_ENDL;
-        decode_state->flushBadFile();
-        return NULL;
-    }
-
-    if (!decode_state->isValid())
-    {
-        // We had an error when decoding, abort.
-        LL_WARNS("AudioEngine") << decode_id << " has invalid vorbis data, aborting decode" << LL_ENDL;
-        decode_state->flushBadFile();
-        return NULL;
-    }
-
-    // Kick off the writing of the decoded audio to the disk cache.
-    // The receiving thread can then cheaply call finishDecode() again to check
-    // if writing has finished. Someone has to hold on to the refcounted
-    // decode_state to prevent it from getting destroyed during write.
-    decode_state->finishDecode();
 
     return decode_state;
 }
