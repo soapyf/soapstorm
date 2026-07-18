@@ -309,7 +309,10 @@ void FSFloaterAssetBlacklist::onPlayBtn()
     onStopBtn();
 
     mAudioSourceID = LLUUID::generateNewID();
-    gAudiop->triggerSound(item->getUUID(), gAgentID, 1.0f, LLAudioEngine::AUDIO_TYPE_UI, LLVector3d::zero, LLUUID::null, mAudioSourceID);
+    if (gAudiop)
+    {
+        gAudiop->triggerSound(item->getUUID(), gAgentID, 1.0f, LLAudioEngine::AUDIO_TYPE_UI, LLVector3d::zero, LLUUID::null, mAudioSourceID);
+    }
 
     childSetVisible("stop_btn", true);
     childSetVisible("play_btn", false);
@@ -322,9 +325,12 @@ void FSFloaterAssetBlacklist::onStopBtn()
         return;
     }
 
-    if (LLAudioSource* audio_source = gAudiop->findAudioSource(mAudioSourceID); audio_source && !audio_source->isDone())
+    if (gAudiop)
     {
-        audio_source->play(LLUUID::null);
+        if (LLAudioSource* audio_source = gAudiop->findAudioSource(mAudioSourceID); audio_source && !audio_source->isDone())
+        {
+            audio_source->play(LLUUID::null);
+        }
     }
 }
 
@@ -371,7 +377,16 @@ bool FSFloaterAssetBlacklist::tick()
         return false;
     }
 
-    if (LLAudioSource* audio_source = gAudiop->findAudioSource(mAudioSourceID); !audio_source || audio_source->isDone())
+    bool audio_source_done = true;
+    if (gAudiop)
+    {
+        if (LLAudioSource* audio_source = gAudiop->findAudioSource(mAudioSourceID); audio_source && !audio_source->isDone())
+        {
+            audio_source_done = false;
+        }
+    }
+
+    if (audio_source_done)
     {
         childSetVisible("play_btn", true);
         childSetVisible("stop_btn", false);
