@@ -267,6 +267,8 @@ private:
     void handleTeleportHome();
     void handleEstateBan();
     void handleDerender(bool permanent);
+    void handleDisconnectRegion();
+    void handleReconnectRegion();
 
     LLHandle<LLView> mPopupMenuHandle;
     uuid_vec_t      gmSelected;

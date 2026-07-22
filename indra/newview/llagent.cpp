@@ -1194,6 +1194,11 @@ void LLAgent::setRegion(LLViewerRegion *regionp)
             NACLAntiSpamRegistry::instance().purgeAllQueues();
             // NaCl End
 
+            // Clear blocked neighbor regions on region change / teleport
+            LLWorld::getInstance()->mBlockedNeighbors.clear();
+            LLWorld::getInstance()->mBlockedHosts.clear();
+            LLWorld::getInstance()->mBlockedSeedCaps.clear();
+
             // We've changed regions, we're now going to change our agent coordinate frame.
             mAgentOriginGlobal = regionp->getOriginGlobal();
             LLVector3d agent_offset_global = mRegionp->getOriginGlobal();

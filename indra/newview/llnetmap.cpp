@@ -58,6 +58,7 @@
 #include "llfloaterland.h"
 #include "llfloaterworldmap.h"
 #include "llparcel.h"
+#include "llregionhandle.h"
 #include "lltracker.h"
 #include "llsurface.h"
 // [SL:KB] - Patch: World-MiniMap | Checked: 2012-07-08 (Catznip-3.3)
@@ -246,6 +247,8 @@ bool LLNetMap::postBuild()
     commitRegistrar.add("Minimap.EstateBan", boost::bind(&LLNetMap::handleEstateBan, this));
     commitRegistrar.add("Minimap.Derender", boost::bind(&LLNetMap::handleDerender, this, false));
     commitRegistrar.add("Minimap.DerenderPermanent", boost::bind(&LLNetMap::handleDerender, this, true));
+    commitRegistrar.add("Minimap.DisconnectRegion", boost::bind(&LLNetMap::handleDisconnectRegion, this));
+    commitRegistrar.add("Minimap.ReconnectRegion", boost::bind(&LLNetMap::handleReconnectRegion, this));
     enableRegistrar.add("Minimap.CanAddFriend", boost::bind(&LLNetMap::canAddFriend, this));
     enableRegistrar.add("Minimap.CanRemoveFriend", boost::bind(&LLNetMap::canRemoveFriend, this));
     enableRegistrar.add("Minimap.CanCall", boost::bind(&LLNetMap::canCall, this));
@@ -736,6 +739,12 @@ void LLNetMap::draw()
 
             // Skip self, we'll draw it later
             if (uuid == gAgent.getID()) continue;
+
+            LLViewerRegion* avatar_region = LLWorld::getInstance()->getRegionFromPosGlobal(sorted_positions[i]);
+            if (avatar_region && LLWorld::getInstance()->mBlockedNeighbors.count(avatar_region->getHandle()) > 0)
+            {
+                continue;
+            }
 
             pos_map = globalPosToView(sorted_positions[i]);
 
@@ -1833,6 +1842,24 @@ bool LLNetMap::handleRightMouseDown(S32 x, S32 y, MASK mask)
         menu->setItemEnabled("Place Profile", RlvActions::canShowLocation());
         menu->setItemEnabled("World Map", !RlvActions::hasBehaviour(RLV_BHVR_SHOWWORLDMAP));
 
+        U64 clicked_handle = to_region_handle(mPopupWorldPos);
+        LLViewerRegion* agent_region = gAgent.getRegion();
+        U32 clicked_x = (U32)(clicked_handle >> 32);
+        U32 clicked_y = (U32)(clicked_handle & 0xFFFFFFFF);
+        U64 agent_handle = agent_region ? agent_region->getHandle() : 0;
+        U32 agent_x = (U32)(agent_handle >> 32);
+        U32 agent_y = (U32)(agent_handle & 0xFFFFFFFF);
+        S32 dx = (S32)(clicked_x / 256) - (S32)(agent_x / 256);
+        S32 dy = (S32)(clicked_y / 256) - (S32)(agent_y / 256);
+        bool is_adjacent = (dx != 0 || dy != 0) && (abs(dx) <= 1 && abs(dy) <= 1);
+        bool is_neighbor = (agent_region != NULL) && is_adjacent;
+        bool is_blocked = (LLWorld::getInstance()->mBlockedNeighbors.count(clicked_handle) > 0);
+
+        menu->setItemVisible("Disconnect Region", is_neighbor && !is_blocked);
+        menu->setItemEnabled("Disconnect Region", is_neighbor && !is_blocked);
+        menu->setItemVisible("Reconnect Region", is_blocked);
+        menu->setItemEnabled("Reconnect Region", is_blocked);
+
 // [/SL:KB]
         menu->buildDrawLabels();
         menu->updateParent(LLMenuGL::sMenuContainer);
@@ -2388,4 +2415,41 @@ void LLNetMap::handleEstateBan()
 void LLNetMap::handleDerender(bool permanent)
 {
     LLAvatarActions::derender(mClosestAgentRightClick, permanent);
+}
+
+void LLNetMap::handleDisconnectRegion()
+{
+    U64 clicked_handle = to_region_handle(mPopupWorldPos);
+    LLViewerRegion* region = LLWorld::getInstance()->getRegionFromHandle(clicked_handle);
+    if (region)
+    {
+        LLWorld::getInstance()->mBlockedNeighbors.insert(clicked_handle);
+        LLWorld::getInstance()->mBlockedHosts[clicked_handle] = region->getHost();
+        LLWorld::getInstance()->deactivateRegion(region);
+        refreshParcelOverlay();
+    }
+}
+
+void LLNetMap::handleReconnectRegion()
+{
+    U64 clicked_handle = to_region_handle(mPopupWorldPos);
+    if (LLWorld::getInstance()->mBlockedNeighbors.count(clicked_handle) > 0)
+    {
+        LLWorld::getInstance()->mBlockedNeighbors.erase(clicked_handle);
+        LLViewerRegion* region = LLWorld::getInstance()->getRegionFromHandle(clicked_handle);
+        if (region)
+        {
+            LLWorld::getInstance()->activateRegion(region);
+        }
+        else
+        {
+            auto iter = LLWorld::getInstance()->mBlockedHosts.find(clicked_handle);
+            if (iter != LLWorld::getInstance()->mBlockedHosts.end())
+            {
+                LLWorld::getInstance()->connectToSimulator(clicked_handle, iter->second);
+            }
+        }
+        LLWorld::getInstance()->mBlockedHosts.erase(clicked_handle);
+        refreshParcelOverlay();
+    }
 }

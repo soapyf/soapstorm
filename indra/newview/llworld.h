@@ -33,6 +33,8 @@
 #define LL_LLWORLD_H
 
 #include "llpatchvertexarray.h"
+#include <set>
+#include <map>
 
 #include "llmath.h"
 #include "v3math.h"
@@ -74,10 +76,18 @@ public:
     void updateLimits(); // <FS:CR> Aurora Sim
     //LLViewerRegion*   addRegion(const U64 &region_handle, const LLHost &host);
     LLViewerRegion* addRegion(const U64 &region_handle, const LLHost &host, const U32 &region_size_x, const U32 &region_size_y);
+    void connectToSimulator(U64 handle, const LLHost& sim, U32 size_x = 256, U32 size_y = 256);
+    void disconnectSimulator(LLViewerRegion* regionp);
+    void deactivateRegion(LLViewerRegion* regionp);
+    void activateRegion(LLViewerRegion* regionp);
+    std::set<U64> mBlockedNeighbors;
+    std::map<U64, LLHost> mBlockedHosts;
+    std::map<U64, std::string> mBlockedSeedCaps;
 // <FS:CR> Aurora Sim
         // safe to call if already present, does the "right thing" if
         // hosts are same, or if hosts are different, etc...
     void            removeRegion(const LLHost &host);
+    void            removeRegion(LLViewerRegion* regionp);
 
     void    disconnectRegions(); // Send quit messages to all child regions
 
