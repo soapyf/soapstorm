@@ -9572,6 +9572,10 @@ bool LLVOAvatar::shouldRenderRigged() const
 // Maybe better naming could make this clearer?
 bool LLVOAvatar::isVisible() const
 {
+    if (getRegion() && LLWorld::getInstance()->mBlockedNeighbors.count(getRegion()->getHandle()) > 0)
+    {
+        return false;
+    }
     static LLCachedControl<bool> friends_only(gSavedSettings, "RenderAvatarFriendsOnly", false);
     return mDrawable.notNull()
         && (!mOrphaned || isSelf())

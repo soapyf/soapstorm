@@ -491,4 +491,17 @@
          function="Floater.Show"
          parameter="world_map" />
     </menu_item_call>
+    <menu_item_separator />
+    <menu_item_call
+     label="Disconnect Region"
+     name="Disconnect Region">
+        <menu_item_call.on_click
+         function="Minimap.DisconnectRegion" />
+    </menu_item_call>
+    <menu_item_call
+     label="Reconnect Region"
+     name="Reconnect Region">
+        <menu_item_call.on_click
+         function="Minimap.ReconnectRegion" />
+    </menu_item_call>
 </menu>

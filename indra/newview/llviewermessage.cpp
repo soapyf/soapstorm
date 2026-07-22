@@ -4291,6 +4291,86 @@ void send_agent_update(bool force_send, bool send_reliable)
                             AGENT_CONTROL_ML_LBUTTON_UP ;
     }
 
+    // Blocked boundary constraints
+    LLViewerRegion* region = gAgent.getRegion();
+    if (region && !LLWorld::getInstance()->mBlockedNeighbors.empty())
+    {
+        LLVector3 pos = gAgent.getPositionAgent();
+        F32 width = region->getWidth();
+        U64 handle = region->getHandle();
+        U32 reg_x = (U32)(handle >> 32);
+        U32 reg_y = (U32)(handle & 0xFFFFFFFF);
+
+        U64 east_handle = to_region_handle(reg_x + (U32)width, reg_y);
+        U64 west_handle = to_region_handle(reg_x - (U32)width, reg_y);
+        U64 north_handle = to_region_handle(reg_x, reg_y + (U32)width);
+        U64 south_handle = to_region_handle(reg_x, reg_y - (U32)width);
+
+        bool east_blocked = (LLWorld::getInstance()->mBlockedNeighbors.count(east_handle) > 0);
+        bool west_blocked = (LLWorld::getInstance()->mBlockedNeighbors.count(west_handle) > 0);
+        bool north_blocked = (LLWorld::getInstance()->mBlockedNeighbors.count(north_handle) > 0);
+        bool south_blocked = (LLWorld::getInstance()->mBlockedNeighbors.count(south_handle) > 0);
+
+        F32 margin = 2.0f; // boundary margin in meters
+        LLQuaternion body_rotation = gAgent.getFrameAgent().getQuaternion();
+        LLVector3 body_at = LLVector3::x_axis * body_rotation;
+        LLVector3 body_left = LLVector3::y_axis * body_rotation;
+
+        bool position_changed = false;
+        LLVector3 nudged_pos = pos;
+
+        if (east_blocked && pos.mV[VX] > width - margin)
+        {
+            if ((control_flags & AGENT_CONTROL_AT_POS) && body_at.mV[VX] > 0.1f) { control_flags &= ~AGENT_CONTROL_AT_POS; gAgent.clearControlFlags(AGENT_CONTROL_AT_POS); }
+            if ((control_flags & AGENT_CONTROL_AT_NEG) && body_at.mV[VX] < -0.1f) { control_flags &= ~AGENT_CONTROL_AT_NEG; gAgent.clearControlFlags(AGENT_CONTROL_AT_NEG); }
+            if ((control_flags & AGENT_CONTROL_LEFT_POS) && body_left.mV[VX] > 0.1f) { control_flags &= ~AGENT_CONTROL_LEFT_POS; gAgent.clearControlFlags(AGENT_CONTROL_LEFT_POS); }
+            if ((control_flags & AGENT_CONTROL_LEFT_NEG) && body_left.mV[VX] < -0.1f) { control_flags &= ~AGENT_CONTROL_LEFT_NEG; gAgent.clearControlFlags(AGENT_CONTROL_LEFT_NEG); }
+
+            nudged_pos.mV[VX] = width - margin - 2.0f;
+            position_changed = true;
+        }
+        if (west_blocked && pos.mV[VX] < margin)
+        {
+            if ((control_flags & AGENT_CONTROL_AT_POS) && body_at.mV[VX] < -0.1f) { control_flags &= ~AGENT_CONTROL_AT_POS; gAgent.clearControlFlags(AGENT_CONTROL_AT_POS); }
+            if ((control_flags & AGENT_CONTROL_AT_NEG) && body_at.mV[VX] > 0.1f) { control_flags &= ~AGENT_CONTROL_AT_NEG; gAgent.clearControlFlags(AGENT_CONTROL_AT_NEG); }
+            if ((control_flags & AGENT_CONTROL_LEFT_POS) && body_left.mV[VX] < -0.1f) { control_flags &= ~AGENT_CONTROL_LEFT_POS; gAgent.clearControlFlags(AGENT_CONTROL_LEFT_POS); }
+            if ((control_flags & AGENT_CONTROL_LEFT_NEG) && body_left.mV[VX] > 0.1f) { control_flags &= ~AGENT_CONTROL_LEFT_NEG; gAgent.clearControlFlags(AGENT_CONTROL_LEFT_NEG); }
+
+            nudged_pos.mV[VX] = margin + 2.0f;
+            position_changed = true;
+        }
+        if (north_blocked && pos.mV[VY] > width - margin)
+        {
+            if ((control_flags & AGENT_CONTROL_AT_POS) && body_at.mV[VY] > 0.1f) { control_flags &= ~AGENT_CONTROL_AT_POS; gAgent.clearControlFlags(AGENT_CONTROL_AT_POS); }
+            if ((control_flags & AGENT_CONTROL_AT_NEG) && body_at.mV[VY] < -0.1f) { control_flags &= ~AGENT_CONTROL_AT_NEG; gAgent.clearControlFlags(AGENT_CONTROL_AT_NEG); }
+            if ((control_flags & AGENT_CONTROL_LEFT_POS) && body_left.mV[VY] > 0.1f) { control_flags &= ~AGENT_CONTROL_LEFT_POS; gAgent.clearControlFlags(AGENT_CONTROL_LEFT_POS); }
+            if ((control_flags & AGENT_CONTROL_LEFT_NEG) && body_left.mV[VY] < -0.1f) { control_flags &= ~AGENT_CONTROL_LEFT_NEG; gAgent.clearControlFlags(AGENT_CONTROL_LEFT_NEG); }
+
+            nudged_pos.mV[VY] = width - margin - 2.0f;
+            position_changed = true;
+        }
+        if (south_blocked && pos.mV[VY] < margin)
+        {
+            if ((control_flags & AGENT_CONTROL_AT_POS) && body_at.mV[VY] < -0.1f) { control_flags &= ~AGENT_CONTROL_AT_POS; gAgent.clearControlFlags(AGENT_CONTROL_AT_POS); }
+            if ((control_flags & AGENT_CONTROL_AT_NEG) && body_at.mV[VY] > 0.1f) { control_flags &= ~AGENT_CONTROL_AT_NEG; gAgent.clearControlFlags(AGENT_CONTROL_AT_NEG); }
+            if ((control_flags & AGENT_CONTROL_LEFT_POS) && body_left.mV[VY] < -0.1f) { control_flags &= ~AGENT_CONTROL_LEFT_POS; gAgent.clearControlFlags(AGENT_CONTROL_LEFT_POS); }
+            if ((control_flags & AGENT_CONTROL_LEFT_NEG) && body_left.mV[VY] > 0.1f) { control_flags &= ~AGENT_CONTROL_LEFT_NEG; gAgent.clearControlFlags(AGENT_CONTROL_LEFT_NEG); }
+
+            nudged_pos.mV[VY] = margin + 2.0f;
+            position_changed = true;
+        }
+
+        if (position_changed)
+        {
+            gAgent.setPositionAgent(nudged_pos);
+            if (isAgentAvatarValid())
+            {
+                gAgentAvatarp->setPositionAgent(nudged_pos);
+                gAgentAvatarp->slamPosition();
+            }
+        }
+    }
+
     // any change in control_flags should be sent ASAP, so we fold that into force_send
     force_send = force_send || (control_flags != last_control_flags);
 

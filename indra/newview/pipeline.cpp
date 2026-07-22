@@ -2698,6 +2698,25 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
         }
     }
 
+    // Cull water for blocked/deactivated regions so they keep rendering their water plane
+    for (U64 handle : LLWorld::getInstance()->mBlockedNeighbors)
+    {
+        LLViewerRegion* region = LLWorld::getInstance()->getRegionFromHandle(handle);
+        if (region)
+        {
+            LLSpatialPartition* water_part = region->getSpatialPartition(LLViewerRegion::PARTITION_WATER);
+            if (water_part && hasRenderType(water_part->mDrawableType))
+            {
+                water_part->cull(camera);
+            }
+            LLSpatialPartition* voidwater_part = region->getSpatialPartition(LLViewerRegion::PARTITION_VOIDWATER);
+            if (voidwater_part && hasRenderType(voidwater_part->mDrawableType))
+            {
+                voidwater_part->cull(camera);
+            }
+        }
+    }
+
     if (hasRenderType(LLPipeline::RENDER_TYPE_SKY) &&
         gSky.mVOSkyp.notNull() &&
         gSky.mVOSkyp->mDrawable.notNull())

@@ -676,12 +676,18 @@ LLViewerRegion* LLWorld::addRegion(const U64 &region_handle, const LLHost &host,
 
 void LLWorld::removeRegion(const LLHost &host)
 {
-    F32 x, y;
-
     LLViewerRegion *regionp = getRegion(host);
+    if (regionp)
+    {
+        removeRegion(regionp);
+    }
+}
+
+void LLWorld::removeRegion(LLViewerRegion* regionp)
+{
     if (!regionp)
     {
-        LL_WARNS() << "Trying to remove region that doesn't exist!" << LL_ENDL;
+        LL_WARNS() << "Trying to remove null region!" << LL_ENDL;
         return;
     }
 
@@ -712,6 +718,7 @@ void LLWorld::removeRegion(const LLHost &host)
         return;
     }
 
+    F32 x, y;
     from_region_handle(regionp->getHandle(), &x, &y);
     LL_INFOS() << "Removing region " << x << ":" << y << LL_ENDL;
 
@@ -1581,6 +1588,69 @@ void LLWorld::disconnectRegions()
     }
 }
 
+void LLWorld::connectToSimulator(U64 handle, const LLHost& sim, U32 size_x, U32 size_y)
+{
+    gMessageSystem->enableCircuit(sim, true);
+    LLViewerRegion* regionp = addRegion(handle, sim, size_x, size_y);
+
+    auto iter = mBlockedSeedCaps.find(handle);
+    if (iter != mBlockedSeedCaps.end() && regionp)
+    {
+        regionp->setSeedCapability(iter->second);
+        mBlockedSeedCaps.erase(iter);
+    }
+
+    LL_INFOS() << "connectToSimulator() Enabling " << sim << " with code " << gMessageSystem->getOurCircuitCode() << LL_ENDL;
+    gMessageSystem->newMessageFast(_PREHASH_UseCircuitCode);
+    gMessageSystem->nextBlockFast(_PREHASH_CircuitCode);
+    gMessageSystem->addU32Fast(_PREHASH_Code, gMessageSystem->getOurCircuitCode());
+    gMessageSystem->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
+    gMessageSystem->addUUIDFast(_PREHASH_ID, gAgent.getID());
+    gMessageSystem->sendReliable(sim);
+}
+
+void LLWorld::disconnectSimulator(LLViewerRegion* regionp)
+{
+    if (!regionp) return;
+
+    LLHost host = regionp->getHost();
+    U64 handle = regionp->getHandle();
+
+    // Cache capability if present
+    std::string seed_cap = regionp->getCapability("Seed");
+    if (!seed_cap.empty())
+    {
+        mBlockedSeedCaps[handle] = seed_cap;
+    }
+
+    // Clean up local region representation and objects
+    removeRegion(regionp);
+}
+
+void LLWorld::deactivateRegion(LLViewerRegion* regionp)
+{
+    if (!regionp) return;
+
+    mActiveRegionList.remove(regionp);
+    mCulledRegionList.remove(regionp);
+    mVisibleRegionList.remove(regionp);
+}
+
+void LLWorld::activateRegion(LLViewerRegion* regionp)
+{
+    if (!regionp) return;
+
+    if (std::find(mActiveRegionList.begin(), mActiveRegionList.end(), regionp) == mActiveRegionList.end())
+    {
+        mActiveRegionList.push_back(regionp);
+    }
+    if (std::find(mCulledRegionList.begin(), mCulledRegionList.end(), regionp) == mCulledRegionList.end()
+        && std::find(mVisibleRegionList.begin(), mVisibleRegionList.end(), regionp) == mVisibleRegionList.end())
+    {
+        mCulledRegionList.push_back(regionp);
+    }
+}
+
 void process_enable_simulator(LLMessageSystem *msg, void **user_data)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_NETWORK;
@@ -1635,21 +1705,15 @@ void process_enable_simulator(LLMessageSystem *msg, void **user_data)
     }
 #endif
 // </FS:CR> Aurora Sim
-    // Viewer trusts the simulator.
-    msg->enableCircuit(sim, true);
-// <FS:CR> Aurora Sim
-    //LLWorld::getInstance()->addRegion(handle, sim);
-    LLWorld::getInstance()->addRegion(handle, sim, region_size_x, region_size_y);
-// </FS:CR> Aurora Sim
 
-    // give the simulator a message it can use to get ip and port
-    LL_INFOS() << "simulator_enable() Enabling " << sim << " with code " << msg->getOurCircuitCode() << LL_ENDL;
-    msg->newMessageFast(_PREHASH_UseCircuitCode);
-    msg->nextBlockFast(_PREHASH_CircuitCode);
-    msg->addU32Fast(_PREHASH_Code, msg->getOurCircuitCode());
-    msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
-    msg->addUUIDFast(_PREHASH_ID, gAgent.getID());
-    msg->sendReliable(sim);
+    // If neighbor is manually blocked, cache it and abort connection
+    if (LLWorld::getInstance()->mBlockedNeighbors.count(handle) > 0)
+    {
+        LLWorld::getInstance()->mBlockedHosts[handle] = sim;
+        return;
+    }
+
+    LLWorld::getInstance()->connectToSimulator(handle, sim, region_size_x, region_size_y);
 }
 
 class LLEstablishAgentCommunication : public LLHTTPNode
@@ -1700,6 +1764,21 @@ public:
         LLViewerRegion* regionp = LLWorld::getInstance()->getRegion(sim);
         if (!regionp)
         {
+            bool found_blocked = false;
+            for (const auto& pair : LLWorld::getInstance()->mBlockedHosts)
+            {
+                if (pair.second == sim)
+                {
+                    LLWorld::getInstance()->mBlockedSeedCaps[pair.first] = input["body"]["seed-capability"].asString();
+                    found_blocked = true;
+                    break;
+                }
+            }
+            if (found_blocked)
+            {
+                return;
+            }
+
             LL_WARNS() << "Got EstablishAgentCommunication for unknown region "
                     << sim << LL_ENDL;
             return;
