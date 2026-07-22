@@ -202,6 +202,7 @@ protected:
     class Handler : public LLHttpSDHandler
     {
         LOG_CLASS(Handler);
+        friend class LLMediaDataClient;
     public:
         Handler(const Request::ptr_t &request);
         Request::ptr_t getRequest() const { return mRequest; }

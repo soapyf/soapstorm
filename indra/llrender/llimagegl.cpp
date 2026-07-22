@@ -1829,9 +1829,12 @@ bool LLImageGL::readBackRaw(S32 discard_level, LLImageRaw* imageraw, bool compre
         return false;
     }
 
-    if (mTarget == 0)
+    bool target_supported = (mTarget == GL_TEXTURE_2D ||
+                             mTarget == GL_TEXTURE_RECTANGLE ||
+                             (mTarget >= GL_TEXTURE_CUBE_MAP_POSITIVE_X && mTarget <= GL_TEXTURE_CUBE_MAP_NEGATIVE_Z));
+    if (!target_supported)
     {
-        LL_WARNS() << "LLImageGL::readBackRaw: invalid target: " << mTarget << LL_ENDL;
+        LL_WARNS() << "LLImageGL::readBackRaw: unsupported target for readback: " << mTarget << LL_ENDL;
         return false;
     }
 

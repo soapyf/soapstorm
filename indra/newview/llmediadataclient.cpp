@@ -357,6 +357,11 @@ void LLMediaDataClient::serviceQueue()
             LLCore::HttpStatus status = mHttpRequest->getStatus();
             LL_WARNS("LLMediaDataClient") << "'" << url << "' request POST failed. Reason "
                 << status.toTerseString() << " \"" << status.toString() << "\"" << LL_ENDL;
+            std::shared_ptr<LLMediaDataClient::Handler> media_handler = std::dynamic_pointer_cast<LLMediaDataClient::Handler>(handler);
+            if (media_handler)
+            {
+                media_handler->onFailure(nullptr, status);
+            }
         }
     }
     else
@@ -374,6 +379,12 @@ void LLMediaDataClient::serviceQueue()
         {
             // This request has exceeded its maximum retry count.  It will be dropped.
             LL_WARNS("LLMediaDataClient") << "Could not send request " << *request << " for " << mMaxNumRetries << " tries, dropping request." << LL_ENDL;
+            LLCore::HttpHandler::ptr_t handler = request->createHandler();
+            std::shared_ptr<LLMediaDataClient::Handler> media_handler = std::dynamic_pointer_cast<LLMediaDataClient::Handler>(handler);
+            if (media_handler)
+            {
+                media_handler->onFailure(nullptr, LLCore::HttpStatus(LLCore::HttpStatus::LLCORE, LLCore::HE_OP_CANCELED));
+            }
         }
 
     }

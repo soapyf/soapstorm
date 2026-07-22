@@ -917,6 +917,7 @@ void LLVOAvatar::debugAvatarRezTime(std::string notification_name, std::string c
 //------------------------------------------------------------------------
 LLVOAvatar::~LLVOAvatar()
 {
+    deleteLayerSetCaches(true);
     sInstances.remove(this);
 
     if (!mFullyLoaded)
