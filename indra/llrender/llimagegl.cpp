@@ -1813,6 +1813,12 @@ bool LLImageGL::readBackRaw(S32 discard_level, LLImageRaw* imageraw, bool compre
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
 
+    if (!imageraw)
+    {
+        LL_WARNS() << "LLImageGL::readBackRaw: destination imageraw is null." << LL_ENDL;
+        return false;
+    }
+
     if (discard_level < 0)
     {
         discard_level = mCurrentDiscardLevel;
@@ -1820,6 +1826,12 @@ bool LLImageGL::readBackRaw(S32 discard_level, LLImageRaw* imageraw, bool compre
 
     if (mTexName == 0 || discard_level < mCurrentDiscardLevel || discard_level > mMaxDiscardLevel )
     {
+        return false;
+    }
+
+    if (mTarget == 0)
+    {
+        LL_WARNS() << "LLImageGL::readBackRaw: invalid target: " << mTarget << LL_ENDL;
         return false;
     }
 
@@ -1896,6 +1908,12 @@ bool LLImageGL::readBackRaw(S32 discard_level, LLImageRaw* imageraw, bool compre
             return false ;
         }
 
+        if (!imageraw->getData() || imageraw->getDataSize() < glbytes)
+        {
+            LL_WARNS() << "LLImageGL::readBackRaw: invalid or undersized destination raw image buffer for compressed data." << LL_ENDL;
+            return false;
+        }
+
         glGetCompressedTexImage(mTarget, gl_discard, (GLvoid*)(imageraw->getData()));
         //stop_glerror();
     }
@@ -1918,7 +1936,40 @@ bool LLImageGL::readBackRaw(S32 discard_level, LLImageRaw* imageraw, bool compre
             return false ;
         }
 
-        glGetTexImage(GL_TEXTURE_2D, gl_discard, mFormatPrimary, mFormatType, (GLvoid*)(imageraw->getData()));
+        S32 expected_size = width * height * ncomponents;
+        if (!imageraw->getData() || imageraw->getDataSize() < expected_size)
+        {
+            LL_WARNS() << "LLImageGL::readBackRaw: invalid or undersized destination raw image buffer." << LL_ENDL;
+            return false;
+        }
+
+        GLenum read_format = mFormatPrimary;
+        bool is_standard_format = (read_format == GL_RGB ||
+                                   read_format == GL_RGBA ||
+                                   read_format == GL_LUMINANCE ||
+                                   read_format == GL_LUMINANCE_ALPHA ||
+                                   read_format == GL_RED ||
+                                   read_format == GL_RG ||
+                                   read_format == GL_BGRA);
+        if (!is_standard_format)
+        {
+            switch (ncomponents)
+            {
+                case 1: read_format = LLRender::sGLCoreProfile ? GL_RED : GL_LUMINANCE; break;
+                case 2: read_format = LLRender::sGLCoreProfile ? GL_RG : GL_LUMINANCE_ALPHA; break;
+                case 3: read_format = GL_RGB; break;
+                case 4: read_format = GL_RGBA; break;
+                default: read_format = GL_RGBA; break;
+            }
+        }
+
+        GLenum read_type = mFormatType;
+        if (read_type == 0)
+        {
+            read_type = GL_UNSIGNED_BYTE;
+        }
+
+        glGetTexImage(mTarget, gl_discard, read_format, read_type, (GLvoid*)(imageraw->getData()));
         //stop_glerror();
     }
 
