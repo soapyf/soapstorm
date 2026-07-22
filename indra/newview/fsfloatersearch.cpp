@@ -146,17 +146,7 @@ public:
     mParent(floater)
     {}
 
-    ~FSSearchAvatarPropertiesObserver()
-    {
-        // remove any in-flight observers
-        std::set<LLUUID>::iterator it;
-        for (it = mAvatarIDs.begin(); it != mAvatarIDs.end(); ++it)
-        {
-            const LLUUID &id = *it;
-            LLAvatarPropertiesProcessor::getInstance()->removeObserver(id, this);
-        }
-        mAvatarIDs.clear();
-    }
+    // In-flight registrations are cleaned up by ~LLAvatarPropertiesObserver.
 
     void processProperties(void* data, EAvatarProcessorType type)
     {
@@ -197,7 +187,6 @@ public:
         }
     }
 private:
-    std::set<LLUUID>    mAvatarIDs;
     FSFloaterSearch*    mParent;
 };
 
