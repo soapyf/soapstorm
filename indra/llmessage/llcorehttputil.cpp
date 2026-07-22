@@ -1234,9 +1234,10 @@ void HttpCoroutineAdapter::cancelSuspendedOperation()
     HttpCoroHandler::ptr_t handler = mWeakHandler.lock();
     if ((request) && (handler) && (mYieldingHandle != LLCORE_HTTP_HANDLE_INVALID))
     {
+        LLCore::HttpHandle yieldingHandle = mYieldingHandle;
         cleanState();
         LL_INFOS() << "Canceling yielding request!" << LL_ENDL;
-        request->requestCancel(mYieldingHandle, handler);
+        request->requestCancel(yieldingHandle, handler);
     }
 }
 

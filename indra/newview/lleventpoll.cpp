@@ -214,11 +214,11 @@ namespace Details
 //          LL_DEBUGS("LLEventPollImpl::eventPollCoro") << "<" << counter << "> result = "
 //              << LLSDXMLStreamer(result) << LL_ENDL;
 
-            if (gDisconnected)
+            if (mDone || gDisconnected)
             {
-                // Lost connection or disconnected during quit, don't process sim/region update
+                // Lost connection or stopped during yield, don't process sim/region update
                 // messages, they might populate some cleaned up classes (LLWorld, region and object list)
-                LL_INFOS("LLEventPollImpl") << "Dropping event messages" << LL_ENDL;
+                LL_INFOS("LLEventPollImpl") << "Dropping event messages (done=" << mDone << ", disconnected=" << gDisconnected << ")" << LL_ENDL;
                 break;
             }
 
