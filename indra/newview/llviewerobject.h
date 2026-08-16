@@ -223,6 +223,15 @@ public:
     virtual bool    isHUDAttachment() const { return false; }
     virtual bool    isTempAttachment() const;
 
+    F64Seconds      getTimeElapsedSinceLastPacket() const;
+
+    bool            isStaleCheckPending() const { return mStaleCheckPending; }
+    void            setStaleCheckPending(bool pending) { mStaleCheckPending = pending; }
+
+    bool            isRoot() const { return getParent() == NULL; }
+    bool            isStaleCheckDone() const { return mStaleCheckDone; }
+    void            setStaleCheckDone(bool done) { mStaleCheckDone = done; }
+
     virtual bool isHiglightedOrBeacon() const;
 
     virtual void    updateRadius() {};
@@ -947,8 +956,11 @@ protected:
 
     F64Seconds      mLastInterpUpdateSecs;          // Last update for purposes of interpolation
     F64Seconds      mLastMessageUpdateSecs;         // Last update from a message from the simulator
+    F64Seconds      mLastAuthoritativePacketTime;   // Last authoritative packet time from the simulator
     TPACKETID       mLatestRecvPacketID;            // Latest time stamp on message from simulator
     F64SecondsImplicit mRegionCrossExpire;      // frame time we detected region crossing in + wait time
+    bool            mStaleCheckPending;             // Whether a stale check is currently pending
+    bool            mStaleCheckDone;                // Whether a stale check has been run in current frustum cycle
 
     // extra data sent from the sim...currently only used for tree species info
     U8* mData;

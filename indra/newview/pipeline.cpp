@@ -2765,6 +2765,43 @@ void LLPipeline::markNotCulled(LLSpatialGroup* group, LLCamera& camera)
     if (group->needsUpdate() ||
         group->getVisible(LLViewerCamera::sCurCameraID) < LLDrawable::getCurrentFrame() - 1)
     {
+        if (group->getVisible(LLViewerCamera::sCurCameraID) < LLDrawable::getCurrentFrame() - 1)
+        {
+            for (LLSpatialGroup::element_iter i = group->getDataBegin(); i != group->getDataEnd(); ++i)
+            {
+                LLDrawable* drawablep = (LLDrawable*)(*i)->getDrawable();
+                if (drawablep)
+                {
+                    LLViewerObject* vobj = drawablep->getVObj();
+                    if (vobj && vobj->isRoot() && !vobj->isAvatar() && !vobj->isDead())
+                    {
+                        // Reset stale check latch when object re-enters frustum
+                        vobj->setStaleCheckDone(false);
+
+                        if (!vobj->isStaleCheckPending() && vobj->getTimeElapsedSinceLastPacket().value() > 30.0f)
+                        {
+                            bool qualify = false;
+                            if (vobj->flagUsePhysics() || vobj->flagTemporaryOnRez() ||
+                                vobj->getVelocity().magVecSquared() > 0.001f ||
+                                vobj->getAngularVelocity().magVecSquared() > 0.001f)
+                            {
+                                qualify = true;
+                            }
+                            else if (vobj->flagScripted() && !vobj->isStaleCheckDone())
+                            {
+                                qualify = true;
+                                vobj->setStaleCheckDone(true);
+                            }
+
+                            if (qualify)
+                            {
+                                gObjectList.queueStaleObjectCheck(vobj);
+                            }
+                        }
+                    }
+                }
+            }
+        }
         // include this group in occlusion groups, not because it is an occluder, but because we want to run
         // an occlusion query to find out if it's an occluder
         markOccluder(group);

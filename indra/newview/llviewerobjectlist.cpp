@@ -1047,6 +1047,55 @@ void LLViewerObjectList::update(LLAgent &agent)
 
     const F64 frame_time = LLFrameTimer::getElapsedSeconds();
 
+    processStaleObjectQueue();
+
+    // Detect non-avatar physical objects whose positions have drifted outside region bounds
+    {
+        const F32 PADDING = 4.0f;
+        const F64 GRACE_PERIOD = 3.0; // 3 seconds
+        std::set<U32> current_oob;
+
+        for (std::vector<LLPointer<LLViewerObject> >::iterator active_iter = mActiveObjects.begin();
+             active_iter != mActiveObjects.end(); ++active_iter)
+        {
+            LLViewerObject* obj = *active_iter;
+            if (obj && !obj->isDead() && !obj->isAvatar() && obj->flagUsePhysics() && !obj->isStaleCheckPending())
+            {
+                LLVector3 pos = obj->getPosition();
+                LLViewerRegion* regionp = obj->getRegion();
+                F32 width = regionp ? regionp->getWidth() : 256.0f;
+                if (pos.mV[0] < -PADDING || pos.mV[0] > width + PADDING ||
+                    pos.mV[1] < -PADDING || pos.mV[1] > width + PADDING)
+                {
+                    U32 local_id = obj->getLocalID();
+                    current_oob.insert(local_id);
+                    if (mOutOfBoundsObjects.find(local_id) == mOutOfBoundsObjects.end())
+                    {
+                        mOutOfBoundsObjects[local_id] = frame_time;
+                    }
+                    else if (frame_time - mOutOfBoundsObjects[local_id] > GRACE_PERIOD)
+                    {
+                        // Exceeded grace period, request update or kill object
+                        queueStaleObjectCheck(obj);
+                    }
+                }
+            }
+        }
+
+        // Clean up objects that are no longer out of bounds
+        for (auto it = mOutOfBoundsObjects.begin(); it != mOutOfBoundsObjects.end(); )
+        {
+            if (current_oob.find(it->first) == current_oob.end())
+            {
+                it = mOutOfBoundsObjects.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+
     LLViewerObject *objectp = NULL;
 
     // Make a copy of the list in case something in idleUpdate() messes with it
@@ -2610,3 +2659,86 @@ bool LLViewerObjectList::isNonFriendDerendered(const LLUUID& id, LLPCode pcode)
     return (pcode == LL_PCODE_LEGACY_AVATAR && fsRenderFriendsOnly && id != gAgentID && !LLAvatarActions::isFriend(id));
 }
 // </FS:Ansariel>
+
+void LLViewerObjectList::queueStaleObjectCheck(LLViewerObject* vobj)
+{
+    if (!vobj || !vobj->getRegion() || vobj->isStaleCheckPending()) return;
+
+    U32 local_id = vobj->getLocalID();
+    U64 region_handle = vobj->getRegion()->getHandle();
+
+    for (const auto& req : mStaleCheckQueue)
+    {
+        if (req.mLocalID == local_id && req.mRegionHandle == region_handle) return;
+    }
+
+    vobj->setStaleCheckPending(true);
+
+    StaleCheckRequest req;
+    req.mLocalID = local_id;
+    req.mRegionHandle = region_handle;
+    mStaleCheckQueue.push_back(req);
+}
+
+void LLViewerObjectList::processStaleObjectQueue()
+{
+    if (mStaleCheckQueue.empty()) return;
+
+    if (mStaleCheckTimer.getElapsedTimeF32() < 0.5f)
+    {
+        return;
+    }
+    mStaleCheckTimer.reset();
+
+    LLViewerRegion* target_region = NULL;
+    U64 target_handle = 0;
+
+    while (!mStaleCheckQueue.empty())
+    {
+        target_handle = mStaleCheckQueue.front().mRegionHandle;
+        target_region = LLWorld::getInstance()->getRegionFromHandle(target_handle);
+        if (target_region)
+        {
+            break;
+        }
+        else
+        {
+            mStaleCheckQueue.erase(mStaleCheckQueue.begin());
+        }
+    }
+
+    if (!target_region) return;
+
+    std::vector<U32> ids_to_request;
+    for (auto it = mStaleCheckQueue.begin(); it != mStaleCheckQueue.end() && ids_to_request.size() < 10; )
+    {
+        if (it->mRegionHandle == target_handle)
+        {
+            ids_to_request.push_back(it->mLocalID);
+            it = mStaleCheckQueue.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    if (!ids_to_request.empty())
+    {
+        LLMessageSystem* msg = gMessageSystem;
+        msg->newMessageFast(_PREHASH_RequestMultipleObjects);
+        msg->nextBlockFast(_PREHASH_AgentData);
+        msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
+        msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
+
+        for (U32 local_id : ids_to_request)
+        {
+            msg->nextBlockFast(_PREHASH_ObjectData);
+            msg->addU8Fast(_PREHASH_CacheMissType, 0);
+            msg->addU32Fast(_PREHASH_ID, local_id);
+        }
+
+        msg->sendReliable(target_region->getHost());
+    }
+}
+

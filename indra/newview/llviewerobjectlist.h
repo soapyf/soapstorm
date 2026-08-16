@@ -278,6 +278,18 @@ public:
     void removeDerenderedItem( LLUUID const & );
 // </FS:ND>
 
+public:
+    struct StaleCheckRequest {
+        U32 mLocalID;
+        U64 mRegionHandle;
+    };
+    void queueStaleObjectCheck(LLViewerObject* vobj);
+    void processStaleObjectQueue();
+
+private:
+    std::vector<StaleCheckRequest> mStaleCheckQueue;
+    LLFrameTimer mStaleCheckTimer;
+    std::map<U32, F64> mOutOfBoundsObjects;
 };
 
 

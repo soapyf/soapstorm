@@ -292,6 +292,9 @@ LLViewerObject::LLViewerObject(const LLUUID &id, const LLPCode pcode, LLViewerRe
     mControlAvatar(NULL),
     mLastInterpUpdateSecs(0.f),
     mLastMessageUpdateSecs(0.f),
+    mLastAuthoritativePacketTime(LLFrameTimer::getElapsedSeconds()),
+    mStaleCheckPending(false),
+    mStaleCheckDone(false),
     mLastProjectileExistenceProbeSecs(0.f),
     mGhostProjectileWatchStartSecs(0.f),
     mGhostProjectileProbeCount(0),
@@ -1361,6 +1364,9 @@ U32 LLViewerObject::processUpdateMessage(LLMessageSystem *mesgsys,
                      const EObjectUpdateType update_type,
                      LLDataPacker *dp)
 {
+    mLastAuthoritativePacketTime = F64Seconds(LLFrameTimer::getElapsedSeconds());
+    mStaleCheckPending = false;
+    mStaleCheckDone = false;
     LL_PROFILE_ZONE_SCOPED;
     LL_DEBUGS_ONCE("SceneLoadTiming") << "Received viewer object data" << LL_ENDL;
 
@@ -8387,4 +8393,10 @@ public:
 
 LLHTTPRegistration<ObjectPhysicsProperties>
     gHTTPRegistrationObjectPhysicsProperties("/message/ObjectPhysicsProperties");
+
+F64Seconds LLViewerObject::getTimeElapsedSinceLastPacket() const
+{
+    return F64Seconds(LLFrameTimer::getElapsedSeconds() - mLastAuthoritativePacketTime.value());
+}
+
 
