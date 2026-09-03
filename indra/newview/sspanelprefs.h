@@ -1,6 +1,6 @@
 /**
  * @file sspanelprefs.h
- * @brief Soapstorm-specific preferences panel
+ * @brief Soapstorm preferences panel.
  *
  * $LicenseInfo:firstyear=2024&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code
@@ -23,4 +23,4 @@ public:
     void cancel(const std::vector<std::string> settings_to_skip = {}) override;
 };
 
-#endif // SS_PANELPREFS_H
+#endif

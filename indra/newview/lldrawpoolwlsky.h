@@ -64,7 +64,16 @@ public:
     static void cleanupGL();
     static void restoreGL();
 private:
-    void renderDome(const LLVector3& camPosLocal, F32 camHeightLocal, LLGLSLShader * shader) const;
+    // scale shrinks the dome toward the camera. Stock is 0.333 for both the
+    // haze backdrop and the cloud layer drawn on it; the cloud pass alone
+    // passes a slightly smaller one - see its call site.
+    //
+    // depth_write is the horizon clip's permission slip: only the haze pass
+    // sets it, only when an active Atmo environment asks for the clip, and it
+    // lets drawDome store the lower dome's nearer depth slot - see
+    // LL_SHADER_CONST_HORIZON_DEPTH (the value) and sHorizonClip in the .cpp.
+    void renderDome(const LLVector3& camPosLocal, F32 camHeightLocal, LLGLSLShader * shader,
+                    F32 scale = 0.333f, bool depth_write = false) const;
 
     void renderSkyHazeDeferred(const LLVector3& camPosLocal, F32 camHeightLocal) const;
     void renderSkyCloudsDeferred(const LLVector3& camPosLocal, F32 camHeightLocal, LLGLSLShader* cloudshader) const;

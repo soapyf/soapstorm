@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <SS:Nexii> Views for the snow chain: what the transport computed, what the
+     drift is doing, and what the whiteout veil is made of. The whiteout layer's
+     enable switch and strength dial are presentation, not debug, and stay on
+     the Simulation floater with the rest of that chain's tuning. -->
+<panel
+ name="debug_snow_panel"
+ follows="all"
+ layout="topleft"
+ background_visible="false"
+ border="false"
+ top="0"
+ left="0"
+ height="400"
+ width="412">
+    <scroll_container
+     name="snow_scroll"
+     follows="all"
+     layout="topleft"
+     left="0"
+     top="0"
+     height="400"
+     width="404"
+     opaque="false"
+     reserve_scroll_corner="false">
+    <panel
+     name="snow_content"
+     follows="left|top"
+     layout="topleft"
+     background_visible="false"
+     border="false"
+     top="0"
+     left="0"
+     min_height="120"
+     min_width="300"
+     height="260"
+     width="384">
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top="8"
+     height="14"
+     width="382"
+     name="snow_debug_label"
+     font="SansSerifSmallBold">
+        Snow Views
+    </text>
+    <button
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="20"
+     width="102"
+     name="R_snow_debug" label="Reset group"
+     tool_tip="Reset every setting in this section to its default">
+        <button.commit_callback function="SSAtmo.ResetGroup"
+         parameter="SSAtmoSnowDebug,SSAtmoWhiteoutDebug,SSAtmoSnowDriftDebug" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="106"
+      name="T_snow_lift"
+      tool_tip="Draw the transport's per-cell lift figure over the ground - blue at onset, white mid-band, orange at saturation">
+        Lift view:
+    </text>
+    <combo_box
+      control_name="SSAtmoSnowDebug" name="C_snow_lift"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="250"
+      tool_tip="Draw the transport's per-cell lift figure over the ground - blue at onset, white mid-band, orange at saturation">
+        <combo_box.item label="Off" value="0" name="lift_off" />
+        <combo_box.item label="Lift over the ground" value="1" name="lift_on" />
+    </combo_box>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="10" height="16" width="106"
+      name="T_whiteout_view"
+      tool_tip="What the whiteout veil draws in place of its fog">
+        Whiteout view:
+    </text>
+    <combo_box
+      control_name="SSAtmoWhiteoutDebug" name="C_whiteout_view"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="250"
+      tool_tip="Fog shows the veil as it renders; coverage shows its amount as grayscale; gate shows the outdoor-air test; split shows the density terms (red squall, green drift, blue height)">
+        <combo_box.item label="Fog" value="0" name="view_fog" />
+        <combo_box.item label="Coverage" value="1" name="view_coverage" />
+        <combo_box.item label="Outdoor gate" value="2" name="view_gate" />
+        <combo_box.item label="Density split" value="3" name="view_split" />
+    </combo_box>
+    <check_box
+     control_name="SSAtmoSnowDriftDebug"
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="10"
+     height="16"
+     width="382"
+     name="drift_debug_check"
+     label="Force drift particles (oversized, magenta)"
+     tool_tip="Spawns blowing snow regardless of weather and lift gates, oversized and solid magenta - if you cannot see these streaming along the ground, the drift tier is not rendering" />
+
+    </panel>
+    </scroll_container>
+</panel>

@@ -42,6 +42,8 @@
 #include "llviewerregion.h"
 #include "llworld.h"
 #include "llvoavatar.h"
+// <SS:Nexii> Atmo Magic wind flowmap
+#include "sswindflow.h"
 
 static const F32 SEC_PER_FLEXI_FRAME = 1.f / 60.f; // 60 flexi updates per second
 /*static*/ F32 LLVolumeImplFlexible::sUpdateFactor = 1.0f;
@@ -505,6 +507,13 @@ void LLVolumeImplFlexible::doFlexibleUpdate()
 
     F32 force_factor = section_length * secondsThisFrame;
 
+    // <SS:Nexii> Atmo Magic wind flowmap: a hanging banner in an alley should feel the draught coming down it, not the region-wide breeze that knows nothing about the alley. Sampled once for the whole prim rather than per section: the field's cells are metres across and a flexi is a couple of metres end to end, so the sections would be reading one cell between them anyway, and this runs for every flexi in sight every frame.
+    static LLCachedControl<bool> ss_flow_wind(gSavedSettings, "SSAtmoWindFlowViewerWind", true);
+    const bool ss_wind_sensitive = mAttributes->getWindSensitivity() > 0.001f;
+    const bool ss_flow_drives = ss_wind_sensitive && ss_flow_wind && SSWindFlowMap::drivesWind();
+    const LLVector3 ss_flow_vec = ss_flow_drives
+        ? SSWindFlowMap::getInstance()->sample(BasePosition) : LLVector3::zero;
+
     // Update simulated sections
     for (i=1; i<=num_sections; ++i)
     {
@@ -525,9 +534,13 @@ void LLVolumeImplFlexible::doFlexibleUpdate()
         //------------------------------------------------------------------------------------------
         // wind force
         //------------------------------------------------------------------------------------------
-        if (mAttributes->getWindSensitivity() > 0.001f)
+        if (ss_wind_sensitive) // <SS:Nexii/> Atmo Magic wind flowmap: answered once above
         {
-            mSection[i].mPosition += gAgent.getRegion()->mWind.getVelocity( mSection[i].mPosition ) * wind_factor;
+            // <SS:Nexii> Atmo Magic wind flowmap
+            const LLVector3 wind = ss_flow_drives
+                ? ss_flow_vec
+                : gAgent.getRegion()->mWind.getVelocity( mSection[i].mPosition );
+            mSection[i].mPosition += wind * wind_factor;
         }
 
         //------------------------------------------------------------------------------------------

@@ -1,0 +1,322 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<panel
+ border="true"
+ follows="all"
+ label="Light &amp; Glow"
+ layout="topleft"
+ left="0"
+ name="panel_ss_atmo_env_sky_light"
+ top="0"
+ width="580"
+ height="540">
+    <!-- <SS:Nexii> Atmo Magic: Atmosphere > Sun and Moon sub-tab - the non-positional lighting dials from EEP's Sun and Moon panel (panel_settings_sky_sunmoon.xml), in its order. Position, disc image and disc scale are all deliberately absent: those belong to the Planetary tab's bodies and resolver. The two glow dials keep "Glow" in their labels on purpose: plain "Sun Focus"/"Sun Size" was proposed, but "Sun Size" would collide with the planetary system's actual sun disc size (an emitter's angular diameter drives setSunScale), so the labels keep "Glow" to name the effect and gain "Sun" to say whose glow it is. -->
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top="10"
+     height="14"
+     width="110"
+     name="atmo_sunlight_color_label"
+     tool_tip="Colour and strength of direct sunlight, and of moonlight at night, before the atmosphere extinguishes it along each ray"
+     font="SansSerifSmall">
+        Sunlight Colour
+    </text>
+    <color_swatch
+     can_apply_immediately="true"
+     follows="left|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-4"
+     height="22"
+     width="60"
+     label_height="0"
+     name="atmo_sunlight_color"
+     tool_tip="Colour and strength of direct sunlight, and of moonlight at night, before the atmosphere extinguishes it along each ray" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left="486"
+     top_delta="-2"
+     height="25"
+     width="25"
+     name="atmo_sunlight_color_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left="513"
+     top_delta="0"
+     height="25"
+     width="25"
+     name="atmo_sunlight_color_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left="540"
+     top_delta="0"
+     height="25"
+     width="25"
+     name="atmo_sunlight_color_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="atmo_glow_focus_label"
+     tool_tip="Tightness of the sun's halo. 0.05 to 0.15 is a soft broad bloom, higher is a small hot core; negative inverts the falloff and dims the sky toward the sun instead"
+     font="SansSerifSmall">
+        Sun Glow Focus
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="atmo_glow_focus_slider"
+     tool_tip="Tightness of the sun's halo. 0.05 to 0.15 is a soft broad bloom, higher is a small hot core; negative inverts the falloff and dims the sky toward the sun instead"
+     show_text="false"
+     min_val="-2"
+     max_val="2"
+     increment="0.01"
+     initial_value="0.096" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="atmo_glow_focus_value_spinner"
+     tool_tip="Tightness of the sun's halo. 0.05 to 0.15 is a soft broad bloom, higher is a small hot core; negative inverts the falloff and dims the sky toward the sun instead"
+     min_val="-2"
+     max_val="2"
+     increment="0.01"
+     decimal_digits="2" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="atmo_glow_focus_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="atmo_glow_focus_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="atmo_glow_focus_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="atmo_glow_size_label"
+     tool_tip="Width of the sun's halo, and the trap of the sky set: a larger value here means a smaller backend glow scale, so the halo grows fast and 1.85 or more whites out the whole frame. Stock 1.75 sits just under that cliff; sunset halos live around 0.4 to 0.8"
+     font="SansSerifSmall">
+        Sun Glow Size
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="atmo_glow_size_slider"
+     tool_tip="Width of the sun's halo, and the trap of the sky set: a larger value here means a smaller backend glow scale, so the halo grows fast and 1.85 or more whites out the whole frame. Stock 1.75 sits just under that cliff; sunset halos live around 0.4 to 0.8"
+     show_text="false"
+     min_val="0"
+     max_val="1.99"
+     increment="0.01"
+     initial_value="1.75" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="atmo_glow_size_value_spinner"
+     tool_tip="Width of the sun's halo, and the trap of the sky set: a larger value here means a smaller backend glow scale, so the halo grows fast and 1.85 or more whites out the whole frame. Stock 1.75 sits just under that cliff; sunset halos live around 0.4 to 0.8"
+     min_val="0"
+     max_val="1.99"
+     increment="0.01"
+     decimal_digits="2" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="atmo_glow_size_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="atmo_glow_size_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="atmo_glow_size_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="atmo_moon_brightness_label"
+     tool_tip="Luminance of the moon disc itself - which body occupies the moon slot is the Planetary tab structure"
+     font="SansSerifSmall">
+        Moon Brightness
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="atmo_moon_brightness_slider"
+     show_text="false"
+     tool_tip="Luminance of the moon disc itself - which body occupies the moon slot is the Planetary tab structure"
+     min_val="0"
+     max_val="1"
+     increment="0.01"
+     initial_value="0.5" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="atmo_moon_brightness_value_spinner"
+     tool_tip="Luminance of the moon disc itself - which body occupies the moon slot is the Planetary tab structure"
+     min_val="0"
+     max_val="1"
+     increment="0.01"
+     decimal_digits="2" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="atmo_moon_brightness_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="atmo_moon_brightness_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="atmo_moon_brightness_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+</panel>

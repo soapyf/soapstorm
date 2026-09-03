@@ -1,0 +1,612 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+ <floater
+ positioning="cascading"
+ can_minimize="true"
+ can_resize="true"
+ height="680"
+ layout="topleft"
+ min_height="680"
+ min_width="760"
+ name="floater_ss_atmo_planetary"
+ save_rect="true"
+ single_instance="true"
+ title="Planetary System"
+ width="900">
+    <!-- <SS:Nexii> Atmo Magic planetary system designer. Opened from the main floater's Planetary tab with the track index as its key; the title names the track being edited. Left: the scene-graph body list (children indented under their parent, siblings in orbital- radius order, header sorting off - the code owns the order) with the selected body's fields under it. Parenting and sun topology are fully automatic (see SSAtmoEnvPlanetary::normalizeSunTopology and addBody), so there are no parent/partner dropdowns - suns follow the canonical pair topology, planets orbit the sun anchor, moons the selected planet. Right: the orbit canvas (ss_orbit_view, see ssfloateratmoplanetary.cpp), an angled top-down map of the system - click a body (or its ring) to select it, drag a body along its ring to set its orbital phase, mousewheel or the corner buttons to zoom (the middle corner button resets to fit). The two per-track distance-scale dials stayed behind on the tab. -->
+
+    <!-- Shown instead of the editing chrome whenever the track index has
+         gone stale (track removed, asset reloaded, nothing loaded at all)
+         - see SSFloaterAtmoPlanetary::refreshAll(). -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top="30"
+     height="40"
+     width="860"
+     name="no_system_text"
+     wrap="true">
+        There is no planetary system to edit - the track this designer was
+        opened for no longer exists, or no environment is loaded. Reopen it
+        from the Atmo Magic floater's Planetary tab.
+    </text>
+
+    <panel
+     follows="left|top|bottom"
+     layout="topleft"
+     left="10"
+     top="22"
+     bottom="-10"
+     width="286"
+     name="designer_left_panel"
+     border="false"
+     background_visible="false">
+        <!-- <SS:Nexii> Where the bodies actually are, drawn in the world: a ray from the camera toward each one with its name, altitude, azimuth, apparent size and how lit it is. This is the answer to "the designer says the moon is there, so why is it drawn here" - it reports what the renderer used, not a second opinion. Inside the left panel, above the list: it is a view control for the designer as a whole, and a floater-level child sat outside every panel in it. -->
+        <check_box
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top="0"
+         height="16"
+         width="200"
+         name="debug_overlay_check"
+         control_name="SSAtmoPlanetaryDebugOverlay"
+         label="Show positions in world"
+         tool_tip="Draw a labelled ray toward every body in the sky, for checking where they really are" />
+
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="8"
+         height="14"
+         width="110"
+         name="body_list_label"
+         font="SansSerifSmallBold">
+            Bodies
+        </text>
+        <!-- can_sort off: the list's order is the code's (distance order,
+             matching ring order and the auto-name ordinals) - a header
+             click re-sorting it would be a one-way trip to nonsense. -->
+        <scroll_list
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="4"
+         height="76"
+         width="286"
+         name="body_list"
+         can_sort="false"
+         column_padding="0"
+         draw_heading="true"
+         multi_select="false">
+            <scroll_list.columns
+             label="Name"
+             name="name"
+             relative_width="0.62" />
+            <scroll_list.columns
+             label="Kind"
+             name="kind"
+             relative_width="0.38" />
+        </scroll_list>
+        <button
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="4"
+         height="20"
+         width="64"
+         name="add_sun_button"
+         label="Add Sun"
+         tool_tip="Add a sun. Sun arrangement is automatic: one is the centre, two are a bound pair, a third orbits the pair, a fourth pairs with the third. Four at most" />
+        <button
+         follows="left|top"
+         layout="topleft"
+         left_pad="4"
+         top_delta="0"
+         height="20"
+         width="72"
+         name="add_planet_button"
+         label="Add Planet"
+         tool_tip="Add a planet, orbiting the sun (or the suns' shared centre)" />
+        <button
+         follows="left|top"
+         layout="topleft"
+         left_pad="4"
+         top_delta="0"
+         height="20"
+         width="68"
+         name="add_moon_button"
+         label="Add Moon"
+         tool_tip="Add a moon around the selected planet (or the selected moon's planet)" />
+        <button
+         follows="left|top"
+         layout="topleft"
+         left_pad="4"
+         top_delta="0"
+         height="20"
+         width="70"
+         name="remove_body_button"
+         label="Remove"
+         tool_tip="Remove the selected body. Its children are kept and merely orphaned rather than deleted with it" />
+
+        <!-- Selected body fields - the set moved here from the old
+             Planetary tab, same widget names and rules. -->
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="8"
+         height="14"
+         width="110"
+         name="body_name_label"
+         font="SansSerifSmall">
+            Name
+        </text>
+        <line_editor
+         follows="left|top"
+         layout="topleft"
+         left_pad="6"
+         top_delta="-3"
+         height="20"
+         width="170"
+         name="body_name_editor"
+         max_length_chars="32"
+         tool_tip="What this body is called, here and under it on the map. Bodies name themselves by position (Sol II, Sol II.1) until you type one - a typed name is yours and sticks" />
+
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="8"
+         height="14"
+         width="200"
+         name="body_orbit_label"
+         font="SansSerifSmallBold">
+            Orbit
+        </text>
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="4"
+         height="14"
+         width="110"
+         name="body_orbital_radius_label"
+         font="SansSerifSmall">
+            Orbital Radius (AU)
+        </text>
+        <!-- Label text, range, increment, precision and tooltip are all
+             reconfigured per body kind at refresh (AU for planets, km for
+             moons, AU for suns - where a pair junior's radius is the pair
+             SEPARATION and only a root senior's spinners are disabled,
+             see ss_sun_orbit_editable) - the values here are just the
+             planet configuration so the preview tool shows something
+             sensible. -->
+        <spinner
+         follows="left|top"
+         layout="topleft"
+         left_pad="6"
+         top_delta="-3"
+         height="20"
+         width="170"
+         label_width="0"
+         name="body_orbital_radius_spinner"
+         min_val="0.05"
+         max_val="100"
+         increment="0.05"
+         decimal_digits="2"
+         tool_tip="Distance from whatever this body orbits - AU for planets, km for moons; the tab's scale dials then compress it. The map leans toward relative distances rather than mapping them exactly" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="6"
+         height="14"
+         width="110"
+         name="body_inclination_label"
+         font="SansSerifSmall">
+            Inclination (&#176;)
+        </text>
+        <spinner
+         follows="left|top"
+         layout="topleft"
+         left_pad="6"
+         top_delta="-3"
+         height="20"
+         width="170"
+         label_width="0"
+         name="body_inclination_spinner"
+         min_val="-90"
+         max_val="90"
+         increment="1"
+         decimal_digits="1"
+         tool_tip="Tilt of this body orbital plane relative to its parent reference plane - shown on the map as a subtle rotation of the ring" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="6"
+         height="14"
+         width="110"
+         name="body_phase_label"
+         font="SansSerifSmall">
+            Orbital Phase (&#176;)
+        </text>
+        <spinner
+         follows="left|top"
+         layout="topleft"
+         left_pad="6"
+         top_delta="-3"
+         height="20"
+         width="170"
+         label_width="0"
+         name="body_phase_spinner"
+         min_val="0"
+         max_val="360"
+         increment="1"
+         decimal_digits="1"
+         tool_tip="How far around the orbit this body sits - fixed and authored, never simulated. Dragging the body along its ring on the map edits this too" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="6"
+         height="14"
+         width="110"
+         name="body_axial_tilt_label"
+         font="SansSerifSmall">
+            Axial Tilt (&#176;)
+        </text>
+        <spinner
+         follows="left|top"
+         layout="topleft"
+         left_pad="6"
+         top_delta="-3"
+         height="20"
+         width="170"
+         label_width="0"
+         name="body_axial_tilt_spinner"
+         min_val="-90"
+         max_val="90"
+         increment="1"
+         decimal_digits="1"
+         tool_tip="Obliquity: how far this body spin axis leans out of its orbital plane. On the home body this is what gives it seasons - it tips the sun daily circle north and south through the year. Where you are standing is Latitude, below" />
+
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="6"
+         height="14"
+         width="110"
+         name="body_latitude_label"
+         font="SansSerifSmall">
+            Latitude (&#176;)
+        </text>
+        <spinner
+         follows="left|top"
+         layout="topleft"
+         left_pad="6"
+         top_delta="-3"
+         height="20"
+         width="170"
+         label_width="0"
+         name="body_latitude_spinner"
+         min_val="-90"
+         max_val="90"
+         increment="1"
+         decimal_digits="1"
+         tool_tip="Where on the home body you are standing, degrees north of its equator. The celestial pole sits this far above the northern horizon: at 0 the sun climbs through the zenith, at 90 nothing rises or sets. Only meaningful on the home body" />
+
+
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="8"
+         height="14"
+         width="200"
+         name="body_appearance_label"
+         font="SansSerifSmallBold">
+            Appearance
+        </text>
+        <!-- Suns only (hidden otherwise): presets filling diameter+mass
+             as a pair. Items are built in code from one table -
+             see STAR_TYPE_PRESETS in ssfloateratmoplanetary.cpp. -->
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="4"
+         height="14"
+         width="110"
+         name="body_star_type_label"
+         font="SansSerifSmall">
+            Type
+        </text>
+        <combo_box
+         follows="left|top"
+         layout="topleft"
+         left_pad="6"
+         top_delta="-4"
+         height="23"
+         width="170"
+         name="body_star_type_combo"
+         tool_tip="Star type preset - sets diameter and mass together. Editing either by hand afterwards shows as (Custom)" />
+        <!-- Diameter label/range/precision reconfigure per kind at
+             refresh (solar diameters for suns, km otherwise) - values
+             here are the planet/moon km configuration. -->
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="4"
+         height="14"
+         width="110"
+         name="body_diameter_label"
+         font="SansSerifSmall">
+            Diameter (km)
+        </text>
+        <spinner
+         follows="left|top"
+         layout="topleft"
+         left_pad="6"
+         top_delta="-3"
+         height="20"
+         width="170"
+         label_width="0"
+         name="body_diameter_spinner"
+         min_val="1"
+         max_val="20000000"
+         increment="100"
+         decimal_digits="0"
+         tool_tip="Physical size - km for planets and moons, solar diameters (D) for suns. With distance, this is what sets how large the body appears in the sky" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="6"
+         height="14"
+         width="110"
+         name="body_mass_label"
+         font="SansSerifSmall">
+            Mass (M)
+        </text>
+        <spinner
+         follows="left|top"
+         layout="topleft"
+         left_pad="6"
+         top_delta="-3"
+         height="20"
+         width="170"
+         label_width="0"
+         name="body_mass_spinner"
+         min_val="0.001"
+         max_val="1000000"
+         increment="0.1"
+         decimal_digits="3"
+         tool_tip="Mass in the level's own natural unit - solar masses for suns, Earth masses for planets and moons. Only the ratio between a bound pair matters, for where their shared barycenter sits" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="6"
+         height="14"
+         width="110"
+         name="body_custom_texture_label"
+         font="SansSerifSmall">
+            Texture
+        </text>
+        <!-- Square swatch: the texture maps onto the body's flat square
+              quad, so the preview previews exactly that shape. Three times
+              the old 30 px: it is the canvas the disc-padding guide circle
+              draws on while its spinner is hovered. -->
+        <texture_picker
+         follows="left|top"
+         layout="topleft"
+         left_pad="6"
+         top_delta="-4"
+         height="90"
+         width="90"
+         show_caption="false"
+         name="body_custom_texture"
+         tool_tip="Custom texture for this body - blank uses the stock disc" />
+        <!-- <SS:Nexii> The body's disc padding, as its own row so it lines up with the other spinners. Hover the spinner and the guide circle on the Texture swatch shows where the renderer will draw the disc inside the texture. -->
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="6"
+         height="14"
+         width="110"
+         name="body_disc_padding_label"
+         font="SansSerifSmall">
+            Disc padding
+        </text>
+        <spinner
+         follows="left|top"
+         layout="topleft"
+         left_pad="6"
+         top_delta="-3"
+         height="20"
+         width="170"
+         label_width="0"
+         name="body_disc_padding_spinner"
+         min_val="0"
+         max_val="0.45"
+         increment="0.01"
+         decimal_digits="2"
+         tool_tip="Transparent margin around the disc art, as a fraction of the texture on each side - 0 means the art fills the quad. Hover here to see the disc the renderer will use, drawn on the Texture swatch" />
+        <check_box
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="4"
+         height="16"
+         width="200"
+         name="body_ring_check"
+         label="Ring"
+         tool_tip="A flat ring around the body - drawn for real once spherical rendering exists" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="4"
+         height="14"
+         width="110"
+         name="body_ring_inner_label"
+         font="SansSerifSmall">
+            Ring Inner (radii)
+        </text>
+        <spinner
+         follows="left|top"
+         layout="topleft"
+         left_pad="6"
+         top_delta="-3"
+         height="20"
+         width="170"
+         label_width="0"
+         name="body_ring_inner_spinner"
+         min_val="1"
+         max_val="10"
+         increment="0.1"
+         decimal_digits="2"
+         tool_tip="Where the ring starts, in multiples of the body own radius" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="6"
+         height="14"
+         width="110"
+         name="body_ring_outer_label"
+         font="SansSerifSmall">
+            Ring Outer (radii)
+        </text>
+        <spinner
+         follows="left|top"
+         layout="topleft"
+         left_pad="6"
+         top_delta="-3"
+         height="20"
+         width="170"
+         label_width="0"
+         name="body_ring_outer_spinner"
+         min_val="1"
+         max_val="10"
+         increment="0.1"
+         decimal_digits="2"
+         tool_tip="Where the ring ends, in multiples of the body own radius" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="6"
+         height="14"
+         width="110"
+         name="body_ring_texture_label"
+         font="SansSerifSmall">
+            Ring Texture
+        </text>
+        <texture_picker
+         follows="left|top"
+         layout="topleft"
+         left_pad="6"
+         top_delta="-4"
+         height="22"
+         width="30"
+         show_caption="false"
+         name="body_ring_texture"
+         tool_tip="Texture for the ring" />
+
+        <check_box
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="6"
+         height="16"
+         width="130"
+         name="body_home_check"
+         label="Home body"
+         tool_tip="The body the avatar stands on: never drawn in the sky, and its axial tilt sets the sky daily rotation. Exactly one per track" />
+        <check_box
+         follows="left|top"
+         layout="topleft"
+         left_pad="10"
+         top_delta="0"
+         height="16"
+         width="140"
+         name="body_light_check"
+         label="Light emitter"
+         tool_tip="This body lights the scene. At most two - the renderer has exactly a sun and a moon light slot - and never the home body" />
+
+        <!-- <SS:Nexii> How the disc itself is drawn, as opposed to what it does to the scene. Both default from the body kind when it is created and are authored from there: a sun lights itself, and everything else is lit by one, but a glowing artificial moon is a thing a world might want. -->
+        <check_box
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="6"
+         height="16"
+         width="130"
+         name="body_emissive_check"
+         label="Emissive"
+         tool_tip="Draw this body at full brightness with no dark side - it makes its own light. On by default for suns; turn it on for a moon or planet that glows" />
+        <check_box
+         follows="left|top"
+         layout="topleft"
+         left_pad="10"
+         top_delta="0"
+         height="16"
+         width="140"
+         name="body_phase_check"
+         label="Phase shading"
+         tool_tip="Shade the disc as a sphere lit by this body star, so it shows a phase. Off draws a flat disc the way the stock sky does. Ignored while Emissive is on" />
+    </panel>
+
+    <!-- The orbit canvas - see SSOrbitViewCtrl. -->
+    <ss_orbit_view
+     follows="all"
+     layout="topleft"
+     left="306"
+     top="22"
+     right="-10"
+     bottom="-10"
+     name="orbit_view"
+     tool_tip="Click a body (or its orbit ring) to select it. Drag a body along its ring to set its orbital phase. Mousewheel or the corner buttons zoom" />
+
+    <!-- Maps-style zoom cluster in the canvas's top-right corner -
+         declared after it so they draw (and hit-test) on top: zoom in,
+         reset-to-fit between the two (the maps-UI idiom), zoom out. Same
+         steps as the canvas's own mousewheel. -->
+    <button
+     follows="top|right"
+     layout="topleft"
+     right="-16"
+     top="28"
+     height="22"
+     width="22"
+     name="orbit_zoom_in_button"
+     image_overlay="Zoom_Off"
+     tool_tip="Zoom the map in" />
+    <button
+     follows="top|right"
+     layout="topleft"
+     right="-16"
+     top_pad="2"
+     height="22"
+     width="22"
+     name="orbit_zoom_reset_button"
+     image_overlay="Refresh_Off"
+     tool_tip="Reset zoom to fit the whole system" />
+    <button
+     follows="top|right"
+     layout="topleft"
+     right="-16"
+     top_pad="2"
+     height="22"
+     width="22"
+     name="orbit_zoom_out_button"
+     image_overlay="UnZoom_Off"
+     tool_tip="Zoom the map out" />
+</floater>

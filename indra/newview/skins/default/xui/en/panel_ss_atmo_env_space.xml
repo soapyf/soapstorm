@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<panel
+ border="true"
+ follows="all"
+ label="Space"
+ layout="topleft"
+ left="0"
+ name="panel_ss_atmo_env_space"
+ top="0"
+ width="580"
+ height="580">
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top="10"
+     height="14"
+     width="110"
+     name="atmo_star_brightness_label"
+     tool_tip="How brightly the star field burns. Daylight washes it out on its own, so this only says what the stars read as once the sky has gone dark"
+     font="SansSerifSmall">
+        Star Brightness
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="atmo_star_brightness_slider"
+     tool_tip="How brightly the star field burns. Daylight washes it out on its own, so this only says what the stars read as once the sky has gone dark"
+     show_text="false"
+     min_val="0"
+     max_val="500"
+     increment="1"
+     initial_value="250" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="atmo_star_brightness_value_spinner"
+     tool_tip="How brightly the star field burns. Daylight washes it out on its own, so this only says what the stars read as once the sky has gone dark"
+     min_val="0"
+     max_val="500"
+     increment="1"
+     decimal_digits="0" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="atmo_star_brightness_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="atmo_star_brightness_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="atmo_star_brightness_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <!-- <SS:Nexii> Atmo Magic: this track celestial bodies. The body hierarchy itself is edited in the dedicated System Designer sub-floater (floater_ss_atmo_planetary.xml) - an orbital map with the sun at centre - opened by the button below. Only the two per-track distance-scale dials stay on this tab: they are dials on the track, not on any one body, and belong beside the track's other per-track controls. Nothing on this tab is keyframed: a solar system is structural, like a water plane existing. -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="sun_planet_scale_label"
+     tool_tip="Compresses every Sun-Planet orbital distance for artistic effect - 1.0 is the authored distance, unmodified. Body sizes are untouched"
+     font="SansSerifSmall">
+        Sun-Planet Scale
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="sun_planet_scale_slider"
+     show_text="false"
+     min_val="0.01"
+     max_val="1.0"
+     increment="0.01"
+     initial_value="1.0"
+     tool_tip="Compresses every Sun-Planet orbital distance for artistic effect - 1.0 is the authored distance, unmodified. Body sizes are untouched" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="sun_planet_scale_spinner"
+     tool_tip="Compresses every Sun-Planet orbital distance for artistic effect - 1.0 is the authored distance, unmodified. Body sizes are untouched"
+     min_val="0.01"
+     max_val="1.0"
+     increment="0.01"
+     decimal_digits="2" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="planet_moon_scale_label"
+     tool_tip="Compresses every Planet-Moon orbital distance - a moon that looms large in the sky without touching its authored size"
+     font="SansSerifSmall">
+        Planet-Moon Scale
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="planet_moon_scale_slider"
+     show_text="false"
+     min_val="0.01"
+     max_val="1.0"
+     increment="0.01"
+     initial_value="1.0"
+     tool_tip="Compresses every Planet-Moon orbital distance - a moon that looms large in the sky without touching its authored size" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="planet_moon_scale_spinner"
+     tool_tip="Compresses every Planet-Moon orbital distance - a moon that looms large in the sky without touching its authored size"
+     min_val="0.01"
+     max_val="1.0"
+     increment="0.01"
+     decimal_digits="2" />
+
+    <!-- <SS:Nexii> The Disc Perception radios: a preset front-end on the two distance dials above, which ARE the perception control. The human visual system reads the real Sun and Moon at roughly two to three times their true angular size, so the seeding default compresses both dials to 1/3 - the discs loom what a person feels they saw. Picking a radio writes both dials to 1/N (1x restores the authored distances); moving either dial by hand deselects the radios. -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="celestial_perception_label"
+     font="SansSerifSmall">
+        Disc Perception
+    </text>
+    <radio_group
+     follows="left|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-2"
+     height="18"
+     width="440"
+     name="celestial_perception_radio"
+     allow_deselect="true"
+     tool_tip="Presets for the two distance dials: 1x leaves the authored system, 3x and 8x pull the sun and moons closer so their discs loom. Moving either dial by hand deselects these">
+        <radio_item
+         name="perception_physical"
+         label="1x Physical"
+         value="1"
+         height="18"
+         width="130" />
+        <radio_item
+         name="perception_perceived"
+         label="3x Perceived"
+         value="3"
+         height="18"
+         width="130"
+         left_pad="6"
+         top_delta="0" />
+        <radio_item
+         name="perception_cinematic"
+         label="8x Cinematic"
+         value="8"
+         height="18"
+         width="130"
+         left_pad="6"
+         top_delta="0" />
+    </radio_group>
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="26"
+     height="56"
+     width="560"
+     name="planetary_designer_text"
+     wrap="true"
+     font="SansSerifSmall">
+        This track's suns, planets and moons are edited in the System Designer - an orbital map of the whole system where bodies are selected by clicking them and repositioned by dragging them along their rings. The designer follows whichever track is selected here.
+    </text>
+    <button
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="23"
+     width="560"
+     name="open_planetary_designer_button"
+     label="Open System Designer..."
+     tool_tip="Open the planetary system designer for this track" />
+</panel>

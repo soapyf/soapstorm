@@ -673,6 +673,52 @@ default
                 gCombatHitsOn = llList2Integer(commandList, 1);
                 updateCombatListen();
             }
+            
+            else if (cmd == "FetchNotecard")
+            {
+                // <SS:Nexii> Fetch notecard contents. This is a synchronous operation, so it will block the script until the notecard is fully loaded or a timeout occurs.
+                llResetTime();
+                string notecardUUID = llList2String(commandList, 1);
+                string notecard;
+                integer line = 0;
+                do
+                {
+                    string result = llGetNotecardLineSync(notecardUUID, line);
+                    if(result == NAK)
+                    {
+                        llSleep(4/45.); // Wait for notecard to load
+                        if(llGetTime() > 3) // Timeout after 3 seconds
+                        {
+                            llHTTPResponse(httpReqID, 404, "<llsd><string>Notecard fetch timeout</string></llsd>");
+                            return;
+                        }
+                    }
+
+                    else if(result == EOF)
+                    {
+                        // Finished loading, now respond with it
+                        
+                        // Check if notecard is LLSD
+                        if(llGetSubString(notecard, 0, 5) == "<llsd>")
+                        {
+                            llHTTPResponse(httpReqID, 200, notecard);
+                        }
+                        else
+                        {
+                            llHTTPResponse(httpReqID, 200, "<llsd><string>" + notecard + "</string></llsd>");
+                        }
+                        
+                        notecard = "";
+                    }
+
+                    else
+                    {
+                        notecard += result + "\n";
+                        ++line;
+                    }
+                }
+                while(notecard);
+            }
 
             else if (cmd == "RelockMoveLockAfterMovement")
             {

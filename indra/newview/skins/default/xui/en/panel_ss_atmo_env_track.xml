@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<panel
+ border="true"
+ follows="all"
+ label="Track"
+ layout="topleft"
+ left="0"
+ name="panel_ss_atmo_env_track"
+ top="0"
+ width="580"
+ height="580">
+    <!-- <SS:Nexii> Atmo Magic: per-track, non-weather settings for whichever track is selected on the altitude rail (see SSFloaterAtmoEnv::mSelectedTrackIndex). Altitude isn't here at all: a track's floor is set by dragging its marker on the rail, and the band that implies - up to the next track, or the region ceiling if nothing is above it, see SSAtmoEnvAsset::trackCeilingZ() - is what the rail already draws. A numeric readout of either would only be a second, worse view of something already on screen. Water moved to its own tab once it grew past two fields. -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top="10"
+     height="14"
+     width="110"
+     name="track_name_label"
+     font="SansSerifSmall">
+        Name
+    </text>
+    <line_editor
+     follows="left|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-3"
+     height="20"
+     width="240"
+     name="track_name_editor"
+     max_length_chars="32"
+     tool_tip="What this track is called. Yours to set - a track keeps its name when you move it, so it can describe what the place actually is rather than where it currently sits" />
+
+    <!-- <SS:Nexii> World templates. An author arrives with a theme, not a parameter category, and a theme is never one setting: a sky world is water kilometres down AND a deck below the landmass AND another above it. Seeding all of that together is the only way the first screen is useful to someone who came here to build Arcadia rather than to tune haze. A dropdown on Track rather than a tab of its own: it acts on the selected track, and one combo does not earn top-level rank. Seeding is one-shot and destructive to the selected track, hence the confirmation - there is no live link back to the template, so nothing drifts and nothing needs reconciling later. See doc/atmo_magic_env_ui.md. -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="14"
+     height="14"
+     width="110"
+     name="track_template_label"
+     font="SansSerifSmall">
+        Template
+    </text>
+    <combo_box
+     follows="left|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-3"
+     height="20"
+     width="240"
+     name="track_template_combo"
+     tool_tip="Seed this track from a world archetype - tracks, deck heights, water, sky and weather together. Replaces everything on the selected track" />
+    <button
+     follows="left|top"
+     layout="topleft"
+     left_pad="8"
+     top_delta="-1"
+     height="22"
+     width="70"
+     name="track_template_apply_button"
+     label="Apply" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="24"
+     height="14"
+     width="336"
+     name="day_cycle_label"
+     font="SansSerifSmallBold">
+        Day cycle
+    </text>
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="8"
+     height="14"
+     width="110"
+     name="day_length_label"
+     tool_tip="How long this track own day-night cycle takes - independent of every other track"
+     font="SansSerifSmall">
+        Day Length (hours)
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="day_length_slider"
+     show_text="false"
+     min_val="0.5"
+     max_val="24.0"
+     increment="0.25"
+     initial_value="0.5"
+     tool_tip="How long this track own day-night cycle takes - independent of every other track" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="day_length_value_spinner"
+     tool_tip="How long this track own day-night cycle takes - independent of every other track"
+     min_val="0.5"
+     max_val="24.0"
+     increment="0.25"
+     decimal_digits="2" />
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="day_offset_label"
+     tool_tip="Shifts where in the cycle time zero sits"
+     font="SansSerifSmall">
+        Day Offset (hours)
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="day_offset_slider"
+     show_text="false"
+     min_val="-11.5"
+     max_val="12.0"
+     increment="0.25"
+     initial_value="-11.5"
+     tool_tip="Shifts where in the cycle time zero sits" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="day_offset_value_spinner"
+     tool_tip="Shifts where in the cycle time zero sits"
+     min_val="-11.5"
+     max_val="12.0"
+     increment="0.25"
+     decimal_digits="2" />
+</panel>

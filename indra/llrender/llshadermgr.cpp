@@ -569,6 +569,12 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
     S32 major_version = gGLManager.mGLSLVersionMajor;
     S32 minor_version = gGLManager.mGLSLVersionMinor;
 
+    // <SS:Nexii> Compute shaders need GLSL 4.30 whatever the rest of the tree targets. They are only ever loaded behind a GL 4.3 capability check, so pinning the version here cannot regress the normal render path.
+    if (type == GL_COMPUTE_SHADER)
+    {
+        shader_code_text[shader_code_count++] = strdup("#version 430\n");
+    }
+    else
     if (major_version == 1 && minor_version < 30)
     {
         llassert(false); // GL 3.1 or later required
@@ -625,6 +631,11 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
     if (type == GL_FRAGMENT_SHADER)
     {
         extra_code_text[extra_code_count++] = strdup("#define FRAGMENT_SHADER 1\n");
+    }
+    // <SS:Nexii> The compute stage is neither, and must not claim to be a vertex shader or shared includes pull in stage-specific declarations
+    else if (type == GL_COMPUTE_SHADER)
+    {
+        extra_code_text[extra_code_count++] = strdup("#define COMPUTE_SHADER 1\n");
     }
     else
     {
@@ -1324,6 +1335,8 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("heroProbes");
     mReservedUniforms.push_back("cloud_noise_texture");
     mReservedUniforms.push_back("cloud_noise_texture_next");
+    mReservedUniforms.push_back("ss_noise_large"); // <SS:Nexii> the dome band's authored large-scale map
+    mReservedUniforms.push_back("ss_noise_large_next"); // <SS:Nexii> the large map's crossfade partner
     mReservedUniforms.push_back("lightnorm");
     mReservedUniforms.push_back("sunlight_color");
     mReservedUniforms.push_back("ambient_color");
@@ -1575,6 +1588,20 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("border_thickness");
     mReservedUniforms.push_back("frame_rect");
     // </FS:Beq>
+
+    // <SS:Nexii> Atmo Magic sunrise ramp - see SSAtmoEnvApplier::sunRiseFraction
+    mReservedUniforms.push_back("ss_sun_rise");
+
+    // <SS:Nexii> Atmo Magic sun direction takeover - see SSAtmoEnvApplier::sunSlotDirection
+    mReservedUniforms.push_back("ss_sun_dir");
+
+    // <SS:Nexii> Atmo Magic sun disc half-angle - see SSAtmoEnvApplier::sunSlotRadius
+    mReservedUniforms.push_back("ss_sun_radius");
+
+    // <SS:Nexii> Atmo Magic dominant-light handover - see SSAtmoEnvApplier::sunSlotLight
+    mReservedUniforms.push_back("ss_sun_light");
+    mReservedUniforms.push_back("ss_moon_light");
+    mReservedUniforms.push_back("ss_light_max");
 
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);
 

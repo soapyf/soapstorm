@@ -42,6 +42,7 @@
 #include "llagent.h"
 #include "llagentcamera.h"
 #include "pipeline.h"
+#include "ssatmomagic.h"  // <SS:Nexii> Atmo Magic geometry-change settling
 #include "llspatialpartition.h"
 #include "lltooltip.h"
 #include "llworld.h"
@@ -202,7 +203,6 @@ void LLViewerObjectList::idleUpdateGhostProjectiles(const F64& frame_time)
         }
     }
 }
-// </SS:Nexii>
 
 
 void LLViewerObjectList::getUUIDFromLocal(LLUUID &id,
@@ -334,6 +334,9 @@ void LLViewerObjectList::processUpdateCore(LLViewerObject* objectp,
     }
 
     updateActive(objectp);
+
+    // <SS:Nexii> Prim changes queue a lazy recapture of the rain shadow map and a resolve of the wind flowmap. The callee filters out avatars, attachments, tiny objects and anything still moving, and holds the rest for a few seconds before either map hears about it - a prim thrower or a combat rez would otherwise have both rebuilding continuously for geometry that is gone before the rebuild finishes.
+    SSAtmoMagic::onObjectUpdate(objectp);
 
     if (just_created)
     {
@@ -1211,7 +1214,6 @@ void LLViewerObjectList::update(LLAgent &agent)
 
         // <SS:Nexii> Probe ghost projectiles that went static and dropped off the active list
         idleUpdateGhostProjectiles(frame_time);
-        // </SS:Nexii>
 
         //update flexible objects
         LLVolumeImplFlexible::updateClass();
@@ -1622,7 +1624,6 @@ void LLViewerObjectList::cleanupReferences(LLViewerObject *objectp)
     }
     updateProjectileObjectTracking(objectp->isLikelyProjectileBullet(), false);
     removeFromGhostProjectileWatch(objectp);
-    // </SS:Nexii>
 
     // <FS:Beq> FIRE-30694 DeadObject Spam - handle new_dead_object properly and closer to source
     // bool new_dead_object = true;
@@ -2321,6 +2322,23 @@ LLViewerObject *LLViewerObjectList::createObjectViewer(const LLPCode pcode, LLVi
     }
 
     mUUIDObjectMap[fullid] = objectp;
+
+    mObjects.push_back(objectp);
+
+    updateActive(objectp);
+
+    return objectp;
+}
+
+// <SS:Nexii> The tail of createObjectViewer for an object the caller already constructed - see the header note.
+LLViewerObject *LLViewerObjectList::adoptViewerObject(LLViewerObject *objectp)
+{
+    if (!objectp)
+    {
+        return NULL;
+    }
+
+    mUUIDObjectMap[objectp->getID()] = objectp;
 
     mObjects.push_back(objectp);
 

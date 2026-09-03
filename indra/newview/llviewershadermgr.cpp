@@ -49,6 +49,8 @@
 #include "lljoint.h"
 #include "llskinningutil.h"
 
+#include <filesystem>   // <SS:Nexii> shader cache keyed on shader source
+
 static LLStaticHashedString sTexture0("texture0");
 static LLStaticHashedString sTexture1("texture1");
 static LLStaticHashedString sTex0("tex0");
@@ -178,6 +180,25 @@ LLGLSLShader            gDeferredAvatarShadowProgram;
 LLGLSLShader            gDeferredAvatarAlphaShadowProgram;
 LLGLSLShader            gDeferredAvatarAlphaMaskShadowProgram;
 LLGLSLShader            gDeferredAlphaProgram;
+// <SS:Nexii> Atmo Magic particle shaders
+LLGLSLShader            gSSPrecipRainProgram;
+LLGLSLShader            gSSPrecipLitProgram;
+LLGLSLShader            gSSSurfaceWetProgram;
+LLGLSLShader            gSSVolCloudProgram;
+LLGLSLShader            gSSLightningProgram;
+LLGLSLShader            gSSCelestialProgram;
+LLGLSLShader            gSSSurfaceNormalProgram;
+LLGLSLShader            gSSSurfaceCommitProgram;
+LLGLSLShader            gSSSurfaceSnowProgram;
+LLGLSLShader            gSSWhiteoutProgram;
+LLGLSLShader            gSSPrecipProjProgram;
+LLGLSLShader            gSSWindInitProgram;
+LLGLSLShader            gSSWindDivProgram;
+LLGLSLShader            gSSWindJacobiProgram;
+LLGLSLShader            gSSWindProjectProgram;
+LLGLSLShader            gSSWindSeedProgram;
+LLGLSLShader            gSSWindRestrictProgram;
+LLGLSLShader            gSSWindProlongProgram;
 LLGLSLShader            gHUDAlphaProgram;
 LLGLSLShader            gDeferredSkinnedAlphaProgram;
 LLGLSLShader            gDeferredAlphaImpostorProgram;
@@ -272,6 +293,13 @@ static void add_common_permutations(LLGLSLShader* shader)
     if (emissive)
     {
         shader->addPermutation("HAS_EMISSIVE", "1");
+    }
+
+    // <SS:Nexii> The Atmo Magic shader variants, one define for all of them: any Atmo-era change to SHARED shading (the sky, the dome clouds, the atmospheric module) lives behind #ifdef SS_ATMO, so with the system off every stock shader compiles byte-for-byte pristine. The SSAtmoEnabled listener in llviewercontrol.cpp rebuilds shaders on toggle - compile-time, zero runtime cost either way. Runtime nuance (weather active vs idle) stays uniform-driven INSIDE the variant blocks; this define is only the master pristine/modified split.
+    static LLCachedControl<bool> atmo(gSavedSettings, "SSAtmoEnabled", false);
+    if (atmo)
+    {
+        shader->addPermutation("SS_ATMO", "1");
     }
 }
 
@@ -432,6 +460,18 @@ void LLViewerShaderMgr::finalizeShaderList()
     mShaderList.push_back(&gHUDAlphaProgram);
     mShaderList.push_back(&gDeferredAlphaImpostorProgram);
     mShaderList.push_back(&gDeferredFullbrightProgram);
+    // <SS:Nexii> Atmo Magic: receive env/light uniform updates
+    mShaderList.push_back(&gSSPrecipRainProgram);
+    mShaderList.push_back(&gSSPrecipLitProgram);
+    mShaderList.push_back(&gSSSurfaceWetProgram);
+    mShaderList.push_back(&gSSVolCloudProgram);
+    mShaderList.push_back(&gSSLightningProgram);
+    mShaderList.push_back(&gSSCelestialProgram);
+    mShaderList.push_back(&gSSSurfaceNormalProgram);
+    mShaderList.push_back(&gSSSurfaceCommitProgram);
+    mShaderList.push_back(&gSSSurfaceSnowProgram);
+    mShaderList.push_back(&gSSWhiteoutProgram);
+    mShaderList.push_back(&gSSPrecipProjProgram);
     mShaderList.push_back(&gHUDFullbrightProgram);
     mShaderList.push_back(&gDeferredFullbrightAlphaMaskProgram);
     mShaderList.push_back(&gHUDFullbrightAlphaMaskProgram);
@@ -524,6 +564,67 @@ S32 LLViewerShaderMgr::getShaderLevel(S32 type)
 //============================================================================
 // Shader Management
 
+// <SS:Nexii> A digest of every shader source file's size and write time. Walked once per session, next to a shader load that reads all of them anyway, so the directory scan is not worth caching.
+static std::string ssShaderTreeSignature()
+{
+    const std::string root =
+        gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "shaders");
+
+    std::error_code ec;
+    std::filesystem::recursive_directory_iterator it{ std::filesystem::path(root), ec };
+    if (ec)
+    {
+        return root;    // unreadable: fall back to version-only behaviour
+    }
+
+    // Stepped by hand rather than with a range-for: the iterator's throwing
+    // increment would take an unreadable subdirectory all the way out of
+    // startup, and a shader cache key is not worth that.
+    std::vector<std::string> parts;
+    const std::filesystem::recursive_directory_iterator end;
+    for (; it != end; it.increment(ec))
+    {
+        if (ec)
+        {
+            break;
+        }
+
+        const auto& entry = *it;
+        const bool is_file = entry.is_regular_file(ec);
+        if (ec || !is_file)
+        {
+            ec.clear();
+            continue;
+        }
+
+        const auto written = std::filesystem::last_write_time(entry, ec);
+        const auto bytes = std::filesystem::file_size(entry, ec);
+        if (ec)
+        {
+            ec.clear();
+            continue;
+        }
+
+        // The path goes in as a hash: its native encoding is wide on Windows
+        // and narrow elsewhere, and nothing here needs to read it back.
+        parts.push_back(std::to_string(std::filesystem::hash_value(entry.path())) + "|"
+            + std::to_string(written.time_since_epoch().count()) + "|"
+            + std::to_string(bytes));
+    }
+
+    // Sorted, so a filesystem that hands entries back in a different order
+    // between runs does not look like an edit and throw the cache away.
+    std::sort(parts.begin(), parts.end());
+
+    std::string signature;
+    for (const auto& part : parts)
+    {
+        signature += part;
+        signature += '\n';
+    }
+    return signature;
+}
+
 void LLViewerShaderMgr::setShaders()
 {
     LL_PROFILE_ZONE_SCOPED;
@@ -552,6 +653,8 @@ void LLViewerShaderMgr::setShaders()
         {
             HBXXH128 hash_obj;
             hash_obj.update(LLVersionInfo::instance().getVersion());
+            // <SS:Nexii> The compiled-program cache was keyed on the viewer version alone, so an edited .glsl inside an unchanged build was never recompiled: the old binary came back and every uniform added since read as location -1, making its upload a silent no-op. Fold the shader tree's contents into the key so editing any shader invalidates the cache exactly once.
+            hash_obj.update(ssShaderTreeSignature());
             current_cache_version = hash_obj.digest();
 
             old_cache_version = LLUUID(gSavedSettings.getString("RenderShaderCacheVersion"));
@@ -961,6 +1064,9 @@ bool LLViewerShaderMgr::loadShadersWater()
             gWaterProgram.addPermutation("HAS_SUN_SHADOW", "1");
         }
 
+        // <SS:Nexii> the water pool skipped the common permutations, so the SS_ATMO variant never compiled in for water
+        add_common_permutations(&gWaterProgram);
+
         gWaterProgram.mShaderGroup = LLGLSLShader::SG_WATER;
         gWaterProgram.mShaderLevel = mShaderLevel[SHADER_WATER];
         success = gWaterProgram.createShader();
@@ -983,6 +1089,7 @@ bool LLViewerShaderMgr::loadShadersWater()
         {
             gUnderWaterProgram.addPermutation("TRANSPARENT_WATER", "1");
         }
+        add_common_permutations(&gUnderWaterProgram);    // <SS:Nexii> SS_ATMO - same omission as gWaterProgram above
         success = gUnderWaterProgram.createShader();
         llassert(success);
     }
@@ -1140,6 +1247,18 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gHUDAlphaProgram.unload();
         gDeferredSkinnedAlphaProgram.unload();
         gDeferredFullbrightProgram.unload();
+        // <SS:Nexii> Atmo Magic particle shaders
+        gSSPrecipRainProgram.unload();
+        gSSPrecipLitProgram.unload();
+        gSSPrecipProjProgram.unload();
+        gSSSurfaceWetProgram.unload();
+        gSSVolCloudProgram.unload();
+        gSSLightningProgram.unload();
+        gSSCelestialProgram.unload();
+        gSSSurfaceNormalProgram.unload();
+        gSSSurfaceCommitProgram.unload();
+        gSSSurfaceSnowProgram.unload();
+        gSSWhiteoutProgram.unload();
         gHUDFullbrightProgram.unload();
         gDeferredFullbrightAlphaMaskProgram.unload();
         gHUDFullbrightAlphaMaskProgram.unload();
@@ -1953,6 +2072,300 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         success = make_rigged_variant(gDeferredFullbrightProgram, gDeferredSkinnedFullbrightProgram);
         success = gDeferredFullbrightProgram.createShader();
         llassert(success);
+    }
+
+    // <SS:Nexii> Atmo Magic rain particles: refraction/env/specular water shader. Failure is non-fatal; the precipitation renderer falls back to the fullbright path when this program is incomplete.
+    if (success)
+    {
+        gSSCelestialProgram.mName = "SS Celestial Disc Shader";
+        gSSCelestialProgram.mShaderFiles.clear();
+        gSSCelestialProgram.mShaderFiles.push_back(make_pair("deferred/ssCelestialV.glsl", GL_VERTEX_SHADER));
+        gSSCelestialProgram.mShaderFiles.push_back(make_pair("deferred/ssCelestialF.glsl", GL_FRAGMENT_SHADER));
+        gSSCelestialProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gSSCelestialProgram.clearPermutations();
+        add_common_permutations(&gSSCelestialProgram);
+        if (!gSSCelestialProgram.createShader())
+        {
+            LL_WARNS("Shader") << "SS celestial disc shader failed to compile;"
+                               << " Atmo Magic will fall back to the stock sun and moon shaders"
+                               << LL_ENDL;
+            gSSCelestialProgram.unload();
+        }
+
+        gSSVolCloudProgram.mName = "SS Volumetric Cloud Shader";
+        // The windlight atmospheric module. Nothing calls calcAtmosphericVars here any more - the deck's aerial perspective moved into ssVolCloudV's own slab-ray transmittance and airlight, the same door the dome band's atmosphere comes in by - but the feature flags stay: they are what pull the windlight uniform declarations in, and dropping them changes the injected header set for no gain.
+        gSSVolCloudProgram.mFeatures.calculatesAtmospherics = true;
+        gSSVolCloudProgram.mFeatures.hasAtmospherics = true;
+        gSSVolCloudProgram.mFeatures.hasGamma = true;
+        gSSVolCloudProgram.mFeatures.hasSrgb = true;
+        gSSVolCloudProgram.mShaderFiles.clear();
+        gSSVolCloudProgram.mShaderFiles.push_back(make_pair("deferred/ssVolCloudV.glsl", GL_VERTEX_SHADER));
+        gSSVolCloudProgram.mShaderFiles.push_back(make_pair("deferred/ssVolCloudF.glsl", GL_FRAGMENT_SHADER));
+        gSSVolCloudProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        // <SS:Nexii> A SKY shader, and it has to say so: LLEnvironment::updateShaderUniforms only hands a program the sky uniforms filed under SG_ANY plus the ones filed under its OWN group, and LLSettingsVOSky::applySpecial files sunlight_color, moonlight_color and cloud_color under SG_SKY alone. Left at the default SG_DEFAULT this program received none of those three - they sat at zero for the life of the session - so ssVolCloudV's whole light path collapsed: sunlight zero, cloud_color zero, hence vary_ss_sunlit and vary_ss_amblit both zero and the deck lit by nothing but the ambient half of the airlight. That is a cold blue-grey that never moves, which is exactly how the field read against a burning sunrise while the dome band beside it wore the whole thing. The band is SG_SKY (gDeferredWLCloudProgram) and this field is shaded by the band's own maths, so it belongs in the band's group. [interaction: dome handoff]
+        gSSVolCloudProgram.mShaderGroup = LLGLSLShader::SG_SKY;
+        gSSVolCloudProgram.clearPermutations();
+        add_common_permutations(&gSSVolCloudProgram);
+        if (!gSSVolCloudProgram.createShader())
+        {
+            LL_WARNS("Shader") << "SS volumetric cloud shader failed to compile;"
+                               << " the volumetric layer will not draw" << LL_ENDL;
+            gSSVolCloudProgram.unload();
+        }
+
+        gSSLightningProgram.mName = "SS Lightning Shader";
+        gSSLightningProgram.mShaderFiles.clear();
+        gSSLightningProgram.mShaderFiles.push_back(make_pair("deferred/ssLightningV.glsl", GL_VERTEX_SHADER));
+        gSSLightningProgram.mShaderFiles.push_back(make_pair("deferred/ssLightningF.glsl", GL_FRAGMENT_SHADER));
+        gSSLightningProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gSSLightningProgram.clearPermutations();
+        add_common_permutations(&gSSLightningProgram);
+        if (!gSSLightningProgram.createShader())
+        {
+            LL_WARNS("Shader") << "SS lightning shader failed to compile;"
+                               << " strikes will not draw" << LL_ENDL;
+            gSSLightningProgram.unload();
+        }
+
+        gSSPrecipRainProgram.mName = "SS Precipitation Rain Shader";
+        gSSPrecipRainProgram.mFeatures.calculatesAtmospherics = true;
+        gSSPrecipRainProgram.mFeatures.hasAtmospherics = true;
+        gSSPrecipRainProgram.mFeatures.hasGamma = true;
+        gSSPrecipRainProgram.mFeatures.hasSrgb = true;
+        gSSPrecipRainProgram.mFeatures.isAlphaLighting = true;
+        gSSPrecipRainProgram.mFeatures.hasReflectionProbes = true;
+        gSSPrecipRainProgram.mShaderFiles.clear();
+        gSSPrecipRainProgram.mShaderFiles.push_back(make_pair("deferred/ssPrecipRainV.glsl", GL_VERTEX_SHADER));
+        gSSPrecipRainProgram.mShaderFiles.push_back(make_pair("deferred/ssPrecipRainF.glsl", GL_FRAGMENT_SHADER));
+        gSSPrecipRainProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gSSPrecipRainProgram.clearPermutations();
+        add_common_permutations(&gSSPrecipRainProgram);
+        if (!gSSPrecipRainProgram.createShader())
+        {
+            LL_WARNS("Shader") << "SS Precipitation rain shader failed to compile;"
+                               << " rain particles will use the fullbright fallback" << LL_ENDL;
+            gSSPrecipRainProgram.unload();
+        }
+    }
+
+    // Lit particle shader for non-emissive precipitation (snow, ripples):
+    // probe ambient plus shadowed sun. Same non-fatal fallback policy.
+    if (success)
+    {
+        gSSPrecipLitProgram.mName = "SS Precipitation Lit Shader";
+        gSSPrecipLitProgram.mFeatures.calculatesAtmospherics = true;
+        gSSPrecipLitProgram.mFeatures.hasAtmospherics = true;
+        gSSPrecipLitProgram.mFeatures.hasGamma = true;
+        gSSPrecipLitProgram.mFeatures.hasSrgb = true;
+        gSSPrecipLitProgram.mFeatures.isAlphaLighting = true;
+        gSSPrecipLitProgram.mFeatures.hasShadows = use_sun_shadow;
+        gSSPrecipLitProgram.mFeatures.hasReflectionProbes = true;
+        gSSPrecipLitProgram.mShaderFiles.clear();
+        gSSPrecipLitProgram.mShaderFiles.push_back(make_pair("deferred/ssPrecipRainV.glsl", GL_VERTEX_SHADER));
+        gSSPrecipLitProgram.mShaderFiles.push_back(make_pair("deferred/ssPrecipLitF.glsl", GL_FRAGMENT_SHADER));
+        gSSPrecipLitProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gSSPrecipLitProgram.clearPermutations();
+        if (use_sun_shadow)
+        {
+            gSSPrecipLitProgram.addPermutation("HAS_SUN_SHADOW", "1");
+        }
+        add_common_permutations(&gSSPrecipLitProgram);
+        if (!gSSPrecipLitProgram.createShader())
+        {
+            LL_WARNS("Shader") << "SS Precipitation lit shader failed to compile;"
+                               << " non-emissive particles will use the fullbright fallback" << LL_ENDL;
+            gSSPrecipLitProgram.unload();
+        }
+    }
+
+    // Projected spotlight over precipitation. One pass per projector, added
+    // on top of whatever the particles were already shaded with, so a beam
+    // picks itself out against heavy rain. Needs deferredUtil for the
+    // projector maths, which comes in with the reflection probe feature.
+    if (success)
+    {
+        gSSPrecipProjProgram.mName = "SS Precipitation Projector Shader";
+        // Shares the precipitation vertex shader, which calls calcAtmospherics,
+        // so the atmospherics vertex objects have to come along even though
+        // nothing in the fragment stage reads what they produce
+        gSSPrecipProjProgram.mFeatures.calculatesAtmospherics = true;
+        gSSPrecipProjProgram.mFeatures.hasSrgb = true;
+        gSSPrecipProjProgram.mFeatures.hasReflectionProbes = true;
+        gSSPrecipProjProgram.mShaderFiles.clear();
+        gSSPrecipProjProgram.mShaderFiles.push_back(make_pair("deferred/ssPrecipRainV.glsl", GL_VERTEX_SHADER));
+        gSSPrecipProjProgram.mShaderFiles.push_back(make_pair("deferred/ssPrecipProjF.glsl", GL_FRAGMENT_SHADER));
+        gSSPrecipProjProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gSSPrecipProjProgram.clearPermutations();
+        add_common_permutations(&gSSPrecipProjProgram);
+        if (!gSSPrecipProjProgram.createShader())
+        {
+            LL_WARNS("Shader") << "SS Precipitation projector shader failed to compile;"
+                               << " projected lights will not show up in precipitation" << LL_ENDL;
+            gSSPrecipProjProgram.unload();
+        }
+    }
+
+    // Wet surfaces. A screen space pass over the gbuffer that tightens the
+    // specular lobe of whatever the weather has been landing on, using the
+    // surface field stitched from the drainage network.
+    //
+    // Deferred only, not the full gbuffer feature: this reads the specular
+    // buffer directly and declares that sampler itself, the way the screen
+    // space reflection post pass does. Pulling gbufferUtil in as well would
+    // declare the same sampler a second time and fetch two more attachments
+    // per fragment that nothing here looks at.
+    if (success)
+    {
+        gSSSurfaceWetProgram.mName = "SS Surface Wetness Shader";
+        gSSSurfaceWetProgram.mFeatures.isDeferred = true;
+        gSSSurfaceWetProgram.mShaderFiles.clear();
+        gSSSurfaceWetProgram.mShaderFiles.push_back(make_pair("deferred/blurLightV.glsl", GL_VERTEX_SHADER));
+        gSSSurfaceWetProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceFieldF.glsl", GL_FRAGMENT_SHADER));
+        gSSSurfaceWetProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceWetF.glsl", GL_FRAGMENT_SHADER));
+        gSSSurfaceWetProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gSSSurfaceWetProgram.clearPermutations();
+        add_common_permutations(&gSSSurfaceWetProgram);
+        if (!gSSSurfaceWetProgram.createShader())
+        {
+            LL_WARNS("Shader") << "SS Surface wetness shader failed to compile;"
+                               << " surfaces will not respond to the weather" << LL_ENDL;
+            gSSSurfaceWetProgram.unload();
+        }
+    }
+
+    // Companion to the wetness shader above: flattens the shading normal
+    // toward up on the same surfaces, by the same wet value, as a second
+    // independent pass rather than a second output bolted onto the first -
+    // that shader's early returns are all proven correct already, and this
+    // way none of them needed touching to add a second thing they carry
+    // through unchanged.
+    if (success && gSSSurfaceWetProgram.isComplete())
+    {
+        gSSSurfaceNormalProgram.mName = "SS Surface Normal Flatten Shader";
+        gSSSurfaceNormalProgram.mFeatures.isDeferred = true;
+        gSSSurfaceNormalProgram.mShaderFiles.clear();
+        gSSSurfaceNormalProgram.mShaderFiles.push_back(make_pair("deferred/blurLightV.glsl", GL_VERTEX_SHADER));
+        gSSSurfaceNormalProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceFieldF.glsl", GL_FRAGMENT_SHADER));
+        gSSSurfaceNormalProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceNormalF.glsl", GL_FRAGMENT_SHADER));
+        gSSSurfaceNormalProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gSSSurfaceNormalProgram.clearPermutations();
+        add_common_permutations(&gSSSurfaceNormalProgram);
+        if (!gSSSurfaceNormalProgram.createShader())
+        {
+            LL_WARNS("Shader") << "SS Surface normal flatten shader failed to compile;"
+                               << " wet surfaces will not flatten" << LL_ENDL;
+            gSSSurfaceNormalProgram.unload();
+        }
+    }
+
+    // Puts the reworked specular buffer back into the gbuffer. Nothing but a
+    // textured blit, but it has to exist as a draw rather than a copy: writing
+    // through the framebuffer is the only way to name the destination that
+    // does not go through the renderer's texture unit cache.
+    if (success && gSSSurfaceWetProgram.isComplete())
+    {
+        gSSSurfaceCommitProgram.mName = "SS Surface Commit Shader";
+        gSSSurfaceCommitProgram.mShaderFiles.clear();
+        gSSSurfaceCommitProgram.mShaderFiles.push_back(make_pair("deferred/blurLightV.glsl", GL_VERTEX_SHADER));
+        gSSSurfaceCommitProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceCommitF.glsl", GL_FRAGMENT_SHADER));
+        gSSSurfaceCommitProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gSSSurfaceCommitProgram.clearPermutations();
+        add_common_permutations(&gSSSurfaceCommitProgram);
+        if (!gSSSurfaceCommitProgram.createShader())
+        {
+            LL_WARNS("Shader") << "SS Surface commit shader failed to compile;"
+                               << " surfaces will not respond to the weather" << LL_ENDL;
+            gSSSurfaceCommitProgram.unload();
+            gSSSurfaceWetProgram.unload();
+            gSSSurfaceNormalProgram.unload();
+        }
+    }
+
+    // Snow surfaces. The same shape as the wetness shader - screen space over
+    // the gbuffer, the field window for coverage - but writing the diffuse
+    // attachment instead of the specular one: the settled depth the field has
+    // always carried becomes visible albedo.
+    if (success)
+    {
+        gSSSurfaceSnowProgram.mName = "SS Surface Snow Shader";
+        gSSSurfaceSnowProgram.mFeatures.isDeferred = true;
+        gSSSurfaceSnowProgram.mShaderFiles.clear();
+        gSSSurfaceSnowProgram.mShaderFiles.push_back(make_pair("deferred/blurLightV.glsl", GL_VERTEX_SHADER));
+        gSSSurfaceSnowProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceFieldF.glsl", GL_FRAGMENT_SHADER));
+        gSSSurfaceSnowProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceSnowF.glsl", GL_FRAGMENT_SHADER));
+        gSSSurfaceSnowProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gSSSurfaceSnowProgram.clearPermutations();
+        add_common_permutations(&gSSSurfaceSnowProgram);
+        if (!gSSSurfaceSnowProgram.createShader())
+        {
+            LL_WARNS("Shader") << "SS Surface snow shader failed to compile;"
+                               << " settled snow will not shade" << LL_ENDL;
+            gSSSurfaceSnowProgram.unload();
+        }
+    }
+
+    // The whiteout veil. Deferred util for the depth/normal reads and the
+    // surface field include for the exposure march; the call site composites
+    // it as an alpha fog lerp over the lit screen.
+    if (success)
+    {
+        gSSWhiteoutProgram.mName = "SS Whiteout Shader";
+        gSSWhiteoutProgram.mFeatures.isDeferred = true;
+        gSSWhiteoutProgram.mShaderFiles.clear();
+        gSSWhiteoutProgram.mShaderFiles.push_back(make_pair("deferred/blurLightV.glsl", GL_VERTEX_SHADER));
+        gSSWhiteoutProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceFieldF.glsl", GL_FRAGMENT_SHADER));
+        gSSWhiteoutProgram.mShaderFiles.push_back(make_pair("deferred/ssWhiteoutF.glsl", GL_FRAGMENT_SHADER));
+        gSSWhiteoutProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gSSWhiteoutProgram.clearPermutations();
+        add_common_permutations(&gSSWhiteoutProgram);
+        if (!gSSWhiteoutProgram.createShader())
+        {
+            LL_WARNS("Shader") << "SS Whiteout shader failed to compile;"
+                               << " no whiteout layer" << LL_ENDL;
+            gSSWhiteoutProgram.unload();
+        }
+    }
+
+    // Wind flowmap compute passes. Compute is GL 4.3; below that the flowmap
+    // stays off and every consumer falls back to the uniform ambient wind, so
+    // a failure here is not fatal to anything else.
+    if (success && gGLManager.mGLVersion >= 4.29f && glDispatchCompute != nullptr)
+    {
+        struct { LLGLSLShader* prog; const char* name; const char* file; } wind_passes[] = {
+            { &gSSWindInitProgram,    "SS Wind Flow Init",      "deferred/ssWindInitC.glsl" },
+            { &gSSWindDivProgram,     "SS Wind Flow Divergence","deferred/ssWindDivC.glsl" },
+            { &gSSWindJacobiProgram,  "SS Wind Flow Jacobi",    "deferred/ssWindJacobiC.glsl" },
+            { &gSSWindProjectProgram, "SS Wind Flow Project",   "deferred/ssWindProjectC.glsl" },
+            { &gSSWindSeedProgram,    "SS Wind Flow Seed",      "deferred/ssWindSeedC.glsl" },
+            { &gSSWindRestrictProgram,"SS Wind Flow Restrict",  "deferred/ssWindRestrictC.glsl" },
+            { &gSSWindProlongProgram, "SS Wind Flow Prolong",   "deferred/ssWindProlongC.glsl" },
+        };
+
+        for (auto& pass : wind_passes)
+        {
+            pass.prog->mName = pass.name;
+
+            // A GL program may not mix a compute stage with any other, and
+            // attachShaderFeatures hangs objects/nonindexedTextureV.glsl off
+            // every shader that does not use indexed textures. attachNothing
+            // is the only way to keep the program pure compute.
+            pass.prog->mFeatures.attachNothing = true;
+
+            pass.prog->mShaderFiles.clear();
+            pass.prog->mShaderFiles.push_back(make_pair(pass.file, GL_COMPUTE_SHADER));
+
+            // These only exist under class1, and a failure has no lower level
+            // worth retrying at; anything higher just repeats the same error.
+            pass.prog->mShaderLevel = 1;
+            pass.prog->clearPermutations();
+
+            if (!pass.prog->createShader())
+            {
+                LL_WARNS("Shader") << pass.name << " failed to compile;"
+                                   << " the wind flowmap will stay disabled" << LL_ENDL;
+                pass.prog->unload();
+            }
+        }
     }
 
     if (success)
@@ -2910,6 +3323,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gEnvironmentMapProgram.clearPermutations();
         gEnvironmentMapProgram.addPermutation("HAS_HDRI", "1");
         add_common_permutations(&gEnvironmentMapProgram);
+        // <SS:Nexii> Both programs that compile skyF.glsl must carry the horizon depth const - skyF references LL_SHADER_CONST_HORIZON_DEPTH inside its SS_ATMO block, and a program without the define fails to compile rather than silently misbehaving.
+        gEnvironmentMapProgram.addConstant(LLGLSLShader::SHADER_CONST_HORIZON_DEPTH);
         gEnvironmentMapProgram.mShaderFiles.push_back(make_pair("deferred/skyV.glsl", GL_VERTEX_SHADER));
         gEnvironmentMapProgram.mShaderFiles.push_back(make_pair("deferred/skyF.glsl", GL_FRAGMENT_SHADER));
         gEnvironmentMapProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
@@ -2934,6 +3349,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredWLSkyProgram.mShaderGroup = LLGLSLShader::SG_SKY;
 
         add_common_permutations(&gDeferredWLSkyProgram);
+        // <SS:Nexii> The skyF.glsl horizon-clip depth - see the note on gEnvironmentMapProgram above.
+        gDeferredWLSkyProgram.addConstant(LLGLSLShader::SHADER_CONST_HORIZON_DEPTH);
 
         success = gDeferredWLSkyProgram.createShader();
         llassert(success);

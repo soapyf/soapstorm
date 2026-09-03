@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <SS:Nexii> The switchboard: every overlay that draws Atmo Magic debug
+     geometry into the world or text onto the screen. The seven render debug
+     masks that used to hang off Develop > Render Metadata lead the list in the
+     menu's own order; the markers and the info readout follow. The pickers and
+     dials that shape what each overlay draws live on the tabs behind this one. -->
+<panel
+ name="debug_overlays_panel"
+ follows="all"
+ layout="topleft"
+ background_visible="false"
+ border="false"
+ top="0"
+ left="0"
+ height="400"
+ width="412">
+    <scroll_container
+     name="overlays_scroll"
+     follows="all"
+     layout="topleft"
+     left="0"
+     top="0"
+     height="400"
+     width="404"
+     opaque="false"
+     reserve_scroll_corner="false">
+    <panel
+     name="overlays_content"
+     follows="left|top"
+     layout="topleft"
+     background_visible="false"
+     border="false"
+     top="0"
+     left="0"
+     min_height="120"
+     min_width="300"
+     height="420"
+     width="384">
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top="8"
+     height="14"
+     width="382"
+     name="debug_views_label"
+     font="SansSerifSmallBold">
+        Debug Views
+    </text>
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="44"
+     width="382"
+     name="debug_views_help"
+     word_wrap="true"
+     font="SansSerifSmall">
+        Everything that draws Atmo Magic debug geometry, one switch each. The pickers and dials for each view are on the other tabs. The info readout&apos;s own orange headings collapse their section on click.
+    </text>
+    <check_box
+     control_name="SSAtmoShowInfo"
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     height="16"
+     width="382"
+     name="info_overlay_check"
+     label="Show info overlay"
+     tool_tip="On-screen readout of weather values, the maps&apos; capture health, particle counts, lightning state and the indoor/outdoor probe result. Click an orange heading to collapse that section" />
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="16"
+     width="382"
+     name="flow_overlay_check"
+     label="Draw the wind flowmap"
+     tool_tip="The solved field drawn over the world - arrows or flow lines, capture passes, all picked on the Wind Flow tab" />
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="16"
+     width="382"
+     name="shadow_overlay_check"
+     label="Draw the rain shadow map"
+     tool_tip="Every captured depth texel drawn where it saw the world, in the view picked on the Rain tab" />
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="16"
+     width="382"
+     name="runoff_overlay_check"
+     label="Draw the roof runoff"
+     tool_tip="The eaves, the water they hold and what they shed, in the stage picked on the Rain tab" />
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="16"
+     width="382"
+     name="surface_overlay_check"
+     label="Draw the surface field"
+     tool_tip="The wet/snow/puddle landing grid and its runoff traces, drawn over the ground they land on" />
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="16"
+     width="382"
+     name="field_overlay_check"
+     label="Draw the world field"
+     tool_tip="The shared capture&apos;s view - band surfaces, air labels, drainage or true ground - picked on the Fields tab. The drainage and air views are distance-thinned" />
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="16"
+     width="382"
+     name="cloud_overlay_check"
+     label="Draw the cloud field"
+     tool_tip="The volumetric deck&apos;s builder views, picked on the Fields tab" />
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="16"
+     width="382"
+     name="settle_overlay_check"
+     label="Mark geometry changes waiting to settle"
+     tool_tip="A beacon over every prim change still waiting out its settle delay, green as it comes due and red once it has re-armed too often to ever settle" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="16"
+     height="14"
+     width="382"
+     name="markers_label"
+     font="SansSerifSmallBold">
+        Markers
+    </text>
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="28"
+     width="382"
+     name="markers_help"
+     word_wrap="true"
+     font="SansSerifSmall">
+        World-space tags over things the systems are holding or doing right now.
+    </text>
+    <check_box
+     control_name="SSAtmoDebugStrikeMarkers"
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     height="16"
+     width="382"
+     name="strike_marker_check"
+     label="Mark pending lightning strikes"
+     tool_tip="Sheet strikes get a ring where the flash will bloom, forks their future channel, ground strikes the channel plus a box at the attachment point, each with a floating countdown in a colour of its own - chosen to read against white storm cloud" />
+    <check_box
+     control_name="SSAtmoDebugSheetMarkers"
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="16"
+     width="382"
+     name="sheet_marker_check"
+     label="Mark rain sheet trajectories"
+     tool_tip="Per live rain-sheet particle, a thin cyan line along its whole intended trajectory, a thick magenta dot at its centre and a magenta heading line of one second&apos;s travel - for diagnosing whether sheets actually carry wind slant" />
+    <check_box
+     control_name="SSAtmoDebugFootstepMarkers"
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="16"
+     width="382"
+     name="footstep_marker_check"
+     label="Mark footstep audio sources"
+     tool_tip="A bright flash where a footstep sound starts playing, then a small dim dot riding the source until it stops - shows start moments, whether loops follow their avatar, and stop timing" />
+
+    </panel>
+    </scroll_container>
+</panel>

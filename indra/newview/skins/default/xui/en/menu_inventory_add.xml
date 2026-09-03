@@ -329,6 +329,15 @@
             <menu_item_call.on_enable
                     function="Inventory.EnvironmentEnabled" />
         </menu_item_call>
+        <!-- <SS:Nexii> Atmo Magic: writes a plain notecard pre-filled with the default v3 environment, rather than a real Settings asset - see menu_create_inventory_item's "atmoenv" branch. -->
+        <menu_item_call
+                label="New Atmo Magic"
+                layout="topleft"
+                name="New Atmo Magic">
+            <menu_item_call.on_click
+                    function="Inventory.DoCreate"
+                    parameter="atmoenv"/>
+        </menu_item_call>
     </menu>
     <menu_item_separator/>
     <menu_item_call

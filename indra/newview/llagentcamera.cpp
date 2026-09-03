@@ -2006,14 +2006,9 @@ LLVector3d LLAgentCamera::calcCameraPositionTargetGlobal(bool *hit_limit)
         static LLCachedControl<bool> ots_collision(gSavedSettings, "OTSCameraCollision", true);
         if (ots_collision && gAgent.getTeleportState() == LLAgent::TELEPORT_NONE) // never raycast mid-teleport
         {
-            // <SS:Nexii> The margin keeps the near clip plane out of the surface the camera stopped in front of, so it has to stay at or
-            // above the near clip or the plane pokes through and the wall goes see-through. Tracks the camera instead of being a constant so
-            // raising FSRenderNearClip cannot outgrow it; takes the setting too because display() pushes it onto the camera only once a
-            // frame, leaving getNear() stale on the frame it changes.
-            //const F32 OTS_COLLISION_MARGIN = 0.20f;        // keep the near clip plane out of the surface
+            // <SS:Nexii> The margin keeps the near clip plane out of the surface the camera stopped in front of, so it has to stay at or above the near clip or the plane pokes through and the wall goes see-through. Tracks the camera instead of being a constant so raising FSRenderNearClip cannot outgrow it; takes the setting too because display() pushes it onto the camera only once a frame, leaving getNear() stale on the frame it changes. const F32 OTS_COLLISION_MARGIN = 0.20f; // keep the near clip plane out of the surface
             static LLCachedControl<F32> near_clip(gSavedSettings, "FSRenderNearClip", 0.25f);
             const F32 OTS_COLLISION_MARGIN = llmax((F32)near_clip, LLViewerCamera::getInstance()->getNear() + 0.05f);
-            // </SS:Nexii>
             const F32 OTS_MIN_CAMERA_DISTANCE = 0.30f;       // never pull in closer than just behind the head
             const F32 OTS_COLLISION_EASE_OUT_HALF_LIFE = 0.15f; // seconds; recovery speed when an obstruction clears
 

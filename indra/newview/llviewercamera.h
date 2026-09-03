@@ -67,14 +67,6 @@ public:
     static void updateFrustumPlanes(LLCamera& camera, bool ortho = false, bool zflip = false, bool no_hacks = false);
     void setPerspective(bool for_selection, S32 x, S32 y_from_bot, S32 width, S32 height, bool limit_select_distance, F32 z_near = 0, F32 z_far = 0);
 
-    // <SS:Nexii> The far plane the world is projected with, as opposed to getFar(), which is only where objects are culled: setup3DRender()
-    // projects with twice the cull distance so geometry straddling it is not sliced, never nearer than the historic 1024m. Anything sizing
-    // itself against what the viewport shows (void water reach, water pool altitude cutoff) must measure against this or it cuts away what
-    // is still being drawn. Static form is for callers whose far clip is fresher than the camera's, which lags the RenderFarClip setting.
-    static F32 calcRenderFarPlane(F32 far_clip) { return llmax(MAX_FAR_CLIP, far_clip) * 2.f; }
-    F32 getRenderFarPlane() const { return calcRenderFarPlane(getFar()); }
-    // </SS:Nexii>
-
     const LLMatrix4 &getProjection() const;
     const LLMatrix4 &getModelview() const;
 

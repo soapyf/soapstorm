@@ -212,6 +212,44 @@ void LLMultiSliderCtrl::onEditorGainFocus( LLFocusableElement* caller, void *use
 }
 
 
+// <SS:Nexii> See the header note.
+void LLMultiSliderCtrl::reshape(S32 width, S32 height, bool called_from_parent)
+{
+    const LLRect old_ctrl = getRect();
+    const LLRect old_slider = mMultiSlider ? mMultiSlider->getRect() : LLRect();
+
+    // Same-size reshapes (floater construction fires several) change nothing and must touch nothing - the inset arithmetic below is only meaningful against an actual size change, and running it
+    // against half-built layout state is how a debug session found a floater failing to OPEN.
+    const bool resized = (width != old_ctrl.getWidth()) || (height != old_ctrl.getHeight());
+
+    LLF32UICtrl::reshape(width, height, called_from_parent);
+
+    if (mMultiSlider && resized && old_ctrl.getWidth() > 0 && old_ctrl.getHeight() > 0)
+    {
+        // The same distances from each ctrl edge the constructor left it with, against the new size.
+        const S32 inset_left = old_slider.mLeft;
+        const S32 inset_right = old_ctrl.getWidth() - old_slider.mRight;
+        const S32 inset_top = old_ctrl.getHeight() - old_slider.mTop;
+        const S32 inset_bottom = old_slider.mBottom;
+
+        LLRect r(inset_left, getRect().getHeight() - inset_top,
+                 getRect().getWidth() - inset_right, inset_bottom);
+
+        // A child rect wider or taller than any screen means the insets were computed against layout state that never described this widget - refuse, and say so, rather than hand the slider an
+        // absurd shape to allocate against.
+        if (r.getWidth() < 1 || r.getHeight() < 1 || r.getWidth() > 16384 || r.getHeight() > 16384)
+        {
+            LL_WARNS("MultiSlider") << getName() << " reshape produced degenerate slider rect "
+                << r.getWidth() << "x" << r.getHeight() << " from ctrl " << old_ctrl.getWidth() << "x" << old_ctrl.getHeight()
+                << " slider " << old_slider.getWidth() << "x" << old_slider.getHeight() << LL_ENDL;
+        }
+        else
+        {
+            mMultiSlider->setShape(r);
+        }
+    }
+}
+
 void LLMultiSliderCtrl::setValue(const LLSD& value)
 {
     mMultiSlider->setValue(value);

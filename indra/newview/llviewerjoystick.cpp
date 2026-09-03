@@ -251,16 +251,11 @@ void LLViewerJoystick::updateEnabled(bool autoenable)
 {
     if (mDriverState == JDS_UNINITIALIZED)
     {
-        // <SS:Nexii> Only forget the enable when the user never pinned a device. Clearing it whenever the device happens to be missing right
-        // now - not enumerated yet at startup, driver still coming up, unplugged for a moment - latches the feature off for good, because
-        // JoystickEnabled persists and LLAppViewer gates the startup init() on it, so the next run never looks for the device at all. That
-        // reads to the user as the viewer forgetting their selection every restart even though JoystickDeviceUUID is still on disk.
-        //gSavedSettings.setBOOL("JoystickEnabled", false);
+        // <SS:Nexii> Only forget the enable when the user never pinned a device. Clearing it whenever the device happens to be missing right now - not enumerated yet at startup, driver still coming up, unplugged for a moment - latches the feature off for good, because JoystickEnabled persists and LLAppViewer gates the startup init() on it, so the next run never looks for the device at all. That reads to the user as the viewer forgetting their selection every restart even though JoystickDeviceUUID is still on disk. gSavedSettings.setBOOL("JoystickEnabled", false);
         if (!isDeviceUUIDSet())
         {
             gSavedSettings.setBOOL("JoystickEnabled", false);
         }
-        // </SS:Nexii>
     }
     else
     {
@@ -441,10 +436,7 @@ void LLViewerJoystick::init(bool autoenable)
             {
                     LL_INFOS("Joystick") << "Failed to gather input devices. Falling back to ndof's init" << LL_ENDL;
                     // Failed to gather devices, init first suitable one
-                // <SS:Nexii> Keep the user's pinned device id through a failed enumeration. Clearing it here threw away the preference for
-                // the rest of the session, and the next saveDeviceIdToSettings() then wrote the empty id over the stored one for good.
-                //mLastDeviceUUID = LLSD();
-                // </SS:Nexii>
+                // <SS:Nexii> Keep the user's pinned device id through a failed enumeration. Clearing it here threw away the preference for the rest of the session, and the next saveDeviceIdToSettings() then wrote the empty id over the stored one for good. mLastDeviceUUID = LLSD();
                 void *preffered_device = NULL;
                 initDevice(preffered_device);
             }
@@ -1446,9 +1438,7 @@ void LLViewerJoystick::scanJoystick()
     if (mDriverState != JDS_INITIALIZED || !joystick_enabled())
     // </FS:PP>
     {
-        // <SS:Nexii> The device the user pinned is wanted but not live: retry on a slow timer. Devices are not always enumerable by the time
-        // LLAppViewer runs the startup init() - a SpaceMouse whose service is still starting is the usual case - and the ndof hot plug
-        // callbacks do not fire on Windows, so without this the only way back is opening the floater and picking the device by hand.
+        // <SS:Nexii> The device the user pinned is wanted but not live: retry on a slow timer. Devices are not always enumerable by the time LLAppViewer runs the startup init() - a SpaceMouse whose service is still starting is the usual case - and the ndof hot plug callbacks do not fire on Windows, so without this the only way back is opening the floater and picking the device by hand.
         if (joystick_enabled() && isDeviceUUIDSet())
         {
             static LLFrameTimer retry_timer;
@@ -1460,7 +1450,6 @@ void LLViewerJoystick::scanJoystick()
                 init(false);
             }
         }
-        // </SS:Nexii>
         return;
     }
 
@@ -1559,16 +1548,10 @@ void LLViewerJoystick::saveDeviceIdToSettings()
     // someone editing the xml will corrupt it
     // so convert to string first
     std::string device_string = getDeviceUUIDString();
-    // <SS:Nexii> Wrap the id in a map instead of storing the bare string. JoystickDeviceUUID is a TYPE_LLSD control, and
-    // LLControlVariable::getComparableValue() re-parses any String handed to an LLSD control as LLSD notation - see llcontrol.cpp. A Windows
-    // GUID reads as "{6F1D2E70-D5A0-11D0-8A22-00A0C9264A70}", the leading brace opens a map in that notation, and every device therefore
-    // collapsed to an empty map on the way in. The stored id was {} for every device ever picked, so nothing could be restored on the next
-    // run and the first enumerated device won by default. A map value skips that reparse entirely.
-    //gSavedSettings.setLLSD("JoystickDeviceUUID", LLSD(device_string));
+    // <SS:Nexii> Wrap the id in a map instead of storing the bare string. JoystickDeviceUUID is a TYPE_LLSD control, and LLControlVariable::getComparableValue() re-parses any String handed to an LLSD control as LLSD notation - see llcontrol.cpp. A Windows GUID reads as "{6F1D2E70-D5A0-11D0-8A22-00A0C9264A70}", the leading brace opens a map in that notation, and every device therefore collapsed to an empty map on the way in. The stored id was {} for every device ever picked, so nothing could be restored on the next run and the first enumerated device won by default. A map value skips that reparse entirely. gSavedSettings.setLLSD("JoystickDeviceUUID", LLSD(device_string));
     LLSD device_data;
     device_data["guid"] = device_string;
     gSavedSettings.setLLSD("JoystickDeviceUUID", device_data);
-    // </SS:Nexii>
 #else
     LLSD device_id = getDeviceUUID();
     gSavedSettings.setLLSD("JoystickDeviceUUID", device_id);
@@ -1583,14 +1566,12 @@ void LLViewerJoystick::loadDeviceIdFromSettings()
     // so _GUID data gets converted to string (we probably can convert it to LLUUID with memcpy)
     // and here we need to convert it back to binary from string
     std::string device_string;
-    // <SS:Nexii> Map form written by saveDeviceIdToSettings(); the plain string is the old format, which never actually survived a save on
-    // Windows but is still read so a hand-edited or imported settings file keeps working.
+    // <SS:Nexii> Map form written by saveDeviceIdToSettings(); the plain string is the old format, which never actually survived a save on Windows but is still read so a hand-edited or imported settings file keeps working.
     if (dev_id.isMap())
     {
         device_string = dev_id["guid"].asString();
     }
     else if (dev_id.isString())
-    // </SS:Nexii>
     {
         device_string = dev_id.asString();
     }

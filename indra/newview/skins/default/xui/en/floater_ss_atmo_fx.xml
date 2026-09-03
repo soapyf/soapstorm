@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <SS:Nexii> Everything here used to be one 1008px column in a floater that could
+     neither be resized nor scrolled, so on any ordinary screen the lightning half was
+     simply off the bottom edge. Four tabs now, split by what a person is doing rather than
+     by which system owns the setting: Rain is the whole precipitation act (how many drops,
+     what they look like, what they do on landing), Lightning is its own world and nobody
+     tunes it while tuning rain, Clouds is the volumetric field, and LOD is the one place
+     to go when the weather costs more than the machine has - both systems' performance
+     dials together. Each tab scrolls its own content, so the floater can be short and
+     resized to taste. See doc/atmo_magic_fx_ui.md. -->
+<floater
+ positioning="cascading"
+ can_minimize="true"
+ can_resize="true"
+ height="500"
+ min_height="260"
+ min_width="424"
+ layout="topleft"
+ name="floater_ss_atmo_fx"
+ save_rect="true"
+ single_instance="true"
+ title="Effects &amp; LOD"
+ width="424">
+    <tab_container
+     follows="all"
+     layout="topleft"
+     left="6"
+     top="22"
+     bottom="-6"
+     width="412"
+     halign="center"
+     tab_position="top"
+     tab_width="100"
+     tab_padding_right="2"
+     name="fx_tabs">
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="rain_tab"
+         label="Rain"
+         filename="panel_ss_atmo_fx_rain.xml" />
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="lightning_tab"
+         label="Lightning"
+         filename="panel_ss_atmo_fx_lightning.xml" />
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="clouds_tab"
+         label="Clouds"
+         filename="panel_ss_atmo_fx_clouds.xml" />
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="lod_tab"
+         label="LOD"
+         filename="panel_ss_atmo_fx_lod.xml" />
+    </tab_container>
+</floater>

@@ -133,7 +133,8 @@ void LLHUDText::render()
         // So it turns out when the LLGLDepthTest object goes out of scope, it reverts back
         // to the previous state. So by having the LLGLDepthTest in the if statements, they were
         // never applied.
-        LLGLDepthTest gls_depth(mbUseHoverHighlight && mbIsHighlighted ? GL_FALSE : GL_TRUE, GL_FALSE);
+        // <SS:Nexii> mZCompare was read before the name tag code split pulled this file out; honour it again, so text that asked to draw through the scene (tracker beacons, Atmo Magic debug labels) is not depth-tested against the world's depth buffer behind it.
+        LLGLDepthTest gls_depth(mZCompare && !(mbUseHoverHighlight && mbIsHighlighted) ? GL_TRUE : GL_FALSE, GL_FALSE);
         // </FS:minerjr> [FIRE-35019] </FS:minerjr> [FIRE-35102]	
         //LLGLDisable gls_stencil(GL_STENCIL_TEST);
         renderText();

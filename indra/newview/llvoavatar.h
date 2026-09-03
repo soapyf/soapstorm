@@ -1333,6 +1333,10 @@ private:
     const static LLUUID sStepSounds[LL_MCODE_END];
     // const static LLUUID  sStepSoundOnLand; - <FS:PP> Commented out for FIRE-3169: Option to change the default footsteps sound
 
+    // <SS:Nexii> Atmo Magic surface-aware footstep sounds. Kept as plain S32 action codes here (0=walk, 1=run, 2=jump, 3=land, matching SSStepAction in ssprecippreset.h) so this header does not need to pull that one in.
+    void        playFootstepSound(const LLVector3& foot_pos_agent, S32 action);
+    bool        mWasJumping = false;
+
     //--------------------------------------------------------------------
     // Foot step state (for generating sounds)
     //--------------------------------------------------------------------
@@ -1341,6 +1345,15 @@ public:
     LLVector4           mFootPlane;
 private:
     bool                mWasOnGroundLeft;
+    // <SS:Nexii> Airborne last frame, for the touchdown edge that fires the Land one-shot - see updateFootstepSounds.
+    bool                mSSWasInAir = false;
+    bool                mSSWasRunning = false;   // hysteresis for the walk/run speed classifier - see updateFootstepSounds
+    // Per-foot touchdown detection state, [0]=left [1]=right. Envelope trackers rather than fixed thresholds because ankle elevation has an unknown DC offset (ankle-to-sole distance scales with
+    // avatar height, and hover/AO shift it further) and an unknown swing amplitude - see updateFootstepSounds.
+    F32                 mSSFootLow[2]   = { 0.f, 0.f };
+    F32                 mSSFootHigh[2]  = { 0.f, 0.f };
+    bool                mSSFootArmed[2] = { false, false };
+    bool                mSSFootTracking = false;
     bool                mWasOnGroundRight;
 
 /**                    Sounds

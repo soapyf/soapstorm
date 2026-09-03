@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<panel
+ border="true"
+ follows="all"
+ label="Lightning"
+ layout="topleft"
+ left="0"
+ name="panel_ss_atmo_env_weather_lightning"
+ top="0"
+ width="580"
+ height="580">
+    <!-- <SS:Nexii> Atmo Magic: Weather > Lightning - the discharge set. Split off Conditions because it is an output of the storm rather than a driver of it, and it carries enough flags of its own to crowd the drivers out. See doc/atmo_magic_env_ui.md. -->
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top="10"
+     height="16"
+     width="360"
+     name="lightning_enabled_check"
+     label="Lightning"
+     tool_tip="Whether this sky has lightning at all. Stable and Breezy skies never strike even with this on - there is nothing unstable enough in them to discharge." />
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="4"
+     height="16"
+     width="360"
+     name="lightning_charge_check"
+     label="Gathering charge before a strike"
+     tool_tip="Crackle, sparks and corona gathering in the air where a strike is about to land, seconds before it does. Nothing in real weather announces a strike; this is for skies that are not trying to be real. On by default." />
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="4"
+     height="16"
+     width="360"
+     name="lightning_sparks_check"
+     label="Sparks at the impact"
+     tool_tip="Sparks thrown outward where a cloud-to-ground strike lands. On by default." />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="lightning_color_label"
+     tool_tip="The glow around the channel - what gives lightning its colour. The core stays white unless Core Whiteness is wound down."
+     font="SansSerifSmall">
+        Bolt Colour
+    </text>
+    <color_swatch
+     can_apply_immediately="true"
+     follows="left|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-4"
+     height="22"
+     width="60"
+     label_height="0"
+     tool_tip="The glow around the channel - what gives lightning its colour. The core stays white unless Core Whiteness is wound down."
+     name="lightning_color" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left="486"
+     top_delta="-2"
+     height="25"
+     width="25"
+     name="lightning_color_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left="513"
+     top_delta="0"
+     height="25"
+     width="25"
+     name="lightning_color_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left="540"
+     top_delta="0"
+     height="25"
+     width="25"
+     name="lightning_color_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="lightning_core_white_label"
+     tool_tip="How white the channel core stays against the bolt colour. 1 is a white-hot channel in a coloured glow, as in nature; 0 colours the bolt all the way through."
+     font="SansSerifSmall">
+        Core Whiteness
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="lightning_core_white_slider"
+     show_text="false"
+     min_val="0"
+     max_val="1"
+     increment="0.01"
+     tool_tip="How white the channel core stays against the bolt colour. 1 is a white-hot channel in a coloured glow, as in nature; 0 colours the bolt all the way through." />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-2"
+     height="20"
+     width="64"
+     name="lightning_core_white_value_spinner"
+     tool_tip="How white the channel core stays against the bolt colour. 1 is a white-hot channel in a coloured glow, as in nature; 0 colours the bolt all the way through."
+     decimal_digits="2"
+     min_val="0"
+     max_val="1"
+     increment="0.01" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left="486"
+     top_delta="-2"
+     height="25"
+     width="25"
+     name="lightning_core_white_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left="513"
+     top_delta="0"
+     height="25"
+     width="25"
+     name="lightning_core_white_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left="540"
+     top_delta="0"
+     height="25"
+     width="25"
+     name="lightning_core_white_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="16"
+     width="360"
+     name="lightning_auto_check"
+     label="Lightning Auto"
+     tool_tip="Derive lightning intensity from convection; uncheck to author it directly. Stable and Breezy skies never strike either way" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="lightning_intensity_label"
+     tool_tip="Strike cadence with Auto off: a whisper near zero is about a strike a minute, full matches a Severe sky's 2 to 5 seconds. An override is an order, so this ignores the moisture gate auto mode obeys - though the temperature season still stretches the intervals"
+     font="SansSerifSmall">
+        Lightning Intensity
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="lightning_intensity_slider"
+     tool_tip="Strike cadence with Auto off: a whisper near zero is about a strike a minute, full matches a Severe sky's 2 to 5 seconds. An override is an order, so this ignores the moisture gate auto mode obeys - though the temperature season still stretches the intervals"
+     show_text="false"
+     min_val="0"
+     max_val="1"
+     increment="0.01"
+     initial_value="0" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="lightning_intensity_value_spinner"
+     tool_tip="Strike cadence with Auto off: a whisper near zero is about a strike a minute, full matches a Severe sky's 2 to 5 seconds. An override is an order, so this ignores the moisture gate auto mode obeys - though the temperature season still stretches the intervals"
+     min_val="0"
+     max_val="1"
+     increment="0.01"
+     decimal_digits="2" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="lightning_intensity_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="lightning_intensity_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="lightning_intensity_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+</panel>

@@ -87,6 +87,9 @@ public:
 
     virtual void    setValue(const LLSD& value );
     virtual LLSD    getValue() const        { return mMultiSlider->getValue(); }
+
+    // <SS:Nexii> The inner LLMultiSlider is laid out once in the constructor and never told about size changes - the ctrl view followed a resizing floater while the slider inside kept its birth height. Reshape re-stretches it preserving whatever edge insets the constructor established, so label/text layouts survive unchanged.
+    /*virtual*/ void reshape(S32 width, S32 height, bool called_from_parent = true);
     virtual bool    setLabelArg( const std::string& key, const LLStringExplicit& text );
 
     const std::string& getCurSlider() const                 { return mMultiSlider->getCurSlider(); }
@@ -106,6 +109,7 @@ public:
     void            setMinValue(F32 min_value) {mMultiSlider->setMinValue(min_value);}
     void            setMaxValue(F32 max_value) {mMultiSlider->setMaxValue(max_value);}
     void            setIncrement(F32 increment) {mMultiSlider->setIncrement(increment);}
+    void            setOverlapThreshold(F32 threshold) {mMultiSlider->setOverlapThreshold(threshold);}
 
     F32             getNearestIncrement(F32 value) const { return mMultiSlider->getNearestIncrement(value); }
     F32             getSliderValueFromPos(S32 x, S32 y) const { return mMultiSlider->getSliderValueFromPos(x, y); }

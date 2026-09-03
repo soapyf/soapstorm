@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<floater
+ positioning="cascading"
+ can_minimize="true"
+ can_resize="false"
+ height="500"
+ layout="topleft"
+ name="floater_ss_atmo_assets"
+ save_rect="true"
+ single_instance="true"
+ title="Global Assets"
+ width="452">
+    <text
+     follows="left|top" layout="topleft" left="12" top="26"
+     height="40" width="416" word_wrap="true" font="SansSerifSmall">
+        Precipitation textures and sound packs live in each preset - open the preset editor for those. Wind is not tied to a precipitation type, so it is configured here.
+    </text>
+    <text
+     follows="left|top" layout="topleft" left="12" top_pad="10"
+     height="14" width="416" name="wind_label" font="SansSerifSmallBold">
+        Wind Loops
+    </text>
+    <text
+     follows="left|top" layout="topleft" left="12" top_pad="2"
+     height="14" width="416" name="wind_desc" font="SansSerifSmall">
+        Each slot is a list of sounds played end to end.
+    </text>
+    <text
+     follows="left|top" layout="topleft" left="12" top_pad="8"
+     height="14" width="90" name="wind_light_label" font="SansSerifSmall">
+        Wind, light
+    </text>
+    <ss_sound_list
+     follows="left|top" layout="topleft" left_pad="4" top_delta="-4"
+     height="20" width="316" mode="sequence" name="loop_wind_light" />
+    <text
+     follows="left|top" layout="topleft" left="12" top_pad="8"
+     height="14" width="90" name="wind_strong_label" font="SansSerifSmall">
+        Wind, strong
+    </text>
+    <ss_sound_list
+     follows="left|top" layout="topleft" left_pad="4" top_delta="-4"
+     height="20" width="316" mode="sequence" name="loop_wind_strong" />
+
+    <text
+     follows="left|top" layout="topleft" left="12" top_pad="14"
+     height="14" width="416" name="thunder_label" font="SansSerifSmallBold">
+        Thunder
+    </text>
+    <text
+     follows="left|top" layout="topleft" left="12" top_pad="2"
+     height="28" width="416" word_wrap="true" name="thunder_desc" font="SansSerifSmall">
+        One picked at random per strike, delayed by its distance. Near strikes take from Crack, distant ones from Rumble.
+    </text>
+    <text
+     follows="left|top" layout="topleft" left="12" top_pad="8"
+     height="14" width="90" name="thunder_crack_label" font="SansSerifSmall">
+        Crack, near
+    </text>
+    <ss_sound_list
+     follows="left|top" layout="topleft" left_pad="4" top_delta="-4"
+     height="20" width="316" mode="random" name="thunder_crack" />
+    <text
+     follows="left|top" layout="topleft" left="12" top_pad="8"
+     height="14" width="90" name="thunder_rumble_label" font="SansSerifSmall">
+        Rumble, far
+    </text>
+    <ss_sound_list
+     follows="left|top" layout="topleft" left_pad="4" top_delta="-4"
+     height="20" width="316" mode="random" name="thunder_rumble" />
+
+    <text
+     follows="left|top" layout="topleft" left="12" top_pad="14"
+     height="14" width="416" name="steps_label" font="SansSerifSmallBold">
+        Footsteps on Dry Ground
+    </text>
+    <text
+     follows="left|top" layout="topleft" left="12" top_pad="2"
+     height="14" width="416" name="steps_desc" font="SansSerifSmall">
+        Not specific to a precipitation, so they are set once here.
+    </text>
+    <panel name="steps_panel" follows="left|top" layout="topleft"
+     left="12" top_pad="4" width="424" height="89"
+     background_visible="false" border="false">
+        <text name="step_head_walk" follows="left|top" layout="topleft"
+         left="100" top="0" height="12" width="78" font="SansSerifSmall">Walk</text>
+        <text name="step_head_run" follows="left|top" layout="topleft"
+         left="182" top="0" height="12" width="78" font="SansSerifSmall">Run</text>
+        <text name="step_head_jump" follows="left|top" layout="topleft"
+         left="264" top="0" height="12" width="78" font="SansSerifSmall">Jump</text>
+        <text name="step_head_land" follows="left|top" layout="topleft"
+         left="346" top="0" height="12" width="78" font="SansSerifSmall">Land</text>
+        <text name="step_terrain_dry_label" follows="left|top" layout="topleft"
+         left="0" top="17" height="14" width="100" font="SansSerifSmall">Terrain, dry</text>
+        <ss_sound_list name="step_terrain_dry_walk" follows="left|top" layout="topleft"
+         left="100" top="14" height="20" width="78" mode="random"
+         tool_tip="Terrain, dry, Walk" />
+        <ss_sound_list name="step_terrain_dry_run" follows="left|top" layout="topleft"
+         left="182" top="14" height="20" width="78" mode="random"
+         tool_tip="Terrain, dry, Run" />
+        <ss_sound_list name="step_terrain_dry_jump" follows="left|top" layout="topleft"
+         left="264" top="14" height="20" width="78" mode="random"
+         tool_tip="Terrain, dry, Jump" />
+        <ss_sound_list name="step_terrain_dry_land" follows="left|top" layout="topleft"
+         left="346" top="14" height="20" width="78" mode="random"
+         tool_tip="Terrain, dry, Land" />
+        <text name="step_outside_dry_label" follows="left|top" layout="topleft"
+         left="0" top="42" height="14" width="100" font="SansSerifSmall">Outside, dry</text>
+        <ss_sound_list name="step_outside_dry_walk" follows="left|top" layout="topleft"
+         left="100" top="39" height="20" width="78" mode="random"
+         tool_tip="Outside, dry, Walk" />
+        <ss_sound_list name="step_outside_dry_run" follows="left|top" layout="topleft"
+         left="182" top="39" height="20" width="78" mode="random"
+         tool_tip="Outside, dry, Run" />
+        <ss_sound_list name="step_outside_dry_jump" follows="left|top" layout="topleft"
+         left="264" top="39" height="20" width="78" mode="random"
+         tool_tip="Outside, dry, Jump" />
+        <ss_sound_list name="step_outside_dry_land" follows="left|top" layout="topleft"
+         left="346" top="39" height="20" width="78" mode="random"
+         tool_tip="Outside, dry, Land" />
+        <text name="step_inside_dry_label" follows="left|top" layout="topleft"
+         left="0" top="67" height="14" width="100" font="SansSerifSmall">Inside</text>
+        <ss_sound_list name="step_inside_dry_walk" follows="left|top" layout="topleft"
+         left="100" top="64" height="20" width="78" mode="random"
+         tool_tip="Inside, Walk" />
+        <ss_sound_list name="step_inside_dry_run" follows="left|top" layout="topleft"
+         left="182" top="64" height="20" width="78" mode="random"
+         tool_tip="Inside, Run" />
+        <ss_sound_list name="step_inside_dry_jump" follows="left|top" layout="topleft"
+         left="264" top="64" height="20" width="78" mode="random"
+         tool_tip="Inside, Jump" />
+        <ss_sound_list name="step_inside_dry_land" follows="left|top" layout="topleft"
+         left="346" top="64" height="20" width="78" mode="random"
+         tool_tip="Inside, Land" />
+    </panel>
+</floater>

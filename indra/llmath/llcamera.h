@@ -41,13 +41,12 @@ constexpr F32 DEFAULT_FAR_PLANE     = 64.f; // far reaches across two horizontal
 constexpr F32 MAX_ASPECT_RATIO  = 50.0f;
 constexpr F32 MAX_NEAR_PLANE    = 1023.9f;   // Clamp the near plane just before the skybox ends
 constexpr F32 MAX_FAR_PLANE     = 100000.0f; //1000000.0f; // Max allowed. Not good Z precision though.
-constexpr F32 MAX_FAR_CLIP      = 512.0f;
+// <SS:Nexii> Was 512 and projected as *2 in setup3DRender; now the projection far plane ITSELF, the constant every far-field system sizes against (water fit, Atmo squash band, cloud cap, lightning reach). Draw distance only governs loading/culling and cannot project farther.
+constexpr F32 MAX_FAR_CLIP      = 2048.0f;
 
 constexpr F32 MIN_ASPECT_RATIO  = 0.02f;
-// <SS:Nexii> Was 0.1f, which setNear() clamps to. Lowered so display() can pull the near plane in with the alt-cam focus distance and let
-// the camera get right up against a surface without slicing into it. Only widens what is permitted; nothing passes this as a value.
+// <SS:Nexii> Was 0.1f, which setNear() clamps to. Lowered so display() can pull the near plane in with the alt-cam focus distance and let the camera get right up against a surface without slicing into it. Only widens what is permitted; nothing passes this as a value.
 constexpr F32 MIN_NEAR_PLANE    = 0.01f;
-// </SS:Nexii>
 constexpr F32 MIN_FAR_PLANE     = 0.2f;
 
 // Min/Max FOV values for square views. Call getMin/MaxView to get extremes based on current aspect ratio.

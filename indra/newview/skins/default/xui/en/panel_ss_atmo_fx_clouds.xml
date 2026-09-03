@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <SS:Nexii> The Effects & LOD floater's volumetric cloud tab. The three switches at the
+     top existed in the code but nowhere else: they were declared lazily by LLCachedControl
+     inside ssvolcloud, so they never persisted across a restart and did not even appear in
+     Debug Settings until the cloud renderer had drawn a frame. They are real settings now,
+     and this is where they live. The field's own dials - how densely its cells are filled,
+     and how many puffs a deck may draw - are LOD decisions and live on the LOD tab with the
+     rest of them. Per-puff opacity is deliberately NOT here: that is the sky's own authored
+     figure, it belongs to the environment editor, and a viewer-side multiplier on top of it
+     would just be a second place to set the same thing.
+     See doc/atmo_magic_fx_ui.md. -->
+<panel
+ name="fx_clouds_panel"
+ follows="all"
+ layout="topleft"
+ background_visible="false"
+ border="false"
+ top="0"
+ left="0"
+ height="400"
+ width="412">
+    <scroll_container
+     name="clouds_scroll"
+     follows="all"
+     layout="topleft"
+     left="0"
+     top="0"
+     height="400"
+     width="404"
+     opaque="false"
+     reserve_scroll_corner="false">
+    <panel
+     name="clouds_content"
+     follows="left|top"
+     layout="topleft"
+     background_visible="false"
+     border="false"
+     top="0"
+     left="0"
+     min_height="120"
+     min_width="300"
+     height="215"
+     width="384">
+    <text
+     follows="left|top" layout="topleft" left="12" top="8"
+     height="14" width="250" name="volumetric_label" font="SansSerifSmallBold">
+        Volumetric Cloud Field
+    </text>
+    <button
+     follows="left|top" layout="topleft"
+     left_pad="4" top_delta="-3" height="20" width="102"
+     name="R_volumetric" label="Reset group"
+     tool_tip="Reset every setting in this section to its default. The per-tier puff counts live on the LOD tab and are not touched">
+     <button.commit_callback function="SSAtmo.ResetGroup"
+      parameter="SSAtmoVolumetricClouds,SSAtmoCloudProceduralNoise,SSAtmoCloudTessellation,SSAtmoCloudSeason,SSAtmoCirrusSeason,SSAtmoCloudGroundShadow" />
+    </button>
+    <check_box
+     control_name="SSAtmoVolumetricClouds"
+     follows="left|top" layout="topleft" left="12" top_pad="6"
+     height="16" width="356" name="volumetric_check"
+     label="Draw the volumetric cloud field"
+     tool_tip="Off leaves the sky to the dome alone - no puffs and no under deck, and so nothing for lightning to hide behind or for precipitation to fall out of" />
+    <check_box
+     control_name="SSAtmoCloudProceduralNoise"
+     follows="left|top" layout="topleft" left="12" top_pad="6"
+     height="16" width="356" name="procedural_noise_check"
+     label="Grow a noise map when the sky authors none"
+     tool_tip="Holes, towers and the anvil carving still happen on a plain sky: the map is grown from the weather seed, so every client sharing the environment gets the same geography without anyone uploading a texture. Off leaves an unauthored deck evenly covered" />
+    <check_box
+     control_name="SSAtmoCloudTessellation"
+     follows="left|top" layout="topleft" left="12" top_pad="6"
+     height="16" width="356" name="tessellation_check"
+     label="Refine the field near the viewer"
+     tool_tip="Within a kilometre, each cloud puff grows smaller child puffs around its own body, and the nearest grow a smaller generation still - the field sampling itself finer where it can be seen, a LOD run in puffs rather than vertices. The detail is anchored to each cloud's own frame, so it rides the wind instead of re-rolling, and it fades with distance so it gathers and thins incrementally. The original puffs are untouched; a full puff budget pays for the detail out of the field's far edge" />
+    <check_box
+     control_name="SSAtmoCloudSeason"
+     follows="left|top" layout="topleft" left="12" top_pad="6"
+     height="16" width="356" name="cloud_season_check"
+     label="Seasonal deck altitude"
+     tool_tip="Temperature drives an auto-derived deck's base: winter air is dense and squashes the atmosphere down (near 400m at -15C), summer heat lifts it (1.2km at +35C), with the deck capped at a kilometre of thickness. Off keeps the old moisture/convection base derivation" />
+    <check_box
+     control_name="SSAtmoCirrusSeason"
+     follows="left|top" layout="topleft" left="12" top_pad="6"
+     height="16" width="356" name="cirrus_season_check"
+     label="Seasonal cirrus altitude"
+     tool_tip="Temperature slides the cirrus layer around the authored dome height: low in winter air (about 5km at -15C), lifted by summer heat (about 8km at +35C). Off keeps the authored height exactly" />
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="10" height="16" width="122"
+      name="T_SSAtmoCloudGroundShadow"
+      tool_tip="How strongly the deck shadows the ground's direct sunlight, 0 (off) to 1 (full). At full the shade is carried by the weather itself - a thin sheet barely dims, a kilometre-deep storm column goes near-black - so this exists to take the effect away, not to tune it. Shadows slide with the wind drift, lengthen with a low sun, and fade out below roughly ten degrees of elevation">
+        Ground shadow:
+    </text>
+    <slider_bar
+      control_name="SSAtmoCloudGroundShadow" name="SB_SSAtmoCloudGroundShadow"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="0" max_val="1" increment="0.05"
+      tool_tip="How strongly the deck shadows the ground's direct sunlight. The shade itself is carried by the deck's thickness; 0 turns it off" />
+    <spinner
+      control_name="SSAtmoCloudGroundShadow" name="S_SSAtmoCloudGroundShadow"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="1" increment="0.05" decimal_digits="2"
+      tool_tip="How strongly the deck shadows the ground's direct sunlight. The shade itself is carried by the deck's thickness; 0 turns it off" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoCloudGroundShadow" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoCloudGroundShadow" />
+    </button>
+    </panel>
+    </scroll_container>
+</panel>

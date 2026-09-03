@@ -507,7 +507,6 @@ bool LLViewerObject::idleUpdateGhostProjectile(const F64SecondsImplicit& frame_t
     sendProjectileExistenceProbe();
     return true;
 }
-// </SS:Nexii>
 
 LLViewerObject::~LLViewerObject()
 {
@@ -2609,15 +2608,12 @@ U32 LLViewerObject::processUpdateMessage(LLMessageSystem *mesgsys,
         (MAG_CUTOFF >= getAngularVelocity().magVecSquared()))
     {
 
-        // <SS:Nexii> A likely projectile that WAS !mStatic but is now static may have crossed a
-        // region boundary and become a ghost. Setting mStatic here stops interpolateLinearMotion()
-        // from ever running for it again, so register it for ghost probing before that happens.
+        // <SS:Nexii> A likely projectile that WAS !mStatic but is now static may have crossed a region boundary and become a ghost. Setting mStatic here stops interpolateLinearMotion() from ever running for it again, so register it for ghost probing before that happens.
         if (mLikelyProjectileBullet && !mStatic)
         {
             LL_DEBUGS("Projectile") << "Object " << getID() << " was a likely projectile bullet, but is now static.  It may have crossed a region boundary and become a ghost." << LL_ENDL;
             beginGhostProjectileWatch();
         }
-        // </SS:Nexii>
 
         mStatic = true; // This object doesn't move!
     }
@@ -2687,11 +2683,9 @@ U32 LLViewerObject::processUpdateMessage(LLMessageSystem *mesgsys,
         mDrawable->updateSpecialHoverCursor(special_hover_cursor);
     }
 
-    // <SS:Nexii> A fresh simulator update clears ghost projectile state and re-arms the
-    // ghost probe budget
+    // <SS:Nexii> A fresh simulator update clears ghost projectile state and re-arms the ghost probe budget
     mGhostedProjectileBullet = false;
     mGhostProjectileProbeCount = 0;
-    // </SS:Nexii>
 
     return retval;
 }
@@ -2740,16 +2734,12 @@ void LLViewerObject::idleUpdate(LLAgent &agent, const F64 &frame_time)
                 interpolateLinearMotion(frame_time, dt);
             }
         }
-        // <SS:Nexii> Static projectiles are skipped by interpolateLinearMotion() above, so a
-        // ghost one has to be probed from here. Objects whose isActive() drops with mStatic are
-        // off the active list and never reach this - they are covered by the object list's
-        // ghost projectile watch instead.
+        // <SS:Nexii> Static projectiles are skipped by interpolateLinearMotion() above, so a ghost one has to be probed from here. Objects whose isActive() drops with mStatic are off the active list and never reach this - they are covered by the object list's ghost projectile watch instead.
         else if (mStatic && mLikelyProjectileBullet && !isSelected()
                  && !mOnGhostProjectileWatch && mGhostProjectileProbeCount == 0)
         {
             beginGhostProjectileWatch();
         }
-        // </SS:Nexii>
 
         updateDrawable(false);
     }
@@ -2775,10 +2765,8 @@ void LLViewerObject::interpolateLinearMotion(const F64SecondsImplicit& frame_tim
         return;
     }
 
-    // <SS:Nexii> Lightweight ghost projectile existence probing. Placed ahead of the branches
-    // below so it covers moving, phased-out and fully stalled projectiles alike.
+    // <SS:Nexii> Lightweight ghost projectile existence probing. Placed ahead of the branches below so it covers moving, phased-out and fully stalled projectiles alike.
     maybeRequestProjectileExistenceCheck(frame_time, time_since_last_update);
-    // </SS:Nexii>
 
     LLVector3 accel = getAcceleration();
     LLVector3 vel   = getVelocity();

@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<floater
+ positioning="cascading"
+ can_minimize="true"
+ can_resize="true"
+ height="720"
+ min_height="240"
+ min_width="424"
+ layout="topleft"
+ name="floater_ss_atmo_worldfield"
+ save_rect="true"
+ single_instance="true"
+ title="World Field"
+ width="424">
+
+    <!-- Every row below is laid out against the panel, not the floater. The
+         panel is fixed height and taller than the window; the container is
+         what follows a resize. -->
+    <scroll_container
+     color="DkGray2"
+     opaque="true"
+     follows="all"
+     layout="topleft"
+     left="0"
+     top="16"
+     height="684"
+     width="424"
+     name="wf_scroll"
+     reserve_scroll_corner="false">
+    <panel
+     name="wf_panel"
+     follows="left|top"
+     layout="topleft"
+     left="0"
+     top="0"
+       width="406"
+       height="1192"
+       background_visible="false">
+
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top="10"
+     height="14"
+     width="382"
+     name="worldfield_label"
+     font="SansSerifSmallBold">
+        World Field
+    </text>
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="44"
+     width="382"
+     name="worldfield_help"
+     word_wrap="true"
+     font="SansSerifSmall">
+        One region-anchored capture of the world's solid structure, shared by the surface, coverage, air and drainage channels. The dials below tune the capture; a change drops the cached tiles and they rebuild under the new setting.
+    </text>
+    <check_box
+     control_name="SSWorldField"
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     height="16"
+     width="382"
+     name="field_enabled_check"
+     label="Capture the world field"
+     tool_tip="Off stops all capture; builds nothing until one of the channels that read the field is demanded" />
+    <check_box
+     control_name="SSWorldFieldSurfaceTop"
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="16"
+     width="382"
+     name="field_surfacetop_check"
+     label="Serve the surface field from the field"
+     tool_tip="The wet/snow/puddle field and runoff read their landing grid from the world field's SURFACE_TOP channel instead of the rain shadow capture. On when you want the field's columns behind the surface sim" />
+    <check_box
+     control_name="SSWorldFieldCoverage"
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="16"
+     width="382"
+     name="field_coverage_check"
+     label="Serve the soundscape from the field"
+     tool_tip="The audio mix reads its roof cover, burial and sealed-room verdict from the field's COVERAGE channel instead of the live raycasts. On is what makes tiles build here for audio" />
+
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="10" height="16" width="106"
+      name="T_field_cell"
+      tool_tip="Metres per column. 2m is a 128x128 column grid over a 256m region; finer resolves narrower walls and costs more capture and more flood work">
+        Cell size:
+    </text>
+    <slider_bar
+      control_name="SSWorldFieldCell" name="SB_field_cell"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0.5" max_val="8" increment="0.25"
+      tool_tip="Metres per column. 2m is a 128x128 column grid over a 256m region; finer resolves narrower walls and costs more capture and more flood work" />
+    <spinner
+      control_name="SSWorldFieldCell" name="S_field_cell"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0.5" max_val="8" increment="0.25" decimal_digits="2"
+      tool_tip="Metres per column. 2m is a 128x128 column grid over a 256m region; finer resolves narrower walls and costs more capture and more flood work" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_field_cell" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSWorldFieldCell" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="106"
+      name="T_field_band"
+      tool_tip="Height of one capture band in metres. Finer bands resolve more interior surfaces at the cost of more depth passes">
+        Band height:
+    </text>
+    <slider_bar
+      control_name="SSWorldFieldBand" name="SB_field_band"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="4" max_val="64" increment="1"
+      tool_tip="Height of one capture band in metres. Finer bands resolve more interior surfaces at the cost of more depth passes" />
+    <spinner
+      control_name="SSWorldFieldBand" name="S_field_band"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="4" max_val="64" increment="1" decimal_digits="0"
+      tool_tip="Height of one capture band in metres. Finer bands resolve more interior surfaces at the cost of more depth passes" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_field_band" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSWorldFieldBand" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="106"
+      name="T_field_ceiling"
+      tool_tip="Altitude in metres above which the field stops capturing. A full build also stops early once the sky has been empty for a few consecutive bands; the stack caps at 24 bands whichever comes first">
+        Ceiling:
+    </text>
+    <slider_bar
+      control_name="SSWorldFieldCeiling" name="SB_field_ceiling"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="16" max_val="1024" increment="16"
+      tool_tip="Altitude in metres above which the field stops capturing. A full build also stops early once the sky has been empty for a few consecutive bands; the stack caps at 24 bands whichever comes first" />
+    <spinner
+      control_name="SSWorldFieldCeiling" name="S_field_ceiling"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="16" max_val="1024" increment="16" decimal_digits="0"
+      tool_tip="Altitude in metres above which the field stops capturing. A full build also stops early once the sky has been empty for a few consecutive bands; the stack caps at 24 bands whichever comes first" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_field_ceiling" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSWorldFieldCeiling" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="106"
+      name="T_field_age"
+      tool_tip="Seconds between full recaptures; local prim updates also queue one">
+        Refresh every:
+    </text>
+    <slider_bar
+      control_name="SSWorldFieldMaxAge" name="SB_field_age"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="5" max_val="300" increment="5"
+      tool_tip="Seconds between full recaptures; local prim updates also queue one" />
+    <spinner
+      control_name="SSWorldFieldMaxAge" name="S_field_age"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="5" max_val="300" increment="5" decimal_digits="0"
+      tool_tip="Seconds between full recaptures; local prim updates also queue one" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_field_age" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSWorldFieldMaxAge" />
+    </button>
+    <button
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="10"
+     height="23"
+     width="150"
+     name="recapture_button"
+     label="Recapture now"
+     tool_tip="Drop every cached world field tile and capture them again at the current settings" />
+
+    </panel>
+    </scroll_container>
+</floater>

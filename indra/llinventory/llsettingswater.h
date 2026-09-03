@@ -238,6 +238,19 @@ public:
         return mNextNormalMapID;
     }
 
+    // <SS:Nexii> Atmo Magic's water crossfade writes the pair directly (ssatmoenvapplier): the "next" map has no LLSD home of its own, so this setter marks the settings dirty - pushing both maps through LLSettingsVOWater::updateSettings to the draw pool - without marking the LLSD itself, which never serialises a next id.
+    void setNextNormalMapID(LLUUID val)
+    {
+        mNextNormalMapID = val;
+        setDirtyFlag(true);
+    }
+
+    // <SS:Nexii> And the crossfade's eased weight, driven per frame from outside stock's blend machinery. The base setter is protected - stock reaches it only through LLSettingsBase::blend and the blender - so this passthrough publishes it; the draw pool reads the weight live at bind time, which is the whole point. Distinct name, so nothing about the base method moves.
+    void setBlendWeight(BlendFactor val)
+    {
+        setBlendFactor(val);
+    }
+
     LLUUID getNextTransparentTextureID() const
     {
         return mNextTransparentTextureID;

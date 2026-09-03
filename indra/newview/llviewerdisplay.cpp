@@ -86,6 +86,15 @@
 #include "llvograss.h"
 #include "llworld.h"
 #include "pipeline.h"
+// <SS:Nexii> Atmo Magic weather
+#include "ssatmomagic.h"
+#include "ssatmoenvapplier.h"
+#include "ssatmoenvdiscovery.h"
+#include "sswater.h"
+#include "ssrainshadow.h"
+#include "sswindflow.h"
+#include "ssglreadback.h"
+#include "ssworldfield.h"
 
 #include <boost/json.hpp>
 // [RLVa:KB] - Checked: 2011-05-22 (RLVa-1.3.1a)
@@ -791,11 +800,7 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
     if (LLViewerCamera::instanceExists())
     {
         LLViewerCamera::getInstance()->setZoomParameters(zoom_factor, subfield);
-        // <SS:Nexii> Near clip drives depth precision: smallest resolvable depth difference is ~d^2 / (near * 2^24) on the 24 bit buffer, so
-        // it scales inversely with this and barely at all with the far plane. Pinning it to MIN_NEAR_PLANE (0.1m) cost a factor of three
-        // against 0.3m, which tells once the draw distance runs to thousands of metres. Bounded above by the OTS collision margin in
-        // LLAgentCamera::updateCamera, which tracks this so walls cannot go see-through when the camera is pulled in against them.
-        //LLViewerCamera::getInstance()->setNear(MIN_NEAR_PLANE);
+        // <SS:Nexii> Near clip drives depth precision: smallest resolvable depth difference is ~d^2 / (near * 2^24) on the 24 bit buffer, so it scales inversely with this and barely at all with the far plane. Pinning it to MIN_NEAR_PLANE (0.1m) cost a factor of three against 0.3m, which tells once the draw distance runs to thousands of metres. Bounded above by the OTS collision margin in LLAgentCamera::updateCamera, which tracks this so walls cannot go see-through when the camera is pulled in against them. LLViewerCamera::getInstance()->setNear(MIN_NEAR_PLANE);
         static LLCachedControl<F32> near_clip(gSavedSettings, "FSRenderNearClip", 0.25f);
         F32 near_plane = llclamp((F32)near_clip, MIN_NEAR_PLANE, 1.f);
 
@@ -816,7 +821,6 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
         }
 
         LLViewerCamera::getInstance()->setNear(near_plane);
-        // </SS:Nexii>
     }
 
     //////////////////////////
@@ -973,6 +977,39 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
                 { //for some reason, ATI 4800 series will error out if you
                   //try to generate a shadow before the first frame is through
                     gPipeline.generateSunShadow(*LLViewerCamera::getInstance());
+
+                    // <SS:Nexii> Atmo Magic: parameters/impacts tick, then at most one rain shadow tile capture, here where the pipeline is in the same state the sun shadows render in
+                    SSAtmoMagic::getInstance()->idle();
+
+                    // Atmo Magic: the environment applier drives EEP's
+                    // ENV_LOCAL sky/water from the loaded asset - runs
+                    // right after the weather tick so both read the same
+                    // frame's resolved track. Gates itself on the same
+                    // SSAtmoEnabled master switch.
+                    SSAtmoEnvApplier::getInstance()->apply();
+
+                    // Atmo Magic: the water plane family swap ticks right
+                    // after the applier so it sees the same frame's active
+                    // state (doc/atmo_magic_water.md).
+                    SSWaterWorld::getInstance()->update();
+
+                    SSRainShadowMap::getInstance()->capture();
+                    SSWindFlowMap::getInstance()->update();
+                    SSWorldField::getInstance()->update();
+
+                    // Atmo Magic: the readback worker's per-frame poll. Completes
+                    // texture readbacks the worker has finished and, after a
+                    // holdout, reads a stranded one inline so a dead worker can
+                    // never leave a capture hanging (see ssglreadback.cpp).
+                    SSGLReadback::getInstance()->poll();
+
+                    // Atmo Magic: this singleton is otherwise never
+                    // touched (it is purely event-driven via
+                    // LLParcelObserver, no per-frame work of its own), so
+                    // this call exists only to bring it - and its parcel
+                    // observer registration - into existence on the first
+                    // frame the pipeline runs, rather than never at all.
+                    SSAtmoEnvDiscoveryManager::getInstance();
                 }
 
                 LLVertexBuffer::unbind();

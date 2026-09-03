@@ -138,6 +138,17 @@ public:
 
     /*virtual*/ bool loadWAV(const std::string& filename);
     /*virtual*/ U32 getLength();
+    /*virtual*/ U32 getLengthMS();
+
+    // <SS:Nexii> Analysed once from the decoded PCM and remembered - see the implementation. -1 until asked for the first time.
+    /*virtual*/ U32 getOnsetMS();
+    /*virtual*/ F32 getPeakLevel();
+    /*virtual*/ bool getPCMCopy(std::vector<S16>& out, S32& out_channels, F32& out_rate);
+private:
+    S32 mOnsetMS = -1;
+    F32 mPeakLevel = -1.f;
+public:
+
     friend class LLAudioChannelFMODSTUDIO;
 protected:
     FMOD::System *getSystem()   const {return mSystemp;}

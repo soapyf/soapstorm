@@ -3263,18 +3263,19 @@ void LLViewerFetchedTexture::readbackRawImage()
         {
             sRawCount++;
         }
+        // <SS:Nexii> Prefer the level-0 mip - a celestial disc rendered small keeps coarse GL mips, and a current-level readback averages the alpha falloff until the disc-padding analyzer's 90% contour washes out to full-bleed. Level 0 is the authored pixels. Only when level 0 is not resident (the texture is still fetching or lives at a coarser discard) fall back to the current displayed level so the call still delivers data.
         mRawImage = new LLImageRaw();
-        if (!mGLTexturep->readBackRaw(-1, mRawImage, false))
+        if (!mGLTexturep->readBackRaw(0, mRawImage, false)
+            && !mGLTexturep->readBackRaw(-1, mRawImage, false))
         {
             mRawImage = nullptr;
             mIsRawImageValid = false;
-            mRawDiscardLevel = INVALID_DISCARD_LEVEL;
             sRawCount--;
         }
         else
         {
             mIsRawImageValid = true;
-            mRawDiscardLevel = mGLTexturep->getDiscardLevel();
+            mRawDiscardLevel = 0; // the level actually read: level 0 preferred, -1 reads current
         }
     }
 }

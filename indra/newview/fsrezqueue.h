@@ -28,18 +28,7 @@
 
 #include "stdtypes.h"
 
-// <SS:Nexii> Rez queue watch
-//
-// While a region's asset download queue is backed up, the simulator stops
-// handing out rez permission: weapons stop firing, attachments stop
-// appearing. The sim publishes that queue in its once-per-second SimStats
-// (pending downloads / uploads), so the block can be detected entirely
-// client side - no in-world script needed. Port of the LSL rez queue
-// checker, including its thresholds.
-//
-// Purely observational: it samples stats that already arrive and draws a
-// line above the crosshair, timing the episode from the first pending
-// asset to the last.
+// <SS:Nexii> Rez queue watch While a region's asset download queue is backed up, the simulator stops handing out rez permission: weapons stop firing, attachments stop appearing. The sim publishes that queue in its once-per-second SimStats (pending downloads / uploads), so the block can be detected entirely client side - no in-world script needed. Port of the LSL rez queue checker, including its thresholds. Purely observational: it samples stats that already arrive and draws a line above the crosshair, timing the episode from the first pending asset to the last.
 class FSRezQueue
 {
 public:
@@ -52,6 +41,5 @@ public:
     // in mouselook and OTS only. Called from LLViewerWindow::draw.
     static void draw();
 };
-// </SS:Nexii>
 
 #endif // FS_REZQUEUE_H

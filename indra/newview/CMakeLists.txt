@@ -212,6 +212,53 @@ set(viewer_SOURCE_FILES
     fsradarmenu.cpp
     fsregioncross.cpp
     fsrezqueue.cpp
+    ssatmomagic.cpp
+    ssatmotrack.cpp
+    ssatmoenvapplier.cpp
+    ssdiscpad.cpp
+    ssavatarwet.cpp
+    ssatmoenvasset.cpp
+    ssatmoenvmanager.cpp
+    ssatmoenvcloudfieldstate.cpp
+    ssatmoenvdiscovery.cpp
+    ssatmoenvbridge.cpp
+    ssatmoenvplanetarystate.cpp
+    ssatmoenvskymodulator.cpp
+    ssatmoenvtrackstate.cpp
+    ssvolcloud.cpp
+    ssatmoenvweatherstate.cpp
+    ssatmoenvweathergen.cpp
+    ssfloateratmo.cpp
+    ssfloateratmoenv.cpp
+    ssfloateratmoinfluence.cpp
+    ssfloateratmoskyimport.cpp
+    ssassetlist.cpp
+    ssfloaterassets.cpp
+    ssfloatersoundanalysis.cpp
+    ssfloatersoundlist.cpp
+    ssfloatertexturelist.cpp
+    ssfloateratmoplanetary.cpp
+    ssfloaterpreset.cpp
+    ssfloateratmodebug.cpp
+    ssfloatersim.cpp
+    ssfloaterworldfield.cpp
+    ssatmostore.cpp
+    ssprecippreset.cpp
+    ssprecipitation.cpp
+    ssprecipvariants.cpp
+    sspreciprenderer.cpp
+    ssgranular.cpp
+    ssglreadback.cpp
+    ssrainshadow.cpp
+    sssurfacefield.cpp
+    sswhiteout.cpp
+    sslightning.cpp
+    sslightningrender.cpp
+    sssoundmeta.cpp
+    sssoundscape.cpp
+    sswater.cpp
+    sswindflow.cpp
+    ssworldfield.cpp
     fsscriptlibrary.cpp
     fsscrolllistctrl.cpp
     fsslurlcommand.cpp
@@ -1102,6 +1149,53 @@ set(viewer_HEADER_FILES
     fsradarmenu.h
     fsregioncross.h
     fsrezqueue.h
+    ssatmomagic.h
+    ssatmotrack.h
+    ssatmoenvapplier.h
+    ssdiscpad.h
+    ssavatarwet.h
+    ssatmoenvasset.h
+    ssatmoenvkeyframe.h
+    ssatmoenvmanager.h
+    ssatmoenvcloudfieldstate.h
+    ssatmoenvdiscovery.h
+    ssatmoenvbridge.h
+    ssatmoenvplanetarystate.h
+    ssatmoenvskymodulator.h
+    ssatmoenvtrackstate.h
+    ssvolcloud.h
+    ssatmoenvweatherstate.h
+    ssatmoenvweathergen.h
+    ssfloateratmo.h
+    ssfloateratmoenv.h
+    ssfloateratmoinfluence.h
+    ssfloateratmoskyimport.h
+    ssassetlist.h
+    ssfloaterassets.h
+    ssfloatersoundanalysis.h
+    ssfloatersoundlist.h
+    ssfloatertexturelist.h
+    ssfloateratmoplanetary.h
+    ssfloaterpreset.h
+    ssfloateratmodebug.h
+    ssfloatersim.h
+    ssatmostore.h
+    ssprecippreset.h
+    ssprecipitation.h
+    ssprecipvariants.h
+    sspreciprenderer.h
+    ssgranular.h
+    ssglreadback.h
+    ssrainshadow.h
+    sssurfacefield.h
+    sswhiteout.h
+    sslightning.h
+    sslightningrender.h
+    sssoundmeta.h
+    sssoundscape.h
+    sswater.h
+    sswindflow.h
+    ssworldfield.h
     fsscriptlibrary.h
     fsscrolllistctrl.h
     fsslurl.h

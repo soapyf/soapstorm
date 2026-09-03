@@ -308,14 +308,17 @@ void LLVOWLSky::drawFsSky(void)
     LLVertexBuffer::unbind();
 }
 
-void LLVOWLSky::drawDome(void)
+void LLVOWLSky::drawDome(bool depth_write)
 {
     if (mStripsVerts.empty())
     {
         updateGeometry(mDrawable);
     }
 
-    LLGLDepthTest gls_depth(GL_TRUE, GL_FALSE);
+    // The depth WRITE half of the mask belongs to the horizon clip alone (see
+    // LLDrawPoolWLSky::renderDome): stock skies draw the dome mask-off because the stars at
+    // 1.0 sit "behind" the squashed dome and pass only while nothing writes.
+    LLGLDepthTest gls_depth(GL_TRUE, depth_write ? GL_TRUE : GL_FALSE);
 
     std::vector< LLPointer<LLVertexBuffer> >::const_iterator strips_vbo_iter, end_strips;
     end_strips = mStripsVerts.end();

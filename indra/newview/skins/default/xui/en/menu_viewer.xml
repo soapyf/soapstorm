@@ -1480,6 +1480,16 @@
                  function="RLV.EnableIfNot"
                  parameter="setenv" />
             </menu_item_call>
+            <!-- <SS:Nexii> Atmo Magic. One entry, not two. The settings window used to sit beside this one in the menu, which asked a person to know the difference before they had opened either. It is reached from a button inside this one now - which is also where the difference is obvious, because by then you are looking at the environment those settings are not part of. -->
+            <menu_item_check
+             label="Atmo Magic..."
+             name="atmo_magic_v3">
+                <menu_item_check.on_click
+                 function="Floater.Toggle"
+                 parameter="ss_atmo_env" />
+                <menu_item_check.on_check
+                 function="World.EnableSSAtmoEnv" />
+            </menu_item_check>
             <menu_item_separator/>
             <menu_item_check
              label="Pause Clouds"

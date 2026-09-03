@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<panel
+ border="true"
+ follows="all"
+ label="Clouds"
+ layout="topleft"
+ left="0"
+ name="panel_ss_atmo_env_clouds"
+ top="0"
+ width="580"
+ height="580">
+    <!-- <SS:Nexii> Atmo Magic: Clouds tab - a thin container for three sub-tabs mirroring the three cloud layers the design doc keeps separate: the Volumetric Field (the storm-capable layer the weather cube drives), the Under Layer (the optional second volumetric field a sky-themed build hangs at its bottom) and the Sky Dome (the legacy Windlight/EEP scrolling-noise layer, kept and demoted to cirrus duty). All load by filename exactly like the main tab_container's panels. -->
+    <tab_container
+     follows="all"
+     layout="topleft"
+     left="4"
+     top="4"
+     right="-4"
+     bottom="-4"
+     halign="left"
+     tab_position="top"
+     tab_width="110"
+     tab_padding_right="2"
+     name="clouds_sub_tabs">
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="clouds_main_tab"
+         label="Main Deck"
+         filename="panel_ss_atmo_env_clouds_main.xml" />
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="clouds_under_tab"
+         label="Under Deck"
+         filename="panel_ss_atmo_env_clouds_under.xml" />
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="clouds_dome_tab"
+         label="Dome"
+         filename="panel_ss_atmo_env_clouds_dome.xml" />
+    </tab_container>
+</panel>

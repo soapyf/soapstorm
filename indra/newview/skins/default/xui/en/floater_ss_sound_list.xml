@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater
+ legacy_header_height="18"
+ can_minimize="false"
+ can_resize="true"
+ height="452"
+ min_height="260"
+ min_width="380"
+ layout="topleft"
+ name="floater_ss_sound_list"
+ help_topic="floater_ss_sound_list"
+ save_rect="true"
+ single_instance="true"
+ title="Sounds"
+ width="420">
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top="24"
+     height="28"
+     width="396"
+     word_wrap="true"
+     name="hint_text"
+     font="SansSerifSmall">
+        Drag sounds in from inventory - several at once are sorted by name. Drag a row to reorder it, or well outside the list to remove it.
+    </text>
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="10"
+     height="14"
+     width="240"
+     name="mode_text"
+     font="SansSerifSmall">
+        Plays one at random
+    </text>
+
+    <text
+     follows="right|top"
+     layout="topleft"
+     left_pad="12"
+     top_delta="3"
+     height="14"
+     width="80"
+     name="count_text"
+     font="SansSerifSmall">
+        0 sounds
+    </text>
+
+    <ss_sound_list_rows
+     follows="all"
+     layout="topleft"
+     left="12"
+     top_pad="8"
+     height="282"
+     width="396"
+     name="sound_list" />
+
+    <text
+     follows="left|bottom"
+     layout="topleft"
+     left="12"
+     top_pad="8"
+     height="14"
+     width="60"
+     name="csv_label"
+     font="SansSerifSmall">
+        UUIDs
+    </text>
+    <line_editor
+     follows="left|right|bottom"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="20"
+     width="332"
+     name="csv_editor"
+     tool_tip="The list as text. Paste UUIDs here, or copy them out - anything the list cannot show a name for still works." />
+
+    <button
+     follows="left|bottom"
+     layout="topleft"
+     left="12"
+     top_pad="8"
+     height="22"
+     width="70"
+     name="play_button"
+     label="Play" />
+    <button
+     follows="right|bottom"
+     layout="topleft"
+     left_pad="80"
+     height="22"
+     width="80"
+     name="ok_button"
+     label="OK" />
+    <button
+     follows="right|bottom"
+     layout="topleft"
+     left_pad="6"
+     height="22"
+     width="80"
+     name="cancel_button"
+     label="Cancel" />
+
+</floater>

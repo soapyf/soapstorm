@@ -355,6 +355,13 @@ public:
     S32 getType()                                           { return mType; }
 
     void setPositionGlobal(const LLVector3d &position_global)       { mPositionGlobal = position_global; }
+    // <SS:Nexii> For sources that follow the listener (thunder placed on a bearing): matching the listener's velocity zeroes the relative motion FMOD's doppler works from, so walking does not pitch-bend a clap.
+    void setVelocity(const LLVector3 &velocity)                     { mVelocity = velocity; }
+
+    // Where playback should BEGIN inside the asset, ms; consumed by the channel when it starts. Lets a footstep loop open on a random step instead of the recording's first one forever, and is
+    // the primitive future chained/windowed playback rides on.
+    void setStartOffsetMS(U32 ms)                                   { mStartOffsetMS = ms; }
+    U32 getStartOffsetMS() const                                    { return mStartOffsetMS; }
     LLVector3d getPositionGlobal() const                            { return mPositionGlobal; }
     LLVector3 getVelocity() const                                   { return mVelocity; }
     F32 getPriority() const                                         { return mPriority; }
@@ -362,6 +369,10 @@ public:
     // Gain should always be clamped between 0 and 1.
     F32 getGain() const                                             { return mGain; }
     virtual void setGain(const F32 gain)                            { mGain = llclamp(gain, 0.f, 1.f); }
+
+    // <SS:Nexii> How buried this source is behind solid build, 0 clear to 1 fully enclosed. Applied by the backend as a LOW-PASS, not a volume cut: transmission loss through mass rises steeply with frequency (~6dB/octave), so occluded sound goes muffled and bassy long before it goes quiet - the neighbour's party is a bassline. Callers keep gain for loudness; this is for timbre.
+    void setOcclusion(F32 occ)                                      { mOcclusion = llclamp(occ, 0.f, 1.f); }
+    F32 getOcclusion() const                                        { return mOcclusion; }
 
     const LLUUID &getID() const     { return mID; }
     // NaCl - Sound Explorer
@@ -402,6 +413,8 @@ protected:
     LLUUID          mOwnerID;   // owner of the object playing the sound
     F32             mPriority;
     F32             mGain;
+    F32             mOcclusion = 0.f;   // <SS:Nexii> see setOcclusion
+    U32             mStartOffsetMS = 0; // <SS:Nexii> see setStartOffsetMS
     bool            mSourceMuted;
     bool            mForcedPriority; // ignore mute, set high priority, researved for sound preview and UI
     bool            mLoop;
@@ -532,7 +545,27 @@ class LLAudioBuffer
 public:
     virtual ~LLAudioBuffer() {};
     virtual bool loadWAV(const std::string& filename) = 0;
+
+    // Length in PCM BYTES - which is what it has always returned, and worth
+    // saying out loud: read as any unit of time it is wrong by whatever the
+    // sample rate and channel count happen to be.
     virtual U32 getLength() = 0;
+
+    // Length in milliseconds, or 0 when the backend cannot say.
+    //
+    // Not pure, so a backend that has no answer simply does not override it
+    // and callers get the honest zero rather than a build break.
+    virtual U32 getLengthMS() { return 0; }
+
+    // <SS:Nexii> Where the sound's main event begins, in milliseconds from the start, or 0 when the backend cannot say or there is no clear one. "Begins", not "peaks": what a listener hears as the moment a thunder clap happened is the ONSET of the bang, not the instant of greatest energy some way into it. A caller that wants a sound's bang to land at a particular time starts playback that much earlier. Exists because a recording rarely starts at its own event - there is leading air, a breath of room tone, a fade-in - and none of that is knowable from the asset UUID. Thunder is the case that needs it: the flash and the clap are separated by a delay computed from distance, and an unknown offset inside the file corrupts that delay by however long the file's own preamble happens to be.
+    virtual U32 getOnsetMS() { return 0; }
+
+    // RMS of the loudest ~1s of the sound, 0..1 against full scale, or 0 when the backend cannot say. The loudness proxy for levelling a pack of differently-mastered assets against each other:
+    // whole-file RMS would be biased low by long echo tails and over-boost exactly the wrong files, so the loudest window is measured instead. Cached with the onset - one PCM pass fills both.
+    virtual F32 getPeakLevel() { return 0.f; }
+
+    // A plain copy of the decoded samples, for analysis on threads the backend's own objects must never touch. False when the format is not something worth guessing about.
+    virtual bool getPCMCopy(std::vector<S16>& out, S32& out_channels, F32& out_rate) { return false; }
 
     friend class LLAudioEngine;
     friend class LLAudioChannel;

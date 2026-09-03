@@ -273,6 +273,26 @@ extern LLGLSLShader         gDeferredAlphaProgram;
 extern LLGLSLShader         gHUDAlphaProgram;
 extern LLGLSLShader         gDeferredAlphaImpostorProgram;
 extern LLGLSLShader         gDeferredFullbrightProgram;
+// <SS:Nexii> Atmo Magic particle shaders
+extern LLGLSLShader         gSSPrecipRainProgram;
+extern LLGLSLShader         gSSPrecipLitProgram;
+extern LLGLSLShader         gSSPrecipProjProgram;
+extern LLGLSLShader         gSSSurfaceWetProgram;
+extern LLGLSLShader         gSSVolCloudProgram;
+extern LLGLSLShader         gSSLightningProgram;
+extern LLGLSLShader         gSSCelestialProgram;
+extern LLGLSLShader         gSSSurfaceNormalProgram;
+extern LLGLSLShader         gSSSurfaceCommitProgram;
+extern LLGLSLShader         gSSSurfaceSnowProgram;
+extern LLGLSLShader         gSSWhiteoutProgram;
+// Wind flowmap compute passes; only created when GL 4.3 is present
+extern LLGLSLShader         gSSWindInitProgram;
+extern LLGLSLShader         gSSWindDivProgram;
+extern LLGLSLShader         gSSWindJacobiProgram;
+extern LLGLSLShader         gSSWindProjectProgram;
+extern LLGLSLShader         gSSWindSeedProgram;
+extern LLGLSLShader         gSSWindRestrictProgram;
+extern LLGLSLShader         gSSWindProlongProgram;
 extern LLGLSLShader         gHUDFullbrightProgram;
 extern LLGLSLShader         gDeferredFullbrightAlphaMaskProgram;
 extern LLGLSLShader         gHUDFullbrightAlphaMaskProgram;

@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <SS:Nexii> Views over the region-wide captures and the cloud deck. The
+     captures themselves are tuned on the World Field floater; the surface
+     diagnostics at the bottom are the ones with no other home. -->
+<panel
+ name="debug_fields_panel"
+ follows="all"
+ layout="topleft"
+ background_visible="false"
+ border="false"
+ top="0"
+ left="0"
+ height="400"
+ width="412">
+    <scroll_container
+     name="fields_scroll"
+     follows="all"
+     layout="topleft"
+     left="0"
+     top="0"
+     height="400"
+     width="404"
+     opaque="false"
+     reserve_scroll_corner="false">
+    <panel
+     name="fields_content"
+     follows="left|top"
+     layout="topleft"
+     background_visible="false"
+     border="false"
+     top="0"
+     left="0"
+     min_height="120"
+     min_width="300"
+     height="420"
+     width="384">
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top="8"
+     height="14"
+     width="382"
+     name="worldfield_label"
+     font="SansSerifSmallBold">
+        World Field
+    </text>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_field_view"
+      tool_tip="The shared field's view, drawn once the world field overlay is on">
+        Field view:
+    </text>
+    <combo_box
+      control_name="SSWorldFieldDebugView" name="C_field_view"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="250"
+      tool_tip="Band surfaces: every surface the capture resolved, hue by band so stacked storeys read separately. Air labels: the connectivity flood, outside-connected air green and fading with occlusion depth, sealed interior air red. Drainage: standing water blue and the D8 outlet chain of the filled surface. True ground: the wind profile's ground reference per column - topmost real ground, tall structures filled from their neighbours">
+        <combo_box.item label="Band surfaces" value="1" name="field_view_bands" />
+        <combo_box.item label="Air labels" value="2" name="field_view_air" />
+        <combo_box.item label="Drainage" value="3" name="field_view_drain" />
+        <combo_box.item label="True ground" value="4" name="field_view_ground" />
+    </combo_box>
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="16"
+     height="14"
+     width="382"
+     name="clouds_label"
+     font="SansSerifSmallBold">
+        Cloud Field
+    </text>
+    <button
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="20"
+     width="102"
+     name="R_cloud_debug" label="Reset group"
+     tool_tip="Reset every setting in this section to its default">
+        <button.commit_callback function="SSAtmo.ResetGroup"
+         parameter="SSAtmoCloudDebugView" />
+    </button>
+    <combo_box
+      control_name="SSAtmoCloudDebugView" name="C_cloud_view"
+      follows="left|top"
+      left="12" top_pad="6" height="20" width="250"
+      tool_tip="Cell gate and towers: the builder's 260m grid replayed across the field, green where cloud was placed and red where the sky was left open, with a stalk as tall as the noise map wants that column to climb. Column profiles: for nearby cells, the column that cell grows outlined at its true position and altitude, its width at each height exactly what the profile ramp and the anvil give a puff there - the curve as a shape, standing beside the cloud it made. Ground shadow map: the baked transmittance texels drawn as dark blots at the exact ground spot the sun projection lands them, so the overlay and the rendered shadow must coincide">
+        <combo_box.item label="Cell gate and towers" value="1" name="cloud_view_gate" />
+        <combo_box.item label="Column profiles" value="2" name="cloud_view_profile" />
+        <combo_box.item label="Ground shadow map" value="3" name="cloud_view_shadow" />
+    </combo_box>
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="16"
+     height="14"
+     width="382"
+     name="surface_label"
+     font="SansSerifSmallBold">
+        Surface
+    </text>
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="28"
+     width="382"
+     name="surface_help"
+     word_wrap="true"
+     font="SansSerifSmall">
+        Diagnostics for the wet/snow/puddle pass. Both sit at zero and do nothing until raised; neither persists across a restart.
+    </text>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_commit_paint"
+      tool_tip="Above zero, the surface commit pass paints diffuse magenta over everything it touches, so a failure there shows up whether or not the wetness pass upstream wrote anything sensible">
+        Commit paint:
+    </text>
+    <slider_bar
+      control_name="SSAtmoCommitDebugPaint" name="SB_commit_paint"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0" max_val="1" increment="0.05"
+      tool_tip="Above zero, the surface commit pass paints diffuse magenta over everything it touches, so a failure there shows up whether or not the wetness pass upstream wrote anything sensible" />
+    <spinner
+      control_name="SSAtmoCommitDebugPaint" name="S_commit_paint"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="1" increment="0.05" decimal_digits="2"
+      tool_tip="Above zero, the surface commit pass paints diffuse magenta over everything it touches, so a failure there shows up whether or not the wetness pass upstream wrote anything sensible" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_commit_paint" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoCommitDebugPaint" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_wet_force"
+      tool_tip="Above zero, soaks every surface this much regardless of the weather or shelter">
+        Force wet:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWetDebugForce" name="SB_wet_force"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0" max_val="1" increment="0.05"
+      tool_tip="Above zero, soaks every surface this much regardless of the weather or shelter" />
+    <spinner
+      control_name="SSAtmoWetDebugForce" name="S_wet_force"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="1" increment="0.05" decimal_digits="2"
+      tool_tip="Above zero, soaks every surface this much regardless of the weather or shelter" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_wet_force" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWetDebugForce" />
+    </button>
+
+    </panel>
+    </scroll_container>
+</panel>

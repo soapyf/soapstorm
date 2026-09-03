@@ -1,0 +1,790 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<panel
+ border="true"
+ follows="all"
+ label="Conditions"
+ layout="topleft"
+ left="0"
+ name="panel_ss_atmo_env_weather_conditions"
+ top="0"
+ width="580"
+ height="580">
+    <!-- <SS:Nexii> Atmo Magic: Weather > Conditions - the simulation inputs. What the air is doing, before anything falls out of it or discharges through it. The Falling switch lives here too because it is a cube condition - the master switch the whole wet half answers to - while which type falls stays on Precipitation. Lightning and precipitation presentation are outputs and live on their own sub-tabs. See doc/atmo_magic_env_ui.md. -->
+
+    <!-- <SS:Nexii> The prose forecast, in plain words, standing at the head of the very rows it is a summary of. It used to live in the floater's top chrome, above the tab container, on the reasoning that a summary should stay visible whichever tab is selected - but that space now carries the forecast STRIP (drawForecastStrip()), which says the same thing hour by hour and says it better, and a sentence about moisture and wind is only ever read while those are the numbers in front of you. Purely a display convenience, never persisted - see SSAtmoEnvWeatherResolver::generateForecastText(). -->
+    <text
+     follows="left|top|right"
+     layout="topleft"
+     left="10"
+     top="8"
+     height="16"
+     right="-10"
+     name="forecast_text"
+     font="SansSerifSmallBold">
+        -
+    </text>
+
+    <!-- <SS:Nexii> Atmo Magic: the moisture/convection/temperature cube, AE-style keyframe rows - see ssatmoenvkeyframe.h and the FloatRow comment in ssfloateratmoenv.h. Units live in the parameter label rather than glued to the number. That is what lets every tab share one right-aligned spinner column instead of each number drifting by the width of its own suffix. -->
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top="34"
+     height="14"
+     width="110"
+     name="moisture_label"
+     tool_tip="How much water the air is carrying. It sets cloud cover in oktas, scales the deck's coverage, and picks the intensity band that falls - drizzle under 0.15, torrential past 0.85. It is also the wet gate every storm effect rides: darkening, deck gloom and lightning ramp across 0.25 to 0.60 and do nothing below it. Under 0.02 the sky reads clear and nothing falls at all"
+     font="SansSerifSmall">
+        Moisture
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="moisture_slider"
+     tool_tip="How much water the air is carrying. It sets cloud cover in oktas, scales the deck's coverage, and picks the intensity band that falls - drizzle under 0.15, torrential past 0.85. It is also the wet gate every storm effect rides: darkening, deck gloom and lightning ramp across 0.25 to 0.60 and do nothing below it. Under 0.02 the sky reads clear and nothing falls at all"
+     show_text="false"
+     min_val="0"
+     max_val="1"
+     increment="0.001"
+     initial_value="0" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="moisture_value_spinner"
+     tool_tip="How much water the air is carrying. It sets cloud cover in oktas, scales the deck's coverage, and picks the intensity band that falls - drizzle under 0.15, torrential past 0.85. It is also the wet gate every storm effect rides: darkening, deck gloom and lightning ramp across 0.25 to 0.60 and do nothing below it. Under 0.02 the sky reads clear and nothing falls at all"
+     min_val="0"
+     max_val="1"
+     increment="0.001"
+     decimal_digits="2" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="moisture_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="moisture_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="moisture_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="convection_label"
+     tool_tip="Vertical energy in the air, bucketed into Stable, Breezy, Turbulent and Severe at 0.25, 0.55 and 0.75. It grows the deck's thickness up to fivefold, opens the anvil past 0.6, drives the auto gusts, picks hail over rain past 0.95 and sets the lightning cadence - but always through moisture: convection over a dry sky is clear-air turbulence and fires nothing"
+     font="SansSerifSmall">
+        Convection
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="convection_slider"
+     tool_tip="Vertical energy in the air, bucketed into Stable, Breezy, Turbulent and Severe at 0.25, 0.55 and 0.75. It grows the deck's thickness up to fivefold, opens the anvil past 0.6, drives the auto gusts, picks hail over rain past 0.95 and sets the lightning cadence - but always through moisture: convection over a dry sky is clear-air turbulence and fires nothing"
+     show_text="false"
+     min_val="0"
+     max_val="1"
+     increment="0.001"
+     initial_value="0" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="convection_value_spinner"
+     tool_tip="Vertical energy in the air, bucketed into Stable, Breezy, Turbulent and Severe at 0.25, 0.55 and 0.75. It grows the deck's thickness up to fivefold, opens the anvil past 0.6, drives the auto gusts, picks hail over rain past 0.95 and sets the lightning cadence - but always through moisture: convection over a dry sky is clear-air turbulence and fires nothing"
+     min_val="0"
+     max_val="1"
+     increment="0.001"
+     decimal_digits="2" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="convection_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="convection_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="convection_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="temperature_label"
+     tool_tip="Air temperature. It picks the precipitation family - blizzard or snow below -1C, freezing rain or sleet to 0C, wintry mix to 1.5C, rain or hail above - seasons an auto deck's base between a squashed 400m winter and a lifted 1.2km summer, stretches lightning intervals up to twentyfold by -15C, and decides whether lying snow grows or melts"
+     font="SansSerifSmall">
+        Temperature (&#176;C)
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="temperature_slider"
+     tool_tip="Air temperature. It picks the precipitation family - blizzard or snow below -1C, freezing rain or sleet to 0C, wintry mix to 1.5C, rain or hail above - seasons an auto deck's base between a squashed 400m winter and a lifted 1.2km summer, stretches lightning intervals up to twentyfold by -15C, and decides whether lying snow grows or melts"
+     show_text="false"
+     min_val="-30"
+     max_val="40"
+     increment="1"
+     initial_value="-30" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="temperature_value_spinner"
+     tool_tip="Air temperature. It picks the precipitation family - blizzard or snow below -1C, freezing rain or sleet to 0C, wintry mix to 1.5C, rain or hail above - seasons an auto deck's base between a squashed 400m winter and a lifted 1.2km summer, stretches lightning intervals up to twentyfold by -15C, and decides whether lying snow grows or melts"
+     min_val="-30"
+     max_val="40"
+     increment="1"
+     decimal_digits="0" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="temperature_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="temperature_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="temperature_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="wind_heading_label"
+     tool_tip="Compass bearing the wind blows TOWARD - 0 is north, 90 is east. An approaching storm arrives from the opposite bearing. The whole flow field, the slant of falling precipitation and the cloud drift ride this heading"
+     font="SansSerifSmall">
+        Wind Heading (&#176;)
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="wind_heading_slider"
+     tool_tip="Compass bearing the wind blows TOWARD - 0 is north, 90 is east. An approaching storm arrives from the opposite bearing. The whole flow field, the slant of falling precipitation and the cloud drift ride this heading"
+     show_text="false"
+     min_val="0"
+     max_val="360"
+     increment="1"
+     initial_value="0" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="wind_heading_value_spinner"
+     tool_tip="Compass bearing the wind blows TOWARD - 0 is north, 90 is east. An approaching storm arrives from the opposite bearing. The whole flow field, the slant of falling precipitation and the cloud drift ride this heading"
+     min_val="0"
+     max_val="360"
+     increment="1"
+     decimal_digits="0" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="wind_heading_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="wind_heading_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="wind_heading_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="wind_speed_label"
+     tool_tip="Wind speed at ground level. The boundary-layer gradient scales it with altitude, so the dome band travels faster than the deck. It is also the forecast wording: still air below 1, a gentle breeze at 3, gale-force past 20"
+     font="SansSerifSmall">
+        Wind Speed (m/s)
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="wind_speed_slider"
+     tool_tip="Wind speed at ground level. The boundary-layer gradient scales it with altitude, so the dome band travels faster than the deck. It is also the forecast wording: still air below 1, a gentle breeze at 3, gale-force past 20"
+     show_text="false"
+     min_val="0"
+     max_val="30"
+     increment="1"
+     initial_value="0" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="wind_speed_value_spinner"
+     tool_tip="Wind speed at ground level. The boundary-layer gradient scales it with altitude, so the dome band travels faster than the deck. It is also the forecast wording: still air below 1, a gentle breeze at 3, gale-force past 20"
+     min_val="0"
+     max_val="30"
+     increment="1"
+     decimal_digits="0" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="wind_speed_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="wind_speed_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="wind_speed_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <!-- <SS:Nexii> Whether anything falls at all - moved here from Precipitation, because the switch is part of the cube's weather, not the presentation of what it produces. Keyframed, and HOLD like every flag: the key that ticks this box and the key that unticks it are the shower's start and stop. -->
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="16"
+     width="360"
+     name="precipitation_falls"
+     label="Precipitation active"
+     tool_tip="Off holds the sky exactly as authored - overcast, gloomy, thundering - with nothing falling out of it. On, moisture decides what falls and how hard, as before" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left="486"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="precipitation_falls_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     top_delta="0"
+     height="25"
+     width="25"
+     name="precipitation_falls_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     top_delta="0"
+     height="25"
+     width="25"
+     name="precipitation_falls_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <!-- Gust and lightning default from the cube; unchecking an Auto box hands its rows below over to the author. The Auto boxes themselves
+         are structural toggles like the water enable, not keyframe rows. -->
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="16"
+     width="360"
+     name="gust_auto_check"
+     label="Gust Auto"
+     tool_tip="Derive gust behaviour from the moisture/convection/temperature cube; the rows below collapse while it owns them - uncheck to author them directly" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="gust_depth_label"
+     tool_tip="How hard the gusts pull against the mean wind. 0 is a steady flow; the felt speed clamps between a tenth and three times the mean however high this goes. Past 0.3 in freezing air it also lifts blowing snow, and 0.35 is one of the squall regime's tests"
+     font="SansSerifSmall">
+        Gust Depth
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="gust_depth_slider"
+     tool_tip="How hard the gusts pull against the mean wind. 0 is a steady flow; the felt speed clamps between a tenth and three times the mean however high this goes. Past 0.3 in freezing air it also lifts blowing snow, and 0.35 is one of the squall regime's tests"
+     show_text="false"
+     min_val="0"
+     max_val="3"
+     increment="0.05"
+     initial_value="0" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="gust_depth_value_spinner"
+     tool_tip="How hard the gusts pull against the mean wind. 0 is a steady flow; the felt speed clamps between a tenth and three times the mean however high this goes. Past 0.3 in freezing air it also lifts blowing snow, and 0.35 is one of the squall regime's tests"
+     min_val="0"
+     max_val="3"
+     increment="0.05"
+     decimal_digits="2" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="gust_depth_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="gust_depth_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="gust_depth_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="gust_length_label"
+     tool_tip="Metres between gust fronts - the wavelength of the noise the gusts ride. Short spacing hits as choppy slams, long spacing as slow surges rolling across the region"
+     font="SansSerifSmall">
+        Gust Spacing (m)
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="gust_length_slider"
+     tool_tip="Metres between gust fronts - the wavelength of the noise the gusts ride. Short spacing hits as choppy slams, long spacing as slow surges rolling across the region"
+     show_text="false"
+     min_val="20"
+     max_val="600"
+     increment="10"
+     initial_value="20" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="gust_length_value_spinner"
+     tool_tip="Metres between gust fronts - the wavelength of the noise the gusts ride. Short spacing hits as choppy slams, long spacing as slow surges rolling across the region"
+     min_val="20"
+     max_val="600"
+     increment="10"
+     decimal_digits="0" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="gust_length_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="gust_length_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="gust_length_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="gust_veer_label"
+     tool_tip="How far the wind direction swings as a gust passes, degrees either side of the heading. A few degrees reads as a steady wind breathing; the top of the range as air that cannot decide where it is going"
+     font="SansSerifSmall">
+        Gust Veer (&#176;)
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="gust_veer_slider"
+     tool_tip="How far the wind direction swings as a gust passes, degrees either side of the heading. A few degrees reads as a steady wind breathing; the top of the range as air that cannot decide where it is going"
+     show_text="false"
+     min_val="0"
+     max_val="45"
+     increment="1"
+     initial_value="0" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="gust_veer_value_spinner"
+     tool_tip="How far the wind direction swings as a gust passes, degrees either side of the heading. A few degrees reads as a steady wind breathing; the top of the range as air that cannot decide where it is going"
+     min_val="0"
+     max_val="45"
+     increment="1"
+     decimal_digits="0" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="gust_veer_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="gust_veer_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="gust_veer_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <!-- <SS:Nexii> What the last Randomize roll turned out to be, in words. A generator the author presses repeatedly has to report itself or the button is a slot machine with the reels hidden - "Autumn with gale-force winds - two spells of precipitation" is what tells you whether to roll again, where eight changed slider positions do not. Blank until something is rolled, and blanked again by Remove. -->
+    <text
+     follows="left|bottom|right"
+     layout="topleft"
+     left="10"
+     top="527"
+     height="14"
+     right="-10"
+     name="weather_roll_text"
+     font="SansSerifSmall"
+     text_color="LtGray">
+    </text>
+
+    <!-- <SS:Nexii> Opens the shared Weather Influence editor (one floater, sections grouped by the tab each mapping reaches) - the tuning surface for how far this track's weather may bend the values on this tab. Positioned by an absolute top against the panel's own height rather than by bottom="8". Under layout="topleft" a POSITIVE bottom is measured downward from the panel's top edge, so that put the button at the very top of the panel, overlapping the rows there and reading as a stray control floating above the tab. Only a negative value would have meant "up from the bottom", and an absolute top is plainer than relying on either reading. -->
+    <button
+     follows="left|bottom"
+     layout="topleft"
+     left="10"
+     top="549"
+     height="21"
+     width="170"
+     name="influence_button_weather"
+     tool_tip="Choose how much the weather cube modulates the sky you authored"
+     label="Weather Influence..." />
+
+    <!-- <SS:Nexii> Rolls a whole day into the cube - see SSAtmoEnvWeatherGenerator. Beside Weather Influence because both act on the cube as a whole rather than on any one row above them, and on this tab rather than on Precipitation because the cube IS these rows: the roll writes moisture, convection, temperature and both wind fields, and precipitation only falls out of them. No confirmation on the roll, deliberately - the button is meant to be pressed repeatedly until a day looks right, and a dialog between every press would make that unusable. Remove asks, because it reads as deleting something and has no re-roll to soften it. Both are undone wholesale by Revert. -->
+    <button
+     follows="left|bottom"
+     layout="topleft"
+     left_pad="8"
+     top_delta="0"
+     height="21"
+     width="110"
+     name="weather_randomize_button"
+     tool_tip="Rolls a whole day of weather into this track - a season, sometimes an extreme event, and precipitation that builds an overcast sky before it falls. Press again for another"
+     label="Randomize" />
+    <button
+     follows="left|bottom"
+     layout="topleft"
+     left_pad="8"
+     top_delta="0"
+     height="21"
+     width="110"
+     name="weather_remove_button"
+     tool_tip="Clears this track's weather back to a still, dry, clear sky - every keyframe on these rows with it"
+     label="Remove" />
+</panel>

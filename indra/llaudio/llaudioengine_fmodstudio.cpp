@@ -251,7 +251,8 @@ bool LLAudioEngine_FMODSTUDIO::init(void* userdata, const std::string &app_title
 
     // FMOD_INIT_THREAD_UNSAFE Disables thread safety for API calls.
     // Only use this if FMOD is being called from a single thread, and if Studio API is not being used.
-    U32 fmod_flags = FMOD_INIT_NORMAL | FMOD_INIT_3D_RIGHTHANDED | FMOD_INIT_THREAD_UNSAFE;
+    // <SS:Nexii> FMOD_INIT_CHANNEL_LOWPASS puts a per-channel lowpass into every 3D voice's DSP chain, driven by ChannelControl::setLowPassGain - what LLAudioSource::setOcclusion rides on.
+    U32 fmod_flags = FMOD_INIT_NORMAL | FMOD_INIT_3D_RIGHTHANDED | FMOD_INIT_THREAD_UNSAFE | FMOD_INIT_CHANNEL_LOWPASS;
     if (mEnableProfiler)
     {
         fmod_flags |= FMOD_INIT_PROFILE_ENABLE;
@@ -774,6 +775,10 @@ void LLAudioChannelFMODSTUDIO::update3DPosition()
         float_pos.setVec(mCurrentSourcep->getPositionGlobal());
         FMOD_RESULT result = mChannelp->set3DAttributes((FMOD_VECTOR*)float_pos.mV, (FMOD_VECTOR*)mCurrentSourcep->getVelocity().mV);
         Check_FMOD_Error(result, "FMOD::Channel::set3DAttributes");
+
+        // <SS:Nexii> The occlusion lowpass - see LLAudioSource::setOcclusion. Applied every update (channels are reused, a stale filter must not leak between sounds), squared so light cover barely touches the timbre and full burial leaves mostly bass, which is what a roof between you and a sound actually does.
+        const F32 occ = mCurrentSourcep->getOcclusion();
+        Check_FMOD_Error(mChannelp->setLowPassGain(1.f - occ * occ * 0.92f), "FMOD::Channel::setLowPassGain");
     }
 }
 
@@ -824,6 +829,12 @@ void LLAudioChannelFMODSTUDIO::play()
     {
         LL_WARNS() << "Playing without a channel handle, aborting" << LL_ENDL;
         return;
+    }
+
+    // <SS:Nexii> Seek before unpausing so the first audible sample is already the requested one - see LLAudioSource::setStartOffsetMS.
+    if (getSource() && getSource()->getStartOffsetMS() > 0)
+    {
+        Check_FMOD_Error(mChannelp->setPosition(getSource()->getStartOffsetMS(), FMOD_TIMEUNIT_MS), "FMOD::Channel::setPosition");
     }
 
     Check_FMOD_Error(mChannelp->setPaused(false), "FMOD::Channel::setPaused");
@@ -973,6 +984,177 @@ U32 LLAudioBufferFMODSTUDIO::getLength()
     U32 length;
     Check_FMOD_Error(mSoundp->getLength(&length, FMOD_TIMEUNIT_PCMBYTES), "FMOD::Sound::getLength");
     return length;
+}
+
+
+U32 LLAudioBufferFMODSTUDIO::getLengthMS()
+{
+    if (!mSoundp)
+    {
+        return 0;
+    }
+
+    // Asked for in milliseconds directly rather than derived from the byte
+    // count above. FMOD knows the sample rate and channel count; nothing
+    // outside it does, so any conversion done by a caller is a guess at two
+    // numbers it cannot see.
+    U32 length_ms = 0;
+    Check_FMOD_Error(mSoundp->getLength(&length_ms, FMOD_TIMEUNIT_MS), "FMOD::Sound::getLength");
+    return length_ms;
+}
+
+
+// <SS:Nexii> Onset detection A short-window RMS envelope, the loudest window found, then a walk BACK from it to where the envelope first rose past a fraction of that peak. Deliberately not the largest single sample. One sample is not a sound: a stray click, a DC glitch or a single clipped peak in an otherwise quiet passage would all win outright, and every one of them is somewhere the listener hears nothing happening. Energy over a window is what perception tracks, which is why the envelope is the thing being searched. And deliberately the RISE rather than the maximum. The loudest instant of a thunder clap is some way inside it - the crack has already begun by the time the peak arrives, and aligning to the peak lands the whole event audibly late. The moment a listener would say it happened is where the level first climbs, so that is what this returns. Lock, memcpy, unlock - main thread only, like every FMOD call here. The copy is what makes the worker-side analysis safe: the workers never see an FMOD object.
+bool LLAudioBufferFMODSTUDIO::getPCMCopy(std::vector<S16>& out, S32& out_channels, F32& out_rate)
+{
+    if (!mSoundp) return false;
+
+    FMOD_SOUND_TYPE type;
+    FMOD_SOUND_FORMAT format;
+    S32 channels = 0;
+    S32 bits = 0;
+    if (Check_FMOD_Error(mSoundp->getFormat(&type, &format, &channels, &bits), "FMOD::Sound::getFormat")) return false;
+    if (format != FMOD_SOUND_FORMAT_PCM16 || channels < 1) return false;
+
+    F32 frequency = 0.f;
+    S32 priority = 0;
+    if (Check_FMOD_Error(mSoundp->getDefaults(&frequency, &priority), "FMOD::Sound::getDefaults") || frequency <= 0.f) return false;
+
+    U32 bytes = 0;
+    if (Check_FMOD_Error(mSoundp->getLength(&bytes, FMOD_TIMEUNIT_PCMBYTES), "FMOD::Sound::getLength")) return false;
+
+    // A sane clip is a few MB; anything reporting more is a corrupt or streaming length and copying it would be a single giant allocation nobody asked for.
+    if (bytes == 0 || bytes > 64u * 1024u * 1024u) return false;
+
+    void* ptr1 = NULL; void* ptr2 = NULL;
+    U32 len1 = 0; U32 len2 = 0;
+    if (Check_FMOD_Error(mSoundp->lock(0, bytes, &ptr1, &ptr2, &len1, &len2), "FMOD::Sound::lock")) return false;
+
+    bool ok = false;
+    if (ptr1 && len1 >= sizeof(S16))
+    {
+        out.assign((const S16*)ptr1, (const S16*)ptr1 + len1 / sizeof(S16));
+        out_channels = channels;
+        out_rate = frequency;
+        ok = true;
+    }
+    Check_FMOD_Error(mSoundp->unlock(ptr1, ptr2, len1, len2), "FMOD::Sound::unlock");
+    return ok;
+}
+
+F32 LLAudioBufferFMODSTUDIO::getPeakLevel()
+{
+    if (mPeakLevel < 0.f) getOnsetMS();    // one analysis fills both caches
+    return llmax(mPeakLevel, 0.f);
+}
+
+U32 LLAudioBufferFMODSTUDIO::getOnsetMS()
+{
+    if (mOnsetMS >= 0) return (U32)mOnsetMS;
+    mOnsetMS = 0;    // the answer for every path that cannot do better
+    mPeakLevel = 0.f;
+
+    if (!mSoundp) return 0;
+
+    FMOD_SOUND_TYPE type;
+    FMOD_SOUND_FORMAT format;
+    S32 channels = 0;
+    S32 bits = 0;
+    if (Check_FMOD_Error(mSoundp->getFormat(&type, &format, &channels, &bits),
+                         "FMOD::Sound::getFormat"))
+    {
+        return 0;
+    }
+
+    // Signed 16 bit is what the viewer's decoder produces. Anything else is
+    // handled by declining to guess rather than by reinterpreting bytes.
+    if (format != FMOD_SOUND_FORMAT_PCM16 || channels < 1) return 0;
+
+    F32 frequency = 0.f;
+    S32 priority = 0;
+    if (Check_FMOD_Error(mSoundp->getDefaults(&frequency, &priority),
+                         "FMOD::Sound::getDefaults") || frequency <= 0.f)
+    {
+        return 0;
+    }
+
+    U32 bytes = 0;
+    if (Check_FMOD_Error(mSoundp->getLength(&bytes, FMOD_TIMEUNIT_PCMBYTES),
+                         "FMOD::Sound::getLength"))
+    {
+        return 0;
+    }
+
+    void* ptr1 = NULL;
+    void* ptr2 = NULL;
+    U32 len1 = 0;
+    U32 len2 = 0;
+    if (Check_FMOD_Error(mSoundp->lock(0, bytes, &ptr1, &ptr2, &len1, &len2),
+                         "FMOD::Sound::lock"))
+    {
+        return 0;
+    }
+
+    // The second span is the wrap of a circular buffer, which a decoded
+    // sample is not - but the API can hand one back, so it is not assumed
+    // away. Only the first span is walked; a sound whose onset is somehow
+    // past the wrap is one this has nothing useful to say about anyway.
+    const S16* pcm = (const S16*)ptr1;
+    const U32 frames = (len1 / sizeof(S16)) / (U32)channels;
+
+    // 10ms windows: long enough to average out the waveform's own cycles
+    // even at the bottom of the audible range, short enough that the answer
+    // is precise well past what anyone can hear as a timing error.
+    const U32 window = llmax((U32)(frequency * 0.010f), 1u);
+    const U32 count = frames / window;
+
+    if (pcm && count > 1)
+    {
+        std::vector<F32> envelope(count, 0.f);
+        F32 peak = 0.f;
+        U32 peak_at = 0;
+
+        for (U32 w = 0; w < count; ++w)
+        {
+            F64 sum = 0.0;
+            const S16* p = pcm + (size_t)w * window * channels;
+            for (U32 i = 0; i < window * (U32)channels; ++i)
+            {
+                const F64 v = (F64)p[i] / 32768.0;
+                sum += v * v;
+            }
+            const F32 rms = (F32)sqrt(sum / (F64)(window * channels));
+            envelope[w] = rms;
+            if (rms > peak) { peak = rms; peak_at = w; }
+        }
+
+        // The loudest second, for getPeakLevel: mean of the envelope over ~1s centred on the peak window. One pass fills both caches.
+        {
+            const S32 half = llmax((S32)(0.5f * frequency / (F32)window), 1);
+            const S32 lo = llmax((S32)peak_at - half, 0);
+            const S32 hi = llmin((S32)peak_at + half, (S32)count - 1);
+            F32 sum_env = 0.f;
+            for (S32 w2 = lo; w2 <= hi; ++w2) sum_env += envelope[(size_t)w2];
+            mPeakLevel = sum_env / (F32)(hi - lo + 1);
+        }
+
+        // A fifth of the peak, in amplitude - about 14 dB down. Low enough to
+        // catch the foot of a fast transient rather than its shoulder, high
+        // enough to sit clear of room tone and tape hiss.
+        const F32 threshold = peak * 0.2f;
+        if (peak > 0.0001f)
+        {
+            U32 onset = peak_at;
+            while (onset > 0 && envelope[onset - 1] >= threshold)
+            {
+                --onset;
+            }
+            mOnsetMS = (S32)((F32)(onset * window) * 1000.f / frequency);
+        }
+    }
+
+    Check_FMOD_Error(mSoundp->unlock(ptr1, ptr2, len1, len2), "FMOD::Sound::unlock");
+    return (U32)mOnsetMS;
 }
 
 
