@@ -32,6 +32,9 @@
 #endif
 
 #include "llviewermenu.h"
+#include "sslightning.h"
+// <SS:Nexii> Atmo Magic: menu check state for the World > Environment > Atmo Magic item.
+#include "ssatmoenvapplier.h"
 
 // linden library includes
 #include "llavatarnamecache.h"  // IDEVO (I Are Not Men!)
@@ -1375,6 +1378,37 @@ U64 info_display_from_string(std::string_view info_display)
     else if ("wind vectors" == info_display)
     {
         return LLPipeline::RENDER_DEBUG_WIND_VECTORS;
+    }
+    // <SS:Nexii> Atmo Magic wind flowmap
+    else if ("wind flow" == info_display)
+    {
+        return LLPipeline::RENDER_DEBUG_WIND_FLOW;
+    }
+    else if ("rain shadow" == info_display)
+    {
+        return LLPipeline::RENDER_DEBUG_RAIN_SHADOW;
+    }
+    else if ("roof runoff" == info_display)
+    {
+        return LLPipeline::RENDER_DEBUG_ROOF_RUNOFF;
+    }
+    else if ("geometry settling" == info_display)
+    {
+        return LLPipeline::RENDER_DEBUG_GEOM_SETTLE;
+    }
+    else if ("surface field" == info_display)
+    {
+        return LLPipeline::RENDER_DEBUG_SURFACE_FIELD;
+    }
+    // <SS:Nexii> Atmo Magic shared world field
+    else if ("world field" == info_display)
+    {
+        return LLPipeline::RENDER_DEBUG_WORLD_FIELD;
+    }
+    // <SS:Nexii> Atmo Magic volumetric cloud field
+    else if ("cloud field" == info_display)
+    {
+        return LLPipeline::RENDER_DEBUG_CLOUD_FIELD;
     }
     else if ("texel density" == info_display)
     {
@@ -12324,6 +12358,15 @@ class LLWorldEnableEnvSettings : public view_listener_t
     }
 };
 
+// <SS:Nexii> Atmo Magic: checked state for the World > Environment > Atmo Magic item. Mirrors how the time-of-day overrides tick - the item shows a check whenever an Atmo Magic environment is actually driving the sky (master switch on, asset loaded, tracks present), not just because the floater is open.
+class SSWorldEnableSSAtmoEnv : public view_listener_t
+{
+    bool handleEvent(const LLSD& userdata)
+    {
+        return SSAtmoEnvApplier::instance().isActive();
+    }
+};
+
 class LLWorldEnvPreset : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
@@ -12660,6 +12703,35 @@ void initialize_spellcheck_menu()
     LLUICtrl::CommitCallbackRegistry::Registrar& commit = LLUICtrl::CommitCallbackRegistry::currentRegistrar();
     LLUICtrl::EnableCallbackRegistry::Registrar& enable = LLUICtrl::EnableCallbackRegistry::currentRegistrar();
 
+    // <SS:Nexii> Atmo Magic: the Effects & LOD floater's debug strike buttons; registered here because that floater is a plain LLFloater with no class of its own to hang a callback on.
+    commit.add("SSAtmo.StrikeNow", [](LLUICtrl*, const LLSD&) { SSLightning::getInstance()->triggerNow(); });
+    commit.add("SSAtmo.StrikeGround", [](LLUICtrl*, const LLSD&) { SSLightning::getInstance()->triggerGroundNow(); });
+
+    // <SS:Nexii> Resets a named group of settings at once - the per-section buttons on the Effects & LOD tabs, beside the per-row D buttons that already reset one control each. The parameter is a comma-separated list of control names rather than a prefix: a prefix would quietly widen every time a setting was added whose name happened to start the same way, and the failure would be silent and destructive. An unknown name warns and is skipped, so a list that falls behind its panel resets what it still can. doc/atmo_magic_fx_ui.md
+    commit.add("SSAtmo.ResetGroup", [](LLUICtrl*, const LLSD& param)
+    {
+        const std::string names = param.asString();
+        size_t start = 0;
+        while (start <= names.size())
+        {
+            const size_t comma = names.find(',', start);
+            std::string name = names.substr(start, (comma == std::string::npos) ? std::string::npos : comma - start);
+            LLStringUtil::trim(name);
+            if (!name.empty())
+            {
+                if (LLControlVariable* control = gSavedSettings.getControl(name))
+                {
+                    control->resetToDefault(true);
+                }
+                else
+                {
+                    LL_WARNS("Settings") << "SSAtmo.ResetGroup: no such setting '" << name << "'" << LL_ENDL;
+                }
+            }
+            if (comma == std::string::npos) break;
+            start = comma + 1;
+        }
+    });
     commit.add("SpellCheck.ReplaceWithSuggestion", boost::bind(&handle_spellcheck_replace_with_suggestion, _1, _2));
     enable.add("SpellCheck.VisibleSuggestion", boost::bind(&visible_spellcheck_suggestion, _1, _2));
     commit.add("SpellCheck.AddToDictionary", boost::bind(&handle_spellcheck_add_to_dictionary, _1));
@@ -12987,6 +13059,8 @@ void initialize_menus()
 
     view_listener_t::addMenu(new LLWorldEnvSettings(), "World.EnvSettings");
     view_listener_t::addMenu(new LLWorldEnableEnvSettings(), "World.EnableEnvSettings");
+    // <SS:Nexii> Atmo Magic: tick state for the Worlds Environment > Atmo Magic item.
+    view_listener_t::addMenu(new SSWorldEnableSSAtmoEnv(), "World.EnableSSAtmoEnv");
     view_listener_t::addMenu(new LLWorldEnvPreset(), "World.EnvPreset");
     view_listener_t::addMenu(new LLWorldEnableEnvPreset(), "World.EnableEnvPreset");
     view_listener_t::addMenu(new LLWorldCheckBanLines() , "World.CheckBanLines");

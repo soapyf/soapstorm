@@ -151,4 +151,3 @@ void FSRezQueue::draw()
                      LLFontGL::HCENTER, LLFontGL::BOTTOM, style, LLFontGL::DROP_SHADOW_SOFT);
     gGL.popMatrix();
 }
-// </SS:Nexii>

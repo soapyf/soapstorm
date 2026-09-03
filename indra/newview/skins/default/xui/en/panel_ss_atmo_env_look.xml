@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<panel
+ border="true"
+ follows="all"
+ label="Look"
+ layout="topleft"
+ left="0"
+ name="panel_ss_atmo_env_look"
+ top="0"
+ width="580"
+ height="540">
+    <!-- <SS:Nexii> Atmo Magic: the Look tab - the controls that are not the world. Scene gamma and probe ambiance are tonemapping and the horizon clip is a depth trick, so none of the three describe anything an avatar could stand in. Giving them a named home stops them accreting onto Sky and gives future exposure dials somewhere to land: Look is the one tab with no position on the altitude rail, which is the cleanest confirmation it is carved right. See doc/atmo_magic_env_ui.md. -->
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top="10"
+     height="14"
+     width="110"
+     name="atmo_scene_gamma_label"
+     tool_tip="The tonemapper's soft-clip exponent, not display gamma: out = 1 - (1 - 2 x colour) raised to this. 1 is a straight doubling, large values lift everything toward white, small ones crush the darks - 0.5 to 0.8 is a legitimate floor for a moody preset"
+     font="SansSerifSmall">
+        Scene Gamma
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="atmo_scene_gamma_slider"
+     tool_tip="The tonemapper's soft-clip exponent, not display gamma: out = 1 - (1 - 2 x colour) raised to this. 1 is a straight doubling, large values lift everything toward white, small ones crush the darks - 0.5 to 0.8 is a legitimate floor for a moody preset"
+     show_text="false"
+     min_val="0"
+     max_val="20"
+     increment="0.01"
+     initial_value="1" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="atmo_scene_gamma_value_spinner"
+     tool_tip="The tonemapper's soft-clip exponent, not display gamma: out = 1 - (1 - 2 x colour) raised to this. 1 is a straight doubling, large values lift everything toward white, small ones crush the darks - 0.5 to 0.8 is a legitimate floor for a moody preset"
+     min_val="0"
+     max_val="20"
+     increment="0.01"
+     decimal_digits="2" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="atmo_scene_gamma_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="atmo_scene_gamma_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="atmo_scene_gamma_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="26"
+     width="110"
+     name="atmo_probe_ambiance_label"
+     tool_tip="Intensity of environment-based indirect lighting. Non-zero enables the HDR lighting model, where Scene Gamma acts as HDR scale"
+     wrap="true"
+     font="SansSerifSmall">
+        Reflection Probe Ambiance
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="atmo_probe_ambiance_slider"
+     show_text="false"
+     tool_tip="Intensity of environment-based indirect lighting. Non-zero enables the HDR lighting model, where Scene Gamma acts as HDR scale"
+     min_val="0"
+     max_val="10"
+     increment="0.01"
+     initial_value="0" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="atmo_probe_ambiance_value_spinner"
+     tool_tip="Intensity of environment-based indirect lighting. Non-zero enables the HDR lighting model, where Scene Gamma acts as HDR scale"
+     min_val="0"
+     max_val="10"
+     increment="0.01"
+     decimal_digits="2" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="atmo_probe_ambiance_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="atmo_probe_ambiance_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="atmo_probe_ambiance_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <!-- <SS:Nexii> The horizon clip - the one toggle on this tab that is not an EEP dial. When on, the sky dome is split at the horizon plane and its lower half draws one depth step nearer than the cloud layer (the LL_SHADER_CONST_HORIZON_DEPTH shader const against 0.99998 and the discs' 0.99999 - see skyF.glsl), so bodies and clouds hide at the horizon instead of glowing through the world below it. A plain flag rather than a keyframed value: there is no meaningful "partially clipped" and nothing here follows the day. -->
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="12"
+     height="16"
+     width="360"
+     name="atmo_horizon_clip_check"
+     label="Clip the sky at the horizon"
+     tool_tip="Hides the sun, moon, stars, planetary bodies and the cloud layer the moment they set, by drawing the lower half of the sky dome one depth step nearer so it occludes everything behind it. The haze and the world below the horizon are unchanged" />
+</panel>

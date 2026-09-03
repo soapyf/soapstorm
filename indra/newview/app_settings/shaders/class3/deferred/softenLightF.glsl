@@ -106,6 +106,46 @@ vec3 pbrBaseLight(vec3 diffuseColor,
 GBufferInfo getGBuffer(vec2 screenpos);
 vec3 clampHDRRange(vec3 color);
 
+// <SS:Nexii> Atmo Magic: the volumetric cloud deck's ground shadow (SSVolCloud::bindGroundShadow). The map is the deck's baked straight-down transmittance over the field's footprint - named altDiffuseMap because that is one of LLShaderMgr's RESERVED uniform names, and only reserved names can be bound as textures. ss_cshadow_grid: world min corner xy of the grid, 1/span, and the gate (dial x graze fade x beam; 0 whenever there is nothing to cast - an unbound uniform also reads 0, so this whole path is inert unless the deck binds it). ss_cshadow_sun: the light's WORLD direction (z floored against the projection blowing up) and the deck's casting plane height.
+uniform sampler2D altDiffuseMap;
+uniform vec4 ss_cshadow_grid;
+uniform vec4 ss_cshadow_sun;
+
+// The camera's world frame (right/up/forward axes, origin packed in the w channels), for putting a view-space position back into world axes. NOT the reserved inv_modelview: llrender re-syncs that from the LIVE matrix stack at draw time, and a full-screen pass may be drawing under an identity modelview - custom names are nobody's to overwrite. [interaction: llrender syncMatrices]
+uniform vec4 ss_cshadow_r;
+uniform vec4 ss_cshadow_u;
+uniform vec4 ss_cshadow_f;
+
+// The projection: walk this ground fragment up the live sun direction to the deck's casting plane, and ask the baked map how much beam survives that column. The angle lives HERE, at sample time - the bake is angle-free - so shadows lengthen, slide and crawl with the sun and the drift for the price of one texture read. The edge fade eases the last stretch of the grid to unshadowed instead of cutting a seam where the bake ends.
+float ssCloudShadow(vec3 pos_eye)
+{
+    if (ss_cshadow_grid.w <= 0.0)
+    {
+        return 1.0;
+    }
+
+    // View space is x right, y up, -z forward; the axes' w channels carry the camera origin.
+    vec3 pw = vec3(ss_cshadow_r.w, ss_cshadow_u.w, ss_cshadow_f.w)
+            + ss_cshadow_r.xyz * pos_eye.x
+            + ss_cshadow_u.xyz * pos_eye.y
+            - ss_cshadow_f.xyz * pos_eye.z;
+    float t = (ss_cshadow_sun.w - pw.z) / ss_cshadow_sun.z;
+    if (t <= 0.0)
+    {
+        // At or above the casting plane: nothing overhead to cast on it.
+        return 1.0;
+    }
+    vec2 uv = (pw.xy + ss_cshadow_sun.xy * t - ss_cshadow_grid.xy) * ss_cshadow_grid.z;
+    vec2 e = min(uv, vec2(1.0) - uv);
+    float edge = smoothstep(0.0, 0.05, min(e.x, e.y));
+    if (edge <= 0.0)
+    {
+        return 1.0;
+    }
+    float trans = texture(altDiffuseMap, clamp(uv, 0.0, 1.0)).r;
+    return mix(1.0, trans, ss_cshadow_grid.w * edge);
+}
+
 void adjustIrradiance(inout vec3 irradiance, float ambocc)
 {
     // use sky settings ambient or irradiance map sample, whichever is brighter
@@ -145,6 +185,9 @@ void main()
 #else
     float ambocc = 1.0;
 #endif
+
+    // <SS:Nexii> The deck's shadow dims the DIRECT sun only, and scol is the one factor every sun term already rides - diffuse, specular and the pbr path alike - so cloud shadow composes with the geometric shadow maps for free. Ambient and irradiance stay untouched: overcast dimming of the ambience is the authored cloud_shadow's job, not this one's.
+    scol *= ssCloudShadow(pos.xyz);
 
     vec3  color = vec3(0);
     float bloom = 0.0;

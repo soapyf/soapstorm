@@ -239,6 +239,7 @@
 #include "fsfloaterkillfeed.h"
 #include "fscombathitmarker.h"
 #include "fsrezqueue.h" // <SS:Nexii> Rez queue watch
+#include "ssatmomagic.h" // <SS:Nexii> Atmo Magic weather
 #include "fspanellogin.h"
 
 #include "lltracerecording.h"
@@ -805,7 +806,6 @@ public:
             addText(xpos, ypos, llformat("Ghost projectiles watched: %d", gObjectList.getNumGhostProjectileObjectsWatched()));
             ypos += y_inc;
         }
-        // </SS:Nexii>
 
         static LLCachedControl<bool> debug_show_avatar_render_info(gSavedSettings, "DebugShowAvatarRenderInfo", false);
         if (debug_show_avatar_render_info())
@@ -1264,6 +1264,12 @@ bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK m
             {
                 LL_INFOS() << buttonname << " Mouse " << buttonstatestr << " not handled by view" << LL_ENDL;
             }
+
+        // <SS:Nexii> Atmo Magic info overlay: a left-click on an orange heading row collapses that section
+        if (down && clicktype == CLICK_LEFT && SSAtmoMagic::handleInfoClick(x, y))
+        {
+            return true;
+        }
     }
 
     // Do not allow tool manager to handle mouseclicks if we have disconnected
@@ -3089,7 +3095,9 @@ void LLViewerWindow::draw()
 
         // <SS:Nexii> Rez queue warning above the crosshair
         FSRezQueue::draw();
-        // </SS:Nexii>
+
+        // <SS:Nexii> Atmo Magic diagnostic readout
+        SSAtmoMagic::drawInfo();
 
         if (inMouselook && fsMouselookCombatFeatures)
         {
@@ -7020,13 +7028,8 @@ void LLViewerWindow::setup2DViewport(S32 x_offset, S32 y_offset)
 void LLViewerWindow::setup3DRender()
 {
     // setup perspective camera
-    // <SS:Nexii> Draw distance beyond 1024m: the far plane was pinned to MAX_FAR_CLIP*2 (1024m) whatever the draw distance, so raising
-    // RenderFarClip past that moved culling but left everything beyond 1024m clipped by the projection. getRenderFarPlane() tracks the
-    // camera's far clip with the same 2x headroom (objects straddling the cull distance are not sliced) and the old 1024m floor.
-    //LLViewerCamera::getInstance()->setPerspective(NOT_FOR_SELECTION, mWorldViewRectRaw.mLeft, mWorldViewRectRaw.mBottom,  mWorldViewRectRaw.getWidth(), mWorldViewRectRaw.getHeight(), false, LLViewerCamera::getInstance()->getNear(), MAX_FAR_CLIP*2.f);
-    const F32 far_clip = LLViewerCamera::getInstance()->getRenderFarPlane();
-    LLViewerCamera::getInstance()->setPerspective(NOT_FOR_SELECTION, mWorldViewRectRaw.mLeft, mWorldViewRectRaw.mBottom,  mWorldViewRectRaw.getWidth(), mWorldViewRectRaw.getHeight(), false, LLViewerCamera::getInstance()->getNear(), far_clip);
-    // </SS:Nexii>
+    // <SS:Nexii> MAX_FAR_CLIP is the projection far plane itself now (2048, constant - see llcamera.h); the interim getRenderFarPlane() that chased the draw distance is gone.
+    LLViewerCamera::getInstance()->setPerspective(NOT_FOR_SELECTION, mWorldViewRectRaw.mLeft, mWorldViewRectRaw.mBottom,  mWorldViewRectRaw.getWidth(), mWorldViewRectRaw.getHeight(), false, LLViewerCamera::getInstance()->getNear(), MAX_FAR_CLIP);
     setup3DViewport();
 }
 

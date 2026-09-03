@@ -135,6 +135,7 @@ public:
     {
         SHADER_CONST_CLOUD_MOON_DEPTH
         , SHADER_CONST_STAR_DEPTH
+        , SHADER_CONST_HORIZON_DEPTH
         , NUM_SHADER_CONSTS
     };
 

@@ -43,6 +43,7 @@
 #include "llconsole.h"
 #include "llinventorydefines.h"
 #include "llinventoryfunctions.h"
+#include "ssatmoenvmanager.h" // <SS:Nexii> Atmo Magic
 #include "llinventorymodel.h"
 #include "llinventorymodelbackgroundfetch.h"
 #include "llgesturemgr.h"
@@ -2350,6 +2351,21 @@ void menu_create_inventory_item(LLInventoryPanel* panel, LLUUID dest_id, const L
                       LLInventoryType::IT_NOTECARD,
                       PERM_ALL,
                       created_cb);    // overridden in create_new_item
+    }
+    // <SS:Nexii> Atmo Magic: a plain notecard, like "notecard" above, but pre-filled with the default v3 environment body rather than left empty - there is no new asset type to hang this off, so the whole unified environment lives in an ordinary notecard from the moment it is created. See doc/archive/atmo_magic_environment.md.
+    else if ("atmoenv" == type_name)
+    {
+        // created_cb only wants the item id (it's the generic
+        // inventory-panel rename-focus callback); SSAtmoEnvManager's own
+        // creation callback also carries the asset id and the written
+        // asset itself, once the upload has actually finished - the asset
+        // matters only to a caller that adopts the result (the floater's
+        // create button), so everything but the item id is dropped here.
+        SSAtmoEnvManager::createDefaultNotecard(dest_id,
+            [created_cb](const LLUUID& item_id, const LLUUID&, const SSAtmoEnvAsset&)
+            {
+                if (created_cb) created_cb(item_id);
+            });
     }
     else if ("gesture" == type_name)
     {

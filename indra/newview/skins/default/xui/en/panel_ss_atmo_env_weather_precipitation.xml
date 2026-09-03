@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<panel
+ border="true"
+ follows="all"
+ label="Precipitation"
+ layout="topleft"
+ left="0"
+ name="panel_ss_atmo_env_weather_precipitation"
+ top="0"
+ width="580"
+ height="580">
+    <!-- <SS:Nexii> Atmo Magic: Weather > Precipitation - what falls, and which deck it falls from. The Falling switch moved to Conditions, where it belongs with the cube that drives it; the type combo is keyframed: which precipitation is running is a property of the moment. The source is not: it is a property of the track, so it carries no keyframe buttons. It sits above the type because it answers "where does this originate" before "what is it". See doc/atmo_magic_env_ui.md. -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top="10"
+     height="14"
+     width="130"
+     name="weather_source_label"
+     font="SansSerifSmall">
+        Weather falls from
+    </text>
+    <combo_box
+     follows="left|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-3"
+     height="20"
+     width="200"
+     name="weather_source_combo"
+     tool_tip="Which cloud deck delivers precipitation. Derived picks the lowest enabled deck above the surface, which is the main deck unless a deck sits between it and the ground" />
+
+    <!-- Forced precipitation type. Auto derives from the cube; the rest is
+         the exact vocabulary SSAtmoEnvWeatherResolver::derivePrecipitationType()
+         produces. Keyframed, but a string holds rather than blends - see
+         ss_atmoenv_lerp&lt;std::string&gt;. The combo spans the slider and
+         spinner columns so the keyframe cluster stays in its usual place. -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="14"
+     height="14"
+     width="110"
+     name="precipitation_label"
+     font="SansSerifSmall">
+        Precipitation
+    </text>
+    <combo_box
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-4"
+     height="23"
+     right="-174"
+     name="precipitation_combo"
+     allow_text_entry="false"
+     tool_tip="Force what falls regardless of what the cube would pick; moisture still decides whether anything falls at all">
+        <combo_box.item label="Auto" value="" name="precip_auto" />
+        <combo_box.item label="Rain" value="rain" name="precip_rain" />
+        <combo_box.item label="Snow" value="snow" name="precip_snow" />
+        <combo_box.item label="Hail" value="hail" name="precip_hail" />
+        <combo_box.item label="Blizzard" value="blizzard" name="precip_blizzard" />
+        <combo_box.item label="Sleet" value="sleet" name="precip_sleet" />
+        <combo_box.item label="Freezing Rain" value="freezing_rain" name="precip_freezing_rain" />
+        <combo_box.item label="Wintry Mix" value="slush_mix" name="precip_slush_mix" />
+    </combo_box>
+    <button
+     follows="right|top"
+     layout="topleft"
+     left="486"
+     top_delta="-2"
+     height="25"
+     width="25"
+     name="precipitation_combo_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left="513"
+     top_delta="0"
+     height="25"
+     width="25"
+     name="precipitation_combo_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left="540"
+     top_delta="0"
+     height="25"
+     width="25"
+     name="precipitation_combo_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <!-- <SS:Nexii> The environment's own tier of precipitation types. The shipped set is ours to tune and lives in the viewer; these are the author's, derived from a shipped type and saved into this environment so they travel with the region. Deriving copies the parent wholesale rather than referencing it, so a viewer update that retunes stock rain cannot change a region that shipped a type built from it. Both buttons open the same editor the shipped set uses, in environment scope. See doc/atmo_magic_env_ui.md. -->
+    <button
+     follows="left|top"
+     layout="topleft"
+     left="126"
+     top_pad="8"
+     height="23"
+     width="140"
+     name="precip_new_button"
+     tool_tip="Copies the selected type into this environment under a new name, ready to edit"
+     label="New from this..." />
+    <button
+     follows="left|top"
+     layout="topleft"
+     left_pad="8"
+     top_delta="0"
+     height="23"
+     width="132"
+     name="precip_edit_button"
+     tool_tip="Edits this environment's own precipitation types"
+     label="Edit types..." />
+
+    <!-- What Auto resolves to at the preview instant - filled in by
+         refreshKeyframeProof(), blank while a forced type makes it
+         redundant. Sits in the spinner column so the row still lines up
+         with its neighbours despite having no number of its own. -->
+    <text
+     follows="right|top"
+     layout="topleft"
+     left="412"
+     top_delta="6"
+     height="14"
+     width="70"
+     name="precipitation_auto_text"
+     font="SansSerifSmall"
+     text_color="LtGray">
+        -
+    </text>
+</panel>

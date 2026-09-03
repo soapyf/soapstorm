@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<panel
+ border="true"
+ follows="all"
+ height="480"
+ layout="topleft"
+ left="1"
+ top="1"
+ width="540"
+ label="Atmo Magic"
+ name="soapstorm_atmo">
+
+    <!-- Atmo Magic runs as a client-side weather system layered over the grid's
+         own environment. Most systems below are independent once the engine is
+         on; the wind flow rows are its consumers, so the master wise they only
+         matter while SSAtmoWindFlow is on. Every row is a live setting - a
+         checkbox here is the same control as the one in the Simulation floater. -->
+
+    <!-- ===== Weather engine ===== -->
+    <text
+     type="string"
+     length="1"
+     follows="left|top"
+     font="SansSerifSmallBold"
+     height="14"
+     layout="topleft"
+     left="10"
+     top="10"
+     width="520">
+        Weather engine
+    </text>
+    <check_box
+     control_name="SSAtmoEnabled"
+     follows="left|top"
+     height="16"
+     label="Run the Atmo Magic weather system"
+     layout="topleft"
+     left="10"
+     name="atmo_enabled_prefs"
+     tool_tip="The master switch for the whole system. Off, every subsystem below is inert and the viewer's normal weather, wind and lighting run untouched."
+     top_pad="6"
+     width="500" />
+
+    <!-- <SS:Nexii> The info overlay toggle lives on the Atmo Magic Debug floater with the rest of the debug views. -->
+
+    <!-- ===== Wind flow map ===== -->
+    <text
+     type="string"
+     length="1"
+     follows="left|top"
+     font="SansSerifSmallBold"
+     height="14"
+     layout="topleft"
+     left="10"
+     top_pad="12"
+     width="520">
+        Wind flow map
+    </text>
+    <check_box
+     control_name="SSAtmoWindFlow"
+     follows="left|top"
+     height="16"
+     label="Solve a flowmap of the build's own wind"
+     layout="topleft"
+     left="10"
+     name="windflow_enabled_prefs"
+     tool_tip="A per-region fluid solve describing how wind actually moves through geometry, so alleys funnel, lees go calm and rooftops gust. Needs OpenGL 4.3; falls back to a single uniform wind without it."
+     top_pad="6"
+     width="500" />
+    <check_box
+     control_name="SSAtmoWindFlowAdvect"
+     follows="left|top"
+     height="16"
+     label="Carry precipitation around buildings"
+     layout="topleft"
+     left="30"
+     name="windflow_advect_prefs"
+     tool_tip="Rain and snow curve with the solved field instead of drifting uniformly."
+     top_pad="4"
+     width="480" />
+    <check_box
+     control_name="SSAtmoWindFlowParticles"
+     follows="left|top"
+     height="16"
+     label="Carry in-world particles"
+     layout="topleft"
+     left="30"
+     name="windflow_particles_prefs"
+     tool_tip="Wind-tagged smoke, dust and leaves funnel down alleys and lift over rooflines instead of drifting on the sim's uniform breeze."
+     top_pad="4"
+     width="480" />
+    <check_box
+     control_name="SSAtmoWindFlowViewerWind"
+     follows="left|top"
+     height="16"
+     label="Drive the viewer wind, audio and flexi"
+     layout="topleft"
+     left="30"
+     name="windflow_viewerwind_prefs"
+     tool_tip="The wind heard in the headphones and how flexible prims blow follow the local field instead of the region breeze."
+     top_pad="4"
+     width="480" />
+    <check_box
+     control_name="SSAtmoWindFlowPartial"
+     follows="left|top"
+     height="16"
+     label="Rebuild edits in a box instead of the whole region"
+     layout="topleft"
+     left="30"
+     name="windflow_partial_prefs"
+     tool_tip="A settled edit only re-solves the flow it can change - a little upwind and everything downwind - warm-started from the previous field."
+     top_pad="4"
+     width="480" />
+    <check_box
+     control_name="SSAtmoWindFlowWorkerGL"
+     follows="left|top"
+     height="16"
+     label="Solve on a worker GL thread"
+     layout="topleft"
+     left="30"
+     name="windflow_worker_prefs"
+     tool_tip="Runs the solve and its readback on a dedicated shared-context GL thread so a rebuild never stalls the frame loop. Falls back to the main thread if a shared context cannot be made."
+     top_pad="4"
+     width="480" />
+
+    <!-- ===== Precipitation ===== -->
+    <text
+     type="string"
+     length="1"
+     follows="left|top"
+     font="SansSerifSmallBold"
+     height="14"
+     layout="topleft"
+     left="10"
+     top_pad="12"
+     width="520">
+        Precipitation
+    </text>
+    <check_box
+     control_name="SSAtmoRainShader"
+     follows="left|top"
+     height="16"
+     label="Render rain with the water shader"
+     layout="topleft"
+     left="10"
+     name="rain_shader_prefs"
+     tool_tip="Refraction, environment and specular water look on rain-family particles instead of the plain fullbright path."
+     top_pad="6"
+     width="500" />
+    <check_box
+     control_name="SSAtmoRipples"
+     follows="left|top"
+     height="16"
+     label="Splash and ripple where drops land"
+     layout="topleft"
+     left="10"
+     name="atmo_ripples_prefs"
+     tool_tip="Impact splashes and running ripples near the camera while precipitation falls."
+     top_pad="4"
+     width="500" />
+    <check_box
+     control_name="SSAtmoRunoff"
+     follows="left|top"
+     height="16"
+     label="Shed collected rain off roof edges"
+     layout="topleft"
+     left="10"
+     name="atmo_runoff_prefs"
+     tool_tip="Eaves and overhangs drip into the street below while it is raining."
+     top_pad="4"
+     width="500" />
+<check_box
+     control_name="SSAtmoRunoff"
+     follows="left|top"
+     height="16"
+     label="Shed collected rain off roof edges"
+     layout="topleft"
+     left="10"
+     name="atmo_runoff_prefs"
+     tool_tip="Eaves and overhangs drip into the street below while it is raining."
+     top_pad="4"
+     width="500" />
+
+    <!-- ===== Wet, snow & whiteout materials ===== -->
+    <text
+     type="string"
+     length="1"
+     follows="left|top"
+     font="SansSerifSmallBold"
+     height="14"
+     layout="topleft"
+     left="10"
+     top_pad="12"
+     width="520">
+        Wet, snow &amp; whiteout
+    </text>
+    <check_box
+     control_name="SSAtmoWetSurfaces"
+     follows="left|top"
+     height="16"
+     label="Render the wet surface material"
+     layout="topleft"
+     left="10"
+     name="atmo_wetsurfaces_prefs"
+     tool_tip="Wet floors, rooftops and streets tighten their specular response against rain and hold the roof runoff. Off freezes the look even at full SSAtmoWetStrength."
+     top_pad="6"
+     width="500" />
+    <check_box
+     control_name="SSAtmoWetPuddles"
+     follows="left|top"
+     height="16"
+     label="Pool lying water into puddles"
+     layout="topleft"
+     left="30"
+     name="atmo_puddles_prefs"
+     tool_tip="Flat ground collects rain into puddle patches. Off drains the visible puddles - rain keeps hitting and running off, it just stops pooling."
+     top_pad="4"
+     width="480" />
+    <check_box
+     control_name="SSAtmoSnowSurfaces"
+     follows="left|top"
+     height="16"
+     label="Render the accumulated snow material"
+     layout="topleft"
+     left="10"
+     name="atmo_snowsurfaces_prefs"
+     tool_tip="Settled snow lifts surfaces toward white and adds drift sparkle. Off freezes the look even at full SSAtmoSnowSurfaceStrength."
+     top_pad="4"
+     width="500" />
+    <check_box
+     control_name="SSAtmoWhiteout"
+     follows="left|top"
+     height="16"
+     label="Render the snow whiteout fog"
+     layout="topleft"
+     left="10"
+     name="atmo_whiteout_prefs"
+     tool_tip="The local, height-limited volumetric fog that collapses visibility inside the squall and the ground blizzard. Off keeps the storm but never the veil."
+     top_pad="4"
+     width="500" />
+
+    <!-- ===== Lightning & sound ===== -->
+    <text
+     type="string"
+     length="1"
+     follows="left|top"
+     font="SansSerifSmallBold"
+     height="14"
+     layout="topleft"
+     left="10"
+     top_pad="12"
+     width="520">
+        Lightning &amp; sound
+    </text>
+    <check_box
+     control_name="SSAtmoLightning"
+     follows="left|top"
+     height="16"
+     label="Draw and sound lightning"
+     layout="topleft"
+     left="10"
+     name="atmo_lightning_prefs"
+     tool_tip="Sheet, fork and ground strikes under storm skies. Stable and breezy weather never strikes regardless."
+     top_pad="6"
+     width="500" />
+    <check_box
+     control_name="SSAtmoSounds"
+     follows="left|top"
+     height="16"
+     label="Play the impact soundscape"
+     layout="topleft"
+     left="10"
+     name="atmo_sounds_prefs"
+     tool_tip="Footsteps, landing impacts and the ambient wind audio the Atmo Magic mix drives."
+     top_pad="4"
+     width="500" />
+
+    <!-- ===== Shared world field ===== -->
+    <text
+     type="string"
+     length="1"
+     follows="left|top"
+     font="SansSerifSmallBold"
+     height="14"
+     layout="topleft"
+     left="10"
+     top_pad="12"
+     width="520">
+        Shared world field
+    </text>
+    <check_box
+     control_name="SSWorldField"
+     follows="left|top"
+     height="16"
+     label="Build the shared solid-structure field"
+     layout="topleft"
+     left="10"
+     name="worldfield_enabled_prefs"
+     tool_tip="One region-anchored capture of the build's solid structure that the surface, coverage and future channels read instead of each capturing its own. Builds nothing until a channel needs it."
+     top_pad="6"
+     width="500" />
+
+</panel>

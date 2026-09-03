@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <SS:Nexii> The wind flowmap overlay's own dials: what it draws and how the
+     flow lines are traced. The flowmap solve itself is tuned on the Simulation
+     floater - this tab only shapes the debug view of the field it produces. -->
+<panel
+ name="debug_windflow_panel"
+ follows="all"
+ layout="topleft"
+ background_visible="false"
+ border="false"
+ top="0"
+ left="0"
+ height="400"
+ width="412">
+    <scroll_container
+     name="windflow_scroll"
+     follows="all"
+     layout="topleft"
+     left="0"
+     top="0"
+     height="400"
+     width="404"
+     opaque="false"
+     reserve_scroll_corner="false">
+    <panel
+     name="windflow_content"
+     follows="left|top"
+     layout="topleft"
+     background_visible="false"
+     border="false"
+     top="0"
+     left="0"
+     min_height="120"
+     min_width="300"
+     height="560"
+     width="384">
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top="8"
+     height="14"
+     width="382"
+     name="windflow_debug_label"
+     font="SansSerifSmallBold">
+        Wind Flowmap Views
+    </text>
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="28"
+     width="382"
+     name="windflow_debug_help"
+     word_wrap="true"
+     font="SansSerifSmall">
+        Shapes what the wind flowmap overlay draws, once it is switched on. The flowmap solve itself is tuned on the Simulation floater.
+    </text>
+    <button
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="8"
+     height="20"
+     width="102"
+     name="R_windflow_debug" label="Reset group"
+     tool_tip="Reset every setting in this section to its default">
+        <button.commit_callback function="SSAtmo.ResetGroup"
+         parameter="SSAtmoWindFlowDebugStyle,SSAtmoWindFlowDebugCapture,SSAtmoWindFlowDebugRange,SSAtmoWindFlowDebugLineTint,SSAtmoWindFlowDebugAspect,SSAtmoWindFlowDebugSeed,SSAtmoWindFlowDebugLength,SSAtmoWindFlowDebugFade" />
+    </button>
+
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="10" height="16" width="106"
+      name="T_flow_style"
+      tool_tip="Arrows read one cell at a time; flow lines read where the air goes">
+        Flow drawn as:
+    </text>
+    <combo_box
+      control_name="SSAtmoWindFlowDebugStyle" name="C_flow_style"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="250">
+        <combo_box.item label="Arrows, one per cell" value="0" name="style_arrows" />
+        <combo_box.item label="Flow lines" value="1" name="style_lines" />
+    </combo_box>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="10" height="16" width="106"
+      name="T_flow_capture"
+      tool_tip="Draw one capture pass in place of the flow field, as the world points that pass actually saw">
+        Capture view:
+    </text>
+    <combo_box
+      control_name="SSAtmoWindFlowDebugCapture" name="C_flow_capture"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="250"
+      tool_tip="Each pass is drawn where it saw geometry, so a direction that missed a whole swathe of the region shows as a hole rather than as nothing at all. Carve candidates: green opened by a probe, amber no probe could see it, dim red correctly blocked">
+        <combo_box.item label="Solved flow field" value="0" name="cap_flow" />
+        <combo_box.item label="Overhead heightmap" value="1" name="cap_top" />
+        <combo_box.item label="Probe 0 (from south)" value="2" name="cap_p0" />
+        <combo_box.item label="Probe 1 (from west)" value="3" name="cap_p1" />
+        <combo_box.item label="Probe 2 (from north)" value="4" name="cap_p2" />
+        <combo_box.item label="Probe 3 (from east)" value="5" name="cap_p3" />
+        <combo_box.item label="Carve candidates" value="6" name="cap_cand" />
+    </combo_box>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="10" height="16" width="106"
+      name="T_flow_range"
+      tool_tip="Distance from the camera drawn at full texel density. Beyond it the arrow field decimates so the far side of the domain still costs something sane">
+        Full detail to:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWindFlowDebugRange" name="SB_flow_range"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="4" max_val="128" increment="1"
+      tool_tip="Distance from the camera drawn at full texel density. Beyond it the arrow field decimates so the far side of the domain still costs something sane" />
+    <spinner
+      control_name="SSAtmoWindFlowDebugRange" name="S_flow_range"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="4" max_val="128" increment="1" decimal_digits="0"
+      tool_tip="Distance from the camera drawn at full texel density. Beyond it the arrow field decimates so the far side of the domain still costs something sane" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_flow_range" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWindFlowDebugRange" />
+    </button>
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="16"
+     height="14"
+     width="382"
+     name="flow_lines_label"
+     font="SansSerifSmallBold">
+        Flow Lines
+    </text>
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="28"
+     width="382"
+     name="flow_lines_help"
+     word_wrap="true"
+     font="SansSerifSmall">
+        Only read while the flow is drawn as lines. Lines do not branch, but seeded densely they read as branching: neighbouring lines diverge around an obstacle and converge again through a gap.
+    </text>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_line_tint"
+      tool_tip="How flow lines are coloured. Speed tint runs cold for sheltered through neutral to hot for a jet, leaving direction to the line's own path; direction hue is what the arrows use">
+        Line tint:
+    </text>
+    <combo_box
+      control_name="SSAtmoWindFlowDebugLineTint" name="C_line_tint"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="250">
+        <combo_box.item label="Direction hue" value="0" name="tint_direction" />
+        <combo_box.item label="Speed tint" value="1" name="tint_speed" />
+    </combo_box>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="10" height="16" width="106"
+      name="T_line_aspect"
+      tool_tip="How much further upwind than sideways flow lines are seeded. The seed footprint is stretched along the wind, so lines start well upwind and arrive already shaped by what they have passed through, instead of being short stubs coming in from every side">
+        Seed aspect:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWindFlowDebugAspect" name="SB_line_aspect"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="1" max_val="8" increment="0.5"
+      tool_tip="How much further upwind than sideways flow lines are seeded. The seed footprint is stretched along the wind, so lines start well upwind and arrive already shaped by what they have passed through, instead of being short stubs coming in from every side" />
+    <spinner
+      control_name="SSAtmoWindFlowDebugAspect" name="S_line_aspect"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="1" max_val="8" increment="0.5" decimal_digits="1"
+      tool_tip="How much further upwind than sideways flow lines are seeded. The seed footprint is stretched along the wind, so lines start well upwind and arrive already shaped by what they have passed through, instead of being short stubs coming in from every side" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_line_aspect" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWindFlowDebugAspect" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_line_seed"
+      tool_tip="Cells between flow line seeds. Lower is denser and slower; the seeding is limited to the area around the camera either way">
+        Seed spacing:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWindFlowDebugSeed" name="SB_line_seed"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="1" max_val="32" increment="1"
+      tool_tip="Cells between flow line seeds. Lower is denser and slower; the seeding is limited to the area around the camera either way" />
+    <spinner
+      control_name="SSAtmoWindFlowDebugSeed" name="S_line_seed"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="1" max_val="32" increment="1" decimal_digits="0"
+      tool_tip="Cells between flow line seeds. Lower is denser and slower; the seeding is limited to the area around the camera either way" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_line_seed" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWindFlowDebugSeed" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_line_length"
+      tool_tip="How many steps a flow line is traced for before it is dropped. A step is three quarters of a cell, so this has to be long enough to carry a line from the upwind edge of the seed footprint to the camera">
+        Line steps:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWindFlowDebugLength" name="SB_line_length"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="8" max_val="512" increment="8"
+      tool_tip="How many steps a flow line is traced for before it is dropped. A step is three quarters of a cell, so this has to be long enough to carry a line from the upwind edge of the seed footprint to the camera" />
+    <spinner
+      control_name="SSAtmoWindFlowDebugLength" name="S_line_length"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="8" max_val="512" increment="8" decimal_digits="0"
+      tool_tip="How many steps a flow line is traced for before it is dropped. A step is three quarters of a cell, so this has to be long enough to carry a line from the upwind edge of the seed footprint to the camera" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_line_length" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWindFlowDebugLength" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_line_fade"
+      tool_tip="How much of its opacity a slab keeps per slab of distance from the one the camera is in. Compounding, so 0.5 draws the neighbouring slab at half strength and the one beyond it at a quarter. Lower separates the layers harder and buries the distant ones sooner; 1 disables the fade">
+        Slab fade:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWindFlowDebugFade" name="SB_line_fade"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0.05" max_val="1" increment="0.05"
+      tool_tip="How much of its opacity a slab keeps per slab of distance from the one the camera is in. Compounding, so 0.5 draws the neighbouring slab at half strength and the one beyond it at a quarter. Lower separates the layers harder and buries the distant ones sooner; 1 disables the fade" />
+    <spinner
+      control_name="SSAtmoWindFlowDebugFade" name="S_line_fade"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0.05" max_val="1" increment="0.05" decimal_digits="2"
+      tool_tip="How much of its opacity a slab keeps per slab of distance from the one the camera is in. Compounding, so 0.5 draws the neighbouring slab at half strength and the one beyond it at a quarter. Lower separates the layers harder and buries the distant ones sooner; 1 disables the fade" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_line_fade" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWindFlowDebugFade" />
+    </button>
+
+    </panel>
+    </scroll_container>
+</panel>

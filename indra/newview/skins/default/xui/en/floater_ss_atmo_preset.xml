@@ -1,0 +1,447 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<floater
+ positioning="cascading"
+ can_minimize="true"
+ can_resize="false"
+ height="671"
+ layout="topleft"
+ name="floater_ss_atmo_preset"
+ save_rect="true"
+ single_instance="true"
+ title="Edit Atmo Magic Preset"
+ width="450">
+    <combo_box name="preset_combo" follows="left|top" layout="topleft"
+     left="10" top="26" height="23" width="290"
+     tool_tip="The preset being edited; selecting one also makes it the active weather" />
+    <button name="new_button" follows="left|top" layout="topleft"
+     left_pad="6" top_delta="0" height="23" width="56" label="Copy"
+     tool_tip="Save the current settings as a new preset" />
+    <line_editor name="preset_name_editor" follows="left|top" layout="topleft"
+     left="10" top_pad="6" height="21" width="290" max_length_chars="63"
+     tool_tip="Name for this preset; use Rename to apply it" />
+    <button name="rename_button" follows="left|top" layout="topleft"
+     left_pad="6" top_delta="0" height="21" width="56" label="Rename"
+     tool_tip="Rename this preset, updating any track that refers to it" />
+    <button name="blank_button" follows="left|top" layout="topleft"
+     left="10" top_pad="6" height="21" width="56" label="New"
+     tool_tip="Create a new preset with default values" />
+    <button name="delete_button" follows="left|top" layout="topleft"
+     left_pad="6" top_delta="0" height="21" width="80" label="Delete"
+     tool_tip="Delete this saved preset" />
+    <button name="revert_button" follows="left|top" layout="topleft"
+     left_pad="6" top_delta="0" height="21" width="120" label="Revert to default"
+     tool_tip="Discard saved edits and return a built-in preset to its shipped values" />
+    <button name="save_button" follows="left|top" layout="topleft"
+     left="10" top_pad="6" height="21" width="80" label="Save"
+     tool_tip="Write this preset to disk. Edits apply live before this, but only survive a restart once saved" />
+    <button name="discard_button" follows="left|top" layout="topleft"
+     left_pad="6" top_delta="0" height="21" width="110" label="Discard changes"
+     tool_tip="Drop unsaved edits and go back to the version on disk" />
+
+    <tab_container name="preset_tabs" follows="all" halign="center" layout="topleft"
+     left="6" top="143" width="438" height="520"
+     tab_position="top" tab_height="21" tab_min_width="72" hide_scroll_arrows="true">
+
+        <panel name="tab_motion" label="Motion" follows="all" layout="topleft"
+         left="0" top="0" width="436" height="494">
+            <combo_box name="archetype_combo" follows="left|top" layout="topleft"
+             left="10" top="12" height="23" width="220"
+             tool_tip="How this weather moves and lands">
+                <combo_box.item label="Liquid (rain)" name="liquid" value="0" />
+                <combo_box.item label="Flake (snow, dust)" name="flake" value="1" />
+                <combo_box.item label="Solid (hail)" name="solid" value="2" />
+                <combo_box.item label="Riser (embers)" name="riser" value="3" />
+            </combo_box>
+            <slider name="fall_speed" follows="left|top" layout="topleft" left="10" top_pad="10"
+             height="15" width="410" label="Fall speed:" label_width="130"
+             min_val="0.1" max_val="40" increment="0.1" decimal_digits="2" show_text="true"
+             tool_tip="Terminal velocity in m/s; risers use this as their rise speed" />
+            <slider name="fall_lo" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Fall height min:" label_width="130"
+             min_val="1" max_val="80" increment="1" decimal_digits="0" show_text="true"
+             tool_tip="Metres above the landing point that particles appear" />
+            <slider name="fall_hi" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Fall height max:" label_width="130"
+             min_val="1" max_val="80" increment="1" decimal_digits="0" show_text="true" />
+            <slider name="sway" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Sway:" label_width="130"
+             min_val="0" max_val="4" increment="0.05" decimal_digits="2" show_text="true"
+             tool_tip="Lateral wander while falling; above 1.5 it also bobs vertically" />
+            <slider name="wind_response" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Wind response:" label_width="130"
+             min_val="0" max_val="4" increment="0.05" decimal_digits="2" show_text="true"
+             tool_tip="How strongly horizontal wind carries it" />
+            <text name="density_label" follows="left|top" layout="topleft" left="10" top_pad="16"
+             height="14" width="410" font="SansSerifSmallBold">Density</text>
+            <slider name="rate" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Rate:" label_width="130"
+             min_val="0" max_val="1" increment="0.005" decimal_digits="3" show_text="true"
+             tool_tip="Drops per square metre per second at full precipitation" />
+            <slider name="intensity_size" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Intensity sizing:" label_width="130"
+             min_val="0" max_val="1" increment="0.01" decimal_digits="2" show_text="true"
+             tool_tip="How much the global precipitation slider grows the drops rather than only adding more of them" />
+            <check_box name="weather_size" follows="left|top" layout="topleft" left="10" top_pad="8"
+             height="16" width="410" label="Weather grades drop size"
+             tool_tip="Sizes drops from the weather's intensity band - drizzle fine, torrential fat - instead of the raw precipitation number. Needs Intensity sizing above zero to have any reach." />
+        </panel>
+
+        <panel name="tab_look" label="Look" follows="all" layout="topleft"
+         left="0" top="0" width="436" height="494">
+            <text name="tint_label" follows="left|top" layout="topleft" left="10" top="16"
+             height="14" width="120">Tint:</text>
+            <color_swatch name="tint" can_apply_immediately="true" follows="left|top"
+             layout="topleft" left_pad="4" top_delta="-5" height="22" width="60" label_height="0"
+             tool_tip="Multiplies whatever the texture or PBR material supplies" />
+            <text name="drop_shape_label" follows="left|top" layout="topleft" left="10" top_pad="14"
+             height="14" width="120">Drop shape:</text>
+            <combo_box name="drop_shape" follows="left|top" layout="topleft" left_pad="4"
+             top_delta="-4" height="23" width="170"
+             tool_tip="Silhouette of one drop in the generated textures. Teardrop reads as liquid, so it suits rain rather than flakes or crystals.">
+                <combo_box.item label="Round mote" name="dot" value="0" />
+                <combo_box.item label="Teardrop" name="teardrop" value="1" />
+                <combo_box.item label="Sliver" name="sliver" value="2" />
+            </combo_box>
+            <slider name="drop_scale" follows="left|top" layout="topleft" left="10" top_pad="14"
+             height="15" width="410" label="Particle size:" label_width="130"
+             min_val="0.1" max_val="8" increment="0.05" decimal_digits="2" show_text="true"
+             tool_tip="Size of the individual drops painted into cluster and sheet particles, relative to the near-drop tier size they stand in for. The near drops keep their own tier size." />
+            <slider name="glow" follows="left|top" layout="topleft" left="10" top_pad="14"
+             height="15" width="410" label="Glow:" label_width="130"
+             min_val="0" max_val="1" increment="0.01" decimal_digits="2" show_text="true"
+             tool_tip="Emissive strength, scaled by the global glow master" />
+            <check_box name="emissive" follows="left|top" layout="topleft" left="10" top_pad="12"
+             height="16" width="410" label="Emissive (additive, blooms)"
+             tool_tip="Light sources add to the scene and write the glow channel" />
+            <check_box name="water_shading" follows="left|top" layout="topleft" left="10" top_pad="8"
+             height="16" width="410" label="Water shading (refraction, reflections)"
+             tool_tip="Runs through the rain shader; only sensible for liquids" />
+        </panel>
+
+        <panel name="tab_tiers" label="Tiers" follows="all" layout="topleft"
+         left="0" top="0" width="436" height="494">
+            <text name="drops_label" follows="left|top" layout="topleft" left="10" top="12"
+             height="14" width="410" font="SansSerifSmallBold">Individual Drops</text>
+            <check_box name="drops_enabled" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="16" width="90" label="Enabled" />
+            <combo_box name="drops_kind" follows="left|top" layout="topleft" left_pad="4"
+             top_delta="-4" height="23" width="130">
+                <combo_box.item label="Streak" name="drops_streak" value="0" />
+                <combo_box.item label="Round" name="drops_round" value="1" />
+                <combo_box.item label="Sheet" name="drops_sheet" value="2" />
+            </combo_box>
+            <slider name="drops_size_x" follows="left|top" layout="topleft" left="10" top_pad="8"
+             height="15" width="410" label="Half width:" label_width="130"
+             min_val="0.005" max_val="12" increment="0.005" decimal_digits="3" show_text="true" />
+            <slider name="drops_size_y" follows="left|top" layout="topleft" left="10" top_pad="4"
+             height="15" width="410" label="Half height:" label_width="130"
+             min_val="0.005" max_val="24" increment="0.005" decimal_digits="3" show_text="true" />
+            <slider name="drops_alpha" follows="left|top" layout="topleft" left="10" top_pad="4"
+             height="15" width="410" label="Opacity:" label_width="130"
+             min_val="0" max_val="1" increment="0.01" decimal_digits="2" show_text="true" />
+            <slider name="drops_radius" follows="left|top" layout="topleft" left="10" top_pad="4"
+             height="15" width="410" label="Reach:" label_width="130"
+             min_val="0" max_val="512" increment="1" decimal_digits="0" show_text="true"
+             tool_tip="Metres from the camera this tier covers" />
+
+            <text name="clusters_label" follows="left|top" layout="topleft" left="10" top_pad="14"
+             height="14" width="410" font="SansSerifSmallBold">Drop Clusters</text>
+            <check_box name="clusters_enabled" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="16" width="90" label="Enabled" />
+            <combo_box name="clusters_kind" follows="left|top" layout="topleft" left_pad="4"
+             top_delta="-4" height="23" width="130">
+                <combo_box.item label="Streak" name="clusters_streak" value="0" />
+                <combo_box.item label="Round" name="clusters_round" value="1" />
+                <combo_box.item label="Sheet" name="clusters_sheet" value="2" />
+            </combo_box>
+            <slider name="clusters_size_x" follows="left|top" layout="topleft" left="10" top_pad="8"
+             height="15" width="410" label="Half width:" label_width="130"
+             min_val="0.005" max_val="12" increment="0.005" decimal_digits="3" show_text="true" />
+            <slider name="clusters_size_y" follows="left|top" layout="topleft" left="10" top_pad="4"
+             height="15" width="410" label="Half height:" label_width="130"
+             min_val="0.005" max_val="24" increment="0.005" decimal_digits="3" show_text="true" />
+            <slider name="clusters_alpha" follows="left|top" layout="topleft" left="10" top_pad="4"
+             height="15" width="410" label="Opacity:" label_width="130"
+             min_val="0" max_val="1" increment="0.01" decimal_digits="2" show_text="true" />
+            <slider name="clusters_radius" follows="left|top" layout="topleft" left="10" top_pad="4"
+             height="15" width="410" label="Reach:" label_width="130"
+             min_val="0" max_val="512" increment="1" decimal_digits="0" show_text="true" />
+
+            <text name="sheets_label" follows="left|top" layout="topleft" left="10" top_pad="14"
+             height="14" width="410" font="SansSerifSmallBold">Shower Sheets</text>
+            <check_box name="sheets_enabled" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="16" width="90" label="Enabled" />
+            <combo_box name="sheets_kind" follows="left|top" layout="topleft" left_pad="4"
+             top_delta="-4" height="23" width="130">
+                <combo_box.item label="Streak" name="sheets_streak" value="0" />
+                <combo_box.item label="Round" name="sheets_round" value="1" />
+                <combo_box.item label="Sheet" name="sheets_sheet" value="2" />
+            </combo_box>
+            <slider name="sheets_size_x" follows="left|top" layout="topleft" left="10" top_pad="8"
+             height="15" width="410" label="Half width:" label_width="130"
+             min_val="0.005" max_val="12" increment="0.005" decimal_digits="3" show_text="true" />
+            <slider name="sheets_size_y" follows="left|top" layout="topleft" left="10" top_pad="4"
+             height="15" width="410" label="Half height:" label_width="130"
+             min_val="0.005" max_val="24" increment="0.005" decimal_digits="3" show_text="true" />
+            <slider name="sheets_alpha" follows="left|top" layout="topleft" left="10" top_pad="4"
+             height="15" width="410" label="Opacity:" label_width="130"
+             min_val="0" max_val="1" increment="0.01" decimal_digits="2" show_text="true" />
+            <slider name="sheets_radius" follows="left|top" layout="topleft" left="10" top_pad="4"
+             height="15" width="410" label="Reach:" label_width="130"
+             min_val="0" max_val="512" increment="1" decimal_digits="0" show_text="true" />
+        </panel>
+
+        <panel name="tab_impact" label="Impact" follows="all" layout="topleft"
+         left="0" top="0" width="436" height="494">
+            <slider name="impact_strength" follows="left|top" layout="topleft" left="10" top="16"
+             height="15" width="410" label="Impact strength:" label_width="130"
+             min_val="0" max_val="2" increment="0.05" decimal_digits="2" show_text="true"
+             tool_tip="Zero means it never lands: no ripples, splashes or impact sounds" />
+            <check_box name="weather_impact" follows="left|top" layout="topleft" left="10" top_pad="8"
+             height="16" width="410" label="Weather grades impact strength"
+             tool_tip="Scales splashes with the weather's intensity band - drizzle barely marks, torrential lands the full strength above" />
+            <check_box name="shatter" follows="left|top" layout="topleft" left="10" top_pad="12"
+             height="16" width="410" label="Shatter into shards on impact"
+             tool_tip="Throws glowing shards off the surface at the speed it hit" />
+
+            <!-- <SS:Nexii> What an impact does to the person standing in it. Stubs: shown so the intent is documented where it belongs rather than living only in a design note, disabled because nothing reads them yet. They matter to impact-carrying archetypes - a barrage built out of the solid archetype is the case that wants them - and are meaningless to a riser, which never lands. See doc/atmo_magic_env_ui.md. -->
+            <text name="shock_label" follows="left|top" layout="topleft" left="10" top_pad="14"
+             height="14" width="410" font="SansSerifSmallBold">Felt Impact (not yet implemented)</text>
+            <slider name="shock_camera" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Camera shock:" label_width="130" enabled="false"
+             min_val="0" max_val="1" increment="0.01" decimal_digits="2" show_text="true"
+             tool_tip="How hard a nearby impact kicks the camera. Not yet wired up" />
+            <slider name="shock_radius" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Felt within:" label_width="130" enabled="false"
+             min_val="0" max_val="120" increment="1" decimal_digits="0" show_text="true"
+             tool_tip="Metres within which an impact is felt and heard as a discrete event. Not yet wired up" />
+
+            <text name="ripple_label" follows="left|top" layout="topleft" left="10" top_pad="14"
+             height="14" width="410" font="SansSerifSmallBold">Landing Ring</text>
+            <slider name="ripple_size" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Ring size:" label_width="130"
+             min_val="0" max_val="3" increment="0.01" decimal_digits="2" show_text="true"
+             tool_tip="Half-size the ring spreads out to, in metres. Water spreads wider. Zero drops the ring." />
+            <slider name="ripple_alpha" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Ring opacity:" label_width="130"
+             min_val="0" max_val="1" increment="0.01" decimal_digits="2" show_text="true"
+             tool_tip="Opacity the ring starts at; it fades out as it spreads, and dims on surfaces tipping toward vertical" />
+            <slider name="ripple_life" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Ring life:" label_width="130"
+             min_val="0" max_val="3" increment="0.05" decimal_digits="2" show_text="true"
+             tool_tip="Seconds the ring takes to spread and fade on a hard surface; water holds it longer" />
+
+            <text name="crown_label" follows="left|top" layout="topleft" left="10" top_pad="14"
+             height="14" width="410" font="SansSerifSmallBold">Splash Crown</text>
+            <slider name="crown_size" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Crown size:" label_width="130"
+             min_val="0" max_val="1" increment="0.005" decimal_digits="3" show_text="true"
+             tool_tip="Half-size of the mote thrown off the surface, in metres. Zero leaves the ring on its own." />
+            <slider name="crown_alpha" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Crown opacity:" label_width="130"
+             min_val="0" max_val="1" increment="0.01" decimal_digits="2" show_text="true" />
+            <slider name="crown_speed" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Crown speed:" label_width="130"
+             min_val="0" max_val="6" increment="0.05" decimal_digits="2" show_text="true"
+             tool_tip="How fast it leaves along the surface normal, in m/s, before gravity takes it back" />
+            <slider name="crown_life" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Crown life:" label_width="130"
+             min_val="0" max_val="3" increment="0.05" decimal_digits="2" show_text="true" />
+
+            <text name="riser_label" follows="left|top" layout="topleft" left="10" top_pad="18"
+             height="14" width="410" font="SansSerifSmallBold">Riser Flavour Mix</text>
+            <text name="riser_desc" follows="left|top" layout="topleft" left="10" top_pad="2"
+             height="14" width="410" font="SansSerifSmall">Only applies to the Riser behaviour.</text>
+            <slider name="dark_mix" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Dark flecks:" label_width="130"
+             min_val="0" max_val="1" increment="0.01" decimal_digits="2" show_text="true"
+             tool_tip="Fraction rendered as small dark sharp flecks" />
+            <slider name="puff_mix" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Vague clouds:" label_width="130"
+             min_val="0" max_val="1" increment="0.01" decimal_digits="2" show_text="true"
+             tool_tip="Fraction rendered as large soft clouds" />
+        </panel>
+
+        <panel name="tab_runoff" label="Runoff" follows="all" layout="topleft"
+         left="0" top="0" width="436" height="494">
+            <text name="runoff_intro" follows="left|top" layout="topleft" left="10" top="12"
+             height="42" width="410" word_wrap="true">Rain that lands on a roof runs down it and comes off the eaves. Only presets that land at all shed runoff, so these do nothing for snow or embers.</text>
+
+            <text name="stream_label" follows="left|top" layout="topleft" left="10" top_pad="10"
+             height="14" width="410" font="SansSerifSmallBold">Streams</text>
+            <text name="stream_intro" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="28" width="410" word_wrap="true">Past a certain flow an eave stops shedding separate drips and runs as a continuous fall. One stream spans its stretch of the gutter.</text>
+            <slider name="stream_alpha" follows="left|top" layout="topleft" left="10" top_pad="8"
+             height="15" width="410" label="Stream opacity:" label_width="130"
+             min_val="0" max_val="3" increment="0.05" decimal_digits="2" show_text="true"
+             tool_tip="How opaque a stream is. A stream already fades up as its gutter runs harder; this scales that. Zero turns streams off and leaves the eave dripping instead." />
+            <slider name="stream_span" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Stream width:" label_width="130"
+             min_val="0" max_val="24" increment="0.5" decimal_digits="1" show_text="true"
+             tool_tip="Metres of eave one stream spans; a longer run is cut into several side by side. Zero uses the width of the sheet tier's quad, which is the size that texture was drawn for." />
+            <slider name="stream_length" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Stream length:" label_width="130"
+             min_val="0.5" max_val="20" increment="0.5" decimal_digits="1" show_text="true"
+             tool_tip="Metres of fall a stream is drawn over. The ground cuts it shorter, so a low eave still meets the street; off a tower it fades out in mid air, which is what a long drop does as it breaks into spray. A stream the wind bends into a wall ends before it gets there." />
+            <slider name="stream_stretch" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Stream stretch:" label_width="130"
+             min_val="0" max_val="1" increment="0.05" decimal_digits="2" show_text="true"
+             tool_tip="One pins the water to the texture, so it speeds up as it falls and the column draws out toward the bottom the way real falling water does. Zero pins the texture to the fall instead: it holds one size all the way down but runs at a steady speed." />
+            <slider name="stream_wind" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Stream wind:" label_width="130"
+             min_val="0" max_val="2" increment="0.05" decimal_digits="2" show_text="true"
+             tool_tip="How strongly the local wind bends a stream. It is applied down the length of the fall rather than at the lip, so the water curves away instead of leaving the roof sideways." />
+            <slider name="stream_scale" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Stream drop size:" label_width="130"
+             min_val="0.1" max_val="4" increment="0.05" decimal_digits="2" show_text="true"
+             tool_tip="Size of the drops that make up a stream. One is life size. The far tiers bake their drops larger than life so a distant curtain of rain is not sub-texel, and a stream undoes that by tiling finer." />
+
+            <text name="drip_label" follows="left|top" layout="topleft" left="10" top_pad="14"
+             height="14" width="410" font="SansSerifSmallBold">Drips</text>
+            <slider name="drip_scale" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="15" width="410" label="Drip size:" label_width="130"
+             min_val="0.1" max_val="4" increment="0.05" decimal_digits="2" show_text="true"
+             tool_tip="Size of the separate drips off an eave. They are already fattened by how much water each one stands in for; this scales that." />
+        </panel>
+
+        <panel name="tab_assets" label="Assets" follows="all" layout="topleft"
+         left="0" top="0" width="436" height="494">
+
+        <!-- <SS:Nexii> The content is taller than the tab and has to scroll. Same arrangement the sim floater uses: an inner panel of fixed height carrying everything, and a container that follows the window and scrolls it. The rows are laid out against the PANEL, so its height is the sum of what it holds rather than whatever the floater happens to be - which is what stopped the footstep grid being cut off at the bottom, and stops the next thing added here from being cut off either. -->
+        <scroll_container
+         color="DkGray2"
+         opaque="true"
+         follows="all"
+         layout="topleft"
+         left="0"
+         top="0"
+         width="436"
+         height="494"
+         name="assets_scroll"
+         reserve_scroll_corner="false">
+        <panel name="assets_panel" follows="left|top" layout="topleft"
+         left="0" top="0" width="418" height="732"
+         background_visible="false">
+            <text name="tex_label" follows="left|top" layout="topleft" left="10" top="12"
+             height="14" width="410" font="SansSerifSmallBold">Textures</text>
+            <text name="tex_desc" follows="left|top" layout="topleft" left="10" top_pad="2"
+             height="28" width="410" word_wrap="true" font="SansSerifSmall">Comma separated UUIDs, or pbr:UUID. Empty generates splatter textures.</text>
+            <line_editor name="textures" follows="left|top" layout="topleft" left="10" top_pad="4"
+             height="20" width="410" label="Particle textures" />
+            <line_editor name="ripple_texture" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="20" width="410" label="Ripple ring" />
+            <line_editor name="dark_texture" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="20" width="410" label="Riser dark flecks" />
+            <line_editor name="puff_texture" follows="left|top" layout="topleft" left="10" top_pad="6"
+             height="20" width="410" label="Riser clouds" />
+            <text name="snd_label" follows="left|top" layout="topleft" left="10" top_pad="14"
+             height="14" width="410" font="SansSerifSmallBold">Sound Pack</text>
+            <text name="snd_desc" follows="left|top" layout="topleft" left="10" top_pad="2"
+             height="14" width="410" font="SansSerifSmall">Each slot is a list of sounds played end to end.</text>
+            <text name="snd_medium_label" follows="left|top" layout="topleft" left="10" top_pad="8"
+             height="14" width="150" font="SansSerifSmall">Ambient (required)</text>
+            <ss_sound_list name="snd_medium" follows="left|top" layout="topleft" left_pad="4" top_delta="-4"
+             height="20" width="254" mode="sequence" />
+            <text name="snd_light_label" follows="left|top" layout="topleft" left="10" top_pad="8"
+             height="14" width="150" font="SansSerifSmall">Ambient light (optional)</text>
+            <ss_sound_list name="snd_light" follows="left|top" layout="topleft" left_pad="4" top_delta="-4"
+             height="20" width="254" mode="sequence" />
+            <text name="snd_heavy_label" follows="left|top" layout="topleft" left="10" top_pad="8"
+             height="14" width="150" font="SansSerifSmall">Ambient heavy (optional)</text>
+            <ss_sound_list name="snd_heavy" follows="left|top" layout="topleft" left_pad="4" top_delta="-4"
+             height="20" width="254" mode="sequence" />
+            <text name="snd_roof_open_label" follows="left|top" layout="topleft" left="10" top_pad="8"
+             height="14" width="150" font="SansSerifSmall">Inside, Sheltered</text>
+            <ss_sound_list name="snd_roof_open" follows="left|top" layout="topleft" left_pad="4" top_delta="-4"
+             height="20" width="254" mode="sequence" />
+            <text name="snd_roof_small_label" follows="left|top" layout="topleft" left="10" top_pad="8"
+             height="14" width="150" font="SansSerifSmall">Inside, small room</text>
+            <ss_sound_list name="snd_roof_small" follows="left|top" layout="topleft" left_pad="4" top_delta="-4"
+             height="20" width="254" mode="sequence" />
+            <text name="snd_roof_medium_label" follows="left|top" layout="topleft" left="10" top_pad="8"
+             height="14" width="150" font="SansSerifSmall">Inside, medium room</text>
+            <ss_sound_list name="snd_roof_medium" follows="left|top" layout="topleft" left_pad="4" top_delta="-4"
+             height="20" width="254" mode="sequence" />
+            <text name="snd_roof_big_label" follows="left|top" layout="topleft" left="10" top_pad="8"
+             height="14" width="150" font="SansSerifSmall">Inside, big hall</text>
+            <ss_sound_list name="snd_roof_big" follows="left|top" layout="topleft" left_pad="4" top_delta="-4"
+             height="20" width="254" mode="sequence" />
+            <text name="steps_label" follows="left|top" layout="topleft" left="10" top_pad="12"
+             height="14" width="410" font="SansSerifSmallBold">Footsteps on Wet Ground</text>
+            <text name="steps_desc" follows="left|top" layout="topleft" left="10" top_pad="2"
+             height="28" width="410" word_wrap="true" font="SansSerifSmall">One list per surface and action, drawn from at random. Dry ground is in Global Assets.</text>
+
+            <!-- <SS:Nexii> A grid, and so laid out as one: every cell carries its own absolute left and top inside this panel. Chaining would work here too, with care - the trouble is what it costs to get wrong. left_pad measures from the previous sibling and top_delta from its top, so every cell inherits its neighbour's mistakes: a stray top_delta of -3 on each chip walked three pixels higher across every row, and each surface label, chained off the last chip of the row above, arrived carrying the whole accumulated drift and climbed into the row before it. One wrong number, twenty-eight wrong positions. Absolute coordinates are not more capable, only independent - which for a grid that will grow a surface or an action later is the property worth having. -->
+            <panel name="steps_panel" follows="left|top" layout="topleft"
+             left="6" top_pad="4" width="424" height="114"
+             background_visible="false" border="false">
+                <text name="step_head_walk" follows="left|top" layout="topleft"
+                 left="100" top="0" height="12" width="78" font="SansSerifSmall">Walk</text>
+                <text name="step_head_run" follows="left|top" layout="topleft"
+                 left="182" top="0" height="12" width="78" font="SansSerifSmall">Run</text>
+                <text name="step_head_jump" follows="left|top" layout="topleft"
+                 left="264" top="0" height="12" width="78" font="SansSerifSmall">Jump</text>
+                <text name="step_head_land" follows="left|top" layout="topleft"
+                 left="346" top="0" height="12" width="78" font="SansSerifSmall">Land</text>
+                <text name="step_terrain_wet_label" follows="left|top" layout="topleft"
+                 left="0" top="17" height="14" width="100" font="SansSerifSmall">Terrain, wet</text>
+                <ss_sound_list name="step_terrain_wet_walk" follows="left|top" layout="topleft"
+                 left="100" top="14" height="20" width="78" mode="random"
+                 tool_tip="Terrain, wet, Walk" />
+                <ss_sound_list name="step_terrain_wet_run" follows="left|top" layout="topleft"
+                 left="182" top="14" height="20" width="78" mode="random"
+                 tool_tip="Terrain, wet, Run" />
+                <ss_sound_list name="step_terrain_wet_jump" follows="left|top" layout="topleft"
+                 left="264" top="14" height="20" width="78" mode="random"
+                 tool_tip="Terrain, wet, Jump" />
+                <ss_sound_list name="step_terrain_wet_land" follows="left|top" layout="topleft"
+                 left="346" top="14" height="20" width="78" mode="random"
+                 tool_tip="Terrain, wet, Land" />
+                <text name="step_terrain_puddle_label" follows="left|top" layout="topleft"
+                 left="0" top="42" height="14" width="100" font="SansSerifSmall">Terrain, puddle</text>
+                <ss_sound_list name="step_terrain_puddle_walk" follows="left|top" layout="topleft"
+                 left="100" top="39" height="20" width="78" mode="random"
+                 tool_tip="Terrain, puddle, Walk" />
+                <ss_sound_list name="step_terrain_puddle_run" follows="left|top" layout="topleft"
+                 left="182" top="39" height="20" width="78" mode="random"
+                 tool_tip="Terrain, puddle, Run" />
+                <ss_sound_list name="step_terrain_puddle_jump" follows="left|top" layout="topleft"
+                 left="264" top="39" height="20" width="78" mode="random"
+                 tool_tip="Terrain, puddle, Jump" />
+                <ss_sound_list name="step_terrain_puddle_land" follows="left|top" layout="topleft"
+                 left="346" top="39" height="20" width="78" mode="random"
+                 tool_tip="Terrain, puddle, Land" />
+                <text name="step_outside_wet_label" follows="left|top" layout="topleft"
+                 left="0" top="67" height="14" width="100" font="SansSerifSmall">Outside, wet</text>
+                <ss_sound_list name="step_outside_wet_walk" follows="left|top" layout="topleft"
+                 left="100" top="64" height="20" width="78" mode="random"
+                 tool_tip="Outside, wet, Walk" />
+                <ss_sound_list name="step_outside_wet_run" follows="left|top" layout="topleft"
+                 left="182" top="64" height="20" width="78" mode="random"
+                 tool_tip="Outside, wet, Run" />
+                <ss_sound_list name="step_outside_wet_jump" follows="left|top" layout="topleft"
+                 left="264" top="64" height="20" width="78" mode="random"
+                 tool_tip="Outside, wet, Jump" />
+                <ss_sound_list name="step_outside_wet_land" follows="left|top" layout="topleft"
+                 left="346" top="64" height="20" width="78" mode="random"
+                 tool_tip="Outside, wet, Land" />
+                <text name="step_outside_puddle_label" follows="left|top" layout="topleft"
+                 left="0" top="92" height="14" width="100" font="SansSerifSmall">Outside, puddle</text>
+                <ss_sound_list name="step_outside_puddle_walk" follows="left|top" layout="topleft"
+                 left="100" top="89" height="20" width="78" mode="random"
+                 tool_tip="Outside, puddle, Walk" />
+                <ss_sound_list name="step_outside_puddle_run" follows="left|top" layout="topleft"
+                 left="182" top="89" height="20" width="78" mode="random"
+                 tool_tip="Outside, puddle, Run" />
+                <ss_sound_list name="step_outside_puddle_jump" follows="left|top" layout="topleft"
+                 left="264" top="89" height="20" width="78" mode="random"
+                 tool_tip="Outside, puddle, Jump" />
+                <ss_sound_list name="step_outside_puddle_land" follows="left|top" layout="topleft"
+                 left="346" top="89" height="20" width="78" mode="random"
+                 tool_tip="Outside, puddle, Land" />
+            </panel>
+        </panel>
+        </scroll_container>
+        </panel>
+    </tab_container>
+</floater>

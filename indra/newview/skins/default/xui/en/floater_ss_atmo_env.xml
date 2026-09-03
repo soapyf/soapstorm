@@ -1,0 +1,891 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<floater
+ positioning="cascading"
+ can_minimize="true"
+ can_resize="true"
+ height="897"
+ layout="topleft"
+ min_height="897"
+ min_width="985"
+ name="floater_ss_atmo_env"
+ save_rect="true"
+ single_instance="true"
+ title="Edit Atmo Magic Environment"
+ width="985">
+    <!-- <SS:Nexii> Atmo Magic floater. Laid out to echo floater_edit_ext_day_cycle.xml where the two overlap - same vertical position for the name row, Load/Save/Revert docked at the bottom the same way Save/Cancel are there, the same SkipBackward_Off/SkipForward_Off step icons - since anyone who already knows EEP's editor should feel at home here, not have to relearn a different convention for the same kind of job. Where v3 actually differs (isolated per-track weather cubes, no shared keyframe timeline) the layout differs too rather than forcing a false parallel. -->
+
+    <!-- <SS:Nexii> Shown only while nothing is loaded - the landing state. There is no implicit default this floater falls back to, so this is where an environment comes from: two one-click seeds, or a direct drag of the assets below (a drop acts immediately - no chooser, no click-through). Only full-permission settings are taken, the same rule every drop path here obeys. -->
+    <panel
+     name="landing_panel"
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top="30"
+     width="740"
+     height="330"
+     background_visible="false"
+     border="false">
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top="0"
+         height="18"
+         width="740"
+         name="landing_header"
+         font="SansSerifSmallBold"
+         wrap="true">
+            Nothing is loaded yet. Drag an asset from Inventory onto this floater to use it right away, or create from the seeds below:
+        </text>
+
+        <!-- What drops become, as tappable copy rather than a hidden conversion rule.
+             Plain wrapped text rows, not a list widget - a scroll_list draws selection chrome and
+             row lines, which reads as a data table, not a bulleted block of prose. -->
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="6"
+         top_pad="10"
+         height="18"
+         width="734"
+         name="landing_bullet_1"
+         font="SansSerifSmall"
+         wrap="true">
+            Atmo Magic environment notecard - loads it as the environment you edit.
+        </text>
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="6"
+         top_pad="6"
+         height="34"
+         width="734"
+         name="landing_bullet_2"
+         font="SansSerifSmall"
+         wrap="true">
+            EEP day cycle - translated into an environment. It will be close, but may not fully reflect the original authored experience.
+        </text>
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="6"
+         top_pad="6"
+         height="66"
+         width="734"
+         name="landing_bullet_3"
+         font="SansSerifSmall"
+         wrap="true">
+            One or more EEP skies - dropped together they become a day cycle. Skies named Midnight, Sunrise, Noon or Sunset pin those phases and trace the path the sun and moon travel; any additional skies are placed between them on the timeline by their own sun and moon elevation.
+        </text>
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="6"
+         top_pad="6"
+         height="34"
+         width="734"
+         name="landing_bullet_4"
+         font="SansSerifSmall"
+         wrap="true">
+            EEP water preset - an empty environment is created with its water block.
+        </text>
+
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="8"
+         height="34"
+         width="740"
+         name="landing_permission_note"
+         font="SansSerifSmall"
+         wrap="true">
+            Only full-permission settings are accepted. Environments from other players are translated, and may not fully reflect the original authored experience.
+        </text>
+
+        <button
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="8"
+         height="23"
+         width="260"
+         name="create_empty_button"
+         tool_tip="Seeds an environment from the midday defaults - nothing is fetched, ready immediately"
+         label="Create Empty Environment" />
+        <button
+         follows="left|top"
+         layout="topleft"
+         left_pad="10"
+         top_delta="0"
+         height="23"
+         width="260"
+         name="create_stock_button"
+         tool_tip="Seeds a day/night cycle from the four shipped skies (Daylight, Night, Sunrise, Sunset), timed by measuring each sky's own sun"
+         label="Create Stock Day Cycle" />
+    </panel>
+
+    <!-- Editing chrome - hidden until hasAsset() is true -->
+
+    <!-- Name row - same top="5" as floater_edit_ext_day_cycle.xml's "Day
+         Cycle Name:" row. -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top="5"
+     height="14"
+     width="80"
+     name="name_label"
+     font="SansSerifSmallBold">
+        Name
+    </text>
+    <line_editor
+     follows="left|top"
+     layout="topleft"
+     left_pad="10"
+     top="5"
+     height="21"
+     width="360"
+     name="name_editor" />
+
+    <!-- <SS:Nexii> The band between the name row and the scrubber is the forecast strip - a column of resolved weather every couple of hours, standing over the stretch of timeline it belongs to, drawn in code by drawForecastStrip() rather than built as widgets here. Nothing is declared for it: at one column per two hours, with a wind rose, a precipitation figure, a temperature and a condition glyph each, a widget tree would be some seventy controls that only ever display, and every one of them would need repositioning by hand each time the floater is resized. The prose forecast that used to sit here has moved onto Weather > Conditions, where the values it is summarising live. Reserved space only - the scrubber's top at 155 leaves this band 124px tall, which is exactly STRIP_HEIGHT plus STRIP_GAP; move either constant and move the scrubber with it or the top row grows into the Name field. -->
+
+    <!-- Preview time - under the forecast strip and above the tab container
+         (and thus above whatever "Weather" section header lives inside its
+         tab), the same way EEP's timeline sits above its own sky/water
+         tab_container. Anchored to both edges rather than carrying a width,
+         so widening the floater lengthens the scrub - and with it the
+         forecast strip, which takes its column positions from this control's
+         rect.
+
+         Clearance BELOW is load-bearing: the ghost keyframe overlay
+         (drawKeyframeGhosts) renders value labels in two lanes ~16px above
+         and below the scrubber's own rect, and the lane underneath has to
+         land between this and the tab container. The lane above deliberately
+         shares space with the strip's hour row, which sits STRIP_GAP up so
+         that it reads as labelling the scrubber rather than floating over it;
+         the ghosts draw last and win, which is the right way round for an
+         overlay that only appears while a row is being hovered.
+
+         The slider is a PERCENTAGE of the cycle, which is what a phase
+         actually is; the track's day length turns that into a time of day
+         afterwards, in the readout beside it. It used to say max 4.0 while
+         onCommitPreviewTime read the value as a phase directly, so the head
+         could be dragged to four whole cycles and every stop was an eighth
+         of one apart.
+
+         refreshPreview sets the same range in code, and the increment there
+         is 100/SS_ATMOENV_PREVIEW_STEPS - keep this in step with it, because
+         seeded keyframes snap to that grid so they land somewhere the head
+         can actually reach. -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top="157"
+     height="14"
+     width="90"
+     name="preview_time_caption"
+     font="SansSerifSmall">
+        Preview time
+    </text>
+    <!-- Runs the head around the cycle - the same control Edit Day Cycle
+         has, and the same sixty seconds a lap it uses
+         (llfloatereditextdaycycle.cpp's DAY_CYCLE_PLAY_TIME_SECONDS), so a
+         four-hour authored day is still watchable. -->
+    <button
+     follows="left|top"
+     layout="topleft"
+     left_pad="8"
+     top_delta="-4"
+     height="22"
+     width="22"
+     name="preview_play_button"
+     tool_tip="Run the preview through the cycle"
+     image_overlay="Play_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="141"
+     top="155"
+     height="18"
+     right="-145"
+     name="preview_time_slider"
+     show_text="false"
+     min_val="0.0"
+     max_val="100.0"
+     increment="1.0"
+     initial_value="0.0" />
+    <text
+     follows="right|top"
+     layout="topleft"
+     left_pad="8"
+     height="14"
+     width="120"
+     name="preview_time_value_text"
+     font="SansSerifSmall">
+        0:00 (0%)
+    </text>
+
+    <!-- Body: a vertical altitude rail on the left, same idiom as
+         pnl_environment_altitudes in panel_region_environment.xml (Region/
+         Estate floater's Environment tab) - a vertical multi_slider with a
+         floating altitude label per track, rather than a table or a plain
+         button list. Doubles as the track selector: dragging a thumb
+         repositions that track's floor, and mousing one down (whether or
+         not it's then dragged) selects that track for the tab_container on
+         the right. Ground has no floor of its own to drag (see
+         SSAtmoEnvTrack::mFloorZ) so it's a fixed row below the slider
+         instead, always present, never removable. See
+         doc/archive/atmo_magic_environment.md. -->
+    <panel
+     follows="left|top|bottom"
+     layout="topleft"
+     left="15"
+     top="191"
+     bottom="-50"
+     width="170"
+     name="track_panel"
+     background_visible="false"
+     border="false">
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top="0"
+         height="14"
+         width="170"
+         name="tracks_label"
+         font="SansSerifSmallBold">
+            Tracks
+        </text>
+
+        <!-- Up to SS_ATMOENV_MAX_TRACKS-1 (3) optional-track markers,
+             added/removed at runtime (see refreshTrackRail()) rather than a
+             fixed set - unlike EEP's always-exactly-four sky tracks, Atmo
+             Magic tracks are 1-4 total, so nothing here is meaningful until
+             a track exists to show. draw_track gives the vertical rail line
+             from the region Environment tab this mirrors.
+
+             The rail is anchored top and bottom so it actually fills the
+             panel's height rather than collapsing to whatever a chained
+             top_pad left over - and carries NO height of its own, which is
+             what makes that work. Given both, the rect is built from top
+             plus height and the bottom is never consulted, so the rail was
+             a fixed 395px however tall the floater grew: the ground row
+             below it followed the bottom edge, the rail did not, and every
+             altitude on it drifted out of step with its own labels. A
+             follows flag cannot rescue a rect that has already been
+             resolved from a height; increment is 64m so it divides 4096 exactly
+             (dragging to the top used to land on 4100m, past the region
+             ceiling) and lands cleanly on the powers of two people build
+             around - 512/1024/2048 are all reachable exactly.
+
+             overlap_threshold is not the spacing it enforces: LLMultiSlider
+             stores it as (value - increment) and then compares against
+             (that + increment/4), so the gap it actually enforces is
+             overlap_threshold - 48 with a 64m increment. 304 is therefore
+             what asks for a real 256m minimum between markers - enough
+             that two 20px name buttons can't collide at this rail height.
+
+             thumb_width is the marker's thickness along the rail, not its
+             width across it, so 8 keeps the flat bar shape from the region
+             Environment tab; matching it to the control's own 17px width
+             made each marker square, which the rounded thumb image then
+             drew as a circle. Nothing in C++ depends on this number -
+             refreshAltitudeLabel() asks the control where the thumb
+             actually landed rather than recomputing it. -->
+        <multi_slider
+         follows="left|top|bottom"
+         layout="topleft"
+         left="100"
+         top="76"
+         bottom="-129"
+         width="17"
+         name="track_altitude_slider"
+         orientation="vertical"
+         min_val="0"
+         max_val="4096"
+         increment="64"
+         decimal_digits="0"
+         max_sliders="7"
+         overlap_threshold="304"
+         show_text="false"
+         draw_track="true"
+         use_triangle="false"
+         thumb_width="8" />
+
+        <!-- Each marker carries a compact toggle button (the track's name,
+             left of the rail) and an altitude readout (right of it), both
+             repositioned in C++ to follow its thumb - see
+             refreshAltitudeLabel(). The button being a toggle is the point:
+             these *are* the tab selector for the panel on the right, so the
+             selected one has to look pressed rather than looking like an
+             inert caption. Initial top/left here are placeholders; the real
+             vertical position is altitude-derived.
+
+             One pair per optional track, so SS_ATMOENV_MAX_TRACKS - 1 of
+             them. Both are the same height and vertically centred so the
+             name and the altitude line up with each other and with the
+             thumb between them. -->
+        <button
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top="0"
+         height="20"
+         width="96"
+         is_toggle="true"
+         name="track_name_button_1"
+         font="SansSerifSmall"
+         label="Track 1"
+         visible="false" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="122"
+         top="0"
+         height="20"
+         width="48"
+         name="track_alt_label_1"
+         font="SansSerifSmall"
+         text_valign="center"
+         visible="false" />
+        <button
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top="0"
+         height="20"
+         width="96"
+         is_toggle="true"
+         name="track_name_button_2"
+         font="SansSerifSmall"
+         label="Track 2"
+         visible="false" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="122"
+         top="0"
+         height="20"
+         width="48"
+         name="track_alt_label_2"
+         font="SansSerifSmall"
+         text_valign="center"
+         visible="false" />
+        <button
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top="0"
+         height="20"
+         width="96"
+         is_toggle="true"
+         name="track_name_button_3"
+         font="SansSerifSmall"
+         label="Track 3"
+         visible="false" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="122"
+         top="0"
+         height="20"
+         width="48"
+         name="track_alt_label_3"
+         font="SansSerifSmall"
+         text_valign="center"
+         visible="false" />
+        <button
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top="0"
+         height="20"
+         width="96"
+         is_toggle="true"
+         name="track_name_button_4"
+         font="SansSerifSmall"
+         label="Track 4"
+         visible="false" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="122"
+         top="0"
+         height="20"
+         width="48"
+         name="track_alt_label_4"
+         font="SansSerifSmall"
+         text_valign="center"
+         visible="false" />
+        <button
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top="0"
+         height="20"
+         width="96"
+         is_toggle="true"
+         name="track_name_button_5"
+         font="SansSerifSmall"
+         label="Track 5"
+         visible="false" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="122"
+         top="0"
+         height="20"
+         width="48"
+         name="track_alt_label_5"
+         font="SansSerifSmall"
+         text_valign="center"
+         visible="false" />
+        <button
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top="0"
+         height="20"
+         width="96"
+         is_toggle="true"
+         name="track_name_button_6"
+         font="SansSerifSmall"
+         label="Track 6"
+         visible="false" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="122"
+         top="0"
+         height="20"
+         width="48"
+         name="track_alt_label_6"
+         font="SansSerifSmall"
+         text_valign="center"
+         visible="false" />
+        <button
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top="0"
+         height="20"
+         width="96"
+         is_toggle="true"
+         name="track_name_button_7"
+         font="SansSerifSmall"
+         label="Track 7"
+         visible="false" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="122"
+         top="0"
+         height="20"
+         width="48"
+         name="track_alt_label_7"
+         font="SansSerifSmall"
+         text_valign="center"
+         visible="false" />
+
+        <!-- Ground: the same compact toggle button and altitude readout as
+             a track marker, but pinned to the rail's 0m position rather
+             than draggable - it is always 0m by definition (see
+             SSAtmoEnvTrack::mFloorZ). The rail deliberately runs all the
+             way down to 0 so ground reads as part of the same scale as
+             every other track rather than as a footnote below it; what
+             stops an optional track being dragged onto ground's band is
+             SS_ATMOENV_MIN_TRACK_FLOOR, enforced in
+             SSFloaterAtmoEnv::onCommitAltitudeSlider(), not the rail's own
+             range. Positioned in C++ alongside the markers so it lines up
+             however the floater is resized. -->
+        <button
+         follows="left|bottom"
+         layout="topleft"
+         left="0"
+         bottom="-76"
+         height="20"
+         width="96"
+         is_toggle="true"
+         name="track_ground_button"
+         font="SansSerifSmall"
+         label="Ground" />
+        <text
+         follows="left|bottom"
+         layout="topleft"
+         left="122"
+         bottom="-76"
+         height="20"
+         width="48"
+         name="track_ground_alt_label"
+         font="SansSerifSmall"
+         text_valign="center">
+            0m
+        </text>
+
+        <!-- Bottom-docked with explicit "bottom" offsets, not top_pad
+             chained after the (resizable) rail above - chaining off a
+             resizable sibling was what let these overlap the Ground button
+             when the floater was shrunk vertically. -->
+        <button
+         follows="left|bottom"
+         layout="topleft"
+         left="0"
+         bottom="-41"
+         height="23"
+         width="170"
+         name="add_track_button"
+         tool_tip="Up to four tracks total, the ground track plus three optional"
+         label="Add Track" />
+        <button
+         follows="left|bottom"
+         layout="topleft"
+         left="0"
+         bottom="-14"
+         height="23"
+         width="170"
+         name="remove_track_button"
+         tool_tip="Select a track above first; the ground track cannot be removed"
+         label="Remove Track" />
+
+        <!-- <SS:Nexii> Layer mode. Selecting any tab other than Track swaps the rail from showing every track on the region scale to showing what is stacked inside the selected track, fitted to its own contents - see SSFloaterAtmoEnv::refreshRailMode(). One rail with two modes rather than two rails: the track markers already carry both altitude and selection, and hanging a third kind of object off them would overload the same widget again. Space and Dome are fixed anchors at the top, excluded from the fit. Space is not an altitude at all, and the dome is a backdrop whose height is often auto-derived - a cirrus dome at 6km would otherwise squash the decks being edited into the bottom eighth of the rail. Three marker pairs is what the model can currently place: the water plane, the main deck and the optional under deck. Same widgets and same C++ repositioning as the track markers above. See doc/atmo_magic_env_ui.md. -->
+        <button
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top="30"
+         height="20"
+         width="96"
+         is_toggle="true"
+         name="space_anchor_button"
+         font="SansSerifSmall"
+         label="Space"
+         tool_tip="Everything beyond the sky - suns, planets, moons and the starfield"
+         visible="false" />
+        <button
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="4"
+         height="20"
+         width="96"
+         is_toggle="true"
+         name="dome_anchor_button"
+         font="SansSerifSmall"
+         label="Dome"
+         tool_tip="The cirrus dome. Drawn out of scale at the top of the rail: it is a backdrop rather than a placed layer"
+         visible="false" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="122"
+         top_delta="0"
+         height="20"
+         width="48"
+         name="dome_anchor_alt_label"
+         font="SansSerifSmall"
+         text_valign="center"
+         visible="false" />
+
+        <button
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top="0"
+         height="20"
+         width="96"
+         is_toggle="true"
+         name="layer_name_button_1"
+         font="SansSerifSmall"
+         label="Layer 1"
+         visible="false" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="122"
+         top="0"
+         height="20"
+         width="48"
+         name="layer_alt_label_1"
+         font="SansSerifSmall"
+         text_valign="center"
+         visible="false" />
+        <button
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top="0"
+         height="20"
+         width="96"
+         is_toggle="true"
+         name="layer_name_button_2"
+         font="SansSerifSmall"
+         label="Layer 2"
+         visible="false" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="122"
+         top="0"
+         height="20"
+         width="48"
+         name="layer_alt_label_2"
+         font="SansSerifSmall"
+         text_valign="center"
+         visible="false" />
+        <button
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top="0"
+         height="20"
+         width="96"
+         is_toggle="true"
+         name="layer_name_button_3"
+         font="SansSerifSmall"
+         label="Layer 3"
+         visible="false" />
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="122"
+         top="0"
+         height="20"
+         width="48"
+         name="layer_alt_label_3"
+         font="SansSerifSmall"
+         text_valign="center"
+         visible="false" />
+
+        <!-- Precipitation occupies a span rather than a height, so its marker is
+             a bracket: the button sits at the middle of the band and
+             drawWeatherBracket() draws the extent, from the reference surface
+             (the higher of the track floor and the water plane) up to whichever
+             deck delivers. -->
+        <button
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top="0"
+         height="20"
+         width="96"
+         is_toggle="true"
+         name="weather_marker_button"
+         font="SansSerifSmall"
+         label="Weather"
+         tool_tip="Where precipitation falls: from the delivering deck down to the surface below it"
+         visible="false" />
+
+        <button
+         follows="left|bottom"
+         layout="topleft"
+         left="0"
+         bottom="-41"
+         height="23"
+         width="170"
+         name="add_deck_button"
+         tool_tip="Adds the under deck - the second volumetric field a sky-themed build hangs below its platform"
+         label="Add Deck"
+         visible="false" />
+        <button
+         follows="left|bottom"
+         layout="topleft"
+         left="0"
+         bottom="-14"
+         height="23"
+         width="170"
+         name="remove_deck_button"
+         tool_tip="Removes the under deck. The main deck cannot be removed - empty it with its coverage instead"
+         label="Remove Deck"
+         visible="false" />
+    </panel>
+
+    <!-- <SS:Nexii> Anchored to the floater's RIGHT edge, not given a width. It carried a 586px width from back when the floater was narrower, so the 200px the floater has gained since sat empty beside the tabs - and the rows inside, all left-anchored, had no reason to grow into it either. The panels' own spinner/keyframe column is right-anchored to match (see panel_ss_atmo_env_weather_conditions.xml), so the sliders between the two take up the slack. -->
+    <tab_container
+     follows="all"
+     layout="topleft"
+     left="199"
+     top="191"
+     bottom="-50"
+     right="-12"
+     halign="left"
+     tab_position="top"
+     tab_width="80"
+     tab_padding_right="2"
+     name="atmo_tabs">
+        <!-- Tab order is altitude order, bottom to top, matching the rail
+             beside it: the track's own foundation, then water at sea level,
+             surface weather above that, the cloud decks, the sky itself, and
+             space at the top. Look is last and deliberately outside the
+             series - it holds the renderer's own output controls, which have
+             no position on the rail at all. See doc/atmo_magic_env_ui.md. -->
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="track_tab"
+         label="Track"
+         filename="panel_ss_atmo_env_track.xml" />
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="water_tab"
+         label="Water"
+         filename="panel_ss_atmo_env_water.xml" />
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="weather_tab"
+         label="Weather"
+         filename="panel_ss_atmo_env_weather.xml" />
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="clouds_tab"
+         label="Clouds"
+         filename="panel_ss_atmo_env_clouds.xml" />
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="sky_tab"
+         label="Sky"
+         filename="panel_ss_atmo_env_sky.xml" />
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="space_tab"
+         label="Space"
+         filename="panel_ss_atmo_env_space.xml" />
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="look_tab"
+         label="Look"
+         filename="panel_ss_atmo_env_look.xml" />
+    </tab_container>
+
+    <!-- CRUD row, docked at the floater's bottom edge, same as Save/Cancel
+         on floater_edit_ext_day_cycle.xml. Save writes immediately using
+         the Name field above (no "As" dialog - there's nothing to pick,
+         the name is already right there). Load From Parcel fetches and
+         applies the environment the parcel advertises in its description
+         (atmo:<uuid>) and only enables while it advertises one; notecards
+         still load by dragging them onto this floater. -->
+    <button
+     follows="left|bottom"
+     layout="topleft"
+     left="15"
+     bottom="-14"
+     height="23"
+     width="118"
+     name="load_from_parcel_button"
+     tool_tip="Loads the environment this parcel advertises in its description (atmo:&lt;uuid&gt;). Disabled while the parcel advertises none - notecards load by dragging them onto this floater"
+     label="Load From Parcel" />
+    <button
+     follows="left|bottom"
+     layout="topleft"
+     left_pad="8"
+     bottom_delta="0"
+     height="23"
+     width="100"
+     name="save_button"
+     tool_tip="Saves the current environment - updates the notecard already loaded in place, or creates a new one if nothing owned is loaded yet"
+     label="Save" />
+    <button
+     follows="left|bottom"
+     layout="topleft"
+     left_pad="8"
+     bottom_delta="0"
+     height="23"
+     width="100"
+     name="revert_button"
+     tool_tip="Discards edits, back to whatever was last loaded or saved"
+     label="Revert" />
+
+    <!-- <SS:Nexii> Unload, beside Revert and deliberately distinct from it: Revert restores the last saved state of THIS environment, Unload leaves nothing loaded at all, so the world falls back to whatever EEP's parcel or region setting publishes. -->
+    <button
+     follows="left|bottom"
+     layout="topleft"
+     left_pad="8"
+     bottom_delta="0"
+     height="23"
+     width="100"
+     name="unload_button"
+     tool_tip="Drop this environment and fall back to the parcel or region EEP setting. Does not delete the notecard"
+     label="Unload" />
+
+    <!-- <SS:Nexii> The way into the settings that are not part of an environment - presets, global assets, the older weather controls. Anchored bottom RIGHT, away from Save/Revert/Unload: those three act on the document in front of you, and this one leaves it entirely. -->
+    <button
+     follows="right|bottom"
+     layout="topleft"
+     right="-12"
+     bottom_delta="0"
+     height="23"
+     width="100"
+     name="settings_button"
+     tool_tip="Precipitation presets, global assets and the rest of Atmo Magic's settings"
+     label="Settings..." />
+
+    <!-- <SS:Nexii> The transitionary state: a drop or a create button has kicked off an async fetch-and-seed (skies are fetched from the asset system, the notecard is written, the day cycle is mapped), and the whole floater stands down until it settles so the author cannot poke a half-loaded environment. Drawn last so it covers everything; the label is set from code (see SSFloaterAtmoEnv::setBusy). -->
+    <panel
+     follows="all"
+     name="busy_panel"
+     layout="topleft"
+     left="0"
+     top="0"
+     right="0"
+     bottom="0"
+     bg_alpha_color="DkGray2"
+     bg_visible="true"
+     border="true"
+     mouse_opaque="true"
+     visible="false">
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top="8"
+         height="18"
+         width="985"
+         halign="center"
+         name="busy_caption"
+         font="SansSerifSmallBold">
+            Working -
+        </text>
+        <text
+         follows="left|top"
+         layout="topleft"
+         left="0"
+         top_pad="24"
+         height="60"
+         width="985"
+         halign="center"
+         name="busy_label"
+         font="SansSerifSmall"
+         wrap="true">
+            -
+        </text>
+    </panel>
+</floater>

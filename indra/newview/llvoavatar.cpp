@@ -98,6 +98,10 @@
 #include "llvovolume.h"
 #include "llworld.h"
 #include "pipeline.h"
+
+// <SS:Nexii> Atmo Magic surface-aware footstep sounds
+#include "ssprecippreset.h"
+#include "sssoundscape.h"
 #include "llviewershadermgr.h"
 #include "llsky.h"
 #include "llanimstatelabels.h"
@@ -5326,53 +5330,130 @@ void LLVOAvatar::updateFootstepSounds()
         }
     }
 
+    // <SS:Nexii> Jump takeoff. Edge detected off PRE_JUMP/JUMP the same way ground contact is edge detected below, so holding the jump key does not retrigger it every frame; fires from wherever the feet currently are since there is no ground contact to anchor it to.
+    static LLCachedControl<bool> PlayModeUISndFootstepsJump(gSavedSettings, "PlayModeUISndFootsteps");
+    const LLUUID AGENT_JUMP_ANIMS[] = {ANIM_AGENT_PRE_JUMP, ANIM_AGENT_JUMP};
+    const bool jumping = isAnyAnimationSignaled(AGENT_JUMP_ANIMS, LL_ARRAY_SIZE(AGENT_JUMP_ANIMS));
+    if (gAudiop && jumping && !mWasJumping && PlayModeUISndFootstepsJump)
+    {
+        LLVector3 jump_foot = getPositionAgent();
+        jump_foot.mV[VZ] -= mPelvisToFoot;
+        SSSoundscape::getInstance()->footstepEvent(getID(), jump_foot, mStepOnLand, STEP_JUMP, isSelf());
+    }
+    mWasJumping = jumping;
+
     const LLUUID AGENT_FOOTSTEP_ANIMS[] = {ANIM_AGENT_WALK, ANIM_AGENT_RUN, ANIM_AGENT_LAND};
     const S32 NUM_AGENT_FOOTSTEP_ANIMS = LL_ARRAY_SIZE(AGENT_FOOTSTEP_ANIMS);
 
-    if ( gAudiop && isAnyAnimationSignaled(AGENT_FOOTSTEP_ANIMS, NUM_AGENT_FOOTSTEP_ANIMS) )
+    // <SS:Nexii> State-driven footstep loops. Walk and run sounds are LOOP recordings attached to the avatar - per-footfall triggering spammed a fresh copy of a long loop on every step, overlapping and never stopping. So the model is: report the locomotion STATE every frame (speed-based, so AOs are irrelevant), and the soundscape starts/stops/switches/follows one managed loop per avatar. Landing is the one per-event sound left: a detached one-shot at the touchdown, fired on the airborne->grounded edge - which needs no anims and no ankle thresholds either.
+    const LLVector3 vel_xy(getVelocity().mV[VX], getVelocity().mV[VY], 0.f);
+    const F32 ground_speed = vel_xy.magVec();
+
+    static LLCachedControl<bool> PlayModeUISndFootsteps(gSavedSettings, "PlayModeUISndFootsteps");
+    if (gAudiop && PlayModeUISndFootsteps)
     {
-        bool playSound = false;
-        LLVector3 foot_pos_agent;
-
-        bool onGroundLeft = (leftElev <= 0.05f);
-        bool onGroundRight = (rightElev <= 0.05f);
-
-        // did left foot hit the ground?
-        if ( onGroundLeft && !mWasOnGroundLeft )
+        // -1 for stopped, NOT 0: STEP_WALK is 0, and a zero idle sentinel made every standing or airborne avatar read as walking - the loop's stop branch was unreachable and footsteps played
+        // forever at rest and straight through freefall.
+        S32 locomotion = -1;
+        if (!mInAir && !isSitting() && ground_speed > 0.5f)
         {
-            foot_pos_agent = ankle_left_pos_agent;
-            playSound = true;
+            // The speed classifier lives in the GAP between SL's gaits (walk ~3.2 m/s, run ~5.2) with hysteresis so it latches: a threshold sitting on walk speed itself flapped the loop on every
+            // diagonal or shallow ramp. The run anim short-circuits it when an unoverridden gait says so directly.
+            const LLUUID AGENT_RUN_ANIM[] = {ANIM_AGENT_RUN};
+            const bool run_now = isAnyAnimationSignaled(AGENT_RUN_ANIM, 1)
+                || ground_speed > (mSSWasRunning ? 3.9f : 4.5f);
+            mSSWasRunning = run_now;
+            locomotion = run_now ? STEP_RUN : STEP_WALK;
+        }
+        else
+        {
+            mSSWasRunning = false;
         }
 
-        // did right foot hit the ground?
-        if ( onGroundRight && !mWasOnGroundRight )
-    {
-            foot_pos_agent = ankle_right_pos_agent;
-            playSound = true;
-    }
+        // At the FEET, not the pelvis: getPositionAgent is the root, and half a body height matters for a sound meant to come from the ground contact.
+        LLVector3 foot_pos = getPositionAgent();
+        foot_pos.mV[VZ] -= mPelvisToFoot;
 
-        mWasOnGroundLeft = onGroundLeft;
-        mWasOnGroundRight = onGroundRight;
+        SSSoundscape::getInstance()->updateFootstepLoop(
+            getID(), foot_pos, mStepOnLand, locomotion, isSelf());
 
-        // <FS:PP> FIRE-3169: Option to change the default footsteps sound
-        // if ( playSound )
-        static LLCachedControl<bool> PlayModeUISndFootsteps(gSavedSettings, "PlayModeUISndFootsteps");
-        if ( playSound && PlayModeUISndFootsteps )
-        // </FS:PP>
+        // Individual footfalls, for recordings whose analysis says the steps can be cut apart. Each foot is watched on its OWN elevation and fires its own touchdown, rather than the earlier
+        // "which ankle is lower" sign flip: that compared the two feet, so anything that biased one side - uneven ground under the two ankles, an asymmetric AO walk, a shape whose ankles sit at
+        // different heights - pushed the two sign flips of a cycle close together, and the anti-spam gap in footstepImpact then swallowed one of the pair, leaving one sound per full gait cycle
+        // instead of one per step. It also fired at the crossing, which is when the feet PASS each other, not when either of them lands.
+        //
+        // Thresholds are relative to a decaying low/high envelope per foot because the absolute numbers are not knowable here: elevation is measured ankle-to-ground, so its floor is the
+        // ankle-to-sole distance (scales with avatar height, and hover or a floaty AO shifts it further) and its swing amplitude is whatever the animation does. Arm high, fire on the way back
+        // down through the low band: one event per foot per cycle, at contact, with the arm/fire split acting as the hysteresis.
+        if (locomotion == STEP_WALK || locomotion == STEP_RUN)
         {
-            const F32 STEP_VOLUME = 0.1f;
-            const LLUUID& step_sound_id = getStepSound();
+            const F32 elev[2] = { leftElev, rightElev };
+            const LLVector3* ankle[2] = { &ankle_left_pos_agent, &ankle_right_pos_agent };
 
-            LLVector3d foot_pos_global = gAgent.getPosGlobalFromAgent(foot_pos_agent);
+            // Envelope decay is per-second so the detector behaves the same at 20fps and 200fps. 3s is a handful of gait cycles: slow enough that the band does not sag much between lifts (which
+            // would drag the fire threshold around mid-cycle), fast enough to re-fit when the gait, the ground or the animation changes.
+            const F32 decay = mSSFootTracking ? llclamp(gFrameIntervalSeconds.value() / 3.f, 0.f, 1.f) : 1.f;
+            mSSFootTracking = true;
 
-            if (LLViewerParcelMgr::getInstance()->canHearSound(foot_pos_global)
-                && !LLMuteList::getInstance()->isMuted(getID(), LLMute::flagObjectSounds))
+            for (S32 f = 0; f < 2; ++f)
             {
-                gAudiop->triggerSound(step_sound_id, getID(), STEP_VOLUME, LLAudioEngine::AUDIO_TYPE_AMBIENT, foot_pos_global);
+                mSSFootLow[f]  = llmin(elev[f], mSSFootLow[f]  + (elev[f] - mSSFootLow[f])  * decay);
+                mSSFootHigh[f] = llmax(elev[f], mSSFootHigh[f] - (mSSFootHigh[f] - elev[f]) * decay);
+
+                const F32 range = mSSFootHigh[f] - mSSFootLow[f];
+                if (range < 0.03f) continue;   // no usable lift yet: still calibrating, or the anim keeps this foot planted
+
+                if (elev[f] > mSSFootLow[f] + range * 0.6f)
+                {
+                    mSSFootArmed[f] = true;
+                }
+                else if (mSSFootArmed[f] && elev[f] < mSSFootLow[f] + range * 0.25f)
+                {
+                    mSSFootArmed[f] = false;
+                    SSSoundscape::getInstance()->footstepImpact(getID(), *ankle[f], isSelf());
+                }
             }
         }
+        else
+        {
+            // Standing, sitting or airborne: drop the envelopes so the next walk refits them instead of inheriting a band measured in some other pose.
+            mSSFootTracking = false;
+            mSSFootArmed[0] = mSSFootArmed[1] = false;
+        }
+
+        // Touchdown: airborne last frame, grounded now.
+        if (mSSWasInAir && !mInAir && !isSitting())
+        {
+            SSSoundscape::getInstance()->footstepEvent(
+                getID(), foot_pos, mStepOnLand, STEP_LAND, isSelf());
+        }
+        mSSWasInAir = mInAir;
     }
 }
+
+// <SS:Nexii> Atmo Magic surface-aware footstep sounds ----------------------------------------------------------------------------- playFootstepSound() Volume/mute/parcel gating factored out of updateFootstepSounds() so the jump trigger and the walk/run/land trigger can share it. -----------------------------------------------------------------------------
+void LLVOAvatar::playFootstepSound(const LLVector3& foot_pos_agent, S32 action)
+{
+    // Was a hardcoded 0.1 (stock's own figure), which is near-inaudible against the Atmo beds; debug-tweakable so the trigger path can be balanced by ear against the loop/segment path's SSAtmoVolumeFootsteps.
+    static LLCachedControl<F32> step_volume(gSavedSettings, "SSAtmoVolumeStepTrigger", 0.3f);
+    const F32 STEP_VOLUME = llclamp((F32)step_volume, 0.f, 1.f);
+
+    LLUUID step_sound_id = SSSoundscape::getInstance()->footstepSound(
+        getID(), foot_pos_agent, mStepOnLand, action, isSelf());
+    if (step_sound_id.isNull())
+    {
+        step_sound_id = getStepSound();
+    }
+
+    LLVector3d foot_pos_global = gAgent.getPosGlobalFromAgent(foot_pos_agent);
+
+    if (LLViewerParcelMgr::getInstance()->canHearSound(foot_pos_global)
+        && !LLMuteList::getInstance()->isMuted(getID(), LLMute::flagObjectSounds))
+    {
+        gAudiop->triggerSound(step_sound_id, getID(), STEP_VOLUME, LLAudioEngine::AUDIO_TYPE_AMBIENT, foot_pos_global);
+    }
+}
+
 
 //------------------------------------------------------------------------
 // computeUpdatePeriod()

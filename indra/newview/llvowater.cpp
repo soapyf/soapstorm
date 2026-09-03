@@ -144,6 +144,10 @@ bool LLVOWater::updateGeometry(LLDrawable *drawable)
     size_x *= (S32)llmin(llround(scale.mV[0] / 256.f), 8);
     size_y *= (S32)llmin(llround(scale.mV[1] / 256.f), 8);
 
+    // <SS:Nexii> A patch under ~128m rounds to ZERO quads above, and the zero-size buffer path dangles in the mapped-buffer flush list (access violation under movePartition). One quad is a valid mesh at any scale.
+    size_x = llmax(size_x, 1);
+    size_y = llmax(size_y, 1);
+
     const S32 num_quads = size_x * size_y;
     face->setSize(vertices_per_quad * num_quads,
                   indices_per_quad * num_quads);
@@ -183,9 +187,7 @@ bool LLVOWater::updateGeometry(LLDrawable *drawable)
     F32 size_inv_x = 1.f / size_x;
     F32 size_inv_y = 1.f / size_y;
 
-    // <SS:Nexii> Quads come off one rounded origin plus whole steps, not a rounded centre offset by half a step. Rounding each centre moved
-    // neighbours independently by up to half a metre whenever the step was fractional (step is scale/size, size capped at 64, so any patch
-    // not a multiple of 64m), tearing seams through the void water at long draw distances. Neighbours now share the exact edge coordinate.
+    // <SS:Nexii> Quads come off one rounded origin plus whole steps, not a rounded centre offset by half a step. Rounding each centre moved neighbours independently by up to half a metre whenever the step was fractional (step is scale/size, size capped at 64, so any patch not a multiple of 64m), tearing seams through the void water at long draw distances. Neighbours now share the exact edge coordinate.
     LLVector3 origin_agent = getPositionAgent() - getScale() * 0.5f;
     origin_agent.mV[VX] = (F32)llround(origin_agent.mV[VX]);
     origin_agent.mV[VY] = (F32)llround(origin_agent.mV[VY]);
@@ -205,7 +207,6 @@ bool LLVOWater::updateGeometry(LLDrawable *drawable)
             *verticesp++  = LLVector3(x0, y0, origin_agent.mV[VZ]);
             *verticesp++  = LLVector3(x1, y1, origin_agent.mV[VZ]);
             *verticesp++  = LLVector3(x1, y0, origin_agent.mV[VZ]);
-            // </SS:Nexii>
 
             *texCoordsp++ = LLVector2(x*size_inv_x, (y+1)*size_inv_y);
             *texCoordsp++ = LLVector2(x*size_inv_x, y*size_inv_y);

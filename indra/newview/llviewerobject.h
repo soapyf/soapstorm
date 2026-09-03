@@ -1115,7 +1115,6 @@ public:
     // ghost. Always longer than sMaxUpdateInterpolationTime - inside that window the viewer
     // still interpolates happily and missing updates are ordinary, not evidence of a ghost.
     static F64Seconds   getGhostProjectileProbeThreshold();
-    // </SS:Nexii>
 
 protected:
     // <SS:Nexii> Last low-cost projectile existence probe
@@ -1123,14 +1122,12 @@ protected:
     F64Seconds      mGhostProjectileWatchStartSecs;
     U32             mGhostProjectileProbeCount;
     bool            mOnGhostProjectileWatch;
-    // </SS:Nexii>
 
 private:
     // <SS:Nexii> Projectile ghost probing
     void maybeRequestProjectileExistenceCheck(const F64SecondsImplicit& frame_time,
                                               const F64Seconds& time_since_last_update);
     void sendProjectileExistenceProbe();
-    // </SS:Nexii>
 };
 
 ///////////////////

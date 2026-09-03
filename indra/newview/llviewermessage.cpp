@@ -5321,7 +5321,6 @@ void process_sim_stats(LLMessageSystem *msg, void **user_data)
 
         // <SS:Nexii> Rez queue watch: track the region's pending asset queue
         FSRezQueue::onSimStat(stat_id, stat_value);
-        // </SS:Nexii>
 
         auto measurementp = LLStatViewer::SimMeasurementSampler::getInstance((ESimStatID)stat_id);
 

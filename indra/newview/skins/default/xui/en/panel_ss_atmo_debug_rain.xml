@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <SS:Nexii> The rain-side debug views: where drops can reach, what the shadow
+     capture actually saw, and what the runoff does with what it caught. The
+     shadow capture and the runoff sim themselves are tuned on the Simulation
+     floater - these only shape their overlays. -->
+<panel
+ name="debug_rain_panel"
+ follows="all"
+ layout="topleft"
+ background_visible="false"
+ border="false"
+ top="0"
+ left="0"
+ height="400"
+ width="412">
+    <scroll_container
+     name="rain_scroll"
+     follows="all"
+     layout="topleft"
+     left="0"
+     top="0"
+     height="400"
+     width="404"
+     opaque="false"
+     reserve_scroll_corner="false">
+    <panel
+     name="rain_content"
+     follows="left|top"
+     layout="topleft"
+     background_visible="false"
+     border="false"
+     top="0"
+     left="0"
+     min_height="120"
+     min_width="300"
+     height="420"
+     width="384">
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top="8"
+     height="14"
+     width="250"
+     name="trace_label"
+     font="SansSerifSmallBold">
+        Column Trace
+    </text>
+    <button
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="20"
+     width="102"
+     name="R_trace" label="Reset group"
+     tool_tip="Reset every setting in this section to its default">
+        <button.commit_callback function="SSAtmo.ResetGroup"
+         parameter="SSAtmoRainTraceDebug" />
+    </button>
+    <check_box
+     control_name="SSAtmoRainTraceDebug"
+     follows="left|top" layout="topleft" left="12" top_pad="6"
+     height="16" width="382" name="rain_trace_check"
+     label="Trace rain columns (where rain can land)"
+     tool_tip="One line per spawn column, from the ground it would land on up toward the weather source. Cyan: the fall reaches the ground, thinning out over the last stretch above the impact. Red: something shelters it and the line stops there - the shelter catches the rain, the ground below stays dry. Violet: the landing sits above the weather deck's top, so no weather source exists over it at all. Amber: the rain shadow capture never mapped the column, so nothing here is known. Lines thin with distance - every column near you, every 2nd further out, every 4th beyond that" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="16"
+     height="14"
+     width="250"
+     name="shadow_label"
+     font="SansSerifSmallBold">
+        Rain Shadow Map
+    </text>
+    <button
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="20"
+     width="102"
+     name="R_shadow" label="Reset group"
+     tool_tip="Reset every setting in this section to its default">
+        <button.commit_callback function="SSAtmo.ResetGroup"
+         parameter="SSAtmoShadowDebugView,SSAtmoShadowDebugStride" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="106"
+      name="T_shadow_view"
+      tool_tip="What the rain shadow overlay draws">
+        Shadow view:
+    </text>
+    <combo_box
+      control_name="SSAtmoShadowDebugView" name="C_shadow_view"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="250"
+      tool_tip="Texel cloud unprojects every captured depth texel to the world point it saw: olive on the ground, green through blue as a hit climbs clear of it, violet for tall structures, magenta where the fall only grazed a near-vertical face and the shelter answer there is a guess. Landing grid is the same capture resampled the way the surface field and the drainage trace read it, loud red on cells the capture never reached and that silently fall back to the bare heightmap. Depth map draws the capture itself in the corner of the screen, holes black, the only view that can be read against the resolution setting. Capture volume draws the ortho box, the band it spans and each tile's state, for regions that never got a usable map at all">
+        <combo_box.item label="Texel cloud" value="0" name="shadow_view_cloud" />
+        <combo_box.item label="Landing grid" value="1" name="shadow_view_shelter" />
+        <combo_box.item label="Depth map on screen" value="2" name="shadow_view_map" />
+        <combo_box.item label="Capture volume" value="3" name="shadow_view_volume" />
+    </combo_box>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="10" height="16" width="106"
+      name="T_shadow_stride"
+      tool_tip="Draw every Nth depth texel; 1 is the map at full resolution and the heaviest to bake">
+        Shadow detail:
+    </text>
+    <slider_bar
+      control_name="SSAtmoShadowDebugStride" name="SB_shadow_stride"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0.25" max_val="32" increment="0.25"
+      tool_tip="Sample spacing of the texel cloud, in depth map texels. 1 draws every texel; higher thins it out. Below 1 the cloud interpolates between texels the way the map is read when sampled - smoother, not more detailed - and is doubled automatically if the map is too fine to bake that many points" />
+    <spinner
+      control_name="SSAtmoShadowDebugStride" name="S_shadow_stride"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0.25" max_val="32" increment="0.25" decimal_digits="2"
+      tool_tip="Sample spacing of the texel cloud, in depth map texels. 1 draws every texel; higher thins it out. Below 1 the cloud interpolates between texels the way the map is read when sampled - smoother, not more detailed - and is doubled automatically if the map is too fine to bake that many points" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_shadow_stride" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoShadowDebugStride" />
+    </button>
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="16"
+     height="14"
+     width="250"
+     name="runoff_label"
+     font="SansSerifSmallBold">
+        Roof Runoff
+    </text>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_runoff_view"
+      tool_tip="What the roof runoff overlay draws, one stage of the shed per view">
+        Runoff view:
+    </text>
+    <combo_box
+      control_name="SSAtmoRunoffDebugView" name="C_runoff_view"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="250"
+      tool_tip="Eaves shows every edge that could shed; shed flow shows the water each holds; spawn gates colours each eave by why it is quiet; drips and streams draws what the shed actually spawned">
+        <combo_box.item label="Eaves" value="0" name="view_eaves" />
+        <combo_box.item label="Shed flow" value="1" name="view_flow" />
+        <combo_box.item label="Spawn gates" value="2" name="view_gates" />
+        <combo_box.item label="Drips and streams" value="3" name="view_live" />
+    </combo_box>
+
+    </panel>
+    </scroll_container>
+</panel>

@@ -810,7 +810,10 @@ void LLFloaterTexturePicker::draw()
             mTentativeLabel->setVisible( false  );
         }
 
-        mDefaultBtn->setEnabled(mImageAssetID != mDefaultImageAssetID || getTentative());
+        // <SS:Nexii> With a generated stand-in, Default returns to it - so it stays live whenever the selection is anything else, including None-adjacent states.
+        mDefaultBtn->setEnabled(mPlaceholderImagep.notNull()
+                                    ? !mImageAssetID.isNull()
+                                    : (mImageAssetID != mDefaultImageAssetID || getTentative()));
         mBlankBtn->setEnabled((mImageAssetID != mBlankImageAssetID && mBlankImageAssetID.notNull()) || getTentative());
         mNoneBtn->setEnabled(mAllowNoTexture && (!mImageAssetID.isNull() || getTentative()));
         mTransparentBtn->setEnabled((mImageAssetID != mTransparentImageAssetID && mTransparentImageAssetID.notNull()) || getTentative()); // <FS:PP> FIRE-5082: "Transparent" button in Texture Panel
@@ -841,6 +844,12 @@ void LLFloaterTexturePicker::draw()
         else
         {
             preview = mTexturep.get();
+        }
+
+        // <SS:Nexii> The owner's generated stand-in is what the preview shows while the selection is None - the picker is then looking at the texture the deck actually runs.
+        if (preview == NULL && mImageAssetID.isNull() && mPlaceholderImagep.notNull())
+        {
+            preview = mPlaceholderImagep;
         }
 
         if( preview )
@@ -1082,7 +1091,15 @@ void LLFloaterTexturePicker::onBtnSetToDefault(void* userdata)
     self->setCanApply(true, true);
     if (self->mOwner)
     {
-        self->setImageID( self->getDefaultImageAssetID() );
+        // <SS:Nexii> With a generated stand-in, Default IS the None state the stand-in previews - the value hands back to null so the owner keeps running its generated texture, and the preview keeps showing it (see draw).
+        if (self->mPlaceholderImagep.notNull())
+        {
+            self->setImageID( LLUUID::null );
+        }
+        else
+        {
+            self->setImageID( self->getDefaultImageAssetID() );
+        }
         self->setTentative(false);
         // Deselect in case inventory has a selected item with the same id
         self->mInventoryPanel->getRootFolder()->clearSelection();
@@ -2168,6 +2185,9 @@ void LLTextureCtrl::showPicker(bool take_focus)
 
             texture_floaterp->setLocalTextureEnabled(mAllowLocalTexture);
             texture_floaterp->setBakeTextureEnabled(mBakeTextureEnabled && mInventoryPickType != PICK_MATERIAL);
+
+            // <SS:Nexii> The generated stand-in rides along: the picker previews it while None, and its Default button returns to it instead of to some asset id.
+            texture_floaterp->setPlaceholderImage(mPlaceholderImagep);
         }
 
         LLFloater* root_floater = gFloaterView->getParentFloater(this);
@@ -2562,6 +2582,9 @@ void LLTextureCtrl::draw()
         mTexturep = NULL;
         mGLTFMaterial = NULL;
         mGLTFPreview = NULL;
+
+        // <SS:Nexii> A placeholder stands in when the field runs on generated content: the swatch previews it (dimmed, in the shared draw below) so the panel shows what is actually in use - while the value itself stays a honest None, and commits stay None with it.
+        preview = mPlaceholderImagep;
     }
 
     // Border
@@ -2576,14 +2599,16 @@ void LLTextureCtrl::draw()
 
     // If we're in a focused floater, don't apply the floater's alpha to the texture (STORM-677).
     const F32 alpha = getTransparencyType() == TT_ACTIVE ? 1.0f : getCurrentTransparency();
+    // <SS:Nexii> The placeholder previews slightly dimmed, so it reads as what is in use rather than as a value the user set.
+    const F32 draw_alpha = (preview.get() == mPlaceholderImagep.get()) ? alpha * 0.8f : alpha;
     if( preview )
     {
         if( preview->getComponents() == 4 )
         {
-            gl_rect_2d_checkerboard( interior, alpha );
+            gl_rect_2d_checkerboard( interior, draw_alpha );
         }
 
-        gl_draw_scaled_image( interior.mLeft, interior.mBottom, interior.getWidth(), interior.getHeight(), preview, UI_VERTEX_COLOR % alpha);
+        gl_draw_scaled_image( interior.mLeft, interior.mBottom, interior.getWidth(), interior.getHeight(), preview, UI_VERTEX_COLOR % draw_alpha);
         preview->addTextureStats( (F32)(interior.getWidth() * interior.getHeight()) );
         // <FS:Ansariel> Mask texture if desired
         if (mIsMasked)

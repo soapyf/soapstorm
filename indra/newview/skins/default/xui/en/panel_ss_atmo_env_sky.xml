@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<panel
+ border="true"
+ follows="all"
+ label="Sky"
+ layout="topleft"
+ left="0"
+ name="panel_ss_atmo_env_sky"
+ top="0"
+ width="580"
+ height="580">
+    <!-- <SS:Nexii> Atmo Magic: Sky tab - a thin container for two sub-tabs. Scattering is what the air is made of and what light does in it (EEP's atmosphere parameter set, PBR dials included, plus the rainbow and halo optics EEP files beside them); Light & Glow is what the sun and moon contribute to it. Deliberately NOT called Atmosphere: the old tab held a sub-tab of the same name, which made the two impossible to tell apart in speech or bug reports. Scene gamma, probe ambiance and the horizon clip left for Look - those describe the renderer, not the sky. Star brightness left for Space, with the bodies it belongs to. Both sub-tabs load by filename exactly like the main tab_container's panels. See doc/atmo_magic_env_ui.md. -->
+    <tab_container
+     follows="all"
+     layout="topleft"
+     left="4"
+     top="4"
+     right="-4"
+     bottom="-4"
+     halign="left"
+     tab_position="top"
+     tab_width="110"
+     tab_padding_right="2"
+     name="sky_sub_tabs">
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="sky_scattering_tab"
+         label="Scattering"
+         filename="panel_ss_atmo_env_sky_scattering.xml" />
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="sky_light_tab"
+         label="Light &amp; Glow"
+         filename="panel_ss_atmo_env_sky_light.xml" />
+    </tab_container>
+</panel>

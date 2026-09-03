@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<floater
+ legacy_header_height="18"
+ can_resize="true"
+ height="480"
+ layout="topleft"
+ min_height="220"
+ min_width="420"
+ name="floater_ss_sound_analysis"
+ save_rect="true"
+ single_instance="true"
+ title="Sound Analysis"
+ width="640">
+    <scroll_container
+     color="DkGray2"
+     opaque="true"
+     follows="all"
+     layout="topleft"
+     left="6"
+     top="24"
+     width="628"
+     height="450"
+     name="analysis_scroll"
+     reserve_scroll_corner="false" />
+</floater>

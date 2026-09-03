@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<panel
+ border="true"
+ follows="all"
+ label="Weather"
+ layout="topleft"
+ left="0"
+ name="panel_ss_atmo_env_weather"
+ top="0"
+ width="580"
+ height="580">
+    <!-- <SS:Nexii> Atmo Magic: Weather tab - a thin container for three sub-tabs, split by what each set is in the simulation. Conditions holds the drivers (what the air is doing), Precipitation and Lightning hold the two outputs. Lightning is not a driver and carries enough flags of its own to crowd the drivers out of one page, which is why it is a sub-tab rather than a header group. All three load by filename exactly like the main tab_container's panels. See doc/atmo_magic_env_ui.md. -->
+    <tab_container
+     follows="all"
+     layout="topleft"
+     left="4"
+     top="4"
+     right="-4"
+     bottom="-4"
+     halign="left"
+     tab_position="top"
+     tab_width="110"
+     tab_padding_right="2"
+     name="weather_sub_tabs">
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="weather_conditions_tab"
+         label="Conditions"
+         filename="panel_ss_atmo_env_weather_conditions.xml" />
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="weather_precipitation_tab"
+         label="Precipitation"
+         filename="panel_ss_atmo_env_weather_precipitation.xml" />
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="weather_lightning_tab"
+         label="Lightning"
+         filename="panel_ss_atmo_env_weather_lightning.xml" />
+    </tab_container>
+</panel>

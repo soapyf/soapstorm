@@ -48,6 +48,13 @@
 
     <panel
      class="panel_preference"
+     filename="panel_preferences_soapstorm_atmo.xml"
+     label="Atmo Magic"
+     layout="topleft"
+     help_topic="preferences_soapstorm_tab"
+     name="soapstorm_atmo" />
+  
+    <panel
      filename="panel_preferences_ss_roc.xml"
      label="Region Object Cache"
      layout="topleft"

@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <SS:Nexii> The Effects & LOD floater's LOD tab: the one place to go when the weather
+     costs more than the machine has. Precipitation's three distance tiers and the cloud
+     field's puff ceiling are the same kind of decision - how much of the effect to draw,
+     not what it should look like - so they sit together here rather than beside the look
+     dials of the systems they belong to. See doc/atmo_magic_fx_ui.md. -->
+<panel
+ name="fx_lod_panel"
+ follows="all"
+ layout="topleft"
+ background_visible="false"
+ border="false"
+ top="0"
+ left="0"
+ height="400"
+ width="412">
+    <scroll_container
+     name="lod_scroll"
+     follows="all"
+     layout="topleft"
+     left="0"
+     top="0"
+     height="400"
+     width="404"
+     opaque="false"
+     reserve_scroll_corner="false">
+    <panel
+     name="lod_content"
+     follows="left|top"
+     layout="topleft"
+     background_visible="false"
+     border="false"
+     top="0"
+     left="0"
+     min_height="120"
+     min_width="300"
+     height="265"
+     width="384">
+    <text
+     follows="left|top" layout="topleft" left="12" top="8"
+     height="14" width="250" name="lod_label" font="SansSerifSmallBold">
+        Detail Tier Distances
+    </text>
+    <button
+     follows="left|top" layout="topleft"
+     left_pad="4" top_delta="-3" height="20" width="102"
+     name="R_lod" label="Reset group"
+     tool_tip="Reset every setting in this section to its default">
+        <button.commit_callback function="SSAtmo.ResetGroup"
+         parameter="SSAtmoLodDrops,SSAtmoLodClusters,SSAtmoLodSheets" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="122"
+      name="T_SSAtmoLodDrops"
+      tool_tip="Meters around the camera with fully modelled individual drops">
+        Individual drops:
+    </text>
+    <slider_bar
+      control_name="SSAtmoLodDrops" name="SB_SSAtmoLodDrops"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="8" max_val="96" increment="1"
+      tool_tip="Meters around the camera with fully modelled individual drops" />
+    <spinner
+      control_name="SSAtmoLodDrops" name="S_SSAtmoLodDrops"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="8" max_val="96" increment="1" decimal_digits="0"
+      tool_tip="Meters around the camera with fully modelled individual drops" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoLodDrops" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoLodDrops" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="122"
+      name="T_SSAtmoLodClusters"
+      tool_tip="Meters out to which clustered multi-drop particles carry the rain">
+        Drop clusters:
+    </text>
+    <slider_bar
+      control_name="SSAtmoLodClusters" name="SB_SSAtmoLodClusters"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="24" max_val="256" increment="2"
+      tool_tip="Meters out to which clustered multi-drop particles carry the rain" />
+    <spinner
+      control_name="SSAtmoLodClusters" name="S_SSAtmoLodClusters"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="24" max_val="256" increment="2" decimal_digits="0"
+      tool_tip="Meters out to which clustered multi-drop particles carry the rain" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoLodClusters" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoLodClusters" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="122"
+      name="T_SSAtmoLodSheets"
+      tool_tip="Meters out to which large distant shower curtains are drawn">
+        Shower sheets:
+    </text>
+    <slider_bar
+      control_name="SSAtmoLodSheets" name="SB_SSAtmoLodSheets"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="64" max_val="512" increment="4"
+      tool_tip="Meters out to which large distant shower curtains are drawn" />
+    <spinner
+      control_name="SSAtmoLodSheets" name="S_SSAtmoLodSheets"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="64" max_val="512" increment="4" decimal_digits="0"
+      tool_tip="Meters out to which large distant shower curtains are drawn" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoLodSheets" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoLodSheets" />
+    </button>
+
+    <text
+     follows="left|top" layout="topleft" left="12" top_pad="12"
+     height="14" width="250" name="cloud_lod_label" font="SansSerifSmallBold">
+        Volumetric Clouds
+    </text>
+    <button
+     follows="left|top" layout="topleft"
+     left_pad="4" top_delta="-3" height="20" width="102"
+     name="R_cloud_lod" label="Reset group"
+     tool_tip="Reset every setting in this section to its default. The field's own look lives on the Clouds tab and is not touched">
+        <button.commit_callback function="SSAtmo.ResetGroup"
+         parameter="SSAtmoCloudPuffsPerCell,SSAtmoCloudPuffBudget" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="122"
+      name="T_SSAtmoCloudPuffsPerCell"
+      tool_tip="How many puffs the field places in each 260m cell it keeps. Lower thins the field toward one body per cell; higher fills the same cells more thickly. It does not open holes - that is the sky's coverage - and it costs nothing in the far field, which already collapses to one puff per cell">
+        Field density:
+    </text>
+    <slider_bar
+      control_name="SSAtmoCloudPuffsPerCell" name="SB_SSAtmoCloudPuffsPerCell"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="1" max_val="8" increment="1"
+      tool_tip="How many puffs the field places in each 260m cell it keeps. Lower thins the field toward one body per cell; higher fills the same cells more thickly. It does not open holes - that is the sky's coverage - and it costs nothing in the far field, which already collapses to one puff per cell" />
+    <spinner
+      control_name="SSAtmoCloudPuffsPerCell" name="S_SSAtmoCloudPuffsPerCell"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="1" max_val="8" increment="1" decimal_digits="0"
+      tool_tip="How many puffs the field places in each 260m cell it keeps. Lower thins the field toward one body per cell; higher fills the same cells more thickly. It does not open holes - that is the sky's coverage - and it costs nothing in the far field, which already collapses to one puff per cell" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoCloudPuffsPerCell" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoCloudPuffsPerCell" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="122"
+      name="T_SSAtmoCloudPuffBudget"
+      tool_tip="Most puffs one cloud deck may draw at once. Over budget the field keeps the nearest and drops the farthest, so lowering this pulls the deck's far edge in rather than thinning the sky overhead">
+        Puff budget:
+    </text>
+    <slider_bar
+      control_name="SSAtmoCloudPuffBudget" name="SB_SSAtmoCloudPuffBudget"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="64" max_val="4000" increment="20"
+      tool_tip="Most puffs one cloud deck may draw at once. Over budget the field keeps the nearest and drops the farthest, so lowering this pulls the deck's far edge in rather than thinning the sky overhead" />
+    <spinner
+      control_name="SSAtmoCloudPuffBudget" name="S_SSAtmoCloudPuffBudget"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="64" max_val="8000" increment="20" decimal_digits="0"
+      tool_tip="Most puffs one cloud deck may draw at once. Over budget the field keeps the nearest and drops the farthest, so lowering this pulls the deck's far edge in rather than thinning the sky overhead" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoCloudPuffBudget" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoCloudPuffBudget" />
+    </button>
+    <!-- Two decks can be live at once (the storm field and a sky build's under deck), so
+         the drawn total is up to twice this. Per deck rather than shared because the two
+         are built independently and a shared pool would let whichever built first starve
+         the other - the same reason blowing snow keeps its own share of the particle
+         budget rather than competing with falling snow for one. -->
+    <text
+     follows="left|top" layout="topleft" left="12" top_pad="8"
+     height="26" width="356" name="puff_budget_note" font="SansSerifSmall" word_wrap="true">
+        Per deck - a sky with an under deck draws up to twice this.
+    </text>
+    </panel>
+    </scroll_container>
+</panel>

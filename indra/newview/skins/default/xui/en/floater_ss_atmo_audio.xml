@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<floater
+ positioning="cascading"
+ can_minimize="true"
+ can_resize="false"
+ height="330"
+ layout="topleft"
+ name="floater_ss_atmo_audio"
+ save_rect="true"
+ single_instance="true"
+ title="Audio Mix"
+ width="400">
+    <text
+     follows="left|top" layout="topleft" left="12" top="26"
+     height="14" width="376" name="mix_label" font="SansSerifSmallBold">
+        Mix
+    </text>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="142"
+      name="T_SSAtmoVolumeMaster"
+      tool_tip="Overall volume of every Atmo Magic sound">
+        Master:
+    </text>
+    <slider_bar
+      control_name="SSAtmoVolumeMaster" name="SB_SSAtmoVolumeMaster"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="0" max_val="1" increment="0.01"
+      tool_tip="Overall volume of every Atmo Magic sound" />
+    <spinner
+      control_name="SSAtmoVolumeMaster" name="S_SSAtmoVolumeMaster"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="1" increment="0.01" decimal_digits="2"
+      tool_tip="Overall volume of every Atmo Magic sound" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoVolumeMaster" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoVolumeMaster" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="142"
+      name="T_SSAtmoVolumeAmbient"
+      tool_tip="The outdoor beds and the rain-on-roof beds">
+        Precipitation ambient:
+    </text>
+    <slider_bar
+      control_name="SSAtmoVolumeAmbient" name="SB_SSAtmoVolumeAmbient"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="0" max_val="1" increment="0.01"
+      tool_tip="The outdoor beds and the rain-on-roof beds" />
+    <spinner
+      control_name="SSAtmoVolumeAmbient" name="S_SSAtmoVolumeAmbient"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="1" increment="0.01" decimal_digits="2"
+      tool_tip="The outdoor beds and the rain-on-roof beds" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoVolumeAmbient" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoVolumeAmbient" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="142"
+      name="T_SSAtmoVolumeWind"
+      tool_tip="Wind is not tied to a precipitation type, so it mixes separately">
+        Wind loops:
+    </text>
+    <slider_bar
+      control_name="SSAtmoVolumeWind" name="SB_SSAtmoVolumeWind"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="0" max_val="1" increment="0.01"
+      tool_tip="Wind is not tied to a precipitation type, so it mixes separately" />
+    <spinner
+      control_name="SSAtmoVolumeWind" name="S_SSAtmoVolumeWind"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="1" increment="0.01" decimal_digits="2"
+      tool_tip="Wind is not tied to a precipitation type, so it mixes separately" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoVolumeWind" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoVolumeWind" />
+    </button>
+
+    <text
+     follows="left|top" layout="topleft" left="12" top_pad="14"
+     height="14" width="376" name="space_label" font="SansSerifSmallBold">
+        Space
+    </text>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="142"
+      name="T_SSAtmoSoundResponse"
+      tool_tip="How fast the beds crossfade when you move indoors or outdoors; higher is snappier">
+        Fade speed:
+    </text>
+    <slider_bar
+      control_name="SSAtmoSoundResponse" name="SB_SSAtmoSoundResponse"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="0.5" max_val="10" increment="0.1"
+      tool_tip="How fast the beds crossfade when you move indoors or outdoors; higher is snappier" />
+    <spinner
+      control_name="SSAtmoSoundResponse" name="S_SSAtmoSoundResponse"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0.5" max_val="10" increment="0.1" decimal_digits="1"
+      tool_tip="How fast the beds crossfade when you move indoors or outdoors; higher is snappier" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoSoundResponse" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoSoundResponse" />
+    </button>
+
+    <text
+     follows="left|top" layout="topleft" left="12" top_pad="14"
+     height="14" width="376" name="assets_label" font="SansSerifSmallBold">
+        Assets
+    </text>
+    <text
+     follows="left|top" layout="topleft" left="12" top_pad="6"
+     height="28" width="376" word_wrap="true" font="SansSerifSmall" name="assets_note">
+        Precipitation sound packs live in each preset. Wind loops are global and are set in the Assets floater.
+    </text>
+</floater>

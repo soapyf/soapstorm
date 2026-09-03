@@ -76,6 +76,9 @@ public:
 
     void pushWaterPlanes(int pass);
 
+    // <SS:Nexii> The water haze pass re-pushes this pool's faces through the base LLFacePool loop; overridden so it routes through the same stock-versus-Atmo family gate as pushWaterPlanes.
+    void pushFaceGeometry() override;
+
 protected:
     void renderOpaqueLegacyWater();
 

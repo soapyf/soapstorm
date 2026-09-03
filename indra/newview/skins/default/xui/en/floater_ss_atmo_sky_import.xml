@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+ <floater
+ positioning="cascading"
+ can_minimize="false"
+ can_resize="false"
+ height="292"
+ layout="topleft"
+ name="floater_ss_atmo_sky_import"
+ save_rect="true"
+ single_instance="true"
+ title="Import EEP Sky"
+ width="440">
+    <!-- <SS:Nexii> Atmo Magic: a dropped EEP sky arrives as one asset, but its values read as separate looks - the haze is not the cloud layer is not the light. This floater asks which groupings to stamp into the track before anything happens; the fetch and the full-perm gate have already run by the time it opens, so every group listed here is real, imported data waiting for a yes. Groupings deliberately mirror what a sky actually populates (the Atmosphere & Lighting and Sky Dome tabs) rather than the editor's whole tab set - a sky cannot bring water, weather or planets with it. The Sun and Moon rows are conditional: they appear only when the target track still carries the STANDARD sun/moon bodies, because a sky states what its discs draw like (angular scale, texture) while a body stores what it is, and the import translates one into the other rather than stamping keyframes - something it may only do to a body the author has not redesigned. -->
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top="8"
+     height="28"
+     width="410"
+     name="intro_text"
+     wrap="true">
+        The dropped sky's values become keyframes at the preview head. Choose which parts of it to take.
+    </text>
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="6"
+     height="16"
+     width="410"
+     name="target_text"
+     font="SansSerifSmallBold">
+        -
+    </text>
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="12"
+     height="16"
+     width="410"
+     name="import_atmosphere"
+     tool_tip="Blue horizon and density, haze horizon and density, sky moisture, droplet radius, ice level, density and distance multipliers, max altitude."
+     label="Atmosphere - haze, density, sky ceiling" />
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="6"
+     height="16"
+     width="410"
+     name="import_lighting"
+     tool_tip="Ambient and sunlight colour, scene gamma, reflection probe ambiance, and the sun and moon glow size and focus."
+     label="Lighting - colours, gamma, sun glow" />
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="6"
+     height="16"
+     width="410"
+     name="import_celestial"
+     tool_tip="Star brightness and moon brightness only."
+     label="Celestial - star and moon brightness" />
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="6"
+     height="16"
+     width="410"
+     name="import_sun"
+     tool_tip="The sky's sun disc becomes this track's standard sun body: its disc scale sets the body's diameter at its current orbit, and a custom sun texture replaces the body's. Offered only while the sun is still the standard one."
+     label="Sun - resize and retexture the standard sun body" />
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="6"
+     height="16"
+     width="410"
+     name="import_moon"
+     tool_tip="The sky's moon disc becomes this track's standard moon body: its disc scale sets the body's diameter at its current orbit, and a custom moon texture replaces the body's. Offered only while the moon is still the standard one."
+     label="Moon - resize and retexture the standard moon body" />
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="6"
+     height="16"
+     width="410"
+     name="import_clouds"
+     tool_tip="The legacy Windlight cloud plane's whole parameter set: colour, coverage, scale, variance, scroll rate, density and detail, noise texture."
+     label="Clouds - the legacy dome layer" />
+
+    <button
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="16"
+     height="23"
+     width="100"
+     name="import_button"
+     label="Import" />
+
+    <button
+     follows="left|top"
+     layout="topleft"
+     left_pad="8"
+     height="23"
+     width="100"
+     name="cancel_button"
+     label="Cancel" />
+</floater>

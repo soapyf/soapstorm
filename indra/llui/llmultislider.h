@@ -99,6 +99,9 @@ public:
     /*virtual*/ void    setValue(const LLSD& value) override;
     /*virtual*/ LLSD    getValue() const override { return mValue; }
 
+    // <SS:Nexii> Thumb rects are cached pixel positions computed against the rect at value-set time; without this they froze at the widget's initial size and a resizable floater stretched the view around thumbs that stayed put.
+    /*virtual*/ void reshape(S32 width, S32 height, bool called_from_parent = true) override;
+
     boost::signals2::connection setMouseDownCallback( const commit_signal_t::slot_type& cb );
     boost::signals2::connection setMouseUpCallback( const commit_signal_t::slot_type& cb );
 
@@ -120,6 +123,8 @@ public:
     S32             getMaxNumSliders() const { return mMaxNumSliders; }
     S32             getCurNumSliders() const { return static_cast<S32>(mValue.size()); }
     F32             getOverlapThreshold() const { return mOverlapThreshold; }
+    // <SS:Nexii> Settable so a rail whose value range changes at runtime can keep the threshold proportionate: a gap authored for a 0-4096m scale blocks every marker once the same rail is fitted to a 300m one.
+    void            setOverlapThreshold(F32 threshold) { mOverlapThreshold = threshold; }
     bool            canAddSliders() const { return mValue.size() < mMaxNumSliders; }
 
 

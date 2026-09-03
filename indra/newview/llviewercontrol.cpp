@@ -1397,6 +1397,8 @@ void settings_setup_listeners()
     setting_setup_signal_listener(gSavedSettings, "RenderAnisotropic", handleAnisotropicChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderShadowResolutionScale", handleShadowsResized);
     setting_setup_signal_listener(gSavedSettings, "RenderGlow", handleReleaseGLBufferChanged);
+    // <SS:Nexii> The Atmo Magic master switch rebuilds shaders: stock sky/atmosphere shaders compile PRISTINE with it off and compile the SS_ATMO variants with it on, so every Atmo-era fix to shared shading lives behind the toggle instead of quietly changing the vanilla viewer. Toggling pays one shader rebuild, which is what this listener class exists for.
+    setting_setup_signal_listener(gSavedSettings, "SSAtmoEnabled", handleSetShaderChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderGlow", handleSetShaderChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderGlowResolutionPow", handleReleaseGLBufferChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderGlowHDR", handleReleaseGLBufferChanged);

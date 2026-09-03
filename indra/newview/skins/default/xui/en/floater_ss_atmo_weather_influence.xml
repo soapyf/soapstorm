@@ -1,0 +1,397 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<floater
+ positioning="cascading"
+ can_minimize="true"
+ can_resize="false"
+ height="574"
+ layout="topleft"
+ name="floater_ss_atmo_weather_influence"
+ save_rect="true"
+ single_instance="true"
+ title="Weather Influence"
+ width="520">
+    <!-- <SS:Nexii> Atmo Magic: how far the weather cube may bend the authored sky. One floater rather than a section per tab, opened from a button on each tab it affects: the mappings have to be compared against each other to be tuned sensibly ("is my storm darkening fighting my rainbow window?"), which splitting them across four tabs would prevent. Sections are grouped by the tab whose parameters each mapping reaches, so a row is findable from wherever the author noticed the effect. Nothing here is keyframable - see SSAtmoEnvWeatherInfluence on why - so there are no keyframe diamonds or chevrons anywhere in this floater. Every row is checkbox + strength + a live readout of what that mapping is doing RIGHT NOW at the preview head, the same "computed values in a disabled control" idiom the Auto weather fields use. -->
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top="8"
+     height="28"
+     width="490"
+     name="intro_text"
+     wrap="true">
+        Weather modulates the sky you authored - it never edits it. Turn a mapping off and that parameter renders exactly as keyframed.
+    </text>
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="6"
+     height="16"
+     width="480"
+     name="master_enabled"
+     label="Weather drives the sky on this track" />
+
+    <!-- ================= Clouds ================= -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="12"
+     height="14"
+     width="480"
+     name="clouds_header"
+     font="SansSerifSmallBold">
+        Clouds
+    </text>
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="25"
+     top_pad="6"
+     height="16"
+     width="250"
+     name="cover_enabled"
+     tool_tip="Okta cloud cover from the forecast lifts the Sky Dome's coverage. Authored coverage is never reduced."
+     label="Forecast cover lifts the cloud dome" />
+    <slider
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-2"
+     height="18"
+     width="140"
+     name="cover_strength"
+     show_text="false"
+     min_val="0.0"
+     max_val="1.0"
+     increment="0.05"
+     initial_value="1.0" />
+    <text
+     follows="left|top"
+     layout="topleft"
+     left_pad="8"
+     height="14"
+     width="80"
+     name="cover_readout"
+     font="SansSerifSmall">
+        -
+    </text>
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="25"
+     top_pad="6"
+     height="16"
+     width="250"
+     name="wind_enabled"
+     tool_tip="Wind heading and speed add to the Sky Dome's authored scroll rate, so the cloud layer travels with the wind."
+     label="Wind drives cloud drift" />
+    <slider
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-2"
+     height="18"
+     width="140"
+     name="wind_strength"
+     show_text="false"
+     min_val="0.0"
+     max_val="1.0"
+     increment="0.05"
+     initial_value="1.0" />
+    <text
+     follows="left|top"
+     layout="topleft"
+     left_pad="8"
+     height="14"
+     width="80"
+     name="wind_readout"
+     font="SansSerifSmall">
+        -
+    </text>
+
+    <!-- ================= Atmosphere ================= -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="14"
+     height="14"
+     width="480"
+     name="atmosphere_header"
+     font="SansSerifSmallBold">
+        Atmosphere
+    </text>
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="25"
+     top_pad="6"
+     height="16"
+     width="250"
+     name="storm_enabled"
+     tool_tip="Convection past the breezy band churns the cloud layer and pulls gamma and ambient light down - the design's pitch-black boiling sky."
+     label="Storms darken the sky" />
+    <slider
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-2"
+     height="18"
+     width="140"
+     name="storm_strength"
+     show_text="false"
+     min_val="0.0"
+     max_val="1.0"
+     increment="0.05"
+     initial_value="1.0" />
+    <text
+     follows="left|top"
+     layout="topleft"
+     left_pad="8"
+     height="14"
+     width="80"
+     name="storm_readout"
+     font="SansSerifSmall">
+        -
+    </text>
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="25"
+     top_pad="6"
+     height="16"
+     width="250"
+     name="cold_enabled"
+     tool_tip="Sub-freezing, dry air shifts the blue density crisper - red down, blue up. It no longer touches ice: halos come from the Ice halos row, which needs both cold air and moisture."
+     label="Cold dry air sharpens the sky colour" />
+    <slider
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-2"
+     height="18"
+     width="140"
+     name="cold_strength"
+     show_text="false"
+     min_val="0.0"
+     max_val="1.0"
+     increment="0.05"
+     initial_value="1.0" />
+    <text
+     follows="left|top"
+     layout="topleft"
+     left_pad="8"
+     height="14"
+     width="80"
+     name="cold_readout"
+     font="SansSerifSmall">
+        -
+    </text>
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="25"
+     top_pad="6"
+     height="16"
+     width="250"
+     name="rainbow_enabled"
+     tool_tip="When rain stops with the sun up and low, the sky's moisture level spikes and decays over the following minutes."
+     label="Rainbows after rain" />
+    <slider
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-2"
+     height="18"
+     width="140"
+     name="rainbow_strength"
+     show_text="false"
+     min_val="0.0"
+     max_val="1.0"
+     increment="0.05"
+     initial_value="1.0" />
+    <text
+     follows="left|top"
+     layout="topleft"
+     left_pad="8"
+     height="14"
+     width="80"
+     name="rainbow_readout"
+     font="SansSerifSmall">
+        -
+    </text>
+
+    <!-- ================= Optics ================= -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="14"
+     height="14"
+     width="480"
+     name="optics_header"
+     font="SansSerifSmallBold">
+        Optics
+    </text>
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="25"
+     top_pad="6"
+     height="16"
+     width="250"
+     name="corona_enabled"
+     tool_tip="Diffraction rings around the light from liquid water drops in the air - mist, or droplets lingering after rain (a few minutes), or light drizzle. Freezes out below about -4C."
+     label="Corona rings in misty air" />
+    <slider
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-2"
+     height="18"
+     width="140"
+     name="corona_strength"
+     show_text="false"
+     min_val="0.0"
+     max_val="1.0"
+     increment="0.05"
+     initial_value="1.0" />
+    <text
+     follows="left|top"
+     layout="topleft"
+     left_pad="8"
+     height="14"
+     width="80"
+     name="corona_readout"
+     font="SansSerifSmall">
+        -
+    </text>
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="25"
+     top_pad="6"
+     height="16"
+     width="250"
+     name="ice_halo_enabled"
+     tool_tip="Ice halos derived from cold moist air - crystals need both, so a dry -30C sky shows none. Small platelets make the 22 deg halo; deep cold and a little convection make the 46 deg halo family; still air aligns plates for sundogs and the circumzenithal arc."
+     label="Ice halos from cold moist air" />
+    <slider
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-2"
+     height="18"
+     width="140"
+     name="ice_halo_strength"
+     show_text="false"
+     min_val="0.0"
+     max_val="1.0"
+     increment="0.05"
+     initial_value="1.0" />
+    <text
+     follows="left|top"
+     layout="topleft"
+     left_pad="8"
+     height="14"
+     width="80"
+     name="ice_halo_readout"
+     font="SansSerifSmall">
+        -
+    </text>
+
+    <!-- ================= Water ================= -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="14"
+     height="14"
+     width="480"
+     name="water_header"
+     font="SansSerifSmallBold">
+        Water
+    </text>
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="25"
+     top_pad="6"
+     height="16"
+     width="250"
+     name="water_fog_enabled"
+     tool_tip="In rain, thickens the underwater fog on the Water tab. Weather never touches the authored haze."
+     label="Rain thickens water fog" />
+    <slider
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-2"
+     height="18"
+     width="140"
+     name="water_fog_strength"
+     show_text="false"
+     min_val="0.0"
+     max_val="1.0"
+     increment="0.05"
+     initial_value="1.0" />
+    <text
+     follows="left|top"
+     layout="topleft"
+     left_pad="8"
+     height="14"
+     width="80"
+     name="water_fog_readout"
+     font="SansSerifSmall">
+        -
+    </text>
+
+    <!-- The readout column needs saying once rather than per row. -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="16"
+     height="28"
+     width="490"
+     name="readout_help"
+     wrap="true"
+     font="SansSerifSmall">
+        The figure beside each strength is what that mapping is doing right now, at the preview time - 0% means the weather is not currently asking for that effect at all.
+    </text>
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="4"
+     height="14"
+     width="490"
+     name="track_text"
+     font="SansSerifSmallBold">
+        -
+    </text>
+
+    <button
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="8"
+     height="23"
+     width="150"
+     name="reset_button"
+     tool_tip="Every mapping on, every strength at full - the defaults a new environment starts with."
+     label="Reset to Defaults" />
+</floater>

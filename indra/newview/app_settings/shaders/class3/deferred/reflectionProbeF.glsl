@@ -533,6 +533,13 @@ vec3 tapRefMap(vec3 pos, vec3 dir, out float w, out float dw, float lod, vec3 c,
     return ret.rgb;
 }
 
+// <SS:Nexii> Tap the sky probe (probe 0, the infinite-distance default probe) straight along a direction, no parallax and no influence weighting - the full radiance of the sky in that direction. dir is a view space mirror direction (GL normalizes the lookup vector), roughness is the 0-1 perceptual roughness the caller is shading with. The sky mirror wants the sky as an IMAGE rather than as the average a wave-scattered direction at a full mip returns, so it quarters the mip the wave tap would use - a quarter-rough water surface still smears the reflection the way a wet mirror does, which is what keeps this a water surface rather than a pane of glass.
+vec3 ssSampleSkyProbe(vec3 dir, float roughness)
+{
+    float lod = clamp(roughness * max_probe_lod * 0.25, 0.0, max_probe_lod);
+    return textureLod(reflectionProbes, vec4(env_mat * dir, refIndex[0].x), lod).rgb * refParams[0].y;
+}
+
 // Tap an irradiance map
 // pos - position of pixel
 // dir - pixel normal

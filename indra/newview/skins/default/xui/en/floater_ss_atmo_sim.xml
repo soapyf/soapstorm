@@ -1,0 +1,613 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<floater
+ positioning="cascading"
+ can_minimize="true"
+ can_resize="true"
+ height="720"
+ min_height="240"
+ min_width="424"
+ layout="topleft"
+ name="floater_ss_atmo_sim"
+ save_rect="true"
+ single_instance="true"
+ title="Simulation"
+ width="424">
+
+    <!-- Every row below is laid out against the panel, not the floater. The
+         panel is fixed height and taller than the window; the container is
+         what follows a resize. -->
+    <scroll_container
+     color="DkGray2"
+     opaque="true"
+     follows="all"
+     layout="topleft"
+     left="0"
+     top="16"
+     height="684"
+     width="424"
+     name="sim_scroll"
+     reserve_scroll_corner="false">
+    <panel
+     name="sim_panel"
+     follows="left|top"
+     layout="topleft"
+     left="0"
+     top="0"
+       width="406"
+       height="810"
+       background_visible="false">
+
+    <!-- <SS:Nexii> Snow: the layer enable and master dial for quick toggling while tuning. The snow debug views moved to the Atmo Magic Debug floater. -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top="10"
+     height="14"
+     width="382"
+     name="snow_label"
+     font="SansSerifSmallBold">
+        Snow
+    </text>
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="28"
+     width="382"
+     name="snow_help"
+     word_wrap="true"
+     font="SansSerifSmall">
+        Blowing snow lifted off the ground by the wind, and the local fog veil that comes with a whiteout. Both only run for snow types in freezing temperatures.
+    </text>
+    <check_box
+     control_name="SSAtmoWhiteout"
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     height="16"
+     width="382"
+     name="whiteout_enable_check"
+     label="Render the whiteout veil"
+     tool_tip="The local, height-limited fog layer. Off freezes the layer even mid-storm; it ramps back in when turned on" />
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="106"
+      name="T_whiteout_strength"
+      tool_tip="Master dial on the whiteout layer; 0 removes it entirely">
+        Whiteout:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWhiteoutStrength" name="SB_whiteout_strength"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0" max_val="2" increment="0.05"
+      tool_tip="Master dial on the whiteout layer; 0 removes it entirely" />
+    <spinner
+      control_name="SSAtmoWhiteoutStrength" name="S_whiteout_strength"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="2" increment="0.05" decimal_digits="2"
+      tool_tip="Master dial on the whiteout layer; 0 removes it entirely" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_whiteout_strength" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWhiteoutStrength" />
+    </button>
+
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="16"
+     height="14"
+     width="382"
+     name="shadow_label"
+     font="SansSerifSmallBold">
+        Rain Shadow Map
+    </text>
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="28"
+     width="382"
+     name="shadow_help"
+     word_wrap="true"
+     font="SansSerifSmall">
+        A depth capture along the fall direction, per region, deciding what catches each drop.
+    </text>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_shadow_res"
+      tool_tip="Texels across a region; 1024 is about 0.25m accuracy on a 256m region">
+        Resolution:
+    </text>
+    <slider_bar
+      control_name="SSAtmoShadowRes" name="SB_shadow_res"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="128" max_val="2048" increment="128"
+      tool_tip="Texels across a region; 1024 is about 0.25m accuracy on a 256m region" />
+    <spinner
+      control_name="SSAtmoShadowRes" name="S_shadow_res"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="128" max_val="2048" increment="128" decimal_digits="0"
+      tool_tip="Texels across a region; 1024 is about 0.25m accuracy on a 256m region" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_shadow_res" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoShadowRes" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_shadow_age"
+      tool_tip="Seconds between full recaptures; local prim updates also queue one">
+        Refresh every:
+    </text>
+    <slider_bar
+      control_name="SSAtmoShadowMaxAge" name="SB_shadow_age"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="5" max_val="300" increment="5"
+      tool_tip="Seconds between full recaptures; local prim updates also queue one" />
+    <spinner
+      control_name="SSAtmoShadowMaxAge" name="S_shadow_age"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="5" max_val="300" increment="5" decimal_digits="0"
+      tool_tip="Seconds between full recaptures; local prim updates also queue one" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_shadow_age" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoShadowMaxAge" />
+    </button>
+    <button
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="10"
+     height="23"
+     width="150"
+     name="shadow_rebuild_button"
+     label="Recapture now"
+     tool_tip="Drop every cached rain shadow map and capture them again" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="16"
+     height="14"
+     width="382"
+     name="runoff_label"
+     font="SansSerifSmallBold">
+        Roof runoff
+    </text>
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="44"
+     width="382"
+     name="runoff_help"
+     word_wrap="true"
+     font="SansSerifSmall">
+        Rain that lands on a roof runs to its edges and drips off the eaves into the street below. Only the roofs near the camera shed, and only while it is actually raining.
+    </text>
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     height="16"
+     width="382"
+     control_name="SSAtmoRunoff"
+     name="runoff_enable_check"
+     label="Shed runoff off roof edges"
+     tool_tip="Rain only; snow settles on a roof rather than running off it" />
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="106"
+      name="T_runoff_scale"
+      tool_tip="Multiplier on how much water the eaves shed; 0 stops shedding entirely">
+        Amount:
+    </text>
+    <slider_bar
+      control_name="SSAtmoRunoffScale" name="SB_runoff_scale"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0" max_val="4" increment="0.05"
+      tool_tip="Multiplier on how much water the eaves shed; 0 stops shedding entirely" />
+    <spinner
+      control_name="SSAtmoRunoffScale" name="S_runoff_scale"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="4" increment="0.05" decimal_digits="2"
+      tool_tip="Multiplier on how much water the eaves shed; 0 stops shedding entirely" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_runoff_scale" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoRunoffScale" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_runoff_radius"
+      tool_tip="Metres from the camera within which roof edges shed drips">
+        Shed within:
+    </text>
+    <slider_bar
+      control_name="SSAtmoRunoffRadius" name="SB_runoff_radius"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="8" max_val="128" increment="4"
+      tool_tip="Metres from the camera within which roof edges shed drips" />
+    <spinner
+      control_name="SSAtmoRunoffRadius" name="S_runoff_radius"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="8" max_val="128" increment="4" decimal_digits="0"
+      tool_tip="Metres from the camera within which roof edges shed drips" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_runoff_radius" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoRunoffRadius" />
+    </button>
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="16"
+     height="14"
+     width="382"
+     name="flow_label"
+     font="SansSerifSmallBold">
+        Wind Flowmap
+    </text>
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="44"
+     width="382"
+     name="flow_help"
+     word_wrap="true"
+     font="SansSerifSmall">
+        A static fluid solve per region, driving wind audio and precipitation drift. Solved once, then left alone until the build or the wind changes.
+    </text>
+    <check_box
+     control_name="SSAtmoWindFlow"
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     height="16"
+     width="382"
+     name="flow_enabled_check"
+     label="Solve the wind flowmap"
+     tool_tip="Off falls every consumer back to the single uniform wind vector" />
+    <check_box
+     control_name="SSAtmoWindFlowAdvect"
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     height="16"
+     width="382"
+     name="flow_advect_check"
+     label="Let the flowmap carry precipitation"
+     tool_tip="Drops curve around buildings and funnel down alleys instead of drifting uniformly" />
+    <check_box
+     control_name="SSAtmoWindFlowParticles"
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     height="16"
+     width="382"
+     name="flow_particles_check"
+     label="Let the flowmap carry in-world particles"
+     tool_tip="Particle systems flagged to follow the wind feel the local field instead of the sim&apos;s uniform breeze" />
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="106"
+      name="T_flow_cell"
+      tool_tip="Metres per cell. 4m is about the width of an alley; smaller resolves narrower gaps and costs more">
+        Cell size:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWindFlowCell" name="SB_flow_cell"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="1" max_val="16" increment="0.5"
+      tool_tip="Metres per cell. 4m is about the width of an alley; smaller resolves narrower gaps and costs more" />
+    <spinner
+      control_name="SSAtmoWindFlowCell" name="S_flow_cell"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="1" max_val="16" increment="0.5" decimal_digits="1"
+      tool_tip="Metres per cell. 4m is about the width of an alley; smaller resolves narrower gaps and costs more" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_flow_cell" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWindFlowCell" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_flow_res"
+      tool_tip="Ceiling on texels per axis. Only a wide varregion reaches it, and then cells get coarser than the target">
+        Texel cap:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWindFlowRes" name="SB_flow_res"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="64" max_val="512" increment="32"
+      tool_tip="Ceiling on texels per axis. Only a wide varregion reaches it, and then cells get coarser than the target" />
+    <spinner
+      control_name="SSAtmoWindFlowRes" name="S_flow_res"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="64" max_val="512" increment="32" decimal_digits="0"
+      tool_tip="Ceiling on texels per axis. Only a wide varregion reaches it, and then cells get coarser than the target" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_flow_res" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWindFlowRes" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_flow_margin"
+      tool_tip="How far a region's solve looks into its neighbours. The overlap is what keeps wind continuous across a sim border">
+        Neighbour reach:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWindFlowMargin" name="SB_flow_margin"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0" max_val="256" increment="8"
+      tool_tip="How far a region's solve looks into its neighbours. The overlap is what keeps wind continuous across a sim border" />
+    <spinner
+      control_name="SSAtmoWindFlowMargin" name="S_flow_margin"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="256" increment="8" decimal_digits="0"
+      tool_tip="How far a region's solve looks into its neighbours. The overlap is what keeps wind continuous across a sim border" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_flow_margin" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWindFlowMargin" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_flow_height"
+      tool_tip="Starting guess at how tall the build is. The capture probes four times this far up and settles the real ceiling on what it finds">
+        Band height:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWindFlowHeight" name="SB_flow_height"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="48" max_val="1024" increment="16"
+      tool_tip="Starting guess at how tall the build is. The capture probes four times this far up and settles the real ceiling on what it finds" />
+    <spinner
+      control_name="SSAtmoWindFlowHeight" name="S_flow_height"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="48" max_val="1024" increment="16" decimal_digits="0"
+      tool_tip="Starting guess at how tall the build is. The capture probes four times this far up and settles the real ceiling on what it finds" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_flow_height" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWindFlowHeight" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_flow_iterations"
+      tool_tip="Pressure iterations, and the main reason flow looks weak around buildings. Each pass carries information one cell, so this wants to be roughly the texel count">
+        Solver passes:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWindFlowIterations" name="SB_flow_iterations"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="4" max_val="512" increment="4"
+      tool_tip="Pressure iterations, and the main reason flow looks weak around buildings. Each pass carries information one cell, so this wants to be roughly the texel count" />
+    <spinner
+      control_name="SSAtmoWindFlowIterations" name="S_flow_iterations"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="4" max_val="512" increment="4" decimal_digits="0"
+      tool_tip="Pressure iterations, and the main reason flow looks weak around buildings. Each pass carries information one cell, so this wants to be roughly the texel count" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_flow_iterations" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWindFlowIterations" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_flow_slicemax"
+      tool_tip="Most horizontal slabs the vertical axis will be split into">
+        Slab cap:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWindFlowSliceMax" name="SB_flow_slicemax"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="2" max_val="16" increment="1"
+      tool_tip="Most horizontal slabs the vertical axis will be split into" />
+    <spinner
+      control_name="SSAtmoWindFlowSliceMax" name="S_flow_slicemax"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="2" max_val="16" increment="1" decimal_digits="0"
+      tool_tip="Most horizontal slabs the vertical axis will be split into" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_flow_slicemax" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWindFlowSliceMax" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_flow_slicemin"
+      tool_tip="Minimum metres between slab boundaries">
+        Slab spacing:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWindFlowSliceMin" name="SB_flow_slicemin"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="1" max_val="32" increment="1"
+      tool_tip="Minimum metres between slab boundaries" />
+    <spinner
+      control_name="SSAtmoWindFlowSliceMin" name="S_flow_slicemin"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="1" max_val="32" increment="1" decimal_digits="1"
+      tool_tip="Minimum metres between slab boundaries" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_flow_slicemin" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWindFlowSliceMin" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_flow_shelter"
+      tool_tip="How far upwind a cell looks for cover, in cells. 0 disables the calm pocket behind a building">
+        Lee shelter:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWindFlowShelterSteps" name="SB_flow_shelter"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0" max_val="32" increment="1"
+      tool_tip="How far upwind a cell looks for cover, in cells. 0 disables the calm pocket behind a building" />
+    <spinner
+      control_name="SSAtmoWindFlowShelterSteps" name="S_flow_shelter"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="32" increment="1" decimal_digits="0"
+      tool_tip="How far upwind a cell looks for cover, in cells. 0 disables the calm pocket behind a building" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_flow_shelter" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWindFlowShelterSteps" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_flow_gradient"
+      tool_tip="Boundary layer exponent. 0 is a uniform wind at all altitudes, 0.25 typical over built-up ground, 0.4 a dense city">
+        Height gradient:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWindFlowGradient" name="SB_flow_gradient"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0" max_val="0.6" increment="0.05"
+      tool_tip="Boundary layer exponent. 0 is a uniform wind at all altitudes, 0.25 typical over built-up ground, 0.4 a dense city" />
+    <spinner
+      control_name="SSAtmoWindFlowGradient" name="S_flow_gradient"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="0.6" increment="0.05" decimal_digits="2"
+      tool_tip="Boundary layer exponent. 0 is a uniform wind at all altitudes, 0.25 typical over built-up ground, 0.4 a dense city" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_flow_gradient" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWindFlowGradient" />
+    </button>
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="14"
+     height="14"
+     width="382"
+     name="gust_label"
+     font="SansSerifSmallBold">
+        Gusts
+    </text>
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="4"
+     height="28"
+     width="382"
+     name="gust_help"
+     word_wrap="true"
+     font="SansSerifSmall">
+        How deep the surges run, how far apart their fronts are and how far the wind swings as one passes are per-track weather, on the main window. This is only how the waves travel.
+    </text>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_gust_travel"
+      tool_tip="How fast fronts sweep downwind relative to the air itself. 1 carries them along with it, so a surge reaches the far side of a region as late as the air takes to get there; 0 pins the pattern to the ground so the wind rises and falls in place instead of in waves">
+        Front travel:
+    </text>
+    <slider_bar
+      control_name="SSAtmoWindGustTravel" name="SB_gust_travel"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0" max_val="3" increment="0.1"
+      tool_tip="How fast fronts sweep downwind relative to the air itself. 1 carries them along with it, so a surge reaches the far side of a region as late as the air takes to get there; 0 pins the pattern to the ground so the wind rises and falls in place instead of in waves" />
+    <spinner
+      control_name="SSAtmoWindGustTravel" name="S_gust_travel"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="3" increment="0.1" decimal_digits="1"
+      tool_tip="How fast fronts sweep downwind relative to the air itself. 1 carries them along with it, so a surge reaches the far side of a region as late as the air takes to get there; 0 pins the pattern to the ground so the wind rises and falls in place instead of in waves" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_gust_travel" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoWindGustTravel" />
+    </button>
+    <button
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="10"
+     height="23"
+     width="150"
+     name="flow_rebuild_button"
+     label="Rebuild now"
+     tool_tip="Throw away every solved region and start again" />
+
+    </panel>
+    </scroll_container>
+</floater>

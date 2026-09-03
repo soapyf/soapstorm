@@ -73,8 +73,12 @@ public:
     void setIsEdgePatch(const bool edge_patch);
     bool getIsEdgePatch() const { return mIsEdgePatch; }
 
+    // <SS:Nexii> Atmo Magic's duplicate water planes (sswater.h) reuse the stock water pcodes so every pcode-keyed check treats the families identically; this flag is the only thing telling them apart, read by the draw-time family gate SSWaterWorld::drawsThisFrame (doc/atmo_magic_water.md).
+    bool getIsAtmoWater() const { return mIsAtmoWater; }
+
 protected:
     bool mIsEdgePatch;
+    bool mIsAtmoWater = false; // <SS:Nexii> see getIsAtmoWater
     S32  mRenderType;
 };
 

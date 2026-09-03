@@ -526,13 +526,8 @@ void LLFloaterJoystick::onCommitJoystickEnabled(LLUICtrl*, void *joy_panel)
 
     LLViewerJoystick::getInstance()->saveDeviceIdToSettings();
 
-    // <SS:Nexii> Move the revert snapshot forward with the committed device. The combo applies immediately and apply() is empty, so there is
-    // no pending state for cancel() to roll back - but cancel() still wrote mJoystickId, snapshotted when the floater opened, back over
-    // JoystickDeviceUUID. It runs on the X button and on quitting with the floater open, not just on Cancel, so simply picking a device and
-    // closing the window put the stale id back while the live device kept working: correct all session, forgotten on the next start.
-    // mJoystickEnabled below is already carried forward the same way, which is why the enable survived and the device did not.
+    // <SS:Nexii> Move the revert snapshot forward with the committed device. The combo applies immediately and apply() is empty, so there is no pending state for cancel() to roll back - but cancel() still wrote mJoystickId, snapshotted when the floater opened, back over JoystickDeviceUUID. It runs on the X button and on quitting with the floater open, not just on Cancel, so simply picking a device and closing the window put the stale id back while the live device kept working: correct all session, forgotten on the next start. mJoystickEnabled below is already carried forward the same way, which is why the enable survived and the device did not.
     self->mJoystickId = gSavedSettings.getLLSD("JoystickDeviceUUID");
-    // </SS:Nexii>
 
     std::string device_string = LLViewerJoystick::getInstance()->getDeviceUUIDString();
     LL_DEBUGS("Joystick") << "Selected " << device_string << " as joystick." << LL_ENDL;

@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<floater
+ positioning="cascading"
+ can_minimize="true"
+ can_resize="false"
+ height="299"
+ layout="topleft"
+ name="floater_ss_atmo"
+ save_rect="true"
+ single_instance="true"
+ title="Atmo Magic Settings"
+ width="360">
+    <!-- <SS:Nexii> Legacy Atmo Magic weather floater - deprecated in favour of the Atmo Magic environment floater (ss_atmo_env), which covers per-track weather authoring with its own asset and its own notion of "track" instead of riding EEP's four sky tracks the way this does. Trimmed down to what's still useful standalone: the shared master switch and impact-effect toggles the renderer itself reads regardless of which config source is driving it, the precipitation preset picker/editor (kept as the reference point for comparing Atmo Magic's own weather editor against, and there is no other way to reach the preset editor), and the sub-floater launchers. The per-track weather editing UI, and its own notecard load/save/ revert/defaults/reload-parcel-config, are gone - see doc/archive/atmo_magic_environment.md's "Relationship to what exists". -->
+    <check_box
+     control_name="SSAtmoEnabled"
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top="26"
+     height="16"
+     width="336"
+     label="Enable Atmo Magic weather"
+     tool_tip="Master switch, shared by both Atmo Magic and this legacy layer. Weather still only runs where something actually configures it" />
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="14"
+     height="14"
+     width="336"
+     name="preset_label_header"
+     font="SansSerifSmallBold">
+        Precipitation Preset
+    </text>
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     height="14"
+     width="90"
+     name="preset_label">
+        Preset:
+    </text>
+    <combo_box
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="23"
+     width="150"
+     name="preset_combo"
+     allow_text_entry="false"
+     tool_tip="Which preset to open in the editor" />
+    <button
+     follows="left|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="0"
+     height="23"
+     width="76"
+     name="edit_preset_button"
+     label="Edit..."
+     tool_tip="Open the preset editor" />
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="14"
+     height="14"
+     width="336"
+     name="effects_label"
+     font="SansSerifSmallBold">
+        Effects
+    </text>
+    <button
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="16"
+     height="23"
+     width="160"
+     name="fx_button"
+     label="Effects &amp; LOD..."
+     tool_tip="Density, particle budget, tier distances and ripple tuning" />
+    <button
+     follows="left|top"
+     layout="topleft"
+     left_pad="16"
+     top_delta="0"
+     height="23"
+     width="160"
+     name="assets_button"
+     label="Global Assets..."
+     tool_tip="Global wind loops and generated-texture options" />
+    <button
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="8"
+     height="23"
+     width="160"
+     name="audio_button"
+     label="Audio Mix..."
+     tool_tip="Volume of each sound category, echo amount and fade speed" />
+    <button
+     follows="left|top"
+     layout="topleft"
+     left_pad="16"
+     top_delta="0"
+     height="23"
+     width="160"
+     name="sim_button"
+     label="Simulation..."
+     tool_tip="Rain shadow and wind flowmap resolution, tuning and rebuilds" />
+    <button
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="8"
+     height="23"
+     width="160"
+     name="sound_analysis_button"
+     label="Sound Analysis..."
+     tool_tip="Every analysed sound as a waveform with its detected metadata marked on it - onset, tail, peak, impact ticks, cadence - grouped by which pack configured it" />
+    <button
+     follows="left|top"
+     layout="topleft"
+     left_pad="16"
+     top_delta="0"
+     height="23"
+     width="160"
+     name="worldfield_button"
+     label="World Field..."
+     tool_tip="The shared world field's debug views and capture tuning - cell size, band height, ceiling and refresh" />
+    <button
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="8"
+     height="23"
+     width="160"
+     name="debug_button"
+     label="Debug..."
+     tool_tip="Every debug view, marker and diagnostic overlay - the switches that used to hang off Develop > Render Metadata, and the pickers that shape what each draws" />
+</floater>

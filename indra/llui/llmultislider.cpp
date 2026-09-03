@@ -253,10 +253,23 @@ void LLMultiSlider::setSliderValue(const std::string& name, F32 value, bool from
     }
 }
 
+// <SS:Nexii> Re-running setValue against the new rect is the whole fix: setSliderValue recomputes every cached thumb rect from its value, and the track drawn in draw() already reads the live rect. See the header note.
+void LLMultiSlider::reshape(S32 width, S32 height, bool called_from_parent)
+{
+    const bool resized = (width != getRect().getWidth()) || (height != getRect().getHeight());
+    LLF32UICtrl::reshape(width, height, called_from_parent);
+    // Thumb rects only need recomputing against an actual size change, and setValue re-fires per-thumb machinery that construction-time layout passes have no business triggering.
+    if (resized && width > 0 && height > 0)
+    {
+        setValue(getValue());
+    }
+}
+
 void LLMultiSlider::setValue(const LLSD& value)
 {
     // only do if it's a map
-    if(value.isMap()) {
+    // <SS:Nexii> ...with anything in it. An EMPTY map passes isMap() and the iterator walk below then dereferences and INCREMENTS the end iterator - UB that marches off the tree, loops through wild memory, and dies as a bad_alloc when a garbage string's fake length reaches the allocator. Latent forever in stock; nothing ever called this with an empty map until reshape() replayed the value of a slider that had no thumbs yet.
+    if(value.isMap() && value.size() > 0) {
 
         // add each value... the first in the map becomes the current
         LLSD::map_const_iterator mIt = value.beginMap();

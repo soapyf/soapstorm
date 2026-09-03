@@ -47,7 +47,11 @@ public:
     /*virtual*/ bool         updateGeometry(LLDrawable *drawable);
 
     void drawStars(void);
-    void drawDome(void);
+    // depth_write lets the dome store depth - used only by the haze pass when Atmo Magic's
+    // horizon clip is on, so the lower dome's nearer depth slot can hide what draws behind it
+    // (see LLDrawPoolWLSky::renderDome). Stock keeps the mask off: the stars sit on the far
+    // plane and survive only because the dome does not write.
+    void drawDome(bool depth_write = false);
     void drawFsSky(void); // fullscreen sky for advanced atmo
     void resetVertexBuffers(void);
 
