@@ -10,6 +10,30 @@
  label="Squeeze"
  name="ss_squeeze">
 
+    <icon
+     follows="left|top"
+     height="16"
+     image_name="notify_caution_icon.tga"
+     layout="topleft"
+     left="10"
+     mouse_opaque="false"
+     name="experimental_icon"
+     top="6"
+     width="16" />
+    <text
+     type="string"
+     follows="left|top"
+     font="SansSerifBold"
+     height="16"
+     layout="topleft"
+     left="30"
+     name="experimental_warning"
+     text_color="AlertCautionBoxColor"
+     top="6"
+     width="490">
+        Experimental Feature! Might cause instability.
+    </text>
+
     <!-- <SS:Nexii> The intro is deliberately one line: the whole explanation lives behind the (?) button, and a second line here would be drawn over the first checkbox rather than pushing it down. -->
     <text
      type="string"
@@ -18,7 +42,7 @@
      height="16"
      layout="topleft"
      left="10"
-     top="8"
+     top="26"
      width="470"
      wrap="true">
         Keeps textures compressed on the graphics card, saving video memory.
@@ -29,7 +53,7 @@
      label="?"
      layout="topleft"
      left="492"
-     top="8"
+     top="25"
      width="24"
      name="ss_squeeze_help"
      tool_tip="Roughly a quarter of the video memory for the same picture. Click for how it works, and when it falls back to the ordinary path.">
