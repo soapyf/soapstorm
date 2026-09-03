@@ -1000,9 +1000,9 @@ void LLViewerObjectList::markAllVolumesForUpdate()
 {
     for (LLViewerObject* pObj : mObjects)
     {
-        if (pObj)
+        if (pObj && pObj->mDrawable && !pObj->mDrawable->isDead())
         {
-            if (LLVOVolume* pVoVolume = pObj->getVOVolume())
+            if (LLVOVolume* pVoVolume = pObj->mDrawable->getVOVolume())
             {
                 pVoVolume->markForUpdate();
             }
