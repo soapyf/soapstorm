@@ -1343,6 +1343,31 @@ static bool handleSSSqueezeEnabledChanged(const LLSD& newvalue)
 }
 // </SS:Nexii>
 
+// <SS:PBRControls>
+void ss_pbr_controls_refresh()
+{
+    bool pbr_enabled = gSavedSettings.getBOOL("SSPBREnabled");
+    bool pbr_materials = gSavedSettings.getBOOL("SSPBRMaterialsEnabled");
+    bool smart_fallback = gSavedSettings.getBOOL("SSPBRSmartFallback");
+
+    LLTextureEntry::sEnablePBRMaterials = pbr_enabled && pbr_materials;
+    LLViewerObject::sSmartPBRFallback = smart_fallback;
+
+    // Refresh shaders (updates classic_mode uniform and environment shaders)
+    handleSetShaderChanged(LLSD());
+
+    // Mark all volumes to rebuild draw info so the changes take effect immediately
+    gObjectList.markAllVolumesForUpdate();
+}
+
+static bool handleSSPBRSettingsChanged(const LLSD& newvalue)
+{
+    (void)newvalue;
+    ss_pbr_controls_refresh();
+    return true;
+}
+// </SS:PBRControls>
+
 void settings_setup_listeners()
 {
     LL_PROFILE_ZONE_SCOPED;
@@ -1675,6 +1700,13 @@ void settings_setup_listeners()
     // </SS:Nexii>
     // </SS:Nexii>
     // </SS:Nexii>
+
+    // <SS:PBRControls>
+    setting_setup_signal_listener(gSavedSettings, "SSPBREnabled", handleSSPBRSettingsChanged);
+    setting_setup_signal_listener(gSavedSettings, "SSPBRMaterialsEnabled", handleSSPBRSettingsChanged);
+    setting_setup_signal_listener(gSavedSettings, "SSPBRSmartFallback", handleSSPBRSettingsChanged);
+    setting_setup_signal_listener(gSavedSettings, "SSPBRClassicLighting", handleSSPBRSettingsChanged);
+    // </SS:PBRControls>
 }
 
 #if TEST_CACHED_CONTROL

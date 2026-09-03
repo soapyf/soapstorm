@@ -25905,6 +25905,52 @@ Change of this parameter will affect the layout of buttons in notification toast
       <integer>0</integer>
     </map>
     <!-- </SS:Nexii> -->
+    <!-- <SS:PBRControls> PBR toggle controls and smart classic fallback -->
+    <key>SSPBREnabled</key>
+    <map>
+      <key>Comment</key>
+      <string>Master toggle for all Physically Based Rendering (PBR) features. When unchecked, all PBR systems are disabled and the viewer operates in Classic ALM mode.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>SSPBRMaterialsEnabled</key>
+    <map>
+      <key>Comment</key>
+      <string>Enable rendering modern glTF PBR metallic-roughness materials on objects and avatars. When unchecked, objects render using lightweight Blinn-Phong textures.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>SSPBRSmartFallback</key>
+    <map>
+      <key>Comment</key>
+      <string>When PBR materials are disabled, automatically extract the base color and normal textures from the glTF material if legacy diffuse/normal is blank, none, or default.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>SSPBRClassicLighting</key>
+    <map>
+      <key>Comment</key>
+      <string>Forces pre-PBR lighting math and tone curve (classic sunlight intensity and gamma) instead of PBR HDR and tonemapping.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <!-- </SS:PBRControls> -->
     <key>FSdataQAtest</key>
       <map>
       <key>Comment</key>

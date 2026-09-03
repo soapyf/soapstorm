@@ -5871,6 +5871,17 @@ void LLVolumeGeometryManager::registerFace(LLSpatialGroup* group, LLFace* facep,
             {
                 draw_info->mAlphaMaskCutoff = 0.33f;
             }
+
+            // <SS:PBRControls> Smart fallback: provide normal map from GLTF material when no legacy material is assigned
+            if (LLViewerObject::sSmartPBRFallback && !LLTextureEntry::sEnablePBRMaterials)
+            {
+                LLViewerTexture* norm = facep->getViewerObject()->getTENormalMap(facep->getTEOffset());
+                if (norm && norm != (LLViewerTexture*)LLViewerFetchedTexture::sDefaultImagep)
+                {
+                    draw_info->mNormalMap = norm;
+                }
+            }
+            // </SS:PBRControls>
         }
 
         // if (type == LLRenderPass::PASS_ALPHA) // always populate the draw_info ptr

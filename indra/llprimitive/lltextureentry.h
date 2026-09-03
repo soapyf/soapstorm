@@ -219,6 +219,7 @@ public:
     F32                 mRotation;              // anti-clockwise rotation in rad about the bottom left corner
 
     static const LLTextureEntry null;
+    static bool sEnablePBRMaterials;
 
     // LLSD key defines
     static const char* OBJECT_ID_KEY;

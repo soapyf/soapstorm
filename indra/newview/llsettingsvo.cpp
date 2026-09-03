@@ -806,8 +806,13 @@ void LLSettingsVOSky::applySpecial(void *ptarget, bool force)
     static LLCachedControl<F32> ambient_scale(gSavedSettings, "RenderSkyAmbientScale", 1.5f);
     static LLCachedControl<F32> tonemap_mix_setting(gSavedSettings, "RenderTonemapMix", 1.f);
 
+    // <SS:PBRControls> Classic lighting mode: forced when SSPBREnabled is false or SSPBRClassicLighting is true
+    static LLCachedControl<bool> ss_pbr_enabled(gSavedSettings, "SSPBREnabled", true);
+    static LLCachedControl<bool> ss_classic_lighting(gSavedSettings, "SSPBRClassicLighting", false);
+
     // sky is a "classic" sky following pre SL 7.0 shading
-    bool classic_mode = psky->canAutoAdjust() && !should_auto_adjust();
+    bool classic_mode = !ss_pbr_enabled || ss_classic_lighting || (psky->canAutoAdjust() && !should_auto_adjust());
+    // </SS:PBRControls>
 
     if (!classic_mode)
     {

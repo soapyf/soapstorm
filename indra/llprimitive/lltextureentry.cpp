@@ -593,8 +593,15 @@ S32 LLTextureEntry::setBaseMaterial()
     return changed;
 }
 
+/*static*/ bool LLTextureEntry::sEnablePBRMaterials = true;
+
 LLGLTFMaterial* LLTextureEntry::getGLTFRenderMaterial() const
 {
+    if (!sEnablePBRMaterials)
+    {
+        return nullptr;
+    }
+
     if (mGLTFRenderMaterial.notNull())
     {
         return mGLTFRenderMaterial;

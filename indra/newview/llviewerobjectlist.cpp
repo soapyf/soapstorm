@@ -996,6 +996,20 @@ void LLViewerObjectList::setAllObjectPBRDefaultTextures(const LLUUID& override_i
 }
 // </FS>
 
+void LLViewerObjectList::markAllVolumesForUpdate()
+{
+    for (LLViewerObject* pObj : mObjects)
+    {
+        if (pObj)
+        {
+            if (LLVOVolume* pVoVolume = pObj->getVOVolume())
+            {
+                pVoVolume->markForUpdate();
+            }
+        }
+    }
+}
+
 void LLViewerObjectList::updateApparentAngles(LLAgent &agent)
 {
     S32 i;

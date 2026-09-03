@@ -130,6 +130,7 @@ public:
 // <FS> FIRE-34340-1 PBR texture override for @setcam_textures
     void setAllObjectPBRDefaultTextures(const LLUUID& override_id, bool fShowDefault);
 // </FS>
+    void markAllVolumesForUpdate();
 
     void removeFromActiveList(LLViewerObject* objectp);
     void updateActive(LLViewerObject *objectp);

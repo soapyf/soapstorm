@@ -62,6 +62,14 @@
      help_topic="preferences_soapstorm_tab"
      name="ss_squeeze" />
 
+    <panel
+     class="panel_preference"
+     filename="panel_preferences_ss_pbr.xml"
+     label="PBR"
+     layout="topleft"
+     help_topic="preferences_soapstorm_tab"
+     name="ss_pbr" />
+
 </tab_container>
 
 </panel>

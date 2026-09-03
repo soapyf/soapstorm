@@ -73,6 +73,7 @@
 #include "llviewercamera.h"
 #include "llviewertexturelist.h"
 #include "llviewerinventory.h"
+#include "fscommon.h"
 #include "llviewerobjectlist.h"
 #include "llviewerparceloverlay.h"
 #include "llviewerpartsource.h"
@@ -264,6 +265,8 @@ LLViewerObject *LLViewerObject::createObject(const LLUUID &id, const LLPCode pco
 
     return res;
 }
+
+bool LLViewerObject::sSmartPBRFallback = true;
 
 LLViewerObject::LLViewerObject(const LLUUID &id, const LLPCode pcode, LLViewerRegion *regionp, bool is_global)
 :   LLPrimitive(),
@@ -5694,10 +5697,27 @@ void LLViewerObject::updateTEMaterialTextures(U8 te)
 
     if (mat != nullptr)
     {
-        mat->mBaseColorTexture = fetch_texture(mat->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_BASE_COLOR]);
-        mat->mNormalTexture = fetch_texture(mat->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_NORMAL]);
-        mat->mMetallicRoughnessTexture = fetch_texture(mat->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_METALLIC_ROUGHNESS]);
-        mat->mEmissiveTexture= fetch_texture(mat->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_EMISSIVE]);
+        if (LLTextureEntry::sEnablePBRMaterials)
+        {
+            mat->mBaseColorTexture = fetch_texture(mat->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_BASE_COLOR]);
+            mat->mNormalTexture = fetch_texture(mat->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_NORMAL]);
+            mat->mMetallicRoughnessTexture = fetch_texture(mat->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_METALLIC_ROUGHNESS]);
+            mat->mEmissiveTexture= fetch_texture(mat->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_EMISSIVE]);
+        }
+        else if (sSmartPBRFallback)
+        {
+            // When PBR materials are disabled, only fetch base color & normal for smart fallback if needed
+            const LLUUID& image_id = getTEref(te).getID();
+            if (image_id.isNull() || FSCommon::isDefaultTexture(image_id))
+            {
+                mat->mBaseColorTexture = fetch_texture(mat->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_BASE_COLOR]);
+            }
+            if (!mTENormalMaps || mTENormalMaps[te] == nullptr)
+            {
+                mat->mNormalTexture = fetch_texture(mat->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_NORMAL]);
+            }
+            // Deliberately skip fetching metallic-roughness and emissive textures to save bandwidth and VRAM
+        }
     }
 }
 
@@ -6229,6 +6249,29 @@ LLViewerTexture *LLViewerObject::getTEImage(const U8 face) const
     if (face < getNumTEs())
     {
         LLViewerTexture* image = mTEImages[face];
+
+        // <SS:PBRControls> Smart fallback: if legacy texture is default/blank and PBR materials are disabled, use base color from GLTF material
+        if (sSmartPBRFallback && !LLTextureEntry::sEnablePBRMaterials)
+        {
+            if (image == nullptr || image->getID().isNull() || FSCommon::isDefaultTexture(image->getID()))
+            {
+                const LLTextureEntry* te = getTE(face);
+                if (te)
+                {
+                    LLGLTFMaterial* mat = te->getGLTFMaterial();
+                    if (mat)
+                    {
+                        const LLUUID& base_id = mat->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_BASE_COLOR];
+                        if (base_id.notNull() && !FSCommon::isDefaultTexture(base_id))
+                        {
+                            return LLViewerTextureManager::getFetchedTexture(base_id, FTT_DEFAULT, true, LLGLTexture::BOOST_NONE, LLViewerTexture::LOD_TEXTURE);
+                        }
+                    }
+                }
+            }
+        }
+        // </SS:PBRControls>
+
         if (image)
         {
             return image;
@@ -6276,6 +6319,29 @@ LLViewerTexture *LLViewerObject::getTENormalMap(const U8 face) const
     if (face < getNumTEs())
     {
         LLViewerTexture* image = mTENormalMaps[face];
+
+        // <SS:PBRControls> Smart fallback: if legacy normal map is missing and PBR materials are disabled, use normal map from GLTF material
+        if (sSmartPBRFallback && !LLTextureEntry::sEnablePBRMaterials)
+        {
+            if (image == nullptr || image->getID().isNull())
+            {
+                const LLTextureEntry* te = getTE(face);
+                if (te)
+                {
+                    LLGLTFMaterial* mat = te->getGLTFMaterial();
+                    if (mat)
+                    {
+                        const LLUUID& norm_id = mat->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_NORMAL];
+                        if (norm_id.notNull())
+                        {
+                            return LLViewerTextureManager::getFetchedTexture(norm_id, FTT_DEFAULT, true, LLGLTexture::BOOST_NONE, LLViewerTexture::LOD_TEXTURE);
+                        }
+                    }
+                }
+            }
+        }
+        // </SS:PBRControls>
+
         if (image)
         {
             return image;

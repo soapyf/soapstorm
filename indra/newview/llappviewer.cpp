@@ -641,6 +641,10 @@ static void settings_to_globals()
     // <SS:Nexii>
     LLImageGL::sSqueezeEnabled          = gSavedSettings.getBOOL("SSSqueezeEnabled");
     // </SS:Nexii>
+    // <SS:PBRControls>
+    LLTextureEntry::sEnablePBRMaterials = gSavedSettings.getBOOL("SSPBREnabled") && gSavedSettings.getBOOL("SSPBRMaterialsEnabled");
+    LLViewerObject::sSmartPBRFallback   = gSavedSettings.getBOOL("SSPBRSmartFallback");
+    // </SS:PBRControls>
     LLVOVolume::sLODFactor              = llclamp(gSavedSettings.getF32("RenderVolumeLODFactor"), 0.01f, MAX_LOD_FACTOR);
     LLVOVolume::sDistanceFactor         = 1.f-LLVOVolume::sLODFactor * 0.1f;
     LLVolumeImplFlexible::sUpdateFactor = gSavedSettings.getF32("RenderFlexTimeFactor");

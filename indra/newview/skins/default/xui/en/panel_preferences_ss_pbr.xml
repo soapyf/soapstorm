@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<panel
+ border="true"
+ follows="all"
+ height="480"
+ layout="topleft"
+ left="1"
+ top="1"
+ width="540"
+ label="PBR"
+ name="ss_pbr">
+
+    <text
+     type="string"
+     length="1"
+     follows="left|top"
+     height="16"
+     layout="topleft"
+     left="10"
+     top="8"
+     width="500"
+     wrap="true">
+        Control Physically Based Rendering (PBR) features and classic rendering fallbacks.
+    </text>
+
+    <!-- Master Toggle -->
+    <check_box
+     control_name="SSPBREnabled"
+     follows="left|top"
+     height="16"
+     label="Enable PBR Rendering"
+     layout="topleft"
+     left="10"
+     name="ss_pbr_enabled"
+     tool_tip="Master switch for all Physically Based Rendering features. When unchecked, all PBR systems are disabled and the viewer operates in Classic ALM mode."
+     top_pad="12"
+     width="500" />
+
+    <!-- ===== Individual Sub-toggles ===== -->
+    <text
+     type="string"
+     length="1"
+     follows="left|top"
+     font="SansSerifSmallBold"
+     height="16"
+     layout="topleft"
+     left="10"
+     top_pad="14"
+     width="440">
+        PBR Systems
+    </text>
+
+    <check_box
+     control_name="SSPBRMaterialsEnabled"
+     enabled_control="SSPBREnabled"
+     follows="left|top"
+     height="16"
+     label="glTF PBR Materials"
+     layout="topleft"
+     left="20"
+     name="ss_pbr_materials"
+     tool_tip="Renders modern glTF metallic/roughness materials on objects and avatars. When unchecked, objects render using lightweight Blinn-Phong textures, saving significant VRAM and network download bandwidth."
+     top_pad="8"
+     width="490" />
+
+    <check_box
+     control_name="SSPBRSmartFallback"
+     enabled_control="SSPBREnabled"
+     follows="left|top"
+     height="16"
+     label="Smart Classic Fallback for Blank Textures"
+     layout="topleft"
+     left="35"
+     name="ss_pbr_smart_fallback"
+     tool_tip="If a PBR object has no legacy texture (or was left as default plywood/blank white), automatically use its glTF base color and normal map in classic mode so it still looks textured without downloading full PBR ORM maps."
+     top_pad="6"
+     width="475" />
+
+    <check_box
+     control_name="RenderTerrainPBREnabled"
+     enabled_control="SSPBREnabled"
+     follows="left|top"
+     height="16"
+     label="PBR Terrain"
+     layout="topleft"
+     left="20"
+     name="ss_pbr_terrain"
+     tool_tip="Enables multi-plane PBR terrain textures. When unchecked, reverts to classic 4-layer terrain splatting to reduce GPU draw calls."
+     top_pad="8"
+     width="490" />
+
+    <check_box
+     control_name="RenderReflectionProbeVolumes"
+     enabled_control="SSPBREnabled"
+     follows="left|top"
+     height="16"
+     label="PBR Reflection Probes"
+     layout="topleft"
+     left="20"
+     name="ss_pbr_probes"
+     tool_tip="Enables dynamic environmental reflection cubemaps. Unchecking this eliminates probe render passes—often the single largest source of framerate drops in PBR areas."
+     top_pad="8"
+     width="490" />
+
+    <!-- ===== Lighting & Tone-mapping ===== -->
+    <text
+     type="string"
+     length="1"
+     follows="left|top"
+     font="SansSerifSmallBold"
+     height="16"
+     layout="topleft"
+     left="10"
+     top_pad="14"
+     width="440">
+        Lighting &amp; Shading
+    </text>
+
+    <check_box
+     control_name="SSPBRClassicLighting"
+     enabled_control="SSPBREnabled"
+     follows="left|top"
+     height="16"
+     label="Classic Lighting Mode (Pre-PBR Tone Curve)"
+     layout="topleft"
+     left="20"
+     name="ss_pbr_classic_lighting"
+     tool_tip="Forces classic pre-PBR lighting math and tone curve, boosting direct sunlight and preventing washed-out haziness on legacy content and avatars."
+     top_pad="8"
+     width="490" />
+
+</panel>
