@@ -128,6 +128,8 @@ if (WINDOWS)
       LL_WINDOWS=1
       WIN32_LEAN_AND_MEAN
       NOMINMAX
+      UNICODE
+      _UNICODE
 #     DOM_DYNAMIC                     # For shared library colladadom
       _CRT_SECURE_NO_WARNINGS         # Allow use of sprintf etc
       _CRT_NONSTDC_NO_DEPRECATE       # Allow use of sprintf etc
