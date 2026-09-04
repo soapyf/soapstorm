@@ -690,12 +690,11 @@ jobs:
           fi
 
       - name: Setup rclone and download the folder
-        if: ${{ secrets.RCLONE_CONFIG != '' }}
+        continue-on-error: true
         uses: beqjanus/setup-rclone@main
         with:
           rclone_config: ${{ secrets.RCLONE_CONFIG }}
 
       - name: Copy files to remote host
-        if: ${{ secrets.RCLONE_CONFIG != '' }}
         continue-on-error: true
         run: rclone copy ${{steps.download.outputs.download-path}}/${{ env.FS_RELEASE_FOLDER }} fs_bundles:soapstorm/downloads/${{ env.FS_RELEASE_FOLDER }}
