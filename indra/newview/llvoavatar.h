@@ -302,7 +302,7 @@ public:
     void            clearNameTag();
 
     // LLAvatarPropertiesObserver: receives APT_GROUPS reply for group-tint lookup
-    /*virtual*/ void processProperties(void* data, EAvatarProcessorType type) override;
+    /*virtual*/ void processProperties(void* data, EAvatarProcessorType type);
     void            sendAvatarGroupsRequest();
     const LLUUID&   getActiveGroupID() const { return mActiveGroupID; }
 

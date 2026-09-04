@@ -35,7 +35,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu-24.04","windows-2022"]
+        os: ["macos-15","ubuntu-24.04","windows-2022"]
         grid: ["sl"]
         variant: ["regular","avx"]
         exclude:
@@ -307,11 +307,11 @@ jobs:
         shell: bash
 
       - name: rclone the private 3p packages for this platform (both 64 & 32)
-        run: 'rclone copy fs_bundles:fs_bundles --filter "- Alpha/**" --filter "+ *${{ env.fallback_platform }}*bz2" --filter "- *" .'
+        run: 'rclone copy fs_bundles:soapstorm/bundles --filter "- Alpha/**" --filter "+ *${{ env.fallback_platform }}*bz2" --filter "- *" .'
         
       - name: rclone any extra private 3p packages for Alpha (allows library updates not in the main repo)
         if: env.FS_RELEASE_TYPE == 'Alpha'
-        run: 'rclone copy fs_bundles:fs_bundles/Alpha --include "*${{ env.fallback_platform }}*bz2" .'
+        run: 'rclone copy fs_bundles:soapstorm/bundles/Alpha --include "*${{ env.fallback_platform }}*bz2" .'
 
       - name: set VSVER for Windows builds
         if: runner.os == 'Windows'
@@ -690,9 +690,12 @@ jobs:
           fi
 
       - name: Setup rclone and download the folder
+        if: ${{ secrets.RCLONE_CONFIG != '' }}
         uses: beqjanus/setup-rclone@main
         with:
           rclone_config: ${{ secrets.RCLONE_CONFIG }}
 
       - name: Copy files to remote host
-        run: rclone copy ${{steps.download.outputs.download-path}}/${{ env.FS_RELEASE_FOLDER }} fs_r2_deploy:downloads/${{ env.FS_RELEASE_FOLDER }}
+        if: ${{ secrets.RCLONE_CONFIG != '' }}
+        continue-on-error: true
+        run: rclone copy ${{steps.download.outputs.download-path}}/${{ env.FS_RELEASE_FOLDER }} fs_bundles:soapstorm/downloads/${{ env.FS_RELEASE_FOLDER }}
