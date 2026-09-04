@@ -27,13 +27,12 @@
 #include "ssatmomagic.h"
 
 #include "llpointer.h"
+#include "llviewertexture.h"
 #include "v3math.h"
 #include "v4coloru.h"
 
 #include <cfloat>
 #include <vector>
-
-class LLViewerTexture;
 
 enum SSPrecipFlags : U8
 {

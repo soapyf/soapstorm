@@ -30,6 +30,7 @@
 #include "llrect.h"
 #include "llsingleton.h"
 #include "lluuid.h"
+#include "llviewertexture.h"
 #include "v3math.h"
 #include "v4color.h"
 
@@ -42,7 +43,6 @@
 #include <vector>
 
 class LLViewerObject;
-class LLViewerTexture;
 class SSPrecipSim;
 struct SSGranularParams;
 

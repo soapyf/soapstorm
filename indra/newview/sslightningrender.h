@@ -28,6 +28,7 @@
 #include "lluuid.h"
 #include "llpointer.h"
 #include "llvertexbuffer.h"
+#include "llviewertexture.h"
 #include "v2math.h"
 #include "v3math.h"
 #include "v4math.h"
@@ -35,7 +36,6 @@
 
 #include <vector>
 
-class LLViewerFetchedTexture;
 struct SSStrike;
 
 class SSLightningRender : public LLSingleton<SSLightningRender>
