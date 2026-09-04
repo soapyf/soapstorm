@@ -377,6 +377,9 @@ public:
 
         // <SS:Nexii> Atmo Magic: the dominant-light handover gate - 1 while an Atmo environment with light-emitting bodies drives the sky, else 0, which leaves the stock single-lightnorm switch untouched.
         SS_LIGHT_MAX,                       //  "ss_light_max"
+
+        // <SS:Nexii> HUD supersample: preserve world depth during resolve
+        HUD_WORLD_DEPTH,                    //  "worldDepthMap"
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;
     // clang-format on

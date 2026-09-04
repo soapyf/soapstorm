@@ -29,6 +29,7 @@ out vec4 frag_color;
 
 uniform sampler2D diffuseRect;
 uniform sampler2D depthMap;
+uniform sampler2D worldDepthMap;
 
 uniform int hud_supersample; // supersample factor, 2 or 4
 uniform vec2 hud_texel_size; // 1 / source target dimensions
@@ -58,8 +59,11 @@ void main()
     frag_color = sum / float(hud_supersample * hud_supersample);
 
     // Hand the HUD's depth back to the default framebuffer so anything drawn afterwards that depth tests -- avatar
-    // nametags, non-HUD hover text -- is still occluded by HUD attachments. Depth cannot be averaged the way colour can,
-    // so take the nearest sample in the block: a partially covered edge pixel occludes, which errs on the side of the
-    // HUD hiding what is behind it.
-    gl_FragDepth = nearest;
+    // nametags, non-HUD hover text, look-at indicators -- is still occluded by HUD attachments. Depth cannot be averaged
+    // the way colour can, so take the nearest sample in the block: a partially covered edge pixel occludes, which errs
+    // on the side of the HUD hiding what is behind it.
+    // Where no HUD attachment was drawn (or where world geometry is nearer), preserve the world depth from worldDepthMap
+    // so subsequent 3D elements (look-at indicators, beacons, hover text) remain properly occluded by world objects and terrain.
+    float world_depth = texture(worldDepthMap, vary_fragcoord.xy).r;
+    gl_FragDepth = min(nearest, world_depth);
 }

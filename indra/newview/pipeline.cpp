@@ -8495,6 +8495,9 @@ void LLPipeline::endHUDSupersample()
     // depth of the same block, so the resolve can hand the HUD's occlusion back to the default framebuffer
     gHUDDownsampleProgram.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mHUDScreen, true, LLTexUnit::TFO_POINT);
 
+    // scene depth so pixels with no HUD preserve world occlusion
+    gHUDDownsampleProgram.bindTexture(LLShaderMgr::HUD_WORLD_DEPTH, &mRT->deferredScreen, true, LLTexUnit::TFO_POINT);
+
     static LLStaticHashedString sHUDSupersample("hud_supersample");
     static LLStaticHashedString sHUDTexelSize("hud_texel_size");
 
@@ -8506,6 +8509,7 @@ void LLPipeline::endHUDSupersample()
 
     gHUDDownsampleProgram.disableTexture(LLShaderMgr::DEFERRED_DIFFUSE, mHUDScreen.getUsage());
     gHUDDownsampleProgram.disableTexture(LLShaderMgr::DEFERRED_DEPTH, mHUDScreen.getUsage());
+    gHUDDownsampleProgram.disableTexture(LLShaderMgr::HUD_WORLD_DEPTH, mRT->deferredScreen.getUsage());
     gHUDDownsampleProgram.unbind();
 
     gGL.setSceneBlendType(LLRender::BT_ALPHA);

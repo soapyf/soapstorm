@@ -1603,6 +1603,9 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("ss_moon_light");
     mReservedUniforms.push_back("ss_light_max");
 
+    // <SS:Nexii> HUD supersample: preserve world depth during resolve
+    mReservedUniforms.push_back("worldDepthMap");
+
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);
 
     std::set<std::string> dupe_check;
