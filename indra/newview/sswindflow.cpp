@@ -137,6 +137,7 @@ static LLTrace::BlockTimerStatHandle FTM_SS_WIND_SOLVE_INIT("Wind Solve Init");
 static LLTrace::BlockTimerStatHandle FTM_SS_WIND_SOLVE_RUN("Wind Solve Run");
 static LLTrace::BlockTimerStatHandle FTM_SS_WIND_READBACK("Wind Readback");
 
+#if !LL_DARWIN
 // The wind flow solve is submitted with raw GL commands, not through the
 // viewer's bind()/gGL path, so the shared-context worker never mutates the
 // main thread's GL state machine (gGL, LLVertexBuffer, the bound-shader
@@ -145,6 +146,7 @@ static void bindProgramRaw(const LLGLSLShader& shader)
 {
     glUseProgram(shader.mProgramObject);
 }
+#endif
 
 // <SS:Nexii> A single worker thread with its own GL context, shared with the viewer's. The solve is a long GPU task plus a synchronous glGetTexImage readback; running it on this thread keeps the 50-400ms rebuild spike out of the frame loop entirely. Mirrors LLImageGLThread's context lifecycle (createSharedContext -> makeContextCurrent -> gGL.init).
 struct SSWindFlowMap::SSWindFlowGLWorker
@@ -212,9 +214,9 @@ bool SSWindFlowMap::isSupported()
     return false;
 #else
     return gGLManager.mGLVersion >= 4.29f
-        && &glDispatchCompute != nullptr
-        && &glBindImageTexture != nullptr
-        && &glTexStorage3D != nullptr;
+        && glDispatchCompute != nullptr
+        && glBindImageTexture != nullptr
+        && glTexStorage3D != nullptr;
 #endif
 }
 
@@ -292,6 +294,7 @@ static U32 tuningSignature()
     return h;
 }
 
+#if !LL_DARWIN
 // Clears pending GL errors so the next check is really ours.
 static void drainGLErrors()
 {
@@ -327,9 +330,6 @@ static bool contextLooksHealthy(const char* where)
 // Allocates one 3D texture for the solver.
 static U32 createVolume(S32 res, S32 slices, GLenum format)
 {
-#if LL_DARWIN
-    return 0;
-#else
     U32 tex = 0;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_3D, tex);
@@ -341,8 +341,8 @@ static U32 createVolume(S32 res, S32 slices, GLenum format)
     glTexStorage3D(GL_TEXTURE_3D, 1, format, res, res, slices);
     glBindTexture(GL_TEXTURE_3D, 0);
     return tex;
-#endif
 }
+#endif
 
 // Allocates (or re-allocates on size change) every GPU object the solve needs.
 bool SSWindFlowMap::ensureResources(S32 res, S32 slices)
@@ -1581,6 +1581,7 @@ void SSWindFlowMap::bridgePassages(const Tile& tile)
                           << " between carved ones" << LL_ENDL;
 }
 
+#if !LL_DARWIN
 // Uniform location with a warning on miss. The warning set is thread-local:
 // the solve worker (a second GL thread) asks for the same names.
 static S32 uniformLoc(const LLGLSLShader& shader, const char* name)
@@ -1641,6 +1642,7 @@ static void setAmbient(LLGLSLShader& shader, const LLVector3* ambient, S32 slice
     }
     glUniform3fv(uniformLoc(shader, "uAmbient"), slices, amb);
 }
+#endif
 
 // Seeds the velocity volume with ambient wind and the solid mask. A partial
 // build first restores the previous mask everywhere so the init pass only

@@ -2330,7 +2330,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     // Wind flowmap compute passes. Compute is GL 4.3; below that the flowmap
     // stays off and every consumer falls back to the uniform ambient wind, so
     // a failure here is not fatal to anything else.
-    if (success && gGLManager.mGLVersion >= 4.29f && &glDispatchCompute != nullptr)
+    if (success && gGLManager.mGLVersion >= 4.29f && glDispatchCompute != nullptr)
     {
         struct { LLGLSLShader* prog; const char* name; const char* file; } wind_passes[] = {
             { &gSSWindInitProgram,    "SS Wind Flow Init",      "deferred/ssWindInitC.glsl" },
