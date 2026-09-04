@@ -214,9 +214,12 @@ bool SSWindFlowMap::isSupported()
     return false;
 #else
     return gGLManager.mGLVersion >= 4.29f
+#if LL_WINDOWS
         && glDispatchCompute != nullptr
         && glBindImageTexture != nullptr
-        && glTexStorage3D != nullptr;
+        && glTexStorage3D != nullptr
+#endif
+        ;
 #endif
 }
 
@@ -313,6 +316,7 @@ static bool contextLooksHealthy(const char* where)
                               << std::hex << err << std::dec << " already pending" << LL_ENDL;
         if (err == GL_OUT_OF_MEMORY) healthy = false;
     }
+#if LL_WINDOWS
     if (glGetGraphicsResetStatus)
     {
         const GLenum reset = glGetGraphicsResetStatus();
@@ -324,6 +328,7 @@ static bool contextLooksHealthy(const char* where)
             healthy = false;
         }
     }
+#endif
     return healthy;
 }
 
