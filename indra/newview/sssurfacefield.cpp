@@ -1147,6 +1147,7 @@ void SSSurfaceField::updateWindow()
     {
         releaseGL();
 
+#if LL_WINDOWS
         if (glTexStorage2D == nullptr)
         {
             LL_WARNS_ONCE("AtmoMagic") << "No glTexStorage2D; the surface field"
@@ -1155,6 +1156,7 @@ void SSSurfaceField::updateWindow()
             mWindowValid = false;
             return;
         }
+#endif
 
         while (glGetError() != GL_NO_ERROR) { }
 
