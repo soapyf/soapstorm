@@ -81,7 +81,7 @@ void SSFloaterSimulation::watch(const std::string& control, EInvalidate what)
     }
 
     mConnections.emplace_back(var->getSignal()->connect(
-        [this, what](LLControlVariable*, const LLSD&, const LLSD&)
+        [what](LLControlVariable*, const LLSD&, const LLSD&)
         {
             if (what == EInvalidate::SHADOW)
             {
