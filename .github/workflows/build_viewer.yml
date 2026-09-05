@@ -356,13 +356,6 @@ jobs:
           sudo apt-get clean
         
 
-      - name: test macOS bundles are present
-        if: runner.os == 'MacOS'
-        run: |
-          dirlisting="$(ls -l ${{ github.workspace }}${path_sep}${pattern})"
-          echo "${dirlisting}"
-        shell: bash
-
       - name: edit installables
         run: |
           path_sep="/"
@@ -590,7 +583,7 @@ jobs:
             build-linux-*/newview/*.bz2
 
       - name: publish MacOS artifacts
-        if: runner.os == 'macOS'
+        if: always() && runner.os == 'macOS' && steps.build.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.FS_RELEASE_TYPE }}-${{ matrix.os }}-${{ matrix.variant }}-${{matrix.grid}}-artifacts.zip
@@ -616,8 +609,8 @@ jobs:
           ref: ${{ github.head_ref || github.ref_name || 'master' }}
           fetch-depth: 1
 
-      - name: Install discord-webhook library
-        run: pip install discord-webhook
+      - name: Install python requirements
+        run: pip install --break-system-packages discord-webhook pytz requests || pip install discord-webhook pytz requests
 
       - name: Download artifacts
         uses: actions/download-artifact@v8
