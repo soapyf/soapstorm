@@ -283,7 +283,7 @@ def unpack_artifacts(path_to_artifacts_directory, config):
         if os_folder not in build_types_found[build_type]["os_folders"]:
             build_types_found[build_type]["os_folders"].append(os_folder)
             print(f"Appended {os_folder} to build_type {build_type}")
-    print(f"Finished processing artifacts for build_type {build_type}")
+    print(f"Finished processing artifacts")
     return build_types_found
 
 def restructure_folders(build_type_info, config):
@@ -300,7 +300,7 @@ def restructure_folders(build_type_info, config):
     # Now move the symbols files to the symbols folder
     # Define the folder for symbols
     symbols_folder = os.path.join(build_type_dir, "symbols")
-    os.mkdir(symbols_folder)
+    os.makedirs(symbols_folder, exist_ok=True)
     # prep the symbols folder
     symbol_patterns = ["*_hvk*", "*_oss*"]
 
