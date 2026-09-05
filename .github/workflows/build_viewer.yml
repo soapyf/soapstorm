@@ -293,8 +293,10 @@ jobs:
         shell: bash
       - name: Check if release type is signable
         if: runner.os == 'Windows'
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
         run: |
-          if [[ "${FS_RELEASE_TYPE}" == "Release" || "${FS_RELEASE_TYPE}" == "Beta" ]]; then
+          if [[ ("${FS_RELEASE_TYPE}" == "Release" || "${FS_RELEASE_TYPE}" == "Beta") && -n "${AZURE_CLIENT_ID}" ]]; then
             CODESIGNING_ENABLED=true
           else
             CODESIGNING_ENABLED=false
@@ -474,7 +476,7 @@ jobs:
         run: rm -f *${{ env.fallback_platform }}*.bz2 *${{ env.fallback_platform }}*.tar.* 2>/dev/null || true
         shell: bash
       - name: Generate metadata.json
-        if: runner.os == 'Windows'
+        if: ${{ runner.os == 'Windows' && (env.CODESIGNING_ENABLED == 'true' || github.event.inputs.override_signing == 'true') }}
         run: |
           echo '{
             "Endpoint": "${{ secrets.AZURE_ENDPOINT }}",
@@ -517,19 +519,19 @@ jobs:
           echo "SIGNTOOL_PATH=signtool.exe" >> $env:GITHUB_ENV
         shell: pwsh          
       - name: Install nuget.exe
-        if: runner.os == 'Windows'
+        if: ${{ runner.os == 'Windows' && (env.CODESIGNING_ENABLED == 'true' || github.event.inputs.override_signing == 'true') }}
         run: |
           Invoke-WebRequest -Uri https://dist.nuget.org/win-x86-commandline/latest/nuget.exe -OutFile nuget.exe
         shell: pwsh
 
       - name: Install Microsoft.Trusted.Signing.Client
-        if: runner.os == 'Windows'
+        if: ${{ runner.os == 'Windows' && (env.CODESIGNING_ENABLED == 'true' || github.event.inputs.override_signing == 'true') }}
         run: |
           .\nuget.exe install Microsoft.Trusted.Signing.Client -Version 1.0.86 -OutputDirectory .
         shell: pwsh
 
       - name: Locate Azure.CodeSigning.Dlib.dll
-        if: runner.os == 'Windows'
+        if: ${{ runner.os == 'Windows' && (env.CODESIGNING_ENABLED == 'true' || github.event.inputs.override_signing == 'true') }}
         run: |
           $dllPath = (Get-ChildItem ".\Microsoft.Trusted.Signing.Client.1.0.86\bin\x64\Azure.CodeSigning.Dlib.dll" -Recurse -File | Select-Object -First 1).FullName
           if (-not $dllPath) {
@@ -539,7 +541,7 @@ jobs:
           echo "CODESIGNING_DLIB_PATH=$dllPath" >> $env:GITHUB_ENV
         shell: pwsh
       - name: Prep env for Trusted code on Windows only
-        if: runner.os == 'Windows'
+        if: ${{ runner.os == 'Windows' && (env.CODESIGNING_ENABLED == 'true' || github.event.inputs.override_signing == 'true') }}
         run: |
           echo "AZURE_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}" >> $GITHUB_ENV
           echo "AZURE_CLIENT_SECRET=${{ secrets.AZURE_CLIENT_SECRET }}" >> $GITHUB_ENV
