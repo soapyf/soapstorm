@@ -1514,7 +1514,9 @@ class Darwin_x86_64_Manifest(ViewerManifest):
                         self.path(libfile)
 
             with self.prefix(dst="MacOS"):
-                executable = self.dst_path_of(CHANNEL_VENDOR_BASE)
+                executable = self.dst_path_of("Firestorm")
+                if not os.path.exists(executable) and os.path.exists(self.dst_path_of(CHANNEL_VENDOR_BASE)):
+                    executable = self.dst_path_of(CHANNEL_VENDOR_BASE)
                 if self.args.get('bugsplat'):
                     # According to Apple Technical Note TN2206:
                     # https://developer.apple.com/library/archive/technotes/tn2206/_index.html#//apple_ref/doc/uid/DTS40007919-CH1-TNTAG207
@@ -2026,8 +2028,13 @@ class Darwin_x86_64_Manifest(ViewerManifest):
         icon_path = os.path.join(self.get_src_prefix(), self.icon_path(), 'firestorm_icon.icns')
         # </FS:TJ>
 
-        # The main executable inside Contents/MacOS/ is named after the channel
-        main_exe = self.channel()
+        # The main executable inside Contents/MacOS/
+        main_exe = "Firestorm"
+        if not os.path.exists(os.path.join(app_bundle, "Contents", "MacOS", main_exe)):
+            if os.path.exists(os.path.join(app_bundle, "Contents", "MacOS", self.channel())):
+                main_exe = self.channel()
+            elif os.path.exists(os.path.join(app_bundle, "Contents", "MacOS", CHANNEL_VENDOR_BASE)):
+                main_exe = CHANNEL_VENDOR_BASE
 
         # In CI, defer Velopack packaging to the sign step where code signing
         # credentials are available. Emit metadata as GitHub outputs so the
