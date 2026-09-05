@@ -607,9 +607,9 @@ static std::string ssShaderTreeSignature()
 
         // The path goes in as a hash: its native encoding is wide on Windows
         // and narrow elsewhere, and nothing here needs to read it back.
-        parts.push_back(std::to_string(std::filesystem::hash_value(entry.path())) + "|"
-            + std::to_string(written.time_since_epoch().count()) + "|"
-            + std::to_string(bytes));
+        parts.push_back(std::to_string(static_cast<unsigned long long>(std::filesystem::hash_value(entry.path()))) + "|"
+            + std::to_string(static_cast<long long>(written.time_since_epoch().count())) + "|"
+            + std::to_string(static_cast<unsigned long long>(bytes)));
     }
 
     // Sorted, so a filesystem that hands entries back in a different order
