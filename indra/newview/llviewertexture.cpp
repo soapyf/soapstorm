@@ -533,14 +533,26 @@ void LLViewerTexture::updateClass()
     // While we're at it, assume we have 1024 to play with at minimum when the divisor is in use.  Works more elegantly with the logic below this.
     // -Geenz 2025-03-21
     // F32 budget = max_vram_budget == 0 ? llmax(1024, (F32)gGLManager.mVRAM / tex_vram_divisor) : (F32)max_vram_budget;
-    F32 budget = !max_vram_budget_enabled ? llmax(1024, (F32)gGLManager.mVRAM / (tex_vram_divisor() > 0.f ? tex_vram_divisor() : 1.f)) : (F32)max_vram_budget;
+    F32 effective_divisor = (tex_vram_divisor() > 0.f ? (F32)tex_vram_divisor() : 1.f);
+    if (!max_vram_budget_enabled && gGLManager.mVRAM <= 2048)
+    {
+        // On <=2GB cards, a divisor of 2 starves textures down to ~384MB actual memory,
+        // causing continuous discard thrashing. Relax the divisor to allow healthier budget.
+        effective_divisor = llmin(effective_divisor, 1.4f);
+    }
+    else if (!max_vram_budget_enabled && gGLManager.mVRAM <= 3072)
+    {
+        effective_divisor = llmin(effective_divisor, 1.6f);
+    }
+
+    F32 budget = !max_vram_budget_enabled ? llmax(1024.f, (F32)gGLManager.mVRAM / effective_divisor) : (F32)max_vram_budget();
 
     // Try to leave at least half a GB for everyone else and for bias,
-    // but keep at least 768MB for ourselves
-    // Viewer can 'overshoot' target when scene changes, if viewer goes over budget it
-    // can negatively impact performance, so leave 20% of a breathing room for
-    // 'bias' calculation to kick in.
-    F32 target = llmax(llmin(budget - 512.f, budget * 0.8f), MIN_VRAM_BUDGET);
+    // but keep at least 768MB for ourselves.
+    // On <= 2GB cards with low-end profiles (where HDR/probes are disabled),
+    // 384MB driver/system reserve is sufficient and prevents unnecessary texture downrezzing.
+    F32 reserve = (gGLManager.mVRAM <= 2048) ? 384.f : 512.f;
+    F32 target = llmax(llmin(budget - reserve, budget * 0.8f), MIN_VRAM_BUDGET);
     sFreeVRAMMegabytes = llmax(target - used, 0.f);
 
     F32 over_pct = (used - target) / target;

@@ -762,9 +762,14 @@ void LLFeatureManager::applyBaseMasks()
     {
         maskFeatures("VRAMGT512");
     }
-    if (gGLManager.mVRAM < 2048)
+    if (gGLManager.mVRAM <= 2048)
     {
+        maskFeatures("VRAMLE2GB");
         maskFeatures("VRAMLT2GB");
+    }
+    else if (gGLManager.mVRAM <= 3072)
+    {
+        maskFeatures("VRAMLE3GB");
     }
     if (gGLManager.mGLVersion < 3.99f)
     {

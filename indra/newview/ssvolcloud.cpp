@@ -755,7 +755,16 @@ void SSVolCloud::buildDeck(Deck& deck, const SSAtmoEnvCloudFieldState& field, F3
 
         // <SS:Nexii> The puff ceiling is a viewer dial rather than a build constant, because it is this field's whole LOD axis and the machine drawing the sky is the only thing that knows what it can afford. Applied per deck, after the depth sort: the farthest puffs are at the front of the vector, so the erase takes the field's far edge and leaves the sky directly overhead whole - the same way the tier distances trim precipitation.
         static LLCachedControl<U32> budget_setting(gSavedSettings, "SSAtmoCloudPuffBudget", 2520);
-        const S32 max_puffs = llclamp((S32)budget_setting, MIN_PUFF_BUDGET, MAX_PUFF_BUDGET);
+        S32 max_puffs = llclamp((S32)budget_setting, MIN_PUFF_BUDGET, MAX_PUFF_BUDGET);
+        if (gGLManager.mVRAM <= 2048 && budget_setting() == 2520)
+        {
+            // On <=2GB hardware with default budget, scale down to 384 puffs to prevent GPU stalls
+            max_puffs = llmin(max_puffs, 384);
+        }
+        else if (gGLManager.mVRAM <= 3072 && budget_setting() == 2520)
+        {
+            max_puffs = llmin(max_puffs, 768);
+        }
         if ((S32)deck.mPuffs.size() > max_puffs)
         {
             deck.mPuffs.erase(deck.mPuffs.begin(), deck.mPuffs.end() - max_puffs);

@@ -64,6 +64,7 @@
 		<string>RenderReflectionProbeMaxLocalLightAmbiance</string>
 		<string>RenderReflectionProbeResolution</string>
 		<string>RenderReflectionProbeVolumes</string>
+		<string>RenderResolutionMultiplier</string>
 		<string>RenderScreenSpaceReflections</string>
 		<string>RenderScreenSpaceReflectionIterations</string>
 		<string>RenderScreenSpaceReflectionRayStep</string>

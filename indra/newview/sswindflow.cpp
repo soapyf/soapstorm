@@ -1812,7 +1812,16 @@ bool SSWindFlowMap::solveRun(const Tile& tile)
     drainGLErrors();
 
     static LLCachedControl<U32> iterations(gSavedSettings, "SSAtmoWindFlowIterations", 256);
-    const S32 iters = llclamp((S32)iterations, 4, 512);
+    S32 iters = llclamp((S32)iterations, 4, 512);
+    if (gGLManager.mVRAM <= 2048 && iterations() == 256)
+    {
+        // On <=2GB hardware without async compute, 256 iterations causes severe GPU bubbles
+        iters = 16;
+    }
+    else if (gGLManager.mVRAM <= 3072 && iterations() == 256)
+    {
+        iters = 32;
+    }
 
     const S32 res = tile.mRes;
     const S32 slices = tile.mSlices;

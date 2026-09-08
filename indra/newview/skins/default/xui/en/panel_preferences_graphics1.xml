@@ -991,6 +991,49 @@
          height="12"
          layout="topleft"
          left="10"
+         name="resolution_scale_label"
+         top_pad="10"
+         width="250"
+         tool_tip="Scale the internal 3D rendering resolution to improve performance while keeping the 2D UI at native screen resolution.">
+          3D Resolution Scaling:
+        </text>
+        <combo_box
+         control_name="RenderResolutionMultiplier"
+         height="22"
+         follows="left|top"
+         layout="topleft"
+         left="10"
+         name="resolution_scale_combo"
+         top_pad="5"
+         width="250">
+            <combo_box.item
+             label="100% (Native Screen Resolution)"
+             name="res_100"
+             value="1.0" />
+            <combo_box.item
+             label="85% (Quality)"
+             name="res_85"
+             value="0.85" />
+            <combo_box.item
+             label="75% (Balanced - Recommended for Low-End)"
+             name="res_75"
+             value="0.75" />
+            <combo_box.item
+             label="67% (Performance)"
+             name="res_67"
+             value="0.67" />
+            <combo_box.item
+             label="50% (Ultra Performance)"
+             name="res_50"
+             value="0.5" />
+        </combo_box>
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         height="12"
+         layout="topleft"
+         left="10"
          name="antialiasing label"
          top_pad="10"
          width="220"

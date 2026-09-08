@@ -153,4 +153,88 @@
      top_pad="8"
      width="490" />
 
+    <!-- ===== Performance & Scaling ===== -->
+    <text
+     type="string"
+     length="1"
+     follows="left|top"
+     font="SansSerifSmallBold"
+     height="16"
+     layout="topleft"
+     left="10"
+     top_pad="14"
+     width="440">
+        Performance &amp; Scaling
+    </text>
+
+    <text
+     type="string"
+     length="1"
+     follows="left|top"
+     height="16"
+     layout="topleft"
+     left="20"
+     name="ss_res_multiplier_label"
+     top_pad="8"
+     width="160">
+        3D Resolution Scaling:
+    </text>
+    <combo_box
+     control_name="RenderResolutionMultiplier"
+     follows="left|top"
+     height="22"
+     layout="topleft"
+     left_pad="10"
+     name="ss_res_multiplier_combo"
+     tool_tip="Renders the 3D scene at a lower resolution for massive framerate gains on low-end GPUs, while keeping the 2D user interface at native screen resolution."
+     width="280">
+        <combo_box.item
+         label="100% (Native Screen Resolution)"
+         name="res_100"
+         value="1.0" />
+        <combo_box.item
+         label="85% (Quality)"
+         name="res_85"
+         value="0.85" />
+        <combo_box.item
+         label="75% (Balanced - Recommended for Low-End)"
+         name="res_75"
+         value="0.75" />
+        <combo_box.item
+         label="67% (Performance)"
+         name="res_67"
+         value="0.67" />
+        <combo_box.item
+         label="50% (Ultra Performance)"
+         name="res_50"
+         value="0.5" />
+    </combo_box>
+
+    <text
+     type="string"
+     length="1"
+     follows="left|top"
+     height="16"
+     layout="topleft"
+     left="20"
+     name="ss_cas_sharpness_label"
+     top_pad="10"
+     width="160">
+        CAS Upscaling Sharpness:
+    </text>
+    <slider
+     control_name="RenderCASSharpness"
+     decimal_digits="2"
+     follows="left|top"
+     height="18"
+     increment="0.05"
+     initial_val="0.4"
+     layout="topleft"
+     left_pad="10"
+     max_val="1.0"
+     min_val="0.0"
+     name="ss_cas_sharpness_slider"
+     tool_tip="Contrast Adaptive Sharpening amount applied when upscaling the 3D scene."
+     width="280" />
+
 </panel>

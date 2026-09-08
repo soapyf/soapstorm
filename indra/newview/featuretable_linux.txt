@@ -87,6 +87,12 @@ RenderTonemapMix			1   1
 RenderDisableVintageMode           1   1
 RenderMaxTextureResolution         1   2048
 RenderReflectionProbeCount  1   256
+RenderHDREnabled		1	1
+SSAtmoVolumetricClouds		1	1
+SSAtmoWindFlowIterations	1	256
+SSPBREnabled			1	1
+SSPBRMaterialsEnabled		1	1
+RenderResolutionMultiplier	1	1.0
 
 //
 // Low Graphics Settings
@@ -447,4 +453,40 @@ RenderTerrainPBRDetail      1   -1
 
 list VaryingVectors16orLess
 RenderTerrainPBRPlanarSampleCount 1   1
+
+list VRAMLE2GB
+RenderMaxTextureResolution	1	1024
+RenderReflectionProbeCount	1	0
+RenderReflectionProbeDetail	1	0
+RenderReflectionProbeLevel	1	0
+RenderHeroProbeResolution	1	0
+RenderHDREnabled		1	0
+RenderLocalLightCount		1	64
+SSAtmoVolumetricClouds		1	0
+SSAtmoWindFlowIterations	1	16
+SSPBREnabled			1	0
+SSPBRMaterialsEnabled		1	0
+
+list VRAMLT2GB
+RenderMaxTextureResolution	1	1024
+RenderReflectionProbeCount	1	0
+RenderReflectionProbeDetail	1	0
+RenderReflectionProbeLevel	1	0
+RenderHeroProbeResolution	1	0
+RenderHDREnabled		1	0
+RenderLocalLightCount		1	64
+SSAtmoVolumetricClouds		1	0
+SSAtmoWindFlowIterations	1	16
+SSPBREnabled			1	0
+SSPBRMaterialsEnabled		1	0
+
+list VRAMLE3GB
+RenderMaxTextureResolution	1	1024
+RenderReflectionProbeCount	1	16
+RenderReflectionProbeDetail	1	0
+RenderReflectionProbeLevel	1	1
+RenderHeroProbeResolution	1	256
+RenderLocalLightCount		1	128
+SSAtmoWindFlowIterations	1	32
+
 
