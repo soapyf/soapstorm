@@ -27,6 +27,7 @@ on:
       - "*alpha"
       - "*nightly"
       - "*preview"
+      - "perf/*"
   schedule:
     - cron: '00 03 * * *' # Run every day at 3am UTC
 env:
@@ -270,6 +271,8 @@ jobs:
           elif [[ "${{ github.event_name }}" == 'schedule' ]]; then
             FS_RELEASE_TYPE=Nightly
           elif [[ "${{ github.ref_name }}" == Firestorm* ]]; then
+            FS_RELEASE_TYPE=Release
+          elif [[ "${{ github.ref_name }}" == perf/* ]]; then
             FS_RELEASE_TYPE=Release
           elif [[ "${{ github.ref_name }}" == *review* ]]; then
             FS_RELEASE_TYPE=Beta
