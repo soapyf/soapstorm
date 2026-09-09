@@ -135,6 +135,10 @@ public:
     void            doSave(bool close_after_save, bool sync = true);
     // </FS:Ansariel>
 
+    std::string     getCompileTarget() const;
+    void            setCompileTarget(const std::string& target);
+    bool            isLua() const;
+
     bool            handleSaveChangesDialog(const LLSD& notification, const LLSD& response);
     bool            handleReloadFromServerDialog(const LLSD& notification, const LLSD& response);
 
@@ -249,6 +253,8 @@ private:
     LLUUID          mAssetID;
     LLTextBox*      mLineCol = nullptr;
     LLButton*       mSaveBtn = nullptr;
+    LLComboBox*     mCompileTarget = nullptr;
+    void            onCompileTargetChanged();
 
 // <FS:CR> Advanced Script Editor
     LLButton*       mSaveBtn2;  //  // <FS:Zi> support extra save button
@@ -302,6 +308,7 @@ protected:
 
     bool            onExternalChange(const std::string& filename);
     virtual void    saveIfNeeded(bool sync = true) = 0;
+    virtual void    onCompileTargetChanged() {}
 
     LLScriptEdCore*     mScriptEd;
 // [SL:KB] - Patch: Build-ScriptRecover | Checked: 2011-11-23 (Catznip-3.2.0) | Added: Catznip-3.2.0
@@ -406,6 +413,7 @@ private:
 
     virtual void loadAsset();
     /*virtual*/ void saveIfNeeded(bool sync = true);
+    /*virtual*/ void onCompileTargetChanged();
     bool monoChecked() const;
 
 

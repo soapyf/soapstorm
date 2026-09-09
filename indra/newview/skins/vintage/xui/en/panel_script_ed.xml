@@ -387,14 +387,38 @@
      layout="topleft"
      name="Insert..."
      top_pad="0"
-     width="128" />
+    <combo_box
+      name="compile_target"
+      follows="right|bottom"
+      height="20"
+      layout="topleft"
+      top_delta="-23"
+      right="-110"
+      width="95">
+      <combo_box.item
+        label="Mono"
+        name="compile_target_mono"
+        value="mono" />
+      <combo_box.item
+        label="LSL"
+        name="compile_target_lsl2"
+        value="lsl2" />
+      <combo_box.item
+        label="Lua"
+        name="compile_target_luau"
+        value="luau" />
+      <combo_box.item
+        label="LSL on Lua"
+        name="compile_target_lsl_luau"
+        value="lsl-luau" />
+    </combo_box>
     <button
      enabled="false"
      follows="right|bottom"
      height="20"
      label="Edit..."
      layout="topleft"
-     top_delta="-23"
+     top_delta="0"
      right="-5"
      name="edit_btn_2"
      width="100" />

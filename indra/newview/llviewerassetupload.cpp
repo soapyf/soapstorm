@@ -875,10 +875,19 @@ LLSD LLScriptAssetUpload::generatePostBody()
 {
     LLSD body;
 
+    std::string target = "mono";
+    switch (getTargetType())
+    {
+        case LSL2:     target = "lsl2"; break;
+        case MONO:     target = "mono"; break;
+        case LUAU:     target = "luau"; break;
+        case LSL_LUAU: target = "lsl-luau"; break;
+    }
+
     if (getTaskId().isNull())
     {
         body["item_id"] = getItemId();
-        body["target"] = "mono";
+        body["target"] = target;
     }
     else
     {
@@ -888,7 +897,7 @@ LLSD LLScriptAssetUpload::generatePostBody()
         //body["is_script_running"] = getIsRunning();
         body["is_script_running"] = (S32)getIsRunning();
         // </FS:Ansariel>
-        body["target"] = (getTargetType() == MONO) ? "mono" : "lsl2";
+        body["target"] = target;
         body["experience"] = getExerienceId();
     }
 

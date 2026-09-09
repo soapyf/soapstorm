@@ -262,7 +262,9 @@ public:
     enum TargetType_t
     {
         LSL2,
-        MONO
+        MONO,
+        LUAU,
+        LSL_LUAU
     };
 
     LLScriptAssetUpload(LLUUID itemId, std::string buffer, invnUploadFinish_f finish, uploadFailed_f failed);
