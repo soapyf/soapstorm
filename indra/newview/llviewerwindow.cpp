@@ -3003,6 +3003,40 @@ void LLViewerWindow::drawDebugText()
     gUIProgram.unbind();
 }
 
+// <SS:Nexii> Mouselook IFF line of sight for one target: two rays from the camera, avatar centre then head height so a target peeking over low cover still shows, against world geometry only so avatars and attachments never block. Re-cast per target at most ten times a second and the last answer reused between casts, which keeps a crowded region cheap for a marker that only needs to track.
+static bool ss_iff_line_of_sight(const LLUUID& key, const LLVector3d& target_global, const LLViewerCamera& camera)
+{
+    struct Sample { F64 mTime; bool mVisible; };
+    static std::map<LLUUID, Sample> sSamples;
+    const F64 LOS_INTERVAL = 0.1;
+    const F64 now = LLFrameTimer::getTotalSeconds();
+
+    auto it = sSamples.find(key);
+    if (it != sSamples.end() && now - it->second.mTime < LOS_INTERVAL)
+    {
+        return it->second.mVisible;
+    }
+    if (sSamples.size() > 512)
+    {
+        sSamples.clear(); // avatars come and go; a flush now and then beats tracking departures
+    }
+
+    LLVector3 target = gAgent.getPosAgentFromGlobal(target_global);
+    LLVector4a start, end, hit;
+    start.load3(camera.getOrigin().mV);
+    end.load3(target.mV);
+    bool visible = !gPipeline.lineSegmentIntersectWorldGeometry(start, end, &hit);
+    if (!visible)
+    {
+        target.mV[VZ] += 0.6f;
+        end.load3(target.mV);
+        visible = !gPipeline.lineSegmentIntersectWorldGeometry(start, end, &hit);
+    }
+    sSamples[key] = { now, visible };
+    return visible;
+}
+// </SS:Nexii>
+
 void LLViewerWindow::draw()
 {
 
@@ -3154,10 +3188,17 @@ void LLViewerWindow::draw()
                         targetColor = mark_color;
                     }
 
-                    if (renderIFF)
+                    // <SS:Nexii> Line of sight gates the marker and the identification alike, always: a target behind walls, floors or terrain draws nothing. The marker is screen-space with no depth test, so without this it was a through-walls radar. An avatar whose active group matches the agent's is an ally and shows through regardless.
+                    LLViewerObject* targetObject = gObjectList.findObject(targetKey);
+                    LLVOAvatar* targetAvatar = targetObject ? targetObject->asAvatar() : nullptr;
+                    const bool ally = targetAvatar && gAgent.getGroupID().notNull() && targetAvatar->getActiveGroupID() == gAgent.getGroupID();
+                    const bool targetVisible = ally || ss_iff_line_of_sight(targetKey, targetPosition, camera);
+
+                    if (renderIFF && targetVisible)
                     {
                         LLTracker::instance()->drawMarker(targetPosition, targetColor, true);
                     }
+                    // </SS:Nexii>
 
                     if (inMouselook && !crosshairRendered && !gRlvHandler.hasBehaviour(RLV_BHVR_SHOWNAMES))
                     {
@@ -3166,26 +3207,6 @@ void LLViewerWindow::draw()
 
                         if (magicVector.mdV[VX] > -0.75 && magicVector.mdV[VX] < 0.75 && magicVector.mdV[VZ] > 0.0 && magicVector.mdV[VY] > -1.5 && magicVector.mdV[VY] < 1.5) // Do not fuck with these, cheater. :(
                         {
-                            // Line of sight: don't identify targets through walls, floors or
-                            // terrain. Two rays (avatar center, then head height) so a target
-                            // peeking over low cover still identifies. World geometry only;
-                            // avatars and attachments never block the check.
-                            static LLCachedControl<bool> renderIFFLineOfSight(gSavedSettings, "ExodusMouselookIFFLineOfSight", true);
-                            bool targetVisible = true;
-                            if (renderIFFLineOfSight)
-                            {
-                                LLVector3 rayTarget = gAgent.getPosAgentFromGlobal(targetPosition);
-                                LLVector4a rayStart, rayEnd, rayHit;
-                                rayStart.load3(camera.getOrigin().mV);
-                                rayEnd.load3(rayTarget.mV);
-                                if (gPipeline.lineSegmentIntersectWorldGeometry(rayStart, rayEnd, &rayHit))
-                                {
-                                    rayTarget.mV[VZ] += 0.6f;
-                                    rayEnd.load3(rayTarget.mV);
-                                    targetVisible = !gPipeline.lineSegmentIntersectWorldGeometry(rayStart, rayEnd, &rayHit);
-                                }
-                            }
-
                             if (targetVisible)
                             {
                                 LLAvatarName avatarName;
@@ -3212,8 +3233,6 @@ void LLViewerWindow::draw()
                                     }
 
                                     // Group-based nameplate tint
-                                    LLViewerObject* targetObject = gObjectList.findObject(targetKey);
-                                    LLVOAvatar* targetAvatar = targetObject ? targetObject->asAvatar() : nullptr;
                                     if (targetAvatar && targetAvatar->getActiveGroupID().notNull())
                                     {
                                         LLColor4 groupColor = LLGroupColorMap::getInstance()->getGroupColor(targetAvatar->getActiveGroupID());

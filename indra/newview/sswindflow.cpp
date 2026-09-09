@@ -137,6 +137,7 @@ static LLTrace::BlockTimerStatHandle FTM_SS_WIND_SOLVE_INIT("Wind Solve Init");
 static LLTrace::BlockTimerStatHandle FTM_SS_WIND_SOLVE_RUN("Wind Solve Run");
 static LLTrace::BlockTimerStatHandle FTM_SS_WIND_READBACK("Wind Readback");
 
+#if !LL_DARWIN
 // The wind flow solve is submitted with raw GL commands, not through the
 // viewer's bind()/gGL path, so the shared-context worker never mutates the
 // main thread's GL state machine (gGL, LLVertexBuffer, the bound-shader
@@ -145,6 +146,7 @@ static void bindProgramRaw(const LLGLSLShader& shader)
 {
     glUseProgram(shader.mProgramObject);
 }
+#endif
 
 // <SS:Nexii> A single worker thread with its own GL context, shared with the viewer's. The solve is a long GPU task plus a synchronous glGetTexImage readback; running it on this thread keeps the 50-400ms rebuild spike out of the frame loop entirely. Mirrors LLImageGLThread's context lifecycle (createSharedContext -> makeContextCurrent -> gGL.init).
 struct SSWindFlowMap::SSWindFlowGLWorker
@@ -208,10 +210,17 @@ SSWindFlowMap::~SSWindFlowMap()
 // Needs compute-capable GL (4.3).
 bool SSWindFlowMap::isSupported()
 {
+#if LL_DARWIN
+    return false;
+#else
     return gGLManager.mGLVersion >= 4.29f
+#if LL_WINDOWS
         && glDispatchCompute != nullptr
         && glBindImageTexture != nullptr
-        && glTexStorage3D != nullptr;
+        && glTexStorage3D != nullptr
+#endif
+        ;
+#endif
 }
 
 // Grid resolution, extent and off-region margin the settings ask for.
@@ -288,6 +297,7 @@ static U32 tuningSignature()
     return h;
 }
 
+#if !LL_DARWIN
 // Clears pending GL errors so the next check is really ours.
 static void drainGLErrors()
 {
@@ -306,6 +316,7 @@ static bool contextLooksHealthy(const char* where)
                               << std::hex << err << std::dec << " already pending" << LL_ENDL;
         if (err == GL_OUT_OF_MEMORY) healthy = false;
     }
+#if LL_WINDOWS
     if (glGetGraphicsResetStatus)
     {
         const GLenum reset = glGetGraphicsResetStatus();
@@ -317,6 +328,7 @@ static bool contextLooksHealthy(const char* where)
             healthy = false;
         }
     }
+#endif
     return healthy;
 }
 
@@ -335,10 +347,14 @@ static U32 createVolume(S32 res, S32 slices, GLenum format)
     glBindTexture(GL_TEXTURE_3D, 0);
     return tex;
 }
+#endif
 
 // Allocates (or re-allocates on size change) every GPU object the solve needs.
 bool SSWindFlowMap::ensureResources(S32 res, S32 slices)
 {
+#if LL_DARWIN
+    return false;
+#else
     // The probe texture is sized for the upload this build will make, which is
     // mProbeTake (never just mProbeRes): a full solve uploads the whole probe
     // image, a partial one a sub-rect of it, and mProbeTake/mProbeRes are
@@ -402,6 +418,7 @@ bool SSWindFlowMap::ensureResources(S32 res, S32 slices)
     mTexSlices = slices;
     mProbeTexRes = probe_res;
     return true;
+#endif
 }
 
 // Frees all GPU objects.
@@ -1569,6 +1586,7 @@ void SSWindFlowMap::bridgePassages(const Tile& tile)
                           << " between carved ones" << LL_ENDL;
 }
 
+#if !LL_DARWIN
 // Uniform location with a warning on miss. The warning set is thread-local:
 // the solve worker (a second GL thread) asks for the same names.
 static S32 uniformLoc(const LLGLSLShader& shader, const char* name)
@@ -1629,6 +1647,7 @@ static void setAmbient(LLGLSLShader& shader, const LLVector3* ambient, S32 slice
     }
     glUniform3fv(uniformLoc(shader, "uAmbient"), slices, amb);
 }
+#endif
 
 // Seeds the velocity volume with ambient wind and the solid mask. A partial
 // build first restores the previous mask everywhere so the init pass only
@@ -1636,6 +1655,9 @@ static void setAmbient(LLGLSLShader& shader, const LLVector3* ambient, S32 slice
 // confined to that box.
 bool SSWindFlowMap::solveInit(const Tile& tile)
 {
+#if LL_DARWIN
+    return false;
+#else
     LL_PROFILE_GPU_ZONE("atmo wind flow init");
 
     if (!contextLooksHealthy("the solve init")) return false;
@@ -1773,6 +1795,7 @@ bool SSWindFlowMap::solveInit(const Tile& tile)
     glFlush();
 
     return true;
+#endif
 }
 
 // The iterative compute solve: pressure projection around the solids until the field is divergence-free enough.
@@ -1781,6 +1804,9 @@ bool SSWindFlowMap::solveInit(const Tile& tile)
 // the box's change instead of re-establishing the whole field from zero.
 bool SSWindFlowMap::solveRun(const Tile& tile)
 {
+#if LL_DARWIN
+    return false;
+#else
     LL_PROFILE_GPU_ZONE("atmo wind flow solve");
 
     drainGLErrors();
@@ -1938,11 +1964,15 @@ bool SSWindFlowMap::solveRun(const Tile& tile)
     gSSWindProjectProgram.unbind();
 
     return glGetError() == GL_NO_ERROR;
+#endif
 }
 
 // <SS:Nexii> The same solve, submitted with raw GL on the worker thread's own shared context. It deliberately does not call LLGLSLShader::bind() or touch gGL: those are the main thread's state machine, and racing on them from a second context is exactly the crash the worker exists to avoid. Program binding and uniform writes are context-local and safe.
 bool SSWindFlowMap::solveRunWorker(const Tile& tile)
 {
+#if LL_DARWIN
+    return false;
+#else
     drainGLErrors();
 
     static LLCachedControl<U32> iterations(gSavedSettings, "SSAtmoWindFlowIterations", 256);
@@ -2088,6 +2118,7 @@ bool SSWindFlowMap::solveRunWorker(const Tile& tile)
     glUseProgram(0);
 
     return glGetError() == GL_NO_ERROR;
+#endif
 }
 
 // Copies the solved volume off the GPU. The pressure comes back too - it is a

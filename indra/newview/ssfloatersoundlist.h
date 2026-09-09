@@ -197,7 +197,7 @@ private:
     void onClickOK();
     void onClickCancel();
     void advancePlayback();
-    void refresh();
+    void refresh() override;
 
     SSSoundListRows* mList = nullptr;
     LLHandle<LLView> mOwnerHandle;

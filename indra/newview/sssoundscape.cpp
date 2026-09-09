@@ -27,6 +27,7 @@
 #include "ssatmomagic.h"
 #include "ssatmostore.h"
 #include "sswindflow.h"
+#include "sscombatlockout.h"
 #include "ssprecippreset.h"
 #include "sssurfacefield.h"
 #include "sssoundmeta.h"
@@ -1347,7 +1348,8 @@ void SSSoundscape::footstepEvent(const LLUUID& avatar_id, const LLVector3& pos_a
 void SSSoundscape::markStepSource(const LLUUID& source_id)
 {
     static LLCachedControl<bool> markers(gSavedSettings, "SSAtmoDebugFootstepMarkers", false);
-    if (!markers || source_id.isNull()) return;
+    // Combat render lockout: the label has depth compare off, so it would track every walking avatar through walls while aiming
+    if (!markers || SSCombatLockout::active() || source_id.isNull()) return;
 
     StepMark mark;
     mark.mSourceID = source_id;
@@ -1364,10 +1366,12 @@ void SSSoundscape::markStepSource(const LLUUID& source_id)
 // Ages step-source marks.
 void SSSoundscape::updateStepMarks(F64 now)
 {
+    // Combat render lockout: marks already riding a source are killed too, not just new ones refused, so nothing placed before aiming survives into it
+    const bool locked = SSCombatLockout::active();
     for (size_t i = 0; i < mStepMarks.size(); )
     {
         StepMark& mark = mStepMarks[i];
-        LLAudioSource* source = gAudiop ? gAudiop->findAudioSource(mark.mSourceID) : nullptr;
+        LLAudioSource* source = (gAudiop && !locked) ? gAudiop->findAudioSource(mark.mSourceID) : nullptr;
         if (!source)
         {
             if (mark.mText) mark.mText->markDead();

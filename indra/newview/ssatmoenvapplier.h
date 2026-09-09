@@ -29,6 +29,7 @@
 #include "llsettingssky.h"
 #include "llsettingswater.h"
 #include "llpointer.h"
+#include "llhudtext.h"
 #include "lluuid.h"
 #include "v2math.h"
 #include "v3math.h"

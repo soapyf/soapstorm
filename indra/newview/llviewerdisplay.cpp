@@ -95,6 +95,7 @@
 #include "sswindflow.h"
 #include "ssglreadback.h"
 #include "ssworldfield.h"
+#include "sscombatlockout.h" // <SS:Nexii> combat render lockout
 
 #include <boost/json.hpp>
 // [RLVa:KB] - Checked: 2011-05-22 (RLVa-1.3.1a)
@@ -822,6 +823,9 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
 
         LLViewerCamera::getInstance()->setNear(near_plane);
     }
+
+    // <SS:Nexii> Combat render lockout samples the camera mode here: after the camera is settled for the frame, before any pass, and outside every render type push and pop, so the forced toggles cannot flip mid-pass.
+    SSCombatLockout::update();
 
     //////////////////////////
     //

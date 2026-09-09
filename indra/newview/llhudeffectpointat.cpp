@@ -38,6 +38,7 @@
 #include "llviewerobjectlist.h"
 #include "llvoavatar.h"
 #include "message.h"
+#include "sscombatlockout.h" // <SS:Nexii> combat render lockout
 
 // packet layout
 const S32 SOURCE_AVATAR = 0;
@@ -360,7 +361,8 @@ void LLHUDEffectPointAt::setSourceObject(LLViewerObject* objectp)
 void LLHUDEffectPointAt::render()
 {
     update();
-    if (sDebugPointAt && mTargetType != POINTAT_TARGET_NONE)
+    // <SS:Nexii/> Combat render lockout: same reasoning as look-at, it is what an unseen opponent is targeting
+    if (sDebugPointAt && !SSCombatLockout::active() && mTargetType != POINTAT_TARGET_NONE)
     {
         //LLGLDisable gls_stencil(GL_STENCIL_TEST);
         gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);

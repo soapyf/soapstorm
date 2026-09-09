@@ -59,6 +59,7 @@
 // void drawBoxOutline(const LLVector3& pos,const LLVector3& size); // llspatialpartition.cpp
 // </FS:Zi>
 #include "llnetmap.h"
+#include "sscombatlockout.h" // <SS:Nexii> combat render lockout
 
 
 static U32 sShaderLevel = 0;
@@ -719,7 +720,8 @@ void LLDrawPoolAvatar::renderAvatars(LLVOAvatar* single_avatar, S32 pass)
 
     // <FS:Zi> Add avatar hitbox debug
     static LLCachedControl<bool> render_hitbox(gSavedSettings, "DebugRenderHitboxes", false);
-    if (render_hitbox && pass == 2 && !avatarp->isControlAvatar())
+    // <SS:Nexii/> Combat render lockout: aim convergence targets this same box, so while aiming it is a reticle aid and stays off
+    if (render_hitbox && !SSCombatLockout::active() && pass == 2 && !avatarp->isControlAvatar())
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_AVATAR("render_hitbox");
 

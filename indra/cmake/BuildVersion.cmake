@@ -15,29 +15,32 @@ if (NOT DEFINED VIEWER_SHORT_VERSION) # will be true in indra/, false in indra/n
            set(VIEWER_VERSION_REVISION $ENV{VIEWER_REVISION})
            message(STATUS "Revision (from environment): ${VIEWER_VERSION_REVISION}")
 
-        elseif (DEFINED ENV{AUTOBUILD_BUILD_ID})
-           set(VIEWER_VERSION_REVISION $ENV{AUTOBUILD_BUILD_ID})
-           message(STATUS "Revision (from autobuild environment): ${VIEWER_VERSION_REVISION}")
-
-        else (DEFINED ENV{VIEWER_REVISION})
+        else ()
             find_program(GIT git)
-            if (DEFINED GIT )
+            set(GIT_REV_FOUND FALSE)
+            if (DEFINED GIT)
                 execute_process(
                         COMMAND ${GIT} rev-list --count HEAD
                         OUTPUT_VARIABLE VIEWER_VERSION_REVISION
                         OUTPUT_STRIP_TRAILING_WHITESPACE
+                        ERROR_QUIET
                 )
                 if ("${VIEWER_VERSION_REVISION}" MATCHES "^[0-9]+$")
+                    set(GIT_REV_FOUND TRUE)
                     message(STATUS "Revision (from git) ${VIEWER_VERSION_REVISION}")
-                else ("${VIEWER_VERSION_REVISION}" MATCHES "^[0-9]+$")
+                endif ()
+            endif ()
+
+            if (NOT GIT_REV_FOUND)
+                if (DEFINED ENV{AUTOBUILD_BUILD_ID})
+                    set(VIEWER_VERSION_REVISION $ENV{AUTOBUILD_BUILD_ID})
+                    message(STATUS "Revision (from autobuild environment): ${VIEWER_VERSION_REVISION}")
+                else ()
                     message(STATUS "Revision not set (repository not found?); using 0")
-                    set(VIEWER_VERSION_REVISION 0 )
-                endif ("${VIEWER_VERSION_REVISION}" MATCHES "^[0-9]+$")
-            else (DEFINED GIT )
-                message(STATUS "Revision not set: 'git' found; using 0")
-                set(VIEWER_VERSION_REVISION 0)
-            endif (DEFINED GIT)
-        endif (DEFINED ENV{VIEWER_REVISION})
+                    set(VIEWER_VERSION_REVISION 0)
+                endif ()
+            endif ()
+        endif ()
         message(STATUS "Building '${VIEWER_CHANNEL}' Version ${VIEWER_SHORT_VERSION}.${VIEWER_VERSION_REVISION}")
     else ( EXISTS ${VIEWER_VERSION_BASE_FILE} )
         message(SEND_ERROR "Cannot get viewer version from '${VIEWER_VERSION_BASE_FILE}'") 

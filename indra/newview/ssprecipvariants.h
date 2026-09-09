@@ -28,10 +28,9 @@
 
 #include "llpointer.h"
 #include "llsingleton.h"
+#include "llviewertexture.h"
 
 #include <map>
-
-class LLViewerTexture;
 
 class SSPrecipVariants : public LLSingleton<SSPrecipVariants>
 {

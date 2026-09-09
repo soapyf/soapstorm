@@ -1514,7 +1514,9 @@ class Darwin_x86_64_Manifest(ViewerManifest):
                         self.path(libfile)
 
             with self.prefix(dst="MacOS"):
-                executable = self.dst_path_of(CHANNEL_VENDOR_BASE)
+                executable = self.dst_path_of("Firestorm")
+                if not os.path.exists(executable) and os.path.exists(self.dst_path_of(CHANNEL_VENDOR_BASE)):
+                    executable = self.dst_path_of(CHANNEL_VENDOR_BASE)
                 if self.args.get('bugsplat'):
                     # According to Apple Technical Note TN2206:
                     # https://developer.apple.com/library/archive/technotes/tn2206/_index.html#//apple_ref/doc/uid/DTS40007919-CH1-TNTAG207
@@ -1793,7 +1795,10 @@ class Darwin_x86_64_Manifest(ViewerManifest):
             print ("Trying template directory", dmg_template)
 
             if not os.path.exists (self.src_path_of(dmg_template)):
-                dmg_template = os.path.join ('installers', 'darwin', 'release-dmg')
+                dmg_template = os.path.join ('installers', 'darwin', '%s-release-dmg' % dmg_template_prefix)
+                print ("Not found, trying template directory", dmg_template)
+            if not os.path.exists (self.src_path_of(dmg_template)):
+                dmg_template = os.path.join ('installers', 'darwin', 'firestorm-release-dmg')
                 print ("Not found, trying template directory", dmg_template)
 
             for s,d in list({self.get_dst_prefix():app_name + ".app",
@@ -1807,35 +1812,65 @@ class Darwin_x86_64_Manifest(ViewerManifest):
             #         that hides the files. If not, packaging will fail.
             #         YOU HAVE BEEN WARNED.
             # Create the alias file (which is a resource file) from the .r
-            self.run_command(
-                ['Rez', self.src_path_of("%s/Applications-alias.r" % dmg_template),
-                 '-o', os.path.join(volpath, "Applications")])
+            app_link = os.path.join(volpath, "Applications")
+            alias_r = self.src_path_of("%s/Applications-alias.r" % dmg_template)
+            if os.path.exists(alias_r):
+                try:
+                    self.run_command(['Rez', alias_r, '-o', app_link])
+                except Exception as e:
+                    print("Rez failed, falling back to symlink:", e)
+                    if not os.path.exists(app_link):
+                        try:
+                            os.symlink('/Applications', app_link)
+                        except Exception as se:
+                            print("os.symlink fallback failed:", se)
+            else:
+                if not os.path.exists(app_link):
+                    try:
+                        os.symlink('/Applications', app_link)
+                    except Exception as se:
+                        print("os.symlink fallback failed:", se)
 
             # Set up the installer disk image: set icon positions, folder view
             #  options, and icon label colors. This must be done before the
             #  files are hidden.
-            self.run_command(
-                ['osascript',
-                 self.src_path_of("installers/darwin/installer-dmg.applescript"),
-                 volname])
+            try:
+                self.run_command(
+                    ['osascript',
+                     self.src_path_of("installers/darwin/installer-dmg.applescript"),
+                     volname])
+            except Exception as e:
+                print("osascript failed (headless environment), continuing:", e)
 
             # <FS:TS> ARGH! osascript clobbers the volume icon file, for no
             #        reason I can find anywhere. So we need to copy it after
             #        running the script to set everything else up.
-            print ("Copying volume icon to dmg")
-            self.copy_action(self.src_path_of(os.path.join(dmg_template, "_VolumeIcon.icns")),
-                os.path.join(volpath, ".VolumeIcon.icns"))
+            vol_icon = self.src_path_of(os.path.join(dmg_template, "_VolumeIcon.icns"))
+            if os.path.exists(vol_icon):
+                print ("Copying volume icon to dmg")
+                self.copy_action(vol_icon, os.path.join(volpath, ".VolumeIcon.icns"))
 
             # Hide the background image, DS_Store file, and volume icon file (set their "visible" bit)
             for f in ".VolumeIcon.icns", "background.png", ".DS_Store":
                 pathname = os.path.join(volpath, f)
-                self.run_command(['SetFile', '-a', 'V', pathname])
+                if os.path.exists(pathname):
+                    try:
+                        self.run_command(['SetFile', '-a', 'V', pathname])
+                    except Exception as e:
+                        print("SetFile on %s ignored: %s" % (f, e))
 
             # Set the alias file's alias and custom icon bits
-            self.run_command(['SetFile', '-a', 'AC', os.path.join(volpath, "Applications")])
+            if os.path.exists(app_link):
+                try:
+                    self.run_command(['SetFile', '-a', 'AC', app_link])
+                except Exception as e:
+                    print("SetFile on Applications alias ignored:", e)
 
             # Set the disk image root's custom icon bit
-            self.run_command(['SetFile', '-a', 'C', volpath])
+            try:
+                self.run_command(['SetFile', '-a', 'C', volpath])
+            except Exception as e:
+                print("SetFile on disk root ignored:", e)
 
             # Sign the app if requested; 
             # do this in the copy that's in the .dmg so that the extended attributes used by 
@@ -2026,8 +2061,13 @@ class Darwin_x86_64_Manifest(ViewerManifest):
         icon_path = os.path.join(self.get_src_prefix(), self.icon_path(), 'firestorm_icon.icns')
         # </FS:TJ>
 
-        # The main executable inside Contents/MacOS/ is named after the channel
-        main_exe = self.channel()
+        # The main executable inside Contents/MacOS/
+        main_exe = "Firestorm"
+        if not os.path.exists(os.path.join(app_bundle, "Contents", "MacOS", main_exe)):
+            if os.path.exists(os.path.join(app_bundle, "Contents", "MacOS", self.channel())):
+                main_exe = self.channel()
+            elif os.path.exists(os.path.join(app_bundle, "Contents", "MacOS", CHANNEL_VENDOR_BASE)):
+                main_exe = CHANNEL_VENDOR_BASE
 
         # In CI, defer Velopack packaging to the sign step where code signing
         # credentials are available. Emit metadata as GitHub outputs so the

@@ -160,7 +160,7 @@ private:
     void onCommitCsv();
     void onClickOK();
     void onClickCancel();
-    void refresh();
+    void refresh() override;
 
     SSTextureListRows* mRows = nullptr;
     LLHandle<LLView> mOwnerHandle;

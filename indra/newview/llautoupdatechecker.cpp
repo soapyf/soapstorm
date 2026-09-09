@@ -160,6 +160,10 @@ void LLAutoUpdateChecker::checkUpdateCoro()
 
     if (jsonObj.contains("assets") && jsonObj.at("assets").is_array())
     {
+        bool preferAVX2 = LLCPUFeatures::hasAVX2() && LLCPUFeatures::hasFMA3();
+        std::string fallbackUrl;
+        double fallbackSizeMB = 0.0;
+
         for (const auto& assetVal : jsonObj.at("assets").as_array())
         {
             if (assetVal.is_object())
@@ -187,15 +191,17 @@ void LLAutoUpdateChecker::checkUpdateCoro()
                     
                     if (match)
                     {
+                        std::string url;
                         if (assetObj.at("browser_download_url").is_string())
                         {
-                            downloadUrl = assetObj.at("browser_download_url").as_string().c_str();
+                            url = assetObj.at("browser_download_url").as_string().c_str();
                         }
                         
+                        double sizeMB = 0.0;
                         if (assetObj.contains("size"))
                         {
-                            double sizeBytes = 0.0;
                             const auto& sizeVal = assetObj.at("size");
+                            double sizeBytes = 0.0;
                             if (sizeVal.is_int64())
                             {
                                 sizeBytes = static_cast<double>(sizeVal.as_int64());
@@ -208,12 +214,32 @@ void LLAutoUpdateChecker::checkUpdateCoro()
                             {
                                 sizeBytes = sizeVal.as_double();
                             }
-                            fileSizeMB = sizeBytes / (1024.0 * 1024.0);
+                            sizeMB = sizeBytes / (1024.0 * 1024.0);
                         }
-                        break; // Match found
+
+                        bool isAvx = (assetNameLower.find("avx") != std::string::npos);
+                        bool isLegacy = (assetNameLower.find("legacy") != std::string::npos);
+
+                        if ((preferAVX2 && isAvx) || (!preferAVX2 && isLegacy))
+                        {
+                            downloadUrl = url;
+                            fileSizeMB = sizeMB;
+                            break;
+                        }
+                        else if (fallbackUrl.empty())
+                        {
+                            fallbackUrl = url;
+                            fallbackSizeMB = sizeMB;
+                        }
                     }
                 }
             }
+        }
+
+        if (downloadUrl.empty() && !fallbackUrl.empty())
+        {
+            downloadUrl = fallbackUrl;
+            fileSizeMB = fallbackSizeMB;
         }
     }
     

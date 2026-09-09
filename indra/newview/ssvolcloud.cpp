@@ -100,7 +100,7 @@ namespace
     // Deterministic cell hash - the whole field derives from position, so every client sees the same clouds.
     U32 hashCell(S32 x, S32 y, U32 salt)
     {
-        U32 h = (U32)(x * 374761393) ^ (U32)(y * 668265263) ^ (salt * 2246822519u);
+        U32 h = ((U32)x * 374761393u) ^ ((U32)y * 668265263u) ^ (salt * 2246822519u);
         h = (h ^ (h >> 13)) * 1274126177u;
         return h ^ (h >> 16);
     }

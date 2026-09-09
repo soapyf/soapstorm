@@ -114,6 +114,7 @@
 #include "ssworldfield.h"   // <SS:Nexii> Atmo Magic shared world field
 #include "sswhiteout.h"     // <SS:Nexii> Atmo Magic whiteout
 #include "ssatmomagic.h" // <SS:Nexii> Atmo Magic geometry settling overlay
+#include "sscombatlockout.h" // <SS:Nexii> combat render lockout
 #include "llspatialpartition.h"
 #include "llmutelist.h"
 #include "lltoolpie.h"
@@ -3958,7 +3959,8 @@ void LLPipeline::postSort(LLCamera &camera)
         LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("beacon rendering flags");
     // only render if the flag is set. The flag is only set if we are in edit mode or the toggle is set in the menus
     // <FS:Ansariel> Make beacons also show when beacons floater is closed.
-    if (/*LLFloaterReg::instanceVisible("beacons") &&*/ !sShadowRender && !gCubeSnapshot)
+    // <SS:Nexii/> Combat render lockout: beacons are unoccluded full-height lines over every projectile, weapon script and gunshot source, so the whole block sits out while aiming
+    if (/*LLFloaterReg::instanceVisible("beacons") &&*/ !sShadowRender && !gCubeSnapshot && !SSCombatLockout::active())
     {
         if (sRenderScriptedTouchBeacons)
         {
@@ -5680,20 +5682,20 @@ void LLPipeline::renderDebug()
         }
     }
 
-    if (mRenderDebugMask & RENDER_DEBUG_WIND_VECTORS)
+    if (hasRenderDebugMask(RENDER_DEBUG_WIND_VECTORS))
     {
         gAgent.getRegion()->mWind.renderVectors();
     }
 
     // <SS:Nexii> Atmo Magic wind flowmap: every slab translucently, plus an arrow field on the slab the camera is in
-    if (mRenderDebugMask & RENDER_DEBUG_WIND_FLOW)
+    if (hasRenderDebugMask(RENDER_DEBUG_WIND_FLOW))
     {
         SSWindFlowMap::getInstance()->renderDebug();
     }
 
     // Atmo Magic rain shadow: every captured depth texel unprojected to the
     // world point it saw, so holes, eaves and grazed faces read directly
-    if (mRenderDebugMask & RENDER_DEBUG_RAIN_SHADOW)
+    if (hasRenderDebugMask(RENDER_DEBUG_RAIN_SHADOW))
     {
         SSRainShadowMap::getInstance()->renderDebug();
     }
@@ -5705,7 +5707,7 @@ void LLPipeline::renderDebug()
     // toggled from the Effects & LOD floater's Rain pane, like the celestial overlay.
     {
         static LLCachedControl<bool> rain_trace_debug(gSavedSettings, "SSAtmoRainTraceDebug", false);
-        if (rain_trace_debug)
+        if (rain_trace_debug && !SSCombatLockout::active()) // the columns outline shelter above, a cover map, so the combat render lockout holds them too
         {
             SSRainShadowMap::getInstance()->renderColumnTrace();
         }
@@ -5723,7 +5725,7 @@ void LLPipeline::renderDebug()
     // Atmo Magic surface field: what the weather has worked into that surface
     // over time - damp, settled snow, standing water - washed over the cells
     // it is held in
-    if (mRenderDebugMask & RENDER_DEBUG_SURFACE_FIELD)
+    if (hasRenderDebugMask(RENDER_DEBUG_SURFACE_FIELD))
     {
         SSSurfaceField::getInstance()->renderDebug();
     }
@@ -5731,7 +5733,7 @@ void LLPipeline::renderDebug()
     // Atmo Magic world field: what the shared capture resolved, what the air
     // flood decided about its connectivity, and the drainage topology it
     // feeds - view chosen by SSWorldFieldDebugView
-    if (mRenderDebugMask & RENDER_DEBUG_WORLD_FIELD)
+    if (hasRenderDebugMask(RENDER_DEBUG_WORLD_FIELD))
     {
         SSWorldField::getInstance()->renderDebug();
     }
@@ -5739,26 +5741,26 @@ void LLPipeline::renderDebug()
     // Atmo Magic volumetric cloud field: the puffs as geometry, their anvil and
     // form shaping, the cell gate and tower map on the builder's own grid, or
     // the vertical profile ramp - view chosen in the Effects & LOD floater
-    if (mRenderDebugMask & RENDER_DEBUG_CLOUD_FIELD)
+    if (hasRenderDebugMask(RENDER_DEBUG_CLOUD_FIELD))
     {
         SSVolCloud::getInstance()->renderDebug();
     }
 
     // Atmo Magic roof runoff: the eaves, the water they hold, the gates that
     // quiet them, or what they shed - view chosen in the Simulation floater
-    if (mRenderDebugMask & RENDER_DEBUG_ROOF_RUNOFF)
+    if (hasRenderDebugMask(RENDER_DEBUG_ROOF_RUNOFF))
     {
         SSSurfaceField::getInstance()->renderRunoffDebug();
     }
 
     // Atmo Magic geometry settling: a beacon over every prim change still
     // waiting to be believed, so a queue that never drains can be walked to
-    if (mRenderDebugMask & RENDER_DEBUG_GEOM_SETTLE)
+    if (hasRenderDebugMask(RENDER_DEBUG_GEOM_SETTLE))
     {
         SSAtmoMagic::getInstance()->renderDebug();
     }
 
-    if (mRenderDebugMask & RENDER_DEBUG_COMPOSITION)
+    if (hasRenderDebugMask(RENDER_DEBUG_COMPOSITION))
     {
         // Debug composition layers
         F32 x, y;
@@ -7065,29 +7067,32 @@ void LLPipeline::toggleRenderType(U32 type)
     }
 }
 
+// <SS:Nexii> The UI controls go through the combat render lockout, which holds the user's intent for a geometry type it has forced on and hands it back when the lockout lifts.
 //static
 void LLPipeline::toggleRenderTypeControl(U32 type)
 {
-    gPipeline.toggleRenderType(type);
+    SSCombatLockout::toggleRenderType(type);
 }
 
 //static
 bool LLPipeline::hasRenderTypeControl(U32 type)
 {
-    return gPipeline.hasRenderType(type);
+    return SSCombatLockout::hasRenderType(type);
 }
 
 // Allows UI items labeled "Hide foo" instead of "Show foo"
 //static
 bool LLPipeline::toggleRenderTypeControlNegated(S32 type)
 {
-    return !gPipeline.hasRenderType(type);
+    return !SSCombatLockout::hasRenderType(type);
 }
+// </SS:Nexii>
 
 //static
 void LLPipeline::toggleRenderDebug(U64 bit)
 {
-    if (gPipeline.hasRenderDebugMask(bit))
+    // <SS:Nexii/> Raw mask here and in the menu check below: hasRenderDebugMask hides the bits the combat render lockout is holding down, and a toggle made while aiming must still land on the user's own state
+    if (gPipeline.mRenderDebugMask & bit)
     {
         LL_INFOS() << "Toggling render debug mask " << std::hex << bit << " off" << std::dec << LL_ENDL;
     }
@@ -7102,7 +7107,7 @@ void LLPipeline::toggleRenderDebug(U64 bit)
 //static
 bool LLPipeline::toggleRenderDebugControl(U64 bit)
 {
-    return gPipeline.hasRenderDebugMask(bit);
+    return bool(gPipeline.mRenderDebugMask & bit);
 }
 
 //static

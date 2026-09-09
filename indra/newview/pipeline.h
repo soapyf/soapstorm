@@ -40,6 +40,7 @@
 #include "llrendertarget.h"
 #include "llreflectionmapmanager.h"
 #include "llheroprobemanager.h"
+#include "sscombatlockout.h" // <SS:Nexii> combat render lockout filters the debug mask
 
 #include <stack>
 
@@ -413,7 +414,7 @@ public:
     void recordTrianglesDrawn();
 
     bool hasRenderDebugFeatureMask(const U32 mask) const    { return bool(mRenderDebugFeatureMask & mask); }
-    bool hasRenderDebugMask(const U64 mask) const           { return bool(mRenderDebugMask & mask); }
+    bool hasRenderDebugMask(const U64 mask) const           { return bool(mRenderDebugMask & ~SSCombatLockout::debugMask() & mask); } // <SS:Nexii/> reads see the combat render lockout; the menu reads the raw mask through toggleRenderDebugControl
     void setAllRenderDebugFeatures() { mRenderDebugFeatureMask = 0xffffffff; }
     void clearAllRenderDebugFeatures() { mRenderDebugFeatureMask = 0x0; }
     void setAllRenderDebugDisplays() { mRenderDebugMask = 0xffffffffffffffff; }

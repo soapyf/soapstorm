@@ -50,6 +50,7 @@
 
 // [RLVa:KC] - Firestrom specific
 #include "rlvhandler.h"
+#include "sscombatlockout.h" // <SS:Nexii> combat render lockout
 // [/RLVa:KC]
 
 //bool LLHUDEffectLookAt::sDebugLookAt = false;
@@ -707,7 +708,8 @@ void LLHUDEffectLookAt::setSourceObject(LLViewerObject* objectp)
 //-----------------------------------------------------------------------------
 void LLHUDEffectLookAt::render()
 {
-    if (mDebugLookAt && mSourceObject.notNull())
+    // <SS:Nexii/> Combat render lockout: a look-at crosshair is an unseen opponent's aim direction, so it stays off while aiming
+    if (mDebugLookAt && !SSCombatLockout::active() && mSourceObject.notNull())
     {
         static LLCachedControl<bool> hide_own(gSavedPerAccountSettings, "DebugLookAtHideOwn", false);
         static LLCachedControl<bool> is_private(gSavedSettings, "PrivateLookAtTarget", false);

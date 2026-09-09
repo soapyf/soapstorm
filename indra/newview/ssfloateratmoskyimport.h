@@ -51,7 +51,7 @@ private:
 
     U32 checkedGroups() const;
 
-    void refresh();
+    void refresh() override;
     void onClickImport();
 
     LLSettingsSky::ptr_t mSky;

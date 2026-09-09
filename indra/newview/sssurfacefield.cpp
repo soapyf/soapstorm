@@ -1147,14 +1147,15 @@ void SSSurfaceField::updateWindow()
     {
         releaseGL();
 
+#if LL_WINDOWS
         if (glTexStorage2D == nullptr)
         {
             LL_WARNS_ONCE("AtmoMagic") << "No glTexStorage2D; the surface field"
-                                          " cannot be uploaded and nothing will"
-                                          " shade wet" << LL_ENDL;
+                                       << " window cannot be allocated" << LL_ENDL;
             mWindowValid = false;
             return;
         }
+#endif
 
         while (glGetError() != GL_NO_ERROR) { }
 

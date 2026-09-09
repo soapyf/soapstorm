@@ -117,6 +117,7 @@
 #include "llterrainpaintmap.h"
 #include "lltextureview.h"
 #include "ssstatsview.h" // <SS:Nexii>
+#include "sscombatlockout.h" // <SS:Nexii> combat render lockout
 #include "lltoolbarview.h"
 #include "lltoolcomp.h"
 #include "lltoolmgr.h"
@@ -1548,9 +1549,11 @@ class LLAdvancedToggleWireframe : public view_listener_t
     {
 // [RLVa:KB] - @detach and @viewwireframe
         const bool fRlvCanViewWireframe = RlvActions::canViewWireframe();
-        if ( (!gUseWireframe) && (!fRlvCanViewWireframe) )
+        // <SS:Nexii/> Through the combat render lockout so a toggle made while aiming lands on the user's intent and shows once the lockout lifts
+        const bool wireframe = SSCombatLockout::getWireframe();
+        if ( (!wireframe) && (!fRlvCanViewWireframe) )
             RlvUtil::notifyBlocked(RlvStringKeys::Blocked::Wireframe);
-        set_use_wireframe( (!gUseWireframe) && (fRlvCanViewWireframe) );
+        set_use_wireframe( (!wireframe) && (fRlvCanViewWireframe) );
         return true;
     }
 };
@@ -1558,10 +1561,10 @@ class LLAdvancedToggleWireframe : public view_listener_t
 // Called from rlvhandler.cpp
 void set_use_wireframe(bool useWireframe)
     {
-        if (gUseWireframe == useWireframe)
+        if (SSCombatLockout::getWireframe() == useWireframe)
             return;
 
-        gUseWireframe = useWireframe;
+        SSCombatLockout::setWireframe(useWireframe);
 // [/RLVa:KB]
 //      gUseWireframe = !(gUseWireframe);
 
@@ -1573,7 +1576,7 @@ class LLAdvancedCheckWireframe : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
-        return gUseWireframe;
+        return SSCombatLockout::getWireframe();
     }
 };
 
@@ -11240,9 +11243,11 @@ class LLToolsShowHiddenSelection : public view_listener_t
     bool handleEvent(const LLSD& userdata)
     {
         // TomY TODO Merge these
-        LLSelectMgr::sRenderHiddenSelections = !LLSelectMgr::sRenderHiddenSelections;
+        // <SS:Nexii/> Through the combat render lockout: silhouettes drawn through occluders stay off while aiming, the intent is kept
+        const bool show = !SSCombatLockout::getHiddenSelections();
+        SSCombatLockout::setHiddenSelections(show);
 
-        gSavedSettings.setBOOL("RenderHiddenSelections", LLSelectMgr::sRenderHiddenSelections);
+        gSavedSettings.setBOOL("RenderHiddenSelections", show);
         return true;
     }
 };
@@ -11748,11 +11753,9 @@ class LLViewHighlightTransparent : public view_listener_t
     {
 //      LLDrawPoolAlpha::sShowDebugAlpha = !LLDrawPoolAlpha::sShowDebugAlpha;
 // [RLVa:KB] - @edit and @viewtransparent
-        LLDrawPoolAlpha::sShowDebugAlpha = (!LLDrawPoolAlpha::sShowDebugAlpha) && (RlvActions::canHighlightTransparent());
+        // <SS:Nexii/> Through the combat render lockout, which rebuilds the batches on a live flip (invisible objects only batch while highlighted) and stashes the intent while aiming
+        SSCombatLockout::setHighlightTransparent((!SSCombatLockout::getHighlightTransparent()) && (RlvActions::canHighlightTransparent()));
 // [/RLVa:KB]
-
-        // invisible objects skip building their render batches unless sShowDebugAlpha is true, so rebuild batches whenever toggling this flag
-        gPipeline.rebuildDrawInfo();
         return true;
     }
 };
@@ -11772,7 +11775,7 @@ class LLViewCheckHighlightTransparent : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
-        bool new_value = LLDrawPoolAlpha::sShowDebugAlpha;
+        bool new_value = SSCombatLockout::getHighlightTransparent();
         return new_value;
     }
 };
@@ -11781,7 +11784,7 @@ class LLViewHighlightTransparentRigged : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
-        LLDrawPoolAlpha::sShowDebugAlphaRigged = !LLDrawPoolAlpha::sShowDebugAlphaRigged;
+        SSCombatLockout::setHighlightTransparentRigged(!SSCombatLockout::getHighlightTransparentRigged());
         return true;
     }
 };
@@ -11790,7 +11793,7 @@ class LLViewCheckHighlightTransparentRigged : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
-        bool new_value = LLDrawPoolAlpha::sShowDebugAlphaRigged;
+        bool new_value = SSCombatLockout::getHighlightTransparentRigged();
         return new_value;
     }
 };

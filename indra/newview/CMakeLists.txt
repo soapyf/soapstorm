@@ -186,6 +186,7 @@ set(viewer_SOURCE_FILES
     ssbc7store.cpp
     ssbc7storeevict.cpp
     ssbc7storeio.cpp
+    sscombatlockout.cpp
     ssobjectfacts.cpp
     ssparcelfacts.cpp
     ssrocaux.cpp
@@ -1118,6 +1119,7 @@ set(viewer_HEADER_FILES
     fspanelpreferenceuisounds.h
     fspanelprefs.h
     ssalphadebug.h
+    sscombatlockout.h
     ssbc7adaptive.h
     ssbc7encodequeue.h
     ssbc7manifest.h
