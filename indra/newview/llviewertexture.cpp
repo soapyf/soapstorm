@@ -1200,6 +1200,7 @@ void LLViewerFetchedTexture::init(bool firstinit)
     mPauseLoadedCallBacks = false;
 
     mNeedsCreateTexture = false;
+    mSSFaceMaskVerdict = false; // <SS:Nexii/> matches LLImageGL::init's mIsMask, which is what faces built before any upload saw
 
     mIsRawImageValid = false;
     mRawDiscardLevel = INVALID_DISCARD_LEVEL;
@@ -1792,12 +1793,40 @@ bool LLViewerFetchedTexture::ssBC7UploadFromStore(const U8* data_in, S32 serve_d
 
     setTexelsPerImage();
 
+    ssSyncAlphaMaskVerdict(); // <SS:Nexii/> the store's verdict replaced whatever the previous upload scanned; see the note above setIsAlphaMask
+
     setActive();
     mGLTexturep->setGLTextureCreated(true);
     mIsFetched = true;
 
     return true;
 }
+
+// <SS:Nexii> Dirties the faces when the alpha-mask verdict has changed since they were last built. doc/alpha_mask_verdict.md
+void LLViewerFetchedTexture::ssSyncAlphaMaskVerdict()
+{
+    if (mGLTexturep.isNull() || mComponents != 4)
+    {
+        return;
+    }
+
+    const bool verdict = mGLTexturep->getIsAlphaMask();
+    if (verdict == mSSFaceMaskVerdict)
+    {
+        return;
+    }
+    mSSFaceMaskVerdict = verdict;
+
+    for (U32 j = 0; j < LLRender::NUM_TEXTURE_CHANNELS; ++j)
+    {
+        llassert(mNumFaces[j] <= mFaceList[j].size());
+        for (U32 i = 0; i < mNumFaces[j]; i++)
+        {
+            mFaceList[j][i]->dirtyTexture();
+        }
+    }
+}
+// </SS:Nexii>
 
 // The only place this texture's contribution to the live video-memory gauge is given back. Keyed on the recorded byte count rather than on the ladder state, because a resident whose re-serve read fails passes through READING on the way to DECLINED and a ladder-keyed release would miss exactly that case.
 void LLViewerFetchedTexture::ssBC7ReleaseGauge()
@@ -1874,6 +1903,8 @@ void LLViewerFetchedTexture::postCreateTexture()
 #endif
 
     setActive();
+
+    ssSyncAlphaMaskVerdict(); // <SS:Nexii/> analyzeAlpha ran inside createTexture, on whichever thread did the upload; this is the first main-thread point past it
 
     // rebuild any volumes that are using this texture for sculpts in case their LoD has changed
     for (U32 i = 0; i < mNumVolumes[LLRender::SCULPT_TEX]; ++i)

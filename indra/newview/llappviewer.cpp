@@ -643,6 +643,7 @@ static void settings_to_globals()
     LLImageGL::sCompressTextures        = gSavedSettings.getBOOL("RenderCompressTextures");
     // <SS:Nexii>
     LLImageGL::sSqueezeEnabled          = gSavedSettings.getBOOL("SSSqueezeEnabled");
+    LLImageGL::sSSAlphaMaskTrustedDiscard = gSavedSettings.getS32("SSAlphaMaskTrustedDiscard");
     // </SS:Nexii>
     // <SS:PBRControls>
     LLTextureEntry::sEnablePBRMaterials = gSavedSettings.getBOOL("SSPBREnabled") && gSavedSettings.getBOOL("SSPBRMaterialsEnabled");

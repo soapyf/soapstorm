@@ -173,6 +173,7 @@ S32 LLImageGL::sMaxCategories = 1 ;
 
 //optimization for when we don't need to calculate mIsMask
 bool LLImageGL::sSkipAnalyzeAlpha;
+S32  LLImageGL::sSSAlphaMaskTrustedDiscard = 2; // <SS:Nexii/> see analyzeAlpha; set from SSAlphaMaskTrustedDiscard
 U32  LLImageGL::sScratchPBO = 0;
 U32  LLImageGL::sScratchPBOSize = 0;
 U32* LLImageGL::sManualScratch = nullptr;
@@ -2471,16 +2472,26 @@ void LLImageGL::analyzeAlpha(const void* data_in, U32 w, U32 h)
         upperhalftotal += sample[i];
     }
 
+    bool is_mask;
     if (midrangetotal > length/48 || // lots of midrange, or
         (lowerhalftotal == length && alphatotal != 0) || // all close to transparent but not all totally transparent, or
         (upperhalftotal == length && alphatotal != 255*length)) // all close to opaque but not all totally opaque
     {
-        mIsMask = false; // not suitable for masking
+        is_mask = false; // not suitable for masking
     }
     else
     {
-        mIsMask = true;
+        is_mask = true;
     }
+
+    // <SS:Nexii> A coarse mip cannot prove soft alpha: decimation smears hard cutout edges into midrange values and the 2x2 box copy above skews the histogram further, so "not a mask" from a discard coarser than sSSAlphaMaskTrustedDiscard is provisional. When all but 1/48 of the samples sit in the top bucket the texture is treated as a mask until a trusted discard settles it, which keeps a mostly-solid texture out of the blended alpha pass (no depth write, distance-sorted) while it is still fetching; LLViewerFetchedTexture::ssSyncAlphaMaskVerdict rebuilds the faces if a finer discard overturns the guess. doc/alpha_mask_verdict.md
+    if (!is_mask && mCurrentDiscardLevel > sSSAlphaMaskTrustedDiscard && (length - sample[15]) <= length/48)
+    {
+        is_mask = true;
+    }
+    // </SS:Nexii>
+
+    mIsMask = is_mask;
 }
 
 //----------------------------------------------------------------------------

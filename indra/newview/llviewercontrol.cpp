@@ -387,6 +387,14 @@ static bool handleAnisotropicChanged(const LLSD& newvalue)
     return true;
 }
 
+// <SS:Nexii> Takes effect for the next upload of each texture; already-resident textures keep their current verdict until they re-upload.
+static bool handleSSAlphaMaskTrustedDiscardChanged(const LLSD& newvalue)
+{
+    LLImageGL::sSSAlphaMaskTrustedDiscard = newvalue.asInteger();
+    return true;
+}
+// </SS:Nexii>
+
 static bool handleVSyncChanged(const LLSD& newvalue)
 {
     LLPerfStats::tunables.vsyncEnabled = newvalue.asBoolean();
@@ -1395,6 +1403,7 @@ void settings_setup_listeners()
     setting_setup_signal_listener(gSavedSettings, "RenderSpecularResY", handleLUTBufferChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderSpecularExponent", handleLUTBufferChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderAnisotropic", handleAnisotropicChanged);
+    setting_setup_signal_listener(gSavedSettings, "SSAlphaMaskTrustedDiscard", handleSSAlphaMaskTrustedDiscardChanged); // <SS:Nexii/>
     setting_setup_signal_listener(gSavedSettings, "RenderShadowResolutionScale", handleShadowsResized);
     setting_setup_signal_listener(gSavedSettings, "RenderGlow", handleReleaseGLBufferChanged);
     // <SS:Nexii> The Atmo Magic master switch rebuilds shaders: stock sky/atmosphere shaders compile PRISTINE with it off and compile the SS_ATMO variants with it on, so every Atmo-era fix to shared shading lives behind the toggle instead of quietly changing the vanilla viewer. Toggling pays one shader rebuild, which is what this listener class exists for.
