@@ -34,6 +34,7 @@ public:
     SSFloaterSoundAnalysis(const LLSD& key);
     bool postBuild() override;
     void draw() override;
+    void onClose(bool app_quitting) override;
 
 private:
     SSSoundAnalysisView* mView = nullptr;

@@ -92,6 +92,8 @@ bool SSAtmoEnvBridge::resolveActiveTrack(F32 world_z, F32 prev_world_z, bool tel
     out_cfg.mImpactScale  = llclamp(state.mImpactScale, 0.f, 1.f);
 
     out_cfg.mTemperatureC = llclamp(track.mWeather.mTemperatureC.valueAt(phase), -60.f, 60.f);
+    // <SS:Nexii> Surface weather slice B: the weather cube's moisture, filled beside temperature - SSAtmoMagic::humidity() reads it through mMoisture. doc/atmo_magic_surface_weather.md sec 2.
+    out_cfg.mMoisture = llclamp(track.mWeather.mMoisture.valueAt(phase), 0.f, 1.f);
 
     out_cfg.mLightningColor = state.mLightningColor;
     out_cfg.mLightningCoreWhite = state.mLightningCoreWhite;

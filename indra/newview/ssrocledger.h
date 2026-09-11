@@ -106,6 +106,9 @@ public:
         U32 mOwnerLookups    = 0;
     };
     const Metrics& metrics() const { return mMetrics; }
+
+    // <SS:Nexii> The ledger's word on whether a root is landscape or a mover, for the shape census's DYNAMIC classifier (doc/atmo_magic_navmesh.md 15). True when the ledger has an opinion: out_static is false for anything hard-disqualified (physical, character), true for a promoted record or one confirmed still on at least two region entries. Silence (no record, one entry, or a move on record) is no opinion and the census falls back to watching it settle.
+    bool restVerdict(U64 handle, const LLUUID& full_id, bool& out_static) const;
     std::string metricsString() const;
 
 private:

@@ -24,6 +24,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "ssfloateratmoenv.h"
+#include "llkeyboard.h" // <SS:Nexii> gKeyboard->currentMask: the preview play button reads SHIFT/ALT at the click
+#include "llviewerwindow.h" // <SS:Nexii> the mouse position for the play button's hover label
 #include "ssatmoenvmanager.h"
 #include "ssatmoenvdiscovery.h" // <SS:Nexii> the Load From Parcel button and its enabled state
 #include "ssdiscpad.h" // <SS:Nexii> disc-padding auto-derive poll
@@ -38,6 +40,7 @@
 #include "ssprecippreset.h"
 #include "ssatmoenvbridge.h"
 #include "ssvolcloud.h" // <SS:Nexii> the deck's generated stand-ins for the texture pickers
+#include "sshazecore.h" // <SS:Nexii> SSHaze::invHeight - the haze thin frac row's scale-height read-out
 
 #include "llbutton.h"
 #include "llcheckboxctrl.h"
@@ -67,6 +70,9 @@
 #include "llui.h"
 #include "llviewercontrol.h"
 #include "llviewerinventory.h"
+#include "llscrolllistctrl.h" // <SS:Nexii> landscape scenery list
+#include "llselectmgr.h" // <SS:Nexii> landscape select-in-world
+#include "ssatmolandscape.h" // <SS:Nexii> scenery world
 
 #include <algorithm>
 
@@ -175,6 +181,17 @@ bool SSFloaterAtmoEnv::postBuild()
     getChild<LLButton>("track_ground_button")->setClickedCallback(
         [this](LLUICtrl*, const LLSD&) { onClickGroundRow(); });
 
+    // <SS:Nexii> Landscape scenery list actions.
+    getChild<LLButton>("landscape_delete_button")->setClickedCallback(
+        [this](LLUICtrl*, const LLSD&) { onClickLandscapeDelete(); });
+    getChild<LLButton>("landscape_lock_button")->setClickedCallback(
+        [this](LLUICtrl*, const LLSD&) { onClickLandscapeLock(); });
+    getChild<LLButton>("landscape_select_button")->setClickedCallback(
+        [this](LLUICtrl*, const LLSD&) { onClickLandscapeSelect(); });
+    getChild<LLButton>("landscape_convert_button")->setClickedCallback(
+        [this](LLUICtrl*, const LLSD&) { onClickLandscapeConvert(); });
+    // </SS:Nexii>
+
     for (S32 slot = 1; slot < SS_ATMOENV_MAX_TRACKS; ++slot)
     {
         getChild<LLButton>(llformat("track_name_button_%d", slot))->setClickedCallback(
@@ -208,6 +225,15 @@ bool SSFloaterAtmoEnv::postBuild()
         [this](LLUICtrl*, const LLSD&) { onClickRandomizeWeather(); });
     getChild<LLUICtrl>("weather_remove_button")->setCommitCallback(
         [this](LLUICtrl*, const LLSD&) { onClickRemoveWeather(); });
+    // <SS:Nexii> Severe Day's own strength only means anything while the checkbox is on - greyed rather than read
+    // and ignored, the gust/lightning Auto rows' idiom, since both live only on the roll button press and carry
+    // no keyframes of their own to disable instead.
+    getChild<LLUICtrl>("weather_severe_day_check")->setCommitCallback(
+        [this](LLUICtrl*, const LLSD&)
+        {
+            getChild<LLUICtrl>("weather_severe_day_strength_spinner")->setEnabled(
+                getChild<LLUICtrl>("weather_severe_day_check")->getValue().asBoolean());
+        });
 
     getChild<LLUICtrl>("preview_time_slider")->setCommitCallback(
         [this](LLUICtrl*, const LLSD&) { onCommitPreviewTime(); });
@@ -217,6 +243,11 @@ bool SSFloaterAtmoEnv::postBuild()
 
     getChild<LLUICtrl>("preview_play_button")->setCommitCallback(
         [this](LLUICtrl*, const LLSD&) { onClickPreviewPlay(); });
+    // <SS:Nexii> hover for the speed suffix on the time label: the control's own enter/leave signals.
+    getChild<LLUICtrl>("preview_play_button")->setMouseEnterCallback(
+        [this](LLUICtrl*, const LLSD&) { mPreviewPlayHover = true; });
+    getChild<LLUICtrl>("preview_play_button")->setMouseLeaveCallback(
+        [this](LLUICtrl*, const LLSD&) { mPreviewPlayHover = false; });
 
     getChild<LLUICtrl>("track_name_editor")->setCommitCallback(
         [this](LLUICtrl*, const LLSD&) { onCommitTrackName(); });
@@ -287,6 +318,10 @@ bool SSFloaterAtmoEnv::postBuild()
         { "gust_veer",    [this]() -> SSAtmoEnvKeyframed<F32>& { return SSAtmoEnvManager::getInstance()->editable().mTracks[mSelectedTrackIndex].mWeather.mGustVeer; },     true },
         { "lightning_intensity", [this]() -> SSAtmoEnvKeyframed<F32>& { return SSAtmoEnvManager::getInstance()->editable().mTracks[mSelectedTrackIndex].mWeather.mLightningIntensity; }, false },
         { "lightning_core_white", [this]() -> SSAtmoEnvKeyframed<F32>& { return SSAtmoEnvManager::getInstance()->editable().mTracks[mSelectedTrackIndex].mWeather.mLightningCoreWhite; }, false },
+        // <SS:Nexii> SCHEDULER: forced-storm cue rows (ssatmoenvasset.h SSAtmoEnvWeather::mStormOverride*, sssquallcore.h SSSquall::ForcedOverride) - phase and offset ride the ordinary FloatRow idiom; the kind itself is a string row, below with precipitation_combo.
+        { "storm_override_phase", [this]() -> SSAtmoEnvKeyframed<F32>& { return SSAtmoEnvManager::getInstance()->editable().mTracks[mSelectedTrackIndex].mWeather.mStormOverridePhase; }, false, 1.f, true },
+        { "storm_override_offset_x", [this]() -> SSAtmoEnvKeyframed<F32>& { return SSAtmoEnvManager::getInstance()->editable().mTracks[mSelectedTrackIndex].mWeather.mStormOverrideOffsetXM; }, true, 1.f, true },
+        { "storm_override_offset_y", [this]() -> SSAtmoEnvKeyframed<F32>& { return SSAtmoEnvManager::getInstance()->editable().mTracks[mSelectedTrackIndex].mWeather.mStormOverrideOffsetYM; }, true, 1.f, true },
     };
 
     auto water = [this]() -> SSAtmoEnvWater& {
@@ -362,6 +397,7 @@ bool SSFloaterAtmoEnv::postBuild()
     const std::vector<FloatRow> atmos_rows = {
         { "atmo_haze_horizon",    [atmos]() -> SSAtmoEnvKeyframed<F32>& { return atmos().mHazeHorizon; },        false },
         { "atmo_haze_density",    [atmos]() -> SSAtmoEnvKeyframed<F32>& { return atmos().mHazeDensity; },        false },
+        { "atmo_haze_thin_frac",  [atmos]() -> SSAtmoEnvKeyframed<F32>& { return atmos().mHazeThinFrac; },       false },
         { "atmo_rainbow",        [atmos]() -> SSAtmoEnvKeyframed<F32>& { return atmos().mSkyMoistureLevel; },   false },
         { "atmo_droplet_radius",  [atmos]() -> SSAtmoEnvKeyframed<F32>& { return atmos().mSkyDropletRadius; },   false },
         { "atmo_ice_level",       [atmos]() -> SSAtmoEnvKeyframed<F32>& { return atmos().mSkyIceLevel; },        false },
@@ -383,7 +419,8 @@ bool SSFloaterAtmoEnv::postBuild()
             [this, row](LLUICtrl*, const LLSD&) { commitFloatRow(row); refreshPreview(); refreshStatus(); });
         getChild<LLUICtrl>(row.mPrefix + "_value_spinner")->setCommitCallback(
             [this, row](LLUICtrl*, const LLSD&) { commitFloatRowSpinner(row); refreshPreview(); refreshStatus(); });
-        bindKeyframeButtons<F32>(row.mPrefix, row.mField);
+        bindKeyframeButtons<F32>(row.mPrefix, row.mField,
+                                  row.mHoldCurve ? SSAtmoEnvCurve::HOLD : ss_atmoenv_default_curve<F32>());
     }
 
     // <SS:Nexii> Height is authored relative to the track's floor. The slider keeps an honest near-floor dial (SS_ATMOENV_WATER_FLOOR..CEILING); the spinner takes the whole authored range, so a sky build can put its ocean kilometres below the track it rides. Values past the slider's ends read pinned at the rail.
@@ -463,6 +500,7 @@ bool SSFloaterAtmoEnv::postBuild()
 
     mStringRows = {
         { "precipitation_combo", [this]() -> SSAtmoEnvKeyframed<std::string>& { return SSAtmoEnvManager::getInstance()->editable().mTracks[mSelectedTrackIndex].mWeather.mPrecipitationOverride; } },
+        { "storm_override_kind_combo", [this]() -> SSAtmoEnvKeyframed<std::string>& { return SSAtmoEnvManager::getInstance()->editable().mTracks[mSelectedTrackIndex].mWeather.mStormOverride; } },
     };
     for (const KeyRow<std::string>& row : mStringRows)
     {
@@ -609,6 +647,7 @@ void SSFloaterAtmoEnv::reshape(S32 width, S32 height, bool called_from_parent)
 void SSFloaterAtmoEnv::draw()
 {
     advancePreviewPlayback();
+    refreshPreviewPlayButton();
 
     const F64 now = LLTimer::getElapsedSeconds();
 
@@ -647,6 +686,7 @@ void SSFloaterAtmoEnv::draw()
         refreshStatus();
         refreshVisibility();
         refreshTrackTab();
+        refreshLandscape(); // <SS:Nexii> landscape list, signature-guarded inside
         LLView* captured = dynamic_cast<LLView*>(gFocusMgr.getMouseCapture());
         if (!captured || !captured->hasAncestor(this))
         {
@@ -728,6 +768,11 @@ bool SSFloaterAtmoEnv::handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop,
         }
         return true;
     }
+
+    // <SS:Nexii> There is deliberately no mesh/object drop branch here: an uploaded mesh is an
+    // AT_OBJECT inventory item whose asset uuid is the server-side prim blob, not a mesh asset id,
+    // so no drag could ever have produced a landscape record. Scenery comes from the Landscape
+    // tab's "Convert selection" button instead. doc/atmo_landscape/design_synthesis.md 15.
 
     if (cargo_type != DAD_NOTECARD)
     {
@@ -2159,10 +2204,13 @@ void SSFloaterAtmoEnv::onClickWeatherInfluence()
 
 // <SS:Nexii> Rolls a whole day of weather onto the selected track. Unconfirmed on purpose: the
 // button exists to be pressed until a day looks right, and a dialog between presses would make
-// that loop unusable - Revert is the way back, the same as it is for every other edit here. The
-// roll writes the cube's five curves and nothing else, so the sky, decks and water the author
-// already built are untouched; what the weather then does to them is the influence editor's
-// business, not this one's.
+// that loop unusable - Revert is the way back, the same as it is for every other edit here. An
+// ordinary roll writes the cube's five curves and nothing else, so the sky, decks and water the
+// author already built are untouched; what the weather then does to them is the influence editor's
+// business, not this one's. A SEVERE roll is the one exception, and only inside the window its
+// authored event owns: it also clears and re-shuts the deck's coverage and depth and the dome's
+// cirrus around the cue, because a wall arriving into a half-covered sky is not an arrival (see
+// SSAtmoEnvWeatherGenerator::randomize).
 void SSFloaterAtmoEnv::onClickRandomizeWeather()
 {
     SSAtmoEnvManager* mgr = SSAtmoEnvManager::getInstance();
@@ -2171,8 +2219,19 @@ void SSFloaterAtmoEnv::onClickRandomizeWeather()
     SSAtmoEnvAsset& asset = mgr->editable();
     if (mSelectedTrackIndex < 0 || mSelectedTrackIndex >= (S32)asset.mTracks.size()) return;
 
-    const SSAtmoEnvWeatherRoll roll =
-        SSAtmoEnvWeatherGenerator::randomize(asset.mTracks[mSelectedTrackIndex].mWeather);
+    // <SS:Nexii> Severe Day: read straight off the two controls at the moment the button is pressed, not stored
+    // anywhere on the track - it is an option on the NEXT roll, the weathergen's own authoring-time bias
+    // (SSSquall::severeDayBias), not a property of the day that gets rolled.
+    const bool severe_day = getChild<LLUICtrl>("weather_severe_day_check")->getValue().asBoolean();
+    const F32 severe_day_strength = (F32)getChild<LLUICtrl>("weather_severe_day_strength_spinner")->getValue().asReal();
+
+    // <SS:Nexii> The deck and the dome go in with the cube now: an authored severe event clears the sky before its
+    // wall arrives (weathergen's severe block), and the two curves that open a sky - the deck's coverage scale and
+    // the dome's cirrus coverage - are the track's, not the cube's. An ordinary roll still leaves both untouched.
+    SSAtmoEnvTrack& track = asset.mTracks[mSelectedTrackIndex];
+    const SSAtmoEnvWeatherRoll roll = SSAtmoEnvWeatherGenerator::randomize(
+        track.mWeather, track.mCloudField, track.mCloudDome, severe_day, severe_day_strength,
+        track.mWeatherInfluence);
 
     setWeatherRollText(roll.mSummary);
 
@@ -2183,6 +2242,16 @@ void SSFloaterAtmoEnv::onClickRandomizeWeather()
     refreshTrackTab();
     refreshStatus();
     refreshPreview();
+
+    // <SS:Nexii> V2 legend fix: a severe roll may have just flipped the track's own Weather Influence
+    // (SSAtmoEnvWeatherGenerator::randomize turning the master and both Allow flags on), so the influence
+    // sub-floater's checkboxes need the same re-pull setSelectedTrack already gives them on a track switch.
+    SSFloaterAtmoInfluence* influence =
+        LLFloaterReg::findTypedInstance<SSFloaterAtmoInfluence>("ss_atmo_influence");
+    if (influence)
+    {
+        influence->setTrack(mSelectedTrackIndex);
+    }
 }
 
 // <SS:Nexii> Clears the selected track's weather cube back to its constructed defaults. Confirmed
@@ -2276,6 +2345,158 @@ void SSFloaterAtmoEnv::selectTrack(S32 index)
 }
 
 // The header status line: source, modified state.
+// <SS:Nexii> Landscape scenery: the list mirrors the active track's records. Rebuilt only
+// when the tab is the one shown and the record set changed (mesh ids + names + lock states),
+// so an idle panel never fights the user's mouse mid-scroll.
+void SSFloaterAtmoEnv::refreshLandscape()
+{
+    LLPanel* landscape_tab = findChild<LLPanel>("landscape_tab");
+    if (!landscape_tab || !landscape_tab->getVisible())
+    {
+        return;
+    }
+    LLScrollListCtrl* list = findChild<LLScrollListCtrl>("landscape_list");
+    if (!list)
+    {
+        return;
+    }
+
+    SSAtmoLandscapeWorld* world = SSAtmoLandscapeWorld::getInstance();
+    std::string sig;
+    const S32 count = world->recordCount();
+    for (S32 i = 0; i < count; ++i)
+    {
+        const SSAtmoEnvLandscape* r = world->recordAt(i);
+        if (!r)
+        {
+            continue;
+        }
+        sig += r->mRecordId.asString();
+        sig += llformat(":%d", r->partCount());
+        sig += r->mName;
+        sig += r->mLocked ? 'L' : 'F';
+        // The availability state rides the signature so a header arriving (or 404'ing) after
+        // the list was first drawn flips the "(missing)" marker.
+        const SSAtmoLandscapeObject* objp = world->objectAt(i);
+        sig += (objp && objp->meshKnown()) ? (objp->meshAvailable() ? '1' : '0') : '?';
+        sig += '|';
+    }
+    if (sig == mLandscapeListSignature)
+    {
+        return;
+    }
+    mLandscapeListSignature = sig;
+
+    list->deleteAllItems();
+    for (S32 i = 0; i < count; ++i)
+    {
+        const SSAtmoEnvLandscape* r = world->recordAt(i);
+        if (!r)
+        {
+            continue;
+        }
+        LLSD row;
+        std::string name = r->mName.empty() ? "(unnamed)" : r->mName;
+        const SSAtmoLandscapeObject* objp = world->objectAt(i);
+        if (objp && objp->meshKnown() && !objp->meshAvailable())
+        {
+            name += " (missing)";
+        }
+        row["columns"][0]["column"] = "name";
+        row["columns"][0]["value"] = name;
+        row["columns"][1]["column"] = "mesh";
+        // <SS:Nexii> The root's mesh for a mesh root, the prim count for a prim build; a linkset shows both.
+        const LLUUID root_mesh = r->rootMeshId();
+        std::string what = root_mesh.isNull() ? "prim" : root_mesh.asString().substr(0, 8);
+        if (r->partCount() > 1) what += llformat(" x%d", r->partCount());
+        row["columns"][1]["value"] = what;
+        row["columns"][2]["column"] = "mode";
+        row["columns"][2]["value"] = r->mLocked ? "locked" : "free";
+        list->addElement(row);
+    }
+}
+
+void SSFloaterAtmoEnv::onClickLandscapeDelete()
+{
+    LLScrollListCtrl* list = findChild<LLScrollListCtrl>("landscape_list");
+    if (!list)
+    {
+        return;
+    }
+    const S32 index = list->getFirstSelectedIndex();
+    if (index < 0)
+    {
+        return;
+    }
+    mLandscapeListSignature.clear();
+    SSAtmoLandscapeWorld::getInstance()->removeRecord(index);
+    refreshLandscape();
+}
+
+void SSFloaterAtmoEnv::onClickLandscapeLock()
+{
+    LLScrollListCtrl* list = findChild<LLScrollListCtrl>("landscape_list");
+    if (!list)
+    {
+        return;
+    }
+    const S32 index = list->getFirstSelectedIndex();
+    if (index < 0)
+    {
+        return;
+    }
+    mLandscapeListSignature.clear();
+    SSAtmoLandscapeWorld::getInstance()->toggleRecordLock(index);
+    refreshLandscape();
+}
+
+void SSFloaterAtmoEnv::onClickLandscapeSelect()
+{
+    LLScrollListCtrl* list = findChild<LLScrollListCtrl>("landscape_list");
+    if (!list)
+    {
+        return;
+    }
+    const S32 index = list->getFirstSelectedIndex();
+    if (index < 0)
+    {
+        return;
+    }
+    SSAtmoLandscapeObject* objp = SSAtmoLandscapeWorld::getInstance()->objectAt(index);
+    if (!objp)
+    {
+        return;
+    }
+    LLSelectMgr::getInstance()->deselectAll();
+    LLObjectSelectionHandle handle = LLSelectMgr::getInstance()->selectObjectAndFamily(objp);    // <SS:Nexii> the whole linkset, as Edit would
+    (void)handle;
+}
+
+// Convert selection: hands the in-world selection to the landscape world's conversion job.
+void SSFloaterAtmoEnv::onClickLandscapeConvert()
+{
+    // <SS:Nexii> Only the synchronous refusals come back here; the job's own later refusals (late permissions, a failing prim, a cap, the contents warning) alert themselves from the per-frame tick, because the button's click is long gone by then.
+    std::string reason;
+    if (!SSAtmoLandscapeWorld::getInstance()->beginConvertSelection(reason))
+    {
+        LLNotificationsUtil::add("GenericAlert", LLSD().with(
+            "MESSAGE", std::string("That selection cannot become landscape: ") + reason));
+    }
+}
+
+// The conversion job's list hook: the landscape world has no UI of its own, so it pokes the list here.
+void ss_landscape_notify_list_changed()
+{
+    SSFloaterAtmoEnv* floater = LLFloaterReg::findTypedInstance<SSFloaterAtmoEnv>("ss_atmo_env");
+    if (!floater)
+    {
+        return;
+    }
+    floater->mLandscapeListSignature.clear();
+    floater->refreshLandscape();
+}
+// </SS:Nexii>
+
 void SSFloaterAtmoEnv::refreshStatus()
 {
     SSAtmoEnvManager* mgr = SSAtmoEnvManager::getInstance();
@@ -2748,6 +2969,7 @@ void SSFloaterAtmoEnv::onCommitCloudAuto()
 namespace
 {
     std::string precipDisplayName(const std::string& value);
+    std::string stormOverrideKindDisplayName(const std::string& value);
 }
 
 // Enables every auto-owned row set per its flag; auto-owned gust rows collapse instead, since
@@ -2779,12 +3001,13 @@ void SSFloaterAtmoEnv::refreshAutoRows()
         { "lightning_intensity", weather.mLightningAuto,  resolved.mLightningIntensity, false },
         { "cloud_base_height",   track.mCloudField.mAuto, auto_height,                  false },
         { "cloud_thickness",     track.mCloudField.mAuto, auto_thickness,               false },
-        { "cloud_coverage",      track.mCloudField.mAuto, auto_coverage,                false },
+        // <SS:Nexii> The coverage scale is a MODIFIER under Auto (multiplies the derived coverage - SSAtmoEnvCloudFieldResolver::resolve), so its row stays the author's whatever the Auto flag says: greyed at a constant 1.00 it hid the very curve a severe-day roll writes to clear the sky before the wall.
+        { "cloud_coverage",      false,                   auto_coverage,                false },
         { "cloud_storm_dark",    track.mCloudField.mAuto, auto_dark,                    false },
         // <SS:Nexii> The under deck's altitude and depth stay the author's under Auto too - the resolver holds them back (SSAtmoEnvCloudFieldResolver::resolve's auto_owns_geometry), because one weather baseline handed to both fields stacks them in the same volume. So these two rows stay LIVE while the deck is auto: greying them out and filling them with the storm deck's answer is precisely the overlap, written into the UI.
         { "ucloud_base_height",  false,                   auto_height,                  false },
         { "ucloud_thickness",    false,                   auto_thickness,               false },
-        { "ucloud_coverage",     track.mUnderField.mAuto, auto_coverage,                false },
+        { "ucloud_coverage",     false,                   auto_coverage,                false },
         { "ucloud_storm_dark",   track.mUnderField.mAuto, auto_dark,                    false },
         { "dome_height",         track.mCloudDome.mAuto,  SSAtmoEnvApplier::instance().cirrusAltitudeMetres(), false },
     };
@@ -2933,12 +3156,13 @@ bool SSFloaterAtmoEnv::rowAutoOwned(const std::string& prefix) const
     {
         return track.mWeather.mLightningAuto;
     }
-    if (prefix == "cloud_base_height" || prefix == "cloud_thickness" || prefix == "cloud_coverage")
+    // The coverage scale rows are never auto-owned: under Auto the authored curve multiplies the derived coverage (a modifier, default 1), so the slider, keyframe buttons, scrubber ticks and hover readout stay live for it. See the matching pair in refreshAutoRows.
+    if (prefix == "cloud_base_height" || prefix == "cloud_thickness")
     {
         return track.mCloudField.mAuto;
     }
     // The under deck's altitude and depth are never auto-owned, whatever its Auto flag says - the resolver keeps them authored so the two decks cannot be derived into the same volume. See SSAtmoEnvCloudFieldResolver::resolve's auto_owns_geometry, and the matching pair in refreshAutoRows.
-    if (prefix == "ucloud_coverage" || prefix == "ucloud_storm_dark")
+    if (prefix == "ucloud_storm_dark")
     {
         return track.mUnderField.mAuto;
     }
@@ -3074,6 +3298,17 @@ namespace
         if (value == "slush_mix")     return "Wintry Mix";
         return value;
     }
+
+    // Forced-storm cue kind key to display name - stormOverrideKindFromString's own vocabulary (ssstormcells.cpp).
+    std::string stormOverrideKindDisplayName(const std::string& value)
+    {
+        if (value.empty())            return "None";
+        if (value == "supercell")     return "Supercell";
+        if (value == "tornado")       return "Tornado";
+        if (value == "waterspout")    return "Waterspout";
+        if (value == "anticyclonic")  return "Anticyclonic";
+        return value;
+    }
 }
 
 template <typename T>
@@ -3093,12 +3328,12 @@ void SSFloaterAtmoEnv::refreshKeyframeControls(const std::string& prefix,
 
 // The keyframe dot: add/edit at the head, or remove the one under it.
 template <typename T>
-void SSFloaterAtmoEnv::toggleKeyframe(SSAtmoEnvKeyframed<T>& field)
+void SSFloaterAtmoEnv::toggleKeyframe(SSAtmoEnvKeyframed<T>& field, SSAtmoEnvCurve curve)
 {
     SSAtmoEnvManager* mgr = SSAtmoEnvManager::getInstance();
     if (!mgr->hasAsset()) return;
     (void)mgr;
-    field.toggleKeyframeAtHead(mPreviewPhase);
+    field.toggleKeyframeAtHead(mPreviewPhase, curve);
 }
 
 // Scrub the head to the neighbouring keyframe.
@@ -3112,11 +3347,12 @@ void SSFloaterAtmoEnv::jumpKeyframe(const SSAtmoEnvKeyframed<T>& field, bool nex
 template <typename T>
 // Wires one row's keyframe buttons to a field.
 void SSFloaterAtmoEnv::bindKeyframeButtons(const std::string& prefix,
-                                           std::function<SSAtmoEnvKeyframed<T>&()> field)
+                                           std::function<SSAtmoEnvKeyframed<T>&()> field,
+                                           SSAtmoEnvCurve curve)
 {
     getChild<LLButton>(prefix + "_keyframe_button")->setClickedCallback(
-        [this, field](LLUICtrl*, const LLSD&)
-        { toggleKeyframe<T>(field()); refreshPreview(); refreshStatus(); });
+        [this, field, curve](LLUICtrl*, const LLSD&)
+        { toggleKeyframe<T>(field(), curve); refreshPreview(); refreshStatus(); });
     getChild<LLButton>(prefix + "_prev_button")->setClickedCallback(
         [this, field](LLUICtrl*, const LLSD&)
         { jumpKeyframe<T>(field(), false); refreshPreview(); });
@@ -3300,25 +3536,28 @@ void SSFloaterAtmoEnv::refreshFloatRow(const FloatRow& row, F64 phase)
     refreshKeyframeControls<F32>(row.mPrefix, field, phase);
 }
 
-// Float spinner into the field.
+// Float spinner into the field. 7b F4: row.mHoldCurve rows (the three forced-storm override curves) always add or
+// edit at SSAtmoEnvCurve::HOLD, never F32's ordinary default (EASE).
 void SSFloaterAtmoEnv::commitFloatRowSpinner(const FloatRow& row)
 {
+    const SSAtmoEnvCurve curve = row.mHoldCurve ? SSAtmoEnvCurve::HOLD : ss_atmoenv_default_curve<F32>();
     row.mField().setValueAtHead(mPreviewPhase,
-        (F32)getChild<LLUICtrl>(row.mPrefix + "_value_spinner")->getValue().asReal() * row.mScale);
+        (F32)getChild<LLUICtrl>(row.mPrefix + "_value_spinner")->getValue().asReal() * row.mScale, curve);
 }
 
-// Float slider into the field.
+// Float slider into the field. 7b F4: see commitFloatRowSpinner's own comment.
 void SSFloaterAtmoEnv::commitFloatRow(const FloatRow& row)
 {
     const F32 value = (F32)getChild<LLUICtrl>(row.mPrefix + "_slider")->getValue().asReal() * row.mScale;
+    const SSAtmoEnvCurve curve = row.mHoldCurve ? SSAtmoEnvCurve::HOLD : ss_atmoenv_default_curve<F32>();
 
-    row.mField().setValueAtHead(mPreviewPhase, value);
+    row.mField().setValueAtHead(mPreviewPhase, value, curve);
 }
 
-// Float row's keyframe dot.
+// Float row's keyframe dot. 7b F4: see commitFloatRowSpinner's own comment.
 void SSFloaterAtmoEnv::toggleFloatRowKeyframe(const FloatRow& row)
 {
-    toggleKeyframe<F32>(row.mField());
+    toggleKeyframe<F32>(row.mField(), row.mHoldCurve ? SSAtmoEnvCurve::HOLD : ss_atmoenv_default_curve<F32>());
 }
 
 // Float row's previous-keyframe jump.
@@ -3349,12 +3588,25 @@ void SSFloaterAtmoEnv::refreshPreview()
     time_slider->setIncrement(100.f / (F32)SS_ATMOENV_PREVIEW_STEPS);
     time_slider->setValue((F32)(llclamp(mPreviewPhase, 0.0, 1.0) * 100.0));
 
-    getChild<LLTextBox>("preview_time_value_text")->setText(formatApparentTime(mPreviewPhase));
+    getChild<LLTextBox>("preview_time_value_text")->setText(previewTimeText()); // apparent time + the speed suffix (refreshPreviewPlayButton)
 
     for (const FloatRow& row : mFloatRows)
     {
         refreshFloatRow(row, mPreviewPhase);
     }
+
+    // <SS:Nexii> The haze thin frac row's own read-out: the scale height SSHaze::invHeight resolves to from the
+    // AUTHORED dome height (never cirrusAltitudeMetres()) and the frac just refreshed above, in metres. "Off" at
+    // frac 0 rather than a metre figure, since invH == 0 has no scale height to show.
+    {
+        const SSAtmoEnvTrack& haze_track = mgr->editable().mTracks[mSelectedTrackIndex];
+        const F32 dome_height_m = haze_track.mCloudDome.mHeightM.valueAt(mPreviewPhase);
+        const F32 thin_frac = haze_track.mAtmosphere.mHazeThinFrac.valueAt(mPreviewPhase);
+        const F32 inv_h = SSHaze::invHeight(dome_height_m, thin_frac);
+        getChild<LLTextBox>("atmo_haze_thin_scale_label")->setText(
+            (inv_h > 0.f) ? llformat("%.0fm", 1.f / inv_h) : std::string("Off"));
+    }
+
     for (const KeyRow<LLColor3>& row : mColorRows)
     {
         refreshColorRow(row, mPreviewPhase);
@@ -3513,8 +3765,11 @@ bool SSFloaterAtmoEnv::collectHoveredKeyframes(std::vector<GhostKeyframe>& out, 
     for (const KeyRow<std::string>& row : mStringRows)
     {
         if (!wanted(row.mPrefix)) continue;
+        // <SS:Nexii> Two vocabularies share mStringRows now - precipitation's and the forced-storm cue's - so the ghost label is picked by which row this is rather than assumed.
+        const bool is_storm_kind = (row.mPrefix == "storm_override_kind_combo");
         buildGhosts<std::string>(row.mField().keyframes(),
-            [](const std::string& v) { return precipDisplayName(v); }, out);
+            [is_storm_kind](const std::string& v)
+            { return is_storm_kind ? stormOverrideKindDisplayName(v) : precipDisplayName(v); }, out);
         found = true;
         if (!overview) return true;
     }
@@ -4323,17 +4578,114 @@ void SSFloaterAtmoEnv::drawSliderValueGhosts()
     }
 }
 
-// Starts/stops preview playback.
+// <SS:Nexii> Starts/stops preview playback. The SPEED is read from the modifier keys held at the click (user, 2026-09-06):
+// plain - the 60 s lap that makes a whole authored day watchable; SHIFT - REAL time, one cycle per the selected track's
+// own day length, i.e. exactly what the world shows (a storm's ages, funnel descent and the squall's arrival at their
+// true pace, since the scheduler runs on cycle time - phase 7e); ALT - a third of the lap speed; SHIFT+ALT - half. A
+// click while playing always stops, whatever is held.
 void SSFloaterAtmoEnv::onClickPreviewPlay()
 {
     mPreviewPlaying = !mPreviewPlaying;
     mPreviewPlayLast = LLTimer::getElapsedSeconds();
+    if (mPreviewPlaying)
+    {
+        static const F64 PLAY_LAP_SECONDS = 60.0;
+        const MASK mask = mPreviewClickMask; // the mask the click EVENT carried (handleMouseDown below), not a keyboard poll
+        const bool shift = (mask & MASK_SHIFT) != 0;
+        const bool alt = (mask & MASK_ALT) != 0;
+        F64 lap = PLAY_LAP_SECONDS;
+        if (shift && alt)      lap = PLAY_LAP_SECONDS * 2.0;
+        else if (alt)          lap = PLAY_LAP_SECONDS * 3.0;
+        else if (shift)
+        {
+            SSAtmoEnvManager* mgr = SSAtmoEnvManager::getInstance();
+            const SSAtmoEnvAsset& asset = mgr->editable();
+            if (mSelectedTrackIndex >= 0 && (size_t)mSelectedTrackIndex < asset.mTracks.size())
+            {
+                lap = llmax(asset.mTracks[(size_t)mSelectedTrackIndex].mDayLengthSeconds, 1.0);
+            }
+        }
+        mPreviewPlayLapS = lap;
+    }
 
     LLButton* button = getChild<LLButton>("preview_play_button");
-    button->setImageOverlay(mPreviewPlaying ? "Pause_Off" : "Play_Off");
+    mPreviewPlayLabel = "\x01"; // impossible face: forces refreshPreviewPlayButton to redraw the button next frame
     button->setToolTip(std::string(mPreviewPlaying
         ? "Stop the preview where it is"
-        : "Run the preview through the cycle"));
+        : "Run the preview through the cycle (60 s). Shift-click: real time, the track's own day length. Alt-click: a third of the speed. Shift+Alt: half."));
+}
+
+// <SS:Nexii> The play button's face (user, 2026-09-06): hovering it shows the speed a click would start at, read live from
+// the modifier keys - "1x" plain, "RT" with SHIFT (real time, the track's own day length), "1/3" with ALT, "1/2"
+// with SHIFT+ALT - and while playing it shows the running speed; otherwise the play/pause icon. Per frame, cheap: one
+// point-in-view test and a string compare; the button is only touched when the face changes.
+namespace
+{
+    std::string previewSpeedLabelForMask(MASK mask)
+    {
+        const bool shift = (mask & MASK_SHIFT) != 0;
+        const bool alt = (mask & MASK_ALT) != 0;
+        if (shift && alt) return "1/2";
+        if (alt) return "1/3";
+        if (shift) return "RT";
+        return "1x";
+    }
+    std::string previewSpeedLabelForLap(F64 lapS)
+    {
+        // The four laps onClickPreviewPlay can choose: 60 / 120 / 180 / the day length (>= 240 s for any day over four minutes).
+        if (lapS < 90.0) return "1x";
+        if (lapS < 150.0) return "1/2";
+        if (lapS < 240.0) return "1/3";
+        return "RT";
+    }
+}
+void SSFloaterAtmoEnv::refreshPreviewPlayButton()
+{
+    // <SS:Nexii> (user, 2026-09-06) The speed is shown as a SUFFIX on the time label, not on the button's face: while
+    // the mouse is over the play button (any modifier state) the label shows what a click would start; while playing it
+    // shows the running speed. Hover is tested in UI space (LLUI::getMousePositionScreen), which is what a view's own
+    // screenPointToLocal expects - window pixels are wrong under any UI scale, which is why the face never changed.
+    LLButton* button = getChild<LLButton>("preview_play_button");
+    if (!button) return;
+    std::string suffix;
+    if (mPreviewPlaying)
+    {
+        suffix = previewSpeedLabelForLap(mPreviewPlayLapS);
+    }
+    else if (mPreviewPlayHover && button->getVisible() && isInVisibleChain())
+    {
+        suffix = previewSpeedLabelForMask(mPreviewHoverMask); // the mask the last hover EVENT carried
+    }
+    if (suffix == mPreviewPlayLabel) return;
+    mPreviewPlayLabel = suffix;
+    button->setLabel(LLStringExplicit(""));
+    button->setImageOverlay(mPreviewPlaying ? "Pause_Off" : "Play_Off");
+    getChild<LLTextBox>("preview_time_value_text")->setText(previewTimeText());
+}
+
+// <SS:Nexii> The modifier masks the OS delivers with mouse events, recorded before the floater's children see them - a
+// keyboard poll at commit time missed a modifier held through the click on the user's build.
+bool SSFloaterAtmoEnv::handleMouseDown(S32 x, S32 y, MASK mask)
+{
+    mPreviewClickMask = mask;
+    mPreviewHoverMask = mask;
+    return LLFloater::handleMouseDown(x, y, mask);
+}
+bool SSFloaterAtmoEnv::handleHover(S32 x, S32 y, MASK mask)
+{
+    mPreviewHoverMask = mask;
+    return LLFloater::handleHover(x, y, mask);
+}
+
+// <SS:Nexii> The time label's text: the apparent time plus the speed suffix when one is showing.
+std::string SSFloaterAtmoEnv::previewTimeText() const
+{
+    std::string text = formatApparentTime(mPreviewPhase);
+    if (!mPreviewPlayLabel.empty() && mPreviewPlayLabel != "\x01")
+    {
+        text += "  \xC2\xB7  " + mPreviewPlayLabel; // middle dot, UTF-8
+    }
+    return text;
 }
 
 // Advances the preview phase while playing.
@@ -4347,15 +4699,13 @@ void SSFloaterAtmoEnv::advancePreviewPlayback()
         return;
     }
 
-    static const F64 PLAY_LAP_SECONDS = 60.0;
-
     const F64 now = LLTimer::getElapsedSeconds();
     const F64 elapsed = now - mPreviewPlayLast;
     mPreviewPlayLast = now;
 
     if (elapsed <= 0.0 || elapsed > 1.0) return;
 
-    mPreviewPhase += elapsed / PLAY_LAP_SECONDS;
+    mPreviewPhase += elapsed / llmax(mPreviewPlayLapS, 1.0); // the lap chosen at the click (see onClickPreviewPlay)
     while (mPreviewPhase >= 1.0) mPreviewPhase -= 1.0;
 
     refreshPreview();

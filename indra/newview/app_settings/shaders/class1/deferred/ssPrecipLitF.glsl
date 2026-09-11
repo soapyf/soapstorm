@@ -3,6 +3,9 @@
  * @brief Atmo Magic lit particle fragment shader (SS:Nexii): non-emissive
  *        precipitation (snow, ripples) shaded by probe ambient and the sun
  *        with directional shadow sampling, like other lit alpha objects.
+ *        The landing ring is the exception and is shaded as water - scene
+ *        refraction, fresnel reflection and a sun glint through its baked
+ *        wave normal, the same treatment ssPrecipRainF.glsl gives a drop.
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Phoenix Firestorm Viewer Source Code
@@ -107,6 +110,9 @@ void main()
 
     vec2 frag_tc = gl_FragCoord.xy / screen_res;
 
+    // A mid-grey stand-in for the ground a decal is lying on, for the two places below that have to guess at it.
+    const float ASSUMED_ALBEDO = 0.4;
+
     float shadow = 1.0;
 #ifdef HAS_SUN_SHADOW
     // The plane the quad is actually in, not the wave bent out of it: the normal offset the shadow lookup applies is a fix for the geometry's own depth bias and a steep flank of a ripple would throw
@@ -114,11 +120,13 @@ void main()
     shadow = sampleDirectionalShadow(pos.xyz, normalize(vary_normal), frag_tc);
 #endif
 
-    // Probe irradiance as local ambient (sky fallback when probes are off)
+    // Probe irradiance as local ambient (sky fallback when probes are off). The ring asks for a GLOSSY sample as well: a wave lying on wet ground is mostly a mirror, and the sky and sun sliding across its
+    // flanks is what makes the analytic puddle ripples in the normal pass read as water. Those get it for free by writing a tilted normal into the gbuffer and letting the deferred wet pass light it; a
+    // forward-drawn particle has to ask for the reflection itself, which is what this and the fresnel below are for. [interaction: ssSurfaceNormalF.glsl item 6 - the same look, drawn the other way round]
     vec3 irradiance = amblit_linear;
     vec3 glossenv = vec3(0);
     vec3 legacyenv = vec3(0);
-    sampleReflectionProbesLegacy(irradiance, glossenv, legacyenv, frag_tc, pos.xyz, norm, 0.0, 0.0, true, amblit_linear);
+    sampleReflectionProbesLegacy(irradiance, glossenv, legacyenv, frag_tc, pos.xyz, norm, decal_norm ? 0.9 : 0.0, 0.0, true, amblit_linear);
 
     // Flakes scatter light near-isotropically and a ripple lies flat on the ground, so neither wants a hard lambert term: the sun comes in through a wide wrap, which leaves a billboard about where
     // the old flat 0.6 constant had it while letting a ripple on a surface turned away from the sun, or standing in shadow, actually go dark. A ring with the wave baked into it is the exception: it
@@ -129,32 +137,53 @@ void main()
     float wrapped = max((dot(norm, light_dir) + wrap) / (1.0 + wrap), 0.0);
     vec3 lit = irradiance + srgb_to_linear(sunlit) * shadow * wrapped * 0.85;
 
-    vec3 sheen = vec3(0);
-    if (decal_norm)
-    {
-        vec3 view = normalize(pos);
-        float rl = max(dot(reflect(view, norm), light_dir), 0.0);
-        sheen = srgb_to_linear(sunlit) * shadow * pow(rl, 64.0) * 0.6;
-    }
-
     // A ripple is a film of water lying on ground that has already been through the whole deferred light pass - every point light, every projector, the lot - so rather than trying to reproduce that
     // lighting on a batched particle with no light list of its own, read it back off the surface. The scene map holds lit colour, which is light times albedo, so dividing by a mid-grey guess turns
     // it back into roughly the light arriving there. Taking the larger of the two rather than adding them is what keeps the sun from being counted twice: under open sky the sun term already explains
     // the ground and nothing changes, and it is only where the ground is brighter than sky and sun alone can account for - a lamp, a spotlight - that the ripple picks the difference up. It is a
     // frame behind, since the scene map is copied at the end of the frame. For a coarse "is there more light here than the sky is giving" signal on a decal that is fine; it would not be if this were
     // being used as the ripple's colour.
-    if (ss_decal * ss_scene_lit > 0.5)
+    bool has_scene = (ss_decal * ss_scene_lit > 0.5);
+    if (has_scene)
     {
-        const float ASSUMED_ALBEDO = 0.4;
         vec3 beneath = texture(sceneMap, frag_tc).rgb / ASSUMED_ALBEDO;
         lit = max(lit, beneath);
     }
 
-    // The ring's colour channels are its shape, not its colour, so it is tinted by the particle alone
-    vec3 albedo = decal_norm ? vertex_color.rgb : (tex.rgb * vertex_color.rgb);
-
     vec4 color;
-    color.rgb = srgb_to_linear(albedo) * lit + sheen;
+    if (decal_norm)
+    {
+        // A landing ring is WATER, not paint, and the thing it has to match is the analytic ring the normal pass draws on a puddle a couple of metres nearer the camera: the two are the same event and
+        // used to be told apart at a glance, because one of them tilted the surface's normal and the other drew a white circle on top of it. So the ring's body is the ground it is lying on, re-lit
+        // through the wave's own normal - the flank turned toward the light comes up, the flank turned away goes down, and where the wave is flat nothing happens at all and the ground shows through
+        // untouched. The scene map is that ground; without one (HDR off) the same mid-grey guess under the same sky stands in, which is dimmer and greyer than the white it replaces either way.
+        // And it is looked at THROUGH the wave rather than past it: the same screen refraction the falling drops get (ssPrecipRainF.glsl's ss_refract_strength block), last frame's scene pulled sideways
+        // by the crest's own slope. The one thing that cannot be copied across is the offset's SCALE. A drop is a billboard whose screen size the renderer fixed, so a flat screen-space offset suits it;
+        // a ring is a patch of ground, and the same flat offset would leave the ring at your feet barely bent while smearing one 20 m out across the whole puddle. So the offset is a WORLD displacement -
+        // what a film SS_RING_REFRACT_M deep bends a ray by - turned into screen space by the fragment's own depth, the 0.87 folding in the NDC per radian of a 60 degree vertical fov.
+        const float SS_RING_REFRACT_M = 0.02;
+        vec3 view = normalize(pos);
+        vec2 refract_tc = clamp(frag_tc + norm.xy * (SS_RING_REFRACT_M * 0.87 / max(length(pos), 0.25)), vec2(0.001), vec2(0.999));
+        vec3 beneath = has_scene ? texture(sceneMap, refract_tc).rgb : srgb_to_linear(vec3(ASSUMED_ALBEDO)) * lit;
+
+        // The re-lighting only ever DARKENS, and the reflection is MIXED in rather than added. That is not a look choice, it is what keeps the loop from running away: the scene map is last frame's scene
+        // at this same pixel, this quad drew into it, and alpha blending makes the frame-to-frame gain (1 - a + a * relight) - so any relight above 1 held over a pixel compounds geometrically until the
+        // ring blows out white. A film of water darkens the diffuse under it and trades the rest for reflection, which is the same shape as the constraint.
+        float wrapped_flat = max((dot(normalize(vary_normal), light_dir) + wrap) / (1.0 + wrap), 0.0);
+        float relight = (wrapped_flat > 0.01) ? clamp(wrapped / wrapped_flat, 0.4, 1.0) : 1.0;
+
+        // Water fresnel at 0.02 normal-incidence, the drops' own transmit-head-on/reflect-at-the-edges split: the flanks turned away from the eye go to sky, the flat parts stay all but transparent. The
+        // sun's glint along a crest is the only additive term, and it is the one thing in here that cannot feed back on itself.
+        float fres = 0.02 + 0.98 * pow(1.0 - clamp(dot(-view, norm), 0.0, 1.0), 5.0);
+        float rl = max(dot(reflect(view, norm), light_dir), 0.0);
+        vec3 glint = srgb_to_linear(sunlit) * shadow * pow(rl, 64.0) * 0.6;
+
+        color.rgb = mix(beneath * relight, glossenv, fres) + glint;
+    }
+    else
+    {
+        color.rgb = srgb_to_linear(tex.rgb * vertex_color.rgb) * lit;
+    }
     color.a = final_alpha;
 
     color.rgb = applySkyAndWaterFog(pos, additive, atten, color).rgb;

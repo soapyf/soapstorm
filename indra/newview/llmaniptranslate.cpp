@@ -65,6 +65,7 @@
 // [RLVa:KB] - Checked: 2010-03-23 (RLVa-1.2.0a)
 #include "rlvhandler.h"
 // [/RLVa:KB]
+#include "sslocalcontentlimits.h"   // <SS:Nexii> local landscape objects may be dragged into the void
 
 const S32 NUM_AXES = 3;
 const S32 MOUSE_DRAG_SLOP = 2;       // pixels
@@ -773,7 +774,8 @@ bool LLManipTranslate::handleHover(S32 x, S32 y, MASK mask)
 
                     if (object->isRootEdit())
                     {
-                        new_position_global = LLWorld::getInstance()->clipToVisibleRegions(object->getPositionGlobal(), new_position_global);
+                        // <SS:Nexii> Local content has no simulator to dump it, so it is not clipped to the visible regions: it may go anywhere in the 2048 m area centred on its own region, which is what scenery in the void is for. Stock objects keep the stock clip.
+                        new_position_global = ssClipLocalContentMove(object, object->getPositionGlobal(), new_position_global);
                     }
 
                     // PR: Only update if changed

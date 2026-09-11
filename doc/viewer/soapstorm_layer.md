@@ -16,7 +16,9 @@ Simulation/state (mostly LLSingletons, ticked from idle/update paths):
 - **SSPrecipSim / precipitation** (`ssprecipitation`, `ssprecippreset`, `ssprecipvariants`, `sspreciprenderer`) — rain/snow particle simulation + its renderer.
 - **SSRainShadowMap** (`ssrainshadow.*`) — top-down occlusion capture so rain doesn't fall indoors.
 - **SSWindFlowMap** (`sswindflow.*`, 89K — largest) — wind flow field around geometry (`doc/archive/atmo_magic_windflow.md`).
-- **SSSurfaceField** (`sssurfacefield.*`) — surface capture for runoff/wetness (`doc/archive/atmo_magic_runoff.md`).
+- **SSSurfaceField** (`sssurfacefield.*`) — surface capture for runoff/wetness (`doc/archive/atmo_magic_runoff.md`); also owns three G-buffer passes drawn from `renderDeferredLighting` (albedo, then wet, then normal — see `doc/viewer/frame_pipeline.md`) and the per-cell ice/frost/stain/age state (`sssurfacestatecore.h`).
+- **SSHeightFog** (`ssheightfog.*`) — the post-deferred height fog layer drawn from `renderFinalize`, before tonemap; see `doc/atmo_magic_surface_weather.md` sections 10 and 3.
+- **SSScreenFXPost** (`ssscreenfx.*`, core `ssscreenfxcore.h`) — the heat-shimmer and lens-drops post passes drawn from `renderFinalize`, after `combineGlow` and after DoF respectively; see `doc/atmo_magic_surface_weather.md` sections 11 and 12.
 - **SSVolCloud** (`ssvolcloud.*`) — volumetric cloud field. Far-field depth squash cap shared with lightning so bolts and clouds agree on drawn depth.
 - **SSLightning / SSLightningRender** — bolt simulation + rendering (`doc/archive/atmo_magic_lightning.md`; the ground strike's aura, amber, plasma, crawl, sparks and fire in `doc/atmo_magic_lightning_strike.md`, drawn through one per-frame LLVertexBuffer). Bloom via additive alpha into the post-deferred screen RT (see [glow_and_alpha.md](glow_and_alpha.md)).
 - **SSAvatarWet** (`ssavatarwet.*`) — avatar wetness response to rain.

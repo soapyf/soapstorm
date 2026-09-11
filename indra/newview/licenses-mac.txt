@@ -821,3 +821,33 @@ file, as section 4(d) of the Apache License 2.0 requires:
     This software, documentation and specifications are provided "as is", without
     warranty of any kind (see Apache 2.0 sections 7-8).
 
+
+=================
+Recast Navigation License
+=================
+
+Recast Navigation (Recast, Detour and DetourTileCache) builds the Soapstorm Atmo Magic
+navmesh from the viewer's physics shape census. It is vendored under indra/recastnavigation
+from https://github.com/recastnavigation/recastnavigation (revision 9f4ce644, 2026-02-27) with
+its own License.txt. One file, DetourTileCache/Source/DetourTileCacheBuilder.cpp, is altered
+from upstream (marked in the source); the rest is unmodified.
+
+Copyright (c) 2009 Mikko Mononen memon@inside.org
+
+This software is provided 'as-is', without any express or implied
+warranty.  In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+claim that you wrote the original software. If you use this software
+in a product, an acknowledgment in the product documentation would be
+appreciated but is not required.
+2. Altered source versions must be plainly marked as such, and must not be
+misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
+
+Source: https://github.com/recastnavigation/recastnavigation

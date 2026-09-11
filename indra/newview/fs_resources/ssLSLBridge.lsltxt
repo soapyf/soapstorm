@@ -1,0 +1,246 @@
+integer combatLogListener;
+
+default
+{
+    listen(integer channel, string name, key identifier, string text)
+    {
+        // Pass through combat log messages from the simulator
+        if(identifier == COMBAT_LOG_ID) llOwnerSay("C2" + text); // "C2[{damage or death event},...]
+        
+        // Scripted combat log messages from other sources than the simulator
+        else
+        {
+            key owner = llGetOwnerKey(identifier);
+            string header = (string)identifier + (string)owner; // 2 36-key UUIDs identifying source and owner as header before actual payload
+            llOwnerSay("C2" + header + text); // "C2<identifier key><owner key>[{damage or death event},...]" -- untrusted message, text may not be actually valid JSON or known schema
+        }
+    }
+    
+    final_damage(integer count)
+    {
+        string source0; list sourceDetails0;
+        string rezzer0; list rezzerDetails0;
+        string root0; list rootDetails0;
+        
+        string source1; list sourceDetails1;
+        string rezzer1; list rezzerDetails1;
+        string root1; list rootDetails1;
+        
+        string source2; list sourceDetails2;
+        string rezzer2; list rezzerDetails2;
+        string root2; list rootDetails2;
+        
+        string source3; list sourceDetails3;
+        string rezzer3; list rezzerDetails3;
+        string root3; list rootDetails3;
+        
+        string source4; list sourceDetails4;
+        string rezzer4; list rezzerDetails4;
+        string root4; list rootDetails4;
+        
+        string source5; list sourceDetails5;
+        string rezzer5; list rezzerDetails5;
+        string root5; list rootDetails5;
+        
+        string source6; list sourceDetails6;
+        string rezzer6; list rezzerDetails6;
+        string root6; list rootDetails6;
+        
+        string source7; list sourceDetails7;
+        string rezzer7; list rezzerDetails7;
+        string root7; list rootDetails7;
+        
+        string source8; list sourceDetails8;
+        string rezzer8; list rezzerDetails8;
+        string root8; list rootDetails8;
+        
+        float time = llGetTime();
+        vector targetPos = llGetPos();
+        
+        integer index;
+        for(index = 0; index < count; ++index)
+        {
+            if(index == 0)
+            {
+                source0 = llDetectedKey(index);
+                if(source0) sourceDetails0 = llGetObjectDetails(source0, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                rezzer0 = llDetectedRezzer(index);
+                if(rezzer0)
+                {
+                    rezzerDetails0 = llGetObjectDetails(rezzer0, [OBJECT_REZZER_KEY, OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                    root0 = llList2String(rezzerDetails0, 0);
+                    if(root0) rootDetails0 = llGetObjectDetails(root0, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                }
+            }
+            else if(index == 1)
+            {
+                source1 = llDetectedKey(index);
+                if(source1) sourceDetails1 = llGetObjectDetails(source1, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                rezzer1 = llDetectedRezzer(index);
+                if(rezzer1)
+                {
+                    rezzerDetails1 = llGetObjectDetails(rezzer1, [OBJECT_REZZER_KEY, OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                    root1 = llList2String(rezzerDetails1, 0);
+                    if(root1) rootDetails1 = llGetObjectDetails(root1, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                }
+            }
+            else if(index == 2)
+            {
+                source2 = llDetectedKey(index);
+                if(source2) sourceDetails2 = llGetObjectDetails(source2, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                rezzer2 = llDetectedRezzer(index);
+                if(rezzer2)
+                {
+                    rezzerDetails2 = llGetObjectDetails(rezzer2, [OBJECT_REZZER_KEY, OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                    root2 = llList2String(rezzerDetails2, 0);
+                    if(root2) rootDetails2 = llGetObjectDetails(root2, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                }
+            }
+            else if(index == 3)
+            {
+                source3 = llDetectedKey(index);
+                if(source3) sourceDetails3 = llGetObjectDetails(source3, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                rezzer3 = llDetectedRezzer(index);
+                if(rezzer3)
+                {
+                    rezzerDetails3 = llGetObjectDetails(rezzer3, [OBJECT_REZZER_KEY, OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                    root3 = llList2String(rezzerDetails3, 0);
+                    if(root3) rootDetails3 = llGetObjectDetails(root3, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                }
+            }
+            else if(index == 4)
+            {
+                source4 = llDetectedKey(index);
+                if(source4) sourceDetails4 = llGetObjectDetails(source4, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                rezzer4 = llDetectedRezzer(index);
+                if(rezzer4)
+                {
+                    rezzerDetails4 = llGetObjectDetails(rezzer4, [OBJECT_REZZER_KEY, OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                    root4 = llList2String(rezzerDetails4, 0);
+                    if(root4) rootDetails4 = llGetObjectDetails(root4, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                }
+            }
+            else if(index == 5)
+            {
+                source5 = llDetectedKey(index);
+                if(source5) sourceDetails5 = llGetObjectDetails(source5, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                rezzer5 = llDetectedRezzer(index);
+                if(rezzer5)
+                {
+                    rezzerDetails5 = llGetObjectDetails(rezzer5, [OBJECT_REZZER_KEY, OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                    root5 = llList2String(rezzerDetails5, 0);
+                    if(root5) rootDetails5 = llGetObjectDetails(root5, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                }
+            }
+            else if(index == 6)
+            {
+                source6 = llDetectedKey(index);
+                if(source6) sourceDetails6 = llGetObjectDetails(source6, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                rezzer6 = llDetectedRezzer(index);
+                if(rezzer6)
+                {
+                    rezzerDetails6 = llGetObjectDetails(rezzer6, [OBJECT_REZZER_KEY, OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                    root6 = llList2String(rezzerDetails6, 0);
+                    if(root6) rootDetails6 = llGetObjectDetails(root6, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                }
+            }
+            else if(index == 7)
+            {
+                source7 = llDetectedKey(index);
+                if(source7) sourceDetails7 = llGetObjectDetails(source7, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                rezzer7 = llDetectedRezzer(index);
+                if(rezzer7)
+                {
+                    rezzerDetails7 = llGetObjectDetails(rezzer7, [OBJECT_REZZER_KEY, OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                    root7 = llList2String(rezzerDetails7, 0);
+                    if(root7) rootDetails7 = llGetObjectDetails(root7, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                }
+            }
+            else if(index == 8)
+            {
+                source8 = llDetectedKey(index);
+                if(source8) sourceDetails8 = llGetObjectDetails(source8, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                rezzer8 = llDetectedRezzer(index);
+                if(rezzer8)
+                {
+                    rezzerDetails8 = llGetObjectDetails(rezzer8, [OBJECT_REZZER_KEY, OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                    root8 = llList2String(rezzerDetails8, 0);
+                    if(root8) rootDetails8 = llGetObjectDetails(root8, [OBJECT_NAME, OBJECT_POS, OBJECT_ATTACHED_POINT, OBJECT_GROUP, OBJECT_CREATOR]);
+                }
+            }
+        }
+        
+        for(index = 0; index < count; ++index)
+        {
+            list damage = llDetectedDamage(index);
+            float delivered = llList2Float(damage, 0);
+            integer type = llList2Integer(damage, 1);
+            float original = llList2Float(damage, 2);
+            string owner = llDetectedOwner(index);
+            
+            
+        }
+        
+        /*
+            vector sourcePos = llDetectedPos(deadlyDamage);
+            vector targetPos = llGetPos();
+            llRegionSay(COMBAT_CHANNEL, llList2Json(JSON_ARRAY, [
+                llList2Json(JSON_OBJECT, [
+                    "event", "OBJECT_DEATH",
+                    "owner", llDetectedOwner(deadlyDamage),
+                    "rezzer", llDetectedRezzer(deadlyDamage),
+                    "source", llDetectedKey(deadlyDamage),
+                    "source_pos", llList2Json(JSON_ARRAY, [sourcePos.x, sourcePos.y, sourcePos.z]),
+                    "target", llGetKey(),
+                    "target_pos", llList2Json(JSON_ARRAY, [targetPos.x, targetPos.y, targetPos.z]),
+                    "type", llList2Integer(llDetectedDamage(deadlyDamage), 1)
+                ])
+            ]));
+        */
+    }
+    
+    /*timer()
+    {
+        list agents = llGetAgentList(AGENT_LIST_REGION, []);
+        integer count = llGetListLength(agents);
+        llLinksetDataWrite("AGENTS", (string)count);
+        while(count --> 0)
+        {
+            key agent = llList2Key(agents, count);
+            llLinksetDataWrite("AGENT" + (string)count, llList2Json(JSON_ARRAY, agent + llList2Json(JSON_ARRAY, llGetObjectDetails(agent, [OBJECT_POS, OBJECT_ROT, OBJECT_VELOCITY]) + llGetAgentInfo(agent)));
+        }
+        // Well, leave this for later but what we actually need to do is track historical agent pos/rot data
+    }*/
+    
+    http_request(key httpReqID, string Method, string Body)
+    {
+        if (Method == "GET" || Method == "POST")
+        {
+            // Remove the <llsd><string> ... </string></llsd> wrapper
+            list commandList = llParseString2List(llGetSubString(Body, 14, llStringLength(Body) - 18), ["|"], []);
+            string cmd = llList2String(commandList, 0);
+
+            // Large If statement for command processing. Shame on you, LSL!
+            if (cmd == "CombatLogListen")
+            {
+                // Combat Log: Forward all combat log messages
+                if(combatLogListener) llListenRemove(combatLogListener);
+                if (llList2Integer(commandList, 1)) combatLogListener = llListen(COMBAT_CHANNEL, "", "", "");
+            }
+            
+            else if (cmd == "TrackAgents")
+            {
+                // Track Agents: Track all agents in the region and their positions
+                if (llList2Integer(commandList, 1)) llSetTimerEvent(1/45.);
+                else llSetTimerEvent(0.0);
+            }
+            
+            else if (cmd == "GetTrackedAgents")
+            {
+                // We would return a list of agents over time, per the timer event
+                // llHTTPResponse(httpReqID, 200, "<llsd><string>" + ... + "</string></llsd>");
+                return;
+            }
+        }
+    }
+}

@@ -63,6 +63,8 @@ struct SSAtmoTrackConfig
     F32 mWindSpeed = 4.f;
 
     F32 mTemperatureC = 15.f;
+    // <SS:Nexii> Surface weather slice B: the weather cube's moisture 0..1, filled beside mTemperatureC in SSAtmoEnvBridge::resolveActiveTrack; SSAtmoMagic::humidity() reads it, falling back to precipitation when no environment. doc/atmo_magic_surface_weather.md sec 2.
+    F32 mMoisture = 0.5f;
 
     LLColor3 mLightningColor{0.62f, 0.55f, 1.f};
     F32 mLightningCoreWhite = 0.85f;

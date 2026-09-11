@@ -30,6 +30,8 @@
 #include "ssatmomagic.h"
 #include "ssprecippreset.h"
 
+#include "llassetstorage.h"
+#include "llaudiodecodemgr.h"
 #include "llaudioengine.h"
 
 // Stops and joins the worker threads at shutdown.
@@ -296,9 +298,14 @@ S32 SSSoundMeta::pendingCount()
 }
 
 // Registers a CSV of sound ids for analysis, unioning purposes and remembering who configured them.
+// Every call records a slot for the debug view, including ones that name no valid sound.
 void SSSoundMeta::addList(const std::string& csv, const std::string& source, U32 purpose)
 {
     if (purpose == 0) return;
+
+    SlotInfo& slot = mSlots.emplace_back();
+    slot.mSource = source;
+    slot.mPurpose = purpose;
 
     std::vector<std::string> tokens;
     LLStringUtil::getTokens(csv, tokens, ",+");
@@ -306,15 +313,18 @@ void SSSoundMeta::addList(const std::string& csv, const std::string& source, U32
     {
         LLUUID id(tok);
         if (id.isNull()) continue;
+        slot.mSounds.push_back(id);
         auto it = mEntries.emplace(id, Entry()).first;
         if (it->second.mSource.empty()) it->second.mSource = source;
         it->second.mPurpose |= purpose;
     }
 }
 
-// Walks every configured sound source - thunder, global footsteps, the active preset's beds and steps - into the entry table.
+// Walks every configured sound source - thunder, global footsteps, the active preset's ambiences and steps - into the entry table.
 void SSSoundMeta::gather()
 {
+    mSlots.clear();
+
     for (const std::string& key : { SSAtmoStoreKey::THUNDER_CRACK, SSAtmoStoreKey::THUNDER_RUMBLE })
     {
         addList(SSAtmoStore::getString(key), key,
@@ -334,14 +344,14 @@ void SSSoundMeta::gather()
     }
 
     const SSPrecipPreset& preset = SSPrecipPresetManager::instance().active();
-    const char* bed_names[] = { "ambient_light", "ambient_medium", "ambient_heavy", "roof_open", "roof_small", "roof_medium", "roof_big" };
-    const std::string* beds[] = { &preset.mSounds.mAmbientLight, &preset.mSounds.mAmbientMedium,
-                                  &preset.mSounds.mAmbientHeavy, &preset.mSounds.mRoofOpen,
-                                  &preset.mSounds.mRoofSmall, &preset.mSounds.mRoofMedium,
-                                  &preset.mSounds.mRoofBig };
+    const char* ambience_names[] = { "ambient_light", "ambient_medium", "ambient_heavy", "roof_open", "roof_small", "roof_medium", "roof_big" };
+    const std::string* ambiences[] = { &preset.mSounds.mAmbientLight, &preset.mSounds.mAmbientMedium,
+                                       &preset.mSounds.mAmbientHeavy, &preset.mSounds.mRoofOpen,
+                                       &preset.mSounds.mRoofSmall, &preset.mSounds.mRoofMedium,
+                                       &preset.mSounds.mRoofBig };
     for (S32 b = 0; b < 7; ++b)
     {
-        addList(*beds[b], "preset:" + preset.mName + "/" + bed_names[b], PURPOSE_DENSITY);
+        addList(*ambiences[b], "preset:" + preset.mName + "/" + ambience_names[b], PURPOSE_DENSITY);
     }
     for (S32 sf = 0; sf < STEP_SURFACE_COUNT; ++sf)
     {
@@ -354,7 +364,52 @@ void SSSoundMeta::gather()
     }
 }
 
-// Feeds decoded PCM to the workers a few at a time, preloading undecoded sounds and failing ones that never decode.
+// Fetches a sound from the asset server when the cache lacks it, then queues the decode; a no-op for sounds already decoded, failed, or marked corrupt.
+void SSSoundMeta::fetch(const LLUUID& id)
+{
+    if (id.isNull() || !gAudiop || !gAssetStorage) return;
+    if (gAudiop->isCorruptSound(id)) return;
+
+    LLAudioData* data = gAudiop->getAudioData(id);
+    if (!data || data->hasDecodedData() || data->hasDecodeFailed()) return;
+
+    if (data->hasLocalData())
+    {
+        LLAudioDecodeMgr::getInstance()->addDecodeRequest(id);
+        return;
+    }
+
+    // Atmo's ambience goes to the front of the asset queue - these are the viewer's own sounds, not scenery.
+    if (!mFetching.insert(id).second) return;
+    gAssetStorage->getAssetData(id, LLAssetType::AT_SOUND, onAssetFetched, NULL, true);
+}
+
+// Asset-server reply for fetch(): the raw sound is now in the asset cache, so mark it local and queue the decode that writes the .dsf; failures are flagged on the data so the pump reports them instead of waiting out the timeout.
+void SSSoundMeta::onAssetFetched(const LLUUID& id, LLAssetType::EType, void*, S32 status, LLExtStat)
+{
+    if (SSSoundMeta::instanceExists()) SSSoundMeta::getInstance()->mFetching.erase(id);
+    if (!gAudiop) return;
+
+    LLAudioData* data = gAudiop->getAudioData(id);
+    if (!data) return;
+
+    if (status != 0)
+    {
+        LL_WARNS("SSSoundMeta") << "sound asset fetch failed: " << id << "  "
+            << LLAssetStorage::getErrorString(status) << " (" << status << ")" << LL_ENDL;
+        data->setHasDecodeFailed(true);
+        data->setHasLocalData(false);
+        data->setHasDecodedData(false);
+        data->setHasCompletedDecode(true);
+        return;
+    }
+
+    data->setHasDecodeFailed(false);
+    data->setHasLocalData(true);
+    LLAudioDecodeMgr::getInstance()->addDecodeRequest(id);
+}
+
+// Fetches every configured sound that is not yet decoded, feeds decoded PCM to the workers a few at a time, and fails entries whose fetch or decode broke or never finished.
 void SSSoundMeta::pump()
 {
     if (!gAudiop) return;
@@ -364,32 +419,59 @@ void SSSoundMeta::pump()
         if (mJobs.size() >= 4) return;
     }
 
-    S32 in_flight = 0;
+    const F64 now = SSAtmoMagic::getInstance()->sharedTime();
+    S32 queued = 0;
     for (auto& pair : mEntries)
     {
-        if (pair.second.mState != PENDING) continue;
-        if (in_flight >= 3) break;
+        Entry& entry = pair.second;
+        if (entry.mState != PENDING) continue;
 
         LLAudioData* data = gAudiop->getAudioData(pair.first);
-        if (!data) { pair.second.mState = FAILED; continue; }
-
-        const F64 now = SSAtmoMagic::getInstance()->sharedTime();
-        if (pair.second.mFirstTried < 0.0) pair.second.mFirstTried = now;
-
-        if (now - pair.second.mFirstTried > 30.0)
+        if (!data)
         {
-            pair.second.mState = FAILED;
-            LL_WARNS("SSSoundMeta") << "sound never decoded: " << pair.first
-                << "  configured in [" << pair.second.mSource << "]" << LL_ENDL;
+            entry.mState = FAILED;
+            entry.mFailWhy = "no audio data";
             continue;
         }
+
+        if (entry.mFirstTried < 0.0) entry.mFirstTried = now;
 
         if (!data->hasDecodedData())
         {
-            gAudiop->preloadSound(pair.first);
-            ++in_flight;
+            if (gAudiop->isCorruptSound(pair.first))
+            {
+                entry.mState = FAILED;
+                entry.mFailWhy = "marked corrupt by the audio engine";
+                LL_WARNS("SSSoundMeta") << "sound marked corrupt: " << pair.first
+                    << "  configured in [" << entry.mSource << "]" << LL_ENDL;
+                continue;
+            }
+            if (data->hasDecodeFailed())
+            {
+                entry.mState = FAILED;
+                entry.mFailWhy = "asset fetch or decode failed";
+                LL_WARNS("SSSoundMeta") << "sound fetch or decode failed: " << pair.first
+                    << "  configured in [" << entry.mSource << "]" << LL_ENDL;
+                continue;
+            }
+            if (now - entry.mFirstTried > 60.0)
+            {
+                entry.mState = FAILED;
+                entry.mFailWhy = "never decoded in 60s";
+                LL_WARNS("SSSoundMeta") << "sound never decoded: " << pair.first
+                    << "  configured in [" << entry.mSource << "]" << LL_ENDL;
+                continue;
+            }
+            // Every configured sound is requested up front; only the analysis jobs below are capped.
+            if (!entry.mFetchIssued)
+            {
+                entry.mFetchIssued = true;
+                fetch(pair.first);
+            }
             continue;
         }
+
+        if (queued >= 3) continue;
 
         LLAudioBuffer* buffer = data->getBuffer();
         if (!buffer)
@@ -397,25 +479,34 @@ void SSSoundMeta::pump()
             gAudiop->updateBufferForData(data, pair.first);
             buffer = data->getBuffer();
         }
-        if (!buffer) { ++in_flight; continue; }
+        if (!buffer)
+        {
+            if (data->hasWAVLoadFailed())
+            {
+                entry.mState = FAILED;
+                entry.mFailWhy = "decoded file would not load";
+            }
+            continue;
+        }
 
         Job job;
         job.mID = pair.first;
         job.mLengthMS = buffer->getLengthMS();
-        job.mPurpose = pair.second.mPurpose;
+        job.mPurpose = entry.mPurpose;
         if (!buffer->getPCMCopy(job.mPCM, job.mChannels, job.mRate))
         {
-            pair.second.mState = FAILED;
+            entry.mState = FAILED;
+            entry.mFailWhy = "no PCM copy";
             continue;
         }
 
-        pair.second.mState = ANALYZING;
+        entry.mState = ANALYZING;
         {
             std::lock_guard<std::mutex> lock(mJobMutex);
             mJobs.push_back(std::move(job));
         }
         mJobSignal.notify_one();
-        ++in_flight;
+        ++queued;
     }
 }
 

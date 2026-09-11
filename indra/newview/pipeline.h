@@ -370,7 +370,7 @@ public:
 
     void renderHighlight(const LLViewerObject* obj, F32 fade);
 
-    void renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCamera& camera, LLCullResult& result, bool depth_clamp);
+    void renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCamera& camera, LLCullResult& result, bool depth_clamp, GLenum depth_func = GL_LESS);
     void renderSelectedFaces(const LLColor4& color);
     void renderHighlights();
     bool renderVignette(LLRenderTarget* src, LLRenderTarget* dst);
@@ -675,7 +675,13 @@ public:
         RENDER_DEBUG_GEOM_SETTLE        = 0x8000000000,
         RENDER_DEBUG_SURFACE_FIELD      = 0x10000000000,
         RENDER_DEBUG_WORLD_FIELD        = 0x20000000000,
-        RENDER_DEBUG_CLOUD_FIELD        = 0x40000000000
+        RENDER_DEBUG_CLOUD_FIELD        = 0x40000000000,
+        // <SS:Nexii> Atmo Magic lightning: the strike diagram (channels split at the leader front, crawl,
+        // attachment, occlusion box, and the scene/cloud light readings). Unlike the seven above it is NOT
+        // dispatched from LLPipeline::renderDebug - that runs inside renderGeomPostDeferred, ahead of the
+        // luminance sample, which is exactly why the info-view overlay was moved out of it - the mask is read by
+        // SSAtmoInfoView::renderDimAndWorld from render_ui() instead. [interaction: SSAtmoInfoView::renderLightning]
+        RENDER_DEBUG_LIGHTNING          = 0x80000000000
     };
 
 public:
@@ -774,6 +780,9 @@ public:
 
     // currently used render target pack
     RenderTargetPack* mRT;
+
+    // <SS:Nexii> The render target the LAST "Present the screen target" pass in renderFinalize() actually read - i.e. whatever the post chain's ping-pong (tonemap, CAS, glow, DoF, FSAA/SMAA, the RLV sphere, the vignette, the snapshot frame) left as sourceBuffer at that point, which is mRT->screen on some paths, mPostPingMap/mPostPongMap on others, and mFXAAMap on yet others. A post-screen pass that runs AFTER renderFinalize and wants the image the user is looking at cannot pick that target by name; it has to be handed the one the present pass chose. Set at exactly one place, the line before gDeferredPostNoDoFNoiseProgram binds it as DEFERRED_DIFFUSE, so it can never name a buffer the present pass did not present, and cleared at the top of renderFinalize so a consumer that runs on a frame where the present pass did not (cube snapshot, an early-out) sees null rather than last frame's target. Only SSAtmoInfoView::renderInfoLook reads it today. [interaction: SSAtmoInfoView::renderInfoLook]
+    LLRenderTarget* mSSLastPresented = nullptr;
 
     LLRenderTarget          mSpotShadow[2];
 

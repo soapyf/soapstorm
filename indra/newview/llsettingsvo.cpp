@@ -741,6 +741,12 @@ void LLSettingsVOSky::applyToUniforms(void* ptarget)
     draw_real(shader, getCloudVariance(), LLShaderMgr::CLOUD_VARIANCE);
     draw_color(shader, getGlow(), LLShaderMgr::GLOW);
     draw_real(shader, getMaxY(), LLShaderMgr::MAX_Y);
+    // <SS:Nexii> Atmo Magic: haze altitude falloff - both accessors already fall back to 0 when Atmo is inactive
+    // (mirroring SSAtmoEnvApplier::sunRiseFraction's mActive gate), which reproduces the stock expression exactly.
+    draw_real(shader, SSAtmoEnvApplier::instance().hazeInvHeight(), LLShaderMgr::SS_HAZE_INV_HEIGHT);
+    draw_real(shader, SSAtmoEnvApplier::instance().hazeCamHeightM(), LLShaderMgr::SS_HAZE_CAM_HEIGHT);
+    // <SS:Nexii> The world-up axis in view space - zero (an inert dot product) when Atmo is inactive, same gate.
+    shader->uniform3fv(LLShaderMgr::SS_HAZE_UP_VIEW, SSAtmoEnvApplier::instance().hazeUpView());
     draw_real(shader, getMoonBrightness(), LLShaderMgr::MOON_BRIGHTNESS);
     draw_real(shader, getSkyMoistureLevel(), LLShaderMgr::MOISTURE_LEVEL);
     draw_real(shader, getSkyDropletRadius(), LLShaderMgr::DROPLET_RADIUS);

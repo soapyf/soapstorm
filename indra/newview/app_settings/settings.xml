@@ -18135,6 +18135,17 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <integer>1</integer>
     </map>
+    <key>SSTimingInversion</key>
+    <map>
+      <key>Comment</key>
+      <string>Re-time simulator object updates by solving their age from the along-track residual (timing inversion), so per-packet latency jitter does not render as position snaps on fast-moving objects</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
     <key>FSSoapstormGhostProjectileProbeDelay</key>
     <map>
       <key>Comment</key>
@@ -25750,6 +25761,28 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <integer>1</integer>
     </map>
+    <key>SSSqueezeNetworkPromoteKBPerSec</key>
+    <map>
+      <key>Comment</key>
+      <string>Fastest this background finishing is ever allowed to download, in kilobytes per second. It is a ceiling on a job nobody is waiting for, so a small number is the point: at 128 an hour of play spends well under half a gigabyte even if the viewer never stops finding work. 0 switches the background downloading off entirely.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>U32</string>
+      <key>Value</key>
+      <integer>128</integer>
+    </map>
+    <key>SSSqueezeNetworkPromoteMaxMB</key>
+    <map>
+      <key>Comment</key>
+      <string>Total this background finishing may download in one session, in megabytes. The rate above says "never faster than this"; this says "never more than this, at all", which is the limit that matters on a metered connection. Once it is reached nothing more is fetched until the viewer is restarted. 0 means no limit.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>U32</string>
+      <key>Value</key>
+      <integer>512</integer>
+    </map>
 <key>SSSqueezeEncodeThreads</key>
     <map>
       <key>Comment</key>
@@ -26485,6 +26518,17 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <integer>0</integer>
     </map>
+    <key>SSAtmoLandscape</key>
+      <map>
+      <key>Comment</key>
+      <string>Enable Atmo Magic landscape scenery - client-rasterized mesh objects owned by the environment asset (layered under SSAtmoEnabled)</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
     <key>SSAtmoRespawnOnImpact</key>
       <map>
       <key>Comment</key>
@@ -26595,10 +26639,21 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <real>48.0</real>
     </map>
+    <key>SSAtmoRunoffRes</key>
+      <map>
+      <key>Comment</key>
+      <string>Drainage samples across a region for the liquid runoff network - 256 is 1 m cells on a standard region, traced where the shed hangs its curtain streams and drips. The wet field keeps its own coarser lattice</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>256</integer>
+    </map>
     <key>SSAtmoRunoffDebugView</key>
       <map>
       <key>Comment</key>
-      <string>Debug floater roof runoff view: which stage to draw. 0 every shelter edge that could ever shed, 1 the water each eave holds and how hard it is draining, 2 the first gate holding each quiet eave back, 3 the drips and gutter streams the shed has spawned</string>
+      <string>Debug floater roof runoff view: which stage to draw. 0 every runoff run that could ever shed - brightening with the catchment it collects, 1 the water each run holds and how hard it is draining, 2 the first gate holding each quiet run back, 3 the drips and gutter streams the shed has spawned. Granular weather draws the per-lip cascade surface instead in every view</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -27005,7 +27060,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>SSWorldField</key>
       <map>
       <key>Comment</key>
-      <string>Master toggle for the shared world field: one region-anchored band-sliced capture of the world's solid structure that surface, coverage and future channels read instead of each capturing its own. Builds nothing until a channel is demanded</string>
+      <string>Master toggle for the shared world field: the per-cell classification of the census navmesh's own rasterization - solid spans, outdoors/sheltered/interior air and the acoustic probe bake - that surface, coverage, fog and audio read instead of each capturing or raycasting its own. Off also stops the navmesh keeping its span sheets. REQUIRES SSNavMesh (which requires SSWorldFieldShapes) - the navmesh is the only geometry source; with it off this answers nothing and every consumer falls back to its own raycasts</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -27035,32 +27090,131 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <integer>1</integer>
     </map>
-    <key>SSWorldFieldCell</key>
+    <key>SSWorldFieldShapes</key>
       <map>
       <key>Comment</key>
-      <string>World field column size in metres; 2.0 over a 256m region is a 128x128 column grid</string>
+      <string>Exact declared-shape queries: one census of the physics shapes objects declare (shape type and phantom status read respectively, phantom a layer not a filter) answered by exact segment/ray casts - the soundscape's live probes and future shockwave/wind consumers. Falls back to the octree raycasts wherever the census has no answer</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>SSWorldFieldShapesBudgetMS</key>
+      <map>
+      <key>Comment</key>
+      <string>Main-thread milliseconds per frame the declared-shape census scan may spend; a rebuild spreads over as many frames as it needs and swaps in whole. Parts whose geometry did not change are reused from the part cache, so steady-state rebuilds cost a few frames</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
       <string>F32</string>
       <key>Value</key>
-      <real>2.0</real>
+      <real>3.0</real>
     </map>
-    <key>SSWorldFieldBand</key>
+    <key>SSWorldFieldShapesRange</key>
       <map>
       <key>Comment</key>
-      <string>Height of one capture band in metres. One ortho depth pass per band, stacked bottom-up, so the field is a multi-span column store; finer bands resolve more interior surfaces at the cost of more passes</string>
+      <string>Radius in metres of the declared-shape census envelope around the query anchor - the memory/fidelity dial for how much of the region carries exact triangle records</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
       <string>F32</string>
       <key>Value</key>
-      <real>16.0</real>
+      <real>192.0</real>
     </map>
-    <key>SSWorldFieldCeiling</key>
+    <key>SSNavMesh</key>
       <map>
       <key>Comment</key>
-      <string>Altitude in metres above which the world field stops capturing. A full build also stops early once the sky has been empty for a few consecutive bands</string>
+      <string>Build the census navmesh: the declared-shape census emitted as triangles per 16 m column (0.125 m cells), split into height bands at air gaps, rasterized by Recast on a worker and published through DetourTileCache. Needs SSWorldFieldShapes. Movers ride the tile cache as obstacles. Off frees everything</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>SSNavMeshBandGap</key>
+      <map>
+      <key>Comment</key>
+      <string>Metres of empty air that split a column into separate height bands (Detour layers) - a skybox never shares a build with the ground and a band boundary never cuts a floor. Smaller means more, cheaper bands</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>8.0</real>
+    </map>
+    <key>SSNavMeshBuildsPerFrame</key>
+      <map>
+      <key>Comment</key>
+      <string>Band builds handed to the worker queue per frame while the worklist drains</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>U32</string>
+      <key>Value</key>
+      <integer>4</integer>
+    </map>
+    <key>SSNavMeshMaxInFlight</key>
+      <map>
+      <key>Comment</key>
+      <string>Band builds allowed on the worker queue at once</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>U32</string>
+      <key>Value</key>
+      <integer>4</integer>
+    </map>
+    <key>SSNavMeshShow</key>
+      <map>
+      <key>Comment</key>
+      <string>Draw the census navmesh: walkable Detour polygons as translucent fills with edges, coloured by height band (navmesh floater, View tab)</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>SSNavMeshShowWorld</key>
+      <map>
+      <key>Comment</key>
+      <string>Draw the world under the navmesh overlay; off wipes the frame so only the navmesh remains, as the stock pathfinding console does</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>SSNavMeshXRay</key>
+      <map>
+      <key>Comment</key>
+      <string>Also draw the parts of the navmesh hidden behind geometry, shaded darker and fainter</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>SSNavMeshRange</key>
+      <map>
+      <key>Comment</key>
+      <string>Radius in metres around the camera within which navmesh columns are scheduled; the shape census widens its envelope to match while the navmesh is on. Built columns beyond it are kept until their region leaves the world</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>512.0</real>
+    </map>
+    <key>SSNavMeshVoidMargin</key>
+      <map>
+      <key>Comment</key>
+      <string>Metres beyond a loaded region's edge within which built navmesh columns are kept when the camera moves away - the void where sim surrounds and off-sim decor sit. Scheduling itself follows SSNavMeshRange</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -27068,21 +27222,153 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <real>256.0</real>
     </map>
-    <key>SSWorldFieldMaxAge</key>
+    <key>SSNavMeshShowLinks</key>
       <map>
       <key>Comment</key>
-      <string>Seconds before a cached world field tile is recaptured even without prim updates - the LOD and asset-timing recovery path</string>
+      <string>Colour navmesh polygon edges on tile borders by whether Detour linked them to the neighbour tile: cyan linked, red open</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>SSNavMeshShowFlash</key>
+      <map>
+      <key>Comment</key>
+      <string>Whiten a navmesh band for a second when its layers land, so rebuilds are visible in the overlay</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>SSNavMeshShowObstacles</key>
+      <map>
+      <key>Comment</key>
+      <string>Draw the box obstacles the tile cache carved out for objects the census still counts as moving</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>SSNavMeshShowCensus</key>
+      <map>
+      <key>Comment</key>
+      <string>Draw the declared-shape census the navmesh is built from, by layer and provenance</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>SSNavMeshAgentHeight</key>
+      <map>
+      <key>Comment</key>
+      <string>Navmesh agent height in metres: the clearance a walkable surface needs above it. 0.5 builds the crawl-height mesh, so cover, vents and under-furniture gaps are on it; taller agent classes filter by headroom at query time</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
       <string>F32</string>
       <key>Value</key>
-      <real>120.0</real>
+      <real>0.5</real>
+    </map>
+    <key>SSNavMeshAgentRadius</key>
+      <map>
+      <key>Comment</key>
+      <string>Agent radius the navmesh is eroded by, metres. 0 by default: the navmesh replaces the world field's column store as the world's surface and is not walked by any agent yet, so no surface is shaved off walls (owner decision 2026-09-10). Raise it when a pathfinding consumer arrives</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.0</real>
+    </map>
+    <key>SSNavMeshAgentClimb</key>
+      <map>
+      <key>Comment</key>
+      <string>Navmesh agent step height in metres (ledges up to this merge into walkable surface)</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.75</real>
+    </map>
+    <key>SSNavMeshAgentSlope</key>
+      <map>
+      <key>Comment</key>
+      <string>Navmesh maximum walkable slope in degrees</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>45.0</real>
+    </map>
+    <key>SSWorldFieldAcoustics</key>
+      <map>
+      <key>Comment</key>
+      <string>Build the ACOUSTIC channel's gap-anchored probe set and propagation graph with the air classification, and serve the soundscape's wall profile, room classification, occlusion trace and thunder propagation from them. Off degrades every question to the raycasts and heuristics it used before</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>SSWorldFieldAcousticsQuality</key>
+      <map>
+      <key>Comment</key>
+      <string>Acoustic bake quality: 0 the statistic tier (wall profiles, Sabine RT60 from a bounded room flood) that rides the classification job; 1 adds the stochastic tier - per-probe ray bundles (128 rays, 8 bounces) against a 4x-coarsened span mip, fanned across the worker pool as batches. Opt-in: seconds of a core per region rebuild</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>U32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>SSWorldFieldCell</key>
+      <map>
+      <key>Comment</key>
+      <string>World field cell size in metres. 0.25 is the census navmesh's own span sheet cell, so the grid costs no resampling and window- and door-scale openings resolve for the air classification's reach walk - a 1024x1024 cell grid over a 256m region. Coarser unions whole sheet cells together and cuts memory and classification cost quadratically, at the price of leaking through thin walls</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.25</real>
+    </map>
+    <key>SSWorldFieldOpenAngle</key>
+      <map>
+      <key>Comment</key>
+      <string>The world field's outdoors rule, in degrees of sky elevation. An opening hands the covered air behind it a reach budget of gap_height / tan(this angle), re-evaluated from the LOCAL gap height at every cell step: ground under a sky platform 200m up keeps a 200m budget and reads outdoors across the whole footprint, while a 2.4m room's door hands about 2.4m of outdoors and roughly four times that of shelter before the air goes interior. The same length sets how fast the enclosure spectrum saturates. Smaller carries outdoors further; larger encloses sooner</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>45.0</real>
+    </map>
+    <key>SSWorldFieldGroundReach</key>
+      <map>
+      <key>Comment</key>
+      <string>How far in metres a query point with no air cell at its own height - a camera pushed inside a wall, an ear inside a floor slab - may walk DOWN looking for one before the world field answers open air. Points in real air (flying, above a sky platform, rain aloft) never use this: their own column's top gap already answers. Keep it short: it is a clipping-recovery distance, not a search, and a camera clipped into terrain with a large value here adopts the label of whatever basement it finds</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>6.0</real>
     </map>
     <key>SSWorldFieldDebugView</key>
       <map>
       <key>Comment</key>
-      <string>What the world field overlay draws: 1 every band surface the capture resolved (hue by band so stacked storeys read separately), 2 the air flood's connectivity labels - outside-connected air green fading with occlusion depth, sealed interior air red, 3 the drainage topology over the landing surface - standing water blue and each cell's D8 outlet on the filled surface, 4 the true ground - the wind profile's ground reference per column, topmost real ground with tall structures filled from their neighbours. Drawing itself is gated by the field overlay toggle, so there is no off value here</string>
+      <string>What the world field overlay draws: 1 every solid span top the cell grid holds (hue by altitude so stacked storeys read separately), 2 the air classification per gap - outdoors air green, sheltered air amber fading with the covered distance, interior air red, 3 the drainage topology over the landing surface - standing water blue and each cell's D8 outlet on the filled surface, 5 the cell spans themselves - each solid span a flat rect at its floor and its ceiling, coloured by the air state standing on it (outdoors green, sheltered amber, indoors red), joined by a dim line through the span's solid body, 7 the census navmesh - Detour polygon edges coloured by height band. Drawing itself is gated by the field overlay toggle, so there is no off value here</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -27170,7 +27456,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>SSAtmoRippleSpeed</key>
       <map>
       <key>Comment</key>
-      <string>Taste multiplier on how quickly landing ripples and splash crowns expand and fade; higher is snappier. Divides the preset's own ripple and crown lifetimes, so at 2 a preset asking for a 0.4s ring gets 0.2s</string>
+      <string>Taste multiplier on how quickly landing ripples and splash crowns expand and fade; higher is snappier. Divides the preset's own ripple and crown lifetimes, so at 2 a preset asking for a 0.4s ring gets 0.2s. The analytic rings on nearby puddles run off the same figure, so both move at the same speed</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -27225,7 +27511,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>SSAtmoVolumeAmbient</key>
       <map>
       <key>Comment</key>
-      <string>Volume of the precipitation ambient beds, indoor and out</string>
+      <string>Volume of the precipitation ambient loops, indoor and out</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -27342,6 +27628,28 @@ Change of this parameter will affect the layout of buttons in notification toast
       <string>Boolean</string>
       <key>Value</key>
       <integer>1</integer>
+    </map>
+    <key>SSComputeCulling</key>
+      <map>
+      <key>Comment</key>
+      <string>Experimental: run compute-shader frustum + Hi-Z occlusion culling for the main view's deferred draw. Each frame the surviving spatial groups are tested on the GPU against the previous frame's depth pyramid and the results gate whole groups in the draw loop one frame late. Requires OpenGL 4.3 (the wind flowmap's gate); groups only stop drawing after SSComputeCullingHysteresis consecutive hidden reports. OFF by default</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>SSComputeCullingHysteresis</key>
+      <map>
+      <key>Comment</key>
+      <string>How many consecutive frames the GPU cull pass must report a group hidden before the viewer stops drawing it. Higher is safer against the one-frame depth staleness during fast camera moves; lower culls more aggressively</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>U32</string>
+      <key>Value</key>
+      <integer>2</integer>
     </map>
     <key>SSAtmoWindFlowDebugStyle</key>
       <map>
@@ -27750,27 +28058,82 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <integer>1</integer>
     </map>
-    <key>SSAtmoSnowDepthFull</key>
+    <key>SSAtmoSurfaceDrops</key>
       <map>
       <key>Comment</key>
-      <string>Atmo Magic: settled depth, metres, that reads as fully snow-covered on the surface pass. The field's repose gate keeps depths honest; this only sets where full white starts</string>
+      <string>Atmo Magic: master strength for rain drops and drips drawn per fragment on wet surfaces, 0 to 1</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
       <string>F32</string>
       <key>Value</key>
-      <real>0.02</real>
+      <real>1.0</real>
     </map>
-    <key>SSAtmoSnowSparkle</key>
+    <key>SSAtmoSurfaceDropScale</key>
       <map>
       <key>Comment</key>
-      <string>Atmo Magic: how hard the snow surface's stable glints bite, 0 to 1 - the per-cell grain sparkle that separates fresh snow from flat paint</string>
+      <string>Atmo Magic: scale of the per-fragment drop and drip lattice - larger drops, fewer of them</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
       <string>F32</string>
       <key>Value</key>
-      <real>0.6</real>
+      <real>1.0</real>
+    </map>
+    <key>SSAtmoSurfaceRings</key>
+      <map>
+      <key>Comment</key>
+      <string>Atmo Magic: ripple rings on nearby puddles where actual rain impacts landed</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>SSAtmoSurfaceIce</key>
+      <map>
+      <key>Comment</key>
+      <string>Atmo Magic: freeze puddles and wet ground below zero into glaze and frozen puddles</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>SSAtmoSurfaceFrost</key>
+      <map>
+      <key>Comment</key>
+      <string>Atmo Magic: grow hoar frost on exposed cells during cold humid nights, with no precipitation needed</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>SSAtmoSurfaceFrostStrength</key>
+      <map>
+      <key>Comment</key>
+      <string>Atmo Magic: strength multiplier on the frost look - lift, grain and glint - 0 to 2</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>1.0</real>
+    </map>
+    <key>SSAtmoSurfaceDebug</key>
+      <map>
+      <key>Comment</key>
+      <string>Atmo Magic: surface state debug views - 0 off, 1 ice, 2 frost, 3 stain, 4 age, 5 porosity - painted grayscale by the albedo pass</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>0</integer>
     </map>
     <key>SSAtmoSnowDebug</key>
       <map>
@@ -27783,16 +28146,170 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <integer>0</integer>
     </map>
-    <key>SSAtmoWhiteoutDebug</key>
+    <key>SSAtmoHeightFogDebug</key>
       <map>
       <key>Comment</key>
-      <string>Atmo Magic: whiteout diagnosis - 0 off, 1 the final veil coverage as grayscale, 2 the outdoor-air gate, 3 the density split (red squall, green drift, blue height falloff). Drawn over the scene</string>
+      <string>Atmo Magic: height fog diagnosis - 0 off, 1 the fog amount as grayscale, 2 the ray march's midpoint density (times five, so partial densities read). Drawn over the scene</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
       <string>S32</string>
       <key>Value</key>
       <integer>0</integer>
+    </map>
+    <key>SSAtmoHeightFog</key>
+      <map>
+      <key>Comment</key>
+      <string>Render the height fog layer - the screen-space veil that sums ground fog, the precipitation veil, the old squall/drift-band whiteout, and a coloured mist toward standing liquid</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>SSAtmoHeightFogGround</key>
+      <map>
+      <key>Comment</key>
+      <string>Atmo Magic: master dial on the ground fog term of the height fog layer - humid, still, dark air that gathers near the ground. 0 removes it entirely</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>1.0</real>
+    </map>
+    <key>SSAtmoHeightFogPrecip</key>
+      <map>
+      <key>Comment</key>
+      <string>Atmo Magic: master dial on the precipitation veil term of the height fog layer - the haze standing rain or snow raises near the ground. 0 removes it entirely</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>1.0</real>
+    </map>
+    <key>SSAtmoHeatShimmer</key>
+      <map>
+      <key>Comment</key>
+      <string>Render the heat-shimmer post pass - a mirage ripple over distant, low-screen pixels after sudden warmth and on hot sunny days</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>SSAtmoHeatShimmerStrength</key>
+      <map>
+      <key>Comment</key>
+      <string>Atmo Magic: master dial on the heat-shimmer post pass' mirage strength. 0 removes the shimmer entirely</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>1.0</real>
+    </map>
+    <key>SSAtmoLensDrops</key>
+      <map>
+      <key>Comment</key>
+      <string>Render rain drops on the camera lens - a rain-on-glass post pass after depth of field</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>SSAtmoLensDropsStrength</key>
+      <map>
+      <key>Comment</key>
+      <string>Atmo Magic: how deeply the lens drops refract - how far the scene behind a drop is displaced by its surface. Derived from Snell at a water lens (sslensdropcore.h REFRACT_DEPTH times 1 - 1/1.333) and multiplied by this. 0 leaves the drops visible but optically flat; it does NOT remove them - SSAtmoLensDrops is the on/off</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>1.0</real>
+    </map>
+    <key>SSAtmoLensCondensation</key>
+      <map>
+      <key>Comment</key>
+      <string>Atmo Magic: master dial on the lens drops post pass' condensation fog, the haze on the glass that a running drop's trail wipes clear. 0 removes it entirely</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>1.0</real>
+    </map>
+    <key>SSAtmoLensStreaks</key>
+      <map>
+      <key>Comment</key>
+      <string>Atmo Magic: how strongly the lens drops' RUNNERS read - the drops that grow until they release, run down the glass along the slide direction and leave a refracting trail that thins and beads up behind them. This is the only place the wind's screen-projected push is visible in the pass, because the run direction is where it enters. 0 leaves only the sitting drops (the look of every build before the 2026-09-07 R2 fix), 1 is the shipping default, 2 doubles their presence</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>1.0</real>
+    </map>
+    <key>SSAtmoLensReflection</key>
+      <map>
+      <key>Comment</key>
+      <string>Atmo Magic: weight of the Fresnel reflection on a lens drop's own surface - grazing angles at a drop's rim go strongly reflective, and that rim highlight is most of what makes a drop read as a drop rather than a dark lump. 0 is refraction only (the look of every build before the 2026-09-07 R4 fix, kept as an in-build A/B), 1 is physical Schlick against water's 0.02 normal-incidence reflectance, 2 exaggerates it. NOTE: this pass runs after tonemap with no reflection probes bound, so the reflected surroundings are approximated from the frame itself - see the R4 note in ssscreenfx.cpp for what would have to change to sample the probes properly</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>1.0</real>
+    </map>
+    <key>SSAtmoLensDropWorker</key>
+      <map>
+      <key>Comment</key>
+      <string>Step the lens drop simulation on its own worker thread instead of on the main thread. Off runs the same simulation inline, which is only worth doing to rule the thread out while debugging</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>SSAtmoLensDryRate</key>
+      <map>
+      <key>Comment</key>
+      <string>Atmo Magic: how fast the lens drops live out their lives. A drop accretes, sits and evaporates over a hashed 5 to 14 seconds (sslensdropcore.h LIFE_MIN_S/LIFE_SPAN_S), shrinking and thinning to nothing over the last 45% of that rather than blinking out; this multiplies the clock, so 2 halves every life and 0.5 doubles it. 1 is the shipping default. Below about 0.3 the field stops visibly churning and reads as a frozen stipple</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>1.0</real>
+    </map>
+    <key>SSAtmoLensStreakBudget</key>
+      <map>
+      <key>Comment</key>
+      <string>Atmo Magic: how many running drops may exist on the lens at once - the streaks that release when they outgrow surface tension, tear down the glass eating the fine droplets in their path and leave a wake of medium beads. These are SIMULATED, so this is a real cost ceiling: each one is a loop iteration per pixel. 24 is the hard maximum the shader's uniform array holds, 12 is the shipping default, 0 leaves only the fine stipple with no streaks at all</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>12</integer>
+    </map>
+    <key>SSAtmoLensClearCentre</key>
+      <map>
+      <key>Comment</key>
+      <string>Atmo Magic: how strongly the FINE droplets and the condensation haze thin toward the middle of the screen (a windscreen's hydrophobic coating), so the frame reads as rain while the centre stays legible. Implemented as a LIFETIME multiplier (sslensdropcore.h clearRadial, growFracAt/evapFracAt, stippleAmplitude), not as an alpha vignette - drops still land in the middle and still evaporate there, they just cannot hold their size as long and cannot grow as large, so there is no ring at the boundary. At 1, measured (tests/lensdropcore.cpp): the centre's droplet coverage is about 22% of the edge's, and condensation is exactly 12% of the margin's. The running streaks and their wake beads are DELIBERATELY EXEMPT and drive straight through the centre. 0 gives a uniform field</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.75</real>
     </map>
     <key>SSAtmoWhiteoutFalloff</key>
       <map>
@@ -27948,17 +28465,6 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <real>6.0</real>
     </map>
-    <key>SSAtmoVolumeStepTrigger</key>
-  <map>
-    <key>Comment</key>
-    <string>Atmo Magic: gain of the legacy per-step trigger path (stock animation-driven steps and their fallback sounds), separate from SSAtmoVolumeFootsteps which drives the attached loop/segment path. Stock hardcoded 0.1, which is near-inaudible against the ambient beds.</string>
-    <key>Persist</key>
-    <integer>1</integer>
-    <key>Type</key>
-    <string>F32</string>
-    <key>Value</key>
-    <real>0.3</real>
-  </map>
   <key>SSAtmoVolumeThunder</key>
   <map>
     <key>Comment</key>
@@ -27984,7 +28490,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>SSAtmoAmbientAutoSort</key>
   <map>
     <key>Comment</key>
-    <string>Atmo Magic: pool the preset's light/medium/heavy rain beds into one ladder sorted by each recording's measured impacts-per-second, and crossfade along it to match the rain actually falling. Falls back to the authored three-bucket blend when fewer than three sounds are analysed or their rates barely differ.</string>
+    <string>Atmo Magic: pool the preset's light/medium/heavy rain loops into one ladder sorted by each recording's measured impacts-per-second, and crossfade along it to match the rain actually falling. Falls back to the authored three-bucket blend when fewer than three sounds are analysed or their rates barely differ.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -28630,10 +29136,87 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>Value</key>
     <real>4096.0</real>
   </map>
-  <key>SSAtmoCloudTessellation</key>
+  <key>SSAtmoCloudLightVariant</key>
   <map>
     <key>Comment</key>
-    <string>Atmo Magic: refine the cloud field around the viewer. Within a kilometre, each cloud puff grows smaller child puffs around its own body (and the nearest grow a smaller generation still), every offset hashed off the cloud's air-frame cell so the detail rides the wind instead of re-rolling against it, and faded toward the ring edges so the detail gathers and thins incrementally as the viewer moves. The original puffs are untouched - the same cards they always were - and the far field is unchanged. Off, the field is the plain puff deck.</string>
+    <string>Atmo Magic: which scene-proven lighting tail the volumetric cloud field's puffs shade with (doc/atmo_magic_flow_field.md section 2 S4), for an in-build A/B - 0 today's tail (bit-identical, the shipping default), 1 POWDER (Beer-powder darkens the direct-sun body term by the puff's own buried depth, deepening bellies), 2 HG2 (a two-lobe Henyey-Greenstein phase replaces the thin^3 rim fringe, so the silver lining tracks the sun's side of the puff instead of every thin edge), 3 FULL (POWDER + HG2 + a subtle green storm tint on buried bellies under gloom). A build-time A/B dial, not a taste setting - 0 is the only value expected outside of judging a build.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>S32</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
+  <key>SSAtmoCloudShadeCalibration</key>
+  <map>
+    <key>Comment</key>
+    <string>Atmo Magic: which calibration the volumetric cloud deck's structural shading uses (ssdeckshadecore.h Calibration, doc/atmo_magic_backlog.md 7.4), for an in-build A/B exactly as SSAtmoCloudLightVariant is. TRUE (the shipping default) is the retuned set: the DEPTH-FREE neighbour term that was darkening a puff sitting on the LID of its column - nothing at all above it - to a fifth for merely being central drops to a third of its scale with a quadratic sun falloff, the slant floor moves 0.35 -&gt; 0.6 so a 260 m cell's own column is no longer traversed along a 2.86x airmass while its coefficient rises to carry that column honestly, and the facing spread widens 0.2 -&gt; 0.3. Measured over a real daylight deck (V:/Scratch/atmo/tests/unit_deckshade_calibration.cpp): the direct-sun share of a puff's light goes 0.582 -&gt; 0.662 at the lid, 0.371 -&gt; 0.391 half way up and 0.209 -&gt; 0.172 at the floor - vertical contrast, not a brightness dial - and the ambient-dominated corner the backlog measured goes 0.083 -&gt; 0.245. FALSE restores the pre-retune constants BIT-IDENTICALLY, so it is the look of every build before this one. A build-time A/B dial, not a taste setting - TRUE is the only value expected outside of judging a build.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>1</integer>
+  </map>
+  <key>SSAtmoInfoView</key>
+  <map>
+    <key>Comment</key>
+    <string>Atmo Magic: the active info view (doc/atmo_magic_debug_views.md) - 0 off, 1 Wind Profile (V1), 2 Storm Cells (V2: lattice potential tiles, influence rings by stage, squall lines as a bar through their own active members with leading-edge QLCS junction markers, forced/authored cells with a distinct double outline, the hero flyby ribbon, rotation glyphs, the "why not" gate readout), 3 Deck LOD (V3: the volumetric cloud deck's distance LOD ramp - rings at each rail, a keep-fraction tile grid, live puff count vs the budget dial, ssdecklodcore.h), 4 Precip &amp; Virga (V4: the last build's distant-rain shaft cells outlined and tinted by drive, a fall-tilt comparison line per kept cell, the particle rain handoff ring and band, ssvirgacore.h), 5 Weather Cube (V5: a pure chart - the applied track's day-cycle curves in one lane and the derived gates in another, a "now" cursor and authored override cue markers, no in-world layer), 9 Lightning (V9: every live strike's channel split at the leader front and coloured by lifecycle stage, its ground crawl, attachment, occlusion box and the scene/cloud light readings, with a strike timeline for a chart; the same layer is also reachable on its own through the Lightning diagram checkbox on the Overlays tab, which drives it through RENDER_DEBUG_LIGHTNING). 6, 7 and 8 are RESERVED and deliberately not offered by the picker - the numbering is settled in ssatmoinfoviewcore.h: 6 World Field (designed, not built), 7 the sync console (a stackable console, never an info-view mode), 8 Anatomy (phase 8b). One curated mode at a time: the world dims, one data layer pops, the legend and the Views-tab chart explain it. Read-only: a view never builds anything. Does not persist, so the engineering overlays it drives always start a session untouched.</string>
+    <key>Persist</key>
+    <integer>0</integer>
+    <key>Type</key>
+    <string>U32</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
+  <key>SSAtmoInfoViewCompare</key>
+  <map>
+    <key>Comment</key>
+    <string>Atmo Magic: on the Wind Profile info view, overlay the curves the flowmap's camera-region exponent and the SSAtmoWindFlowGradient fallback would give beside the live weather-cube curve. Display only - the cube's curve is the only one that drives the sky.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>1</integer>
+  </map>
+  <key>SSAltCamMaxDistance</key>
+  <map>
+    <key>Comment</key>
+    <string>How far (metres) an ALT-click may reach to find a camera focus point when the ordinary 512 m pick hits nothing: a long-range terrain/object cast, then the region water plane along the same ray (void water included). Lets the camera orbit weather from open water. 512 to 65536.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>F32</string>
+    <key>Value</key>
+    <real>4096.0</real>
+  </map>
+  <key>SSAtmoInfoViewLook</key>
+  <map>
+    <key>Comment</key>
+    <string>Atmo Magic: draw the info-view LOOK under an active info view - a post-screen pass that remaps the finished frame onto a warm-gray ramp with recomputed ambient occlusion, a soft hemisphere shade and an extreme-fog depth ramp, so the data overlay reads on top. Replaces the old world-dim quad, which only darkened toward black. Nothing is drawn while no view is active.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>1</integer>
+  </map>
+  <key>SSAtmoInfoViewMastOffset</key>
+  <map>
+    <key>Comment</key>
+    <string>Atmo Magic: metres ahead of the camera the Wind Profile view's wind mast stands. 0 puts it on the camera column itself. Display only - the mast reads windAt(z), it never positions anything.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>F32</string>
+    <key>Value</key>
+    <real>80.0</real>
+  </map>
+  <key>SSAtmoInfoViewTileTint</key>
+  <map>
+    <key>Comment</key>
+    <string>Atmo Magic: paint the diagnostic tile grid an info view diagrams a quantity onto - V2 Storm Cells' lattice-potential tint (and its tile outlines), V3 Deck LOD's keep-fraction tint, and V9 Lightning's ground-fire blob discs and filled scene-light radii. Off by default: the fill can bury the entities it sits under (rings, the hero ribbon, vortex icons, squall line band, pins and labels for V2; the LOD rails and their labels for V3; channels, crawl, attachment, occlusion box, light rings and labels for V9), which all keep drawing regardless. Off also swaps each view's legend ramp row for "(tile tint off)". Display only, like every info view - never changes what a build does.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -31617,5 +32200,6 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <integer>1</integer>
     </map>
+    <!-- </SS:Nexii> -->
   </map>
 </llsd>

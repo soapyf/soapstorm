@@ -58,6 +58,16 @@
      font="SansSerifSmall">
         Shapes what the wind flowmap overlay draws, once it is switched on. The flowmap solve itself is tuned on the Simulation floater.
     </text>
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     height="16"
+     width="382"
+     name="flow_overlay_check"
+     label="Draw the wind flowmap"
+     tool_tip="The solved field drawn over the world - arrows or flow lines, capture passes, all picked below" />
     <button
      follows="left|top"
      layout="topleft"

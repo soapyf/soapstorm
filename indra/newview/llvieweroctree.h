@@ -326,6 +326,7 @@ protected:
 
 private:
     bool earlyFail(LLCamera* camera, const LLVector4a* bounds);
+    void abandonQuery(); // <SS:Nexii> give up on a query whose verdict GL refused to write
 
 protected:
     U32         mOcclusionState[LLViewerCamera::NUM_CAMERAS];

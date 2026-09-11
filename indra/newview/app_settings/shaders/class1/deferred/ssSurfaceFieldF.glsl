@@ -59,6 +59,11 @@ vec4 ssFieldFetch(vec2 xy_agent)
 // consumers that actually animate anything bind ssFieldFlowMap at all, so this is declared here rather than assumed present.
 uniform sampler2D ssFieldFlowMap;
 
+// <SS:Nexii> The cover window, on the same lattice again: the shared world field's enclosure spectrum per cell (sssurfacefield.cpp updateWindow) - x reads 0 outdoors to 1 sealed interior, negative
+// where neither the surface field nor the world field holds a verdict for the cell. The height fog's covered branch is the consumer that grades its fog by it; like the flow window only the passes
+// that read it bind ssFieldCoverMap at all, so its sampler is dead-stripped everywhere else.
+uniform sampler2D ssFieldCoverMap;
+
 // xy: agent-space unit flow direction, downstream. z: how much of the cell is drainage passing through rather than caught by it, 0 to 1.
 vec3 ssFieldFetchFlow(vec2 xy_agent)
 {
@@ -72,10 +77,33 @@ vec3 ssFieldFetchFlow(vec2 xy_agent)
     return texture(ssFieldFlowMap, uv).xyz;
 }
 
+// The cover fetch. -1 outside the window: a caller with no cover answer must fall back to its
+// own binary cover test, never read "open".
+float ssFieldFetchCover(vec2 xy_agent)
+{
+    float span = ssFieldOrigin.z * ssFieldOrigin.w;
+    vec2 uv = (xy_agent - ssFieldOrigin.xy) / span;
+
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThanEqual(uv, vec2(1.0))))
+    {
+        return -1.0;
+    }
+    return texture(ssFieldCoverMap, uv).x;
+}
+
 // Cheap per-fragment hash, stable in world space so the pattern it drives does not swim as the camera moves - unlike a screen-space hash, which would.
+// <SS:Nexii> an integer bit mix, not fract(sin(dot(p, k)) * 43758.5453). Every caller feeds this an integer CELL INDEX, and those reach 10^3 to 10^4
+// (a 4 cm drop lattice is at 3200 by one region's width, the 2.5 cm sparkle lattice at 10240), so sin() was being evaluated at arguments of
+// 10^5 to 10^6 radians - past where GPU sin() is specified to hold precision at all (NVIDIA documents sinf accuracy only for |x| <= 48039) and
+// where the F32 argument itself is already quantised to a thirty-second of a radian. Whatever a given driver does there it is not a hash any more.
+// Same idiom and same constants as ssPuddleLatHash/ssStateHash in ssSurfaceStateF.glsl, which the shore carve and the world noise already use -
+// so this is the fork's existing hash rather than a third one, and it is exact at every index a lattice can reach.
 float ssFieldHash(vec2 p)
 {
-    return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+    ivec2 c = ivec2(floor(p));
+    uint h = uint(c.x) * 374761393u + uint(c.y) * 668265263u;
+    h = (h ^ (h >> 13)) * 1274126177u;
+    return float((h ^ (h >> 16)) & 0xffffffu) / 16777216.0;
 }
 
 // One ray back up the fall direction. Returns 1 where something is in the way.
@@ -144,6 +172,27 @@ vec4 ssFieldAt(vec3 p_agent, vec3 n_agent)
         blocked += ssFieldRay(origin, normalize(ssFieldFall + b * ssFieldSpread), cell);
         blocked += ssFieldRay(origin, normalize(ssFieldFall - b * ssFieldSpread), cell);
         exposure = 1.0 - blocked * 0.2;
+
+        // <SS:Nexii> BROAD COVER (sssheltercore.h, SSShelter::broadCoverFactor). The march above cannot see a low ceiling: it starts cell*0.75 out
+        // along the surface normal - which on a floor is straight up, buying nothing - and steps cell*1.25, so its first testable sample sits
+        // 2.35 cells above the fragment. At the shipping 2 m cell that is 4.7 m, taller than every ordinary room, so an indoor floor read as open
+        // sky and wetted, which is the "surface drops indoors" defect. No march is needed for the answer: reaching this branch AT ALL means the
+        // window's stored top for this column is more than half a cell above this fragment, and that stored top is where a drop falling through
+        // this column lands (the grid is the shadow map's own depth render from above - ssrainshadow.cpp buildSurfaceGrid).
+        //
+        // Two things keep this from over-reaching. It is weighted by how UP-FACING the fragment is, so at n_agent.z == 0 it is exactly 1.0 and the
+        // wall path is bit-identical to what it was before this term existed - a wall under an eave still catches driven rain and the cone above is
+        // what answers for it. And the stored top is the MINIMUM over this column and its four neighbours, because the window holds one height per
+        // column and a thin wall's ridge is otherwise indistinguishable from a roof: cover has to be BROAD to shelter a floor. At a 2 m cell that
+        // means at least three cells, 6 m across; a narrower lip reads as open, which is what it did before, so the error runs toward wet.
+        // [interaction: sssheltercore.h, the same file the precipitation sim's and lens pass's cover threshold belongs in]
+        float cover_top = here.x;
+        cover_top = min(cover_top, ssFieldFetch(p_agent.xy + vec2( cell, 0.0)).x);
+        cover_top = min(cover_top, ssFieldFetch(p_agent.xy + vec2(-cell, 0.0)).x);
+        cover_top = min(cover_top, ssFieldFetch(p_agent.xy + vec2(0.0,  cell)).x);
+        cover_top = min(cover_top, ssFieldFetch(p_agent.xy + vec2(0.0, -cell)).x);
+        float column_cover = smoothstep(cell * 0.5, cell * 1.0, cover_top - p_agent.z);
+        exposure *= 1.0 - column_cover * clamp(n_agent.z, 0.0, 1.0);
     }
 
     // Driven weather wets the face it can see and leaves the lee of it alone. Straight down this does nothing, which is correct: in still air a vertical wall stays dry whichever way it points.

@@ -44,20 +44,20 @@
       follows="left|top" layout="topleft"
       left="12" top_pad="6" height="16" width="142"
       name="T_SSAtmoVolumeAmbient"
-      tool_tip="The outdoor beds and the rain-on-roof beds">
+      tool_tip="The outdoor loops and the rain-on-roof loops">
         Precipitation ambient:
     </text>
     <slider_bar
       control_name="SSAtmoVolumeAmbient" name="SB_SSAtmoVolumeAmbient"
       follows="left|top" layout="topleft"
       left_pad="4" top_delta="0" height="16" width="136" min_val="0" max_val="1" increment="0.01"
-      tool_tip="The outdoor beds and the rain-on-roof beds" />
+      tool_tip="The outdoor loops and the rain-on-roof loops" />
     <spinner
       control_name="SSAtmoVolumeAmbient" name="S_SSAtmoVolumeAmbient"
       follows="left|top" layout="topleft"
       left_pad="4" top_delta="-2" height="20" width="62"
       label_width="0" min_val="0" max_val="1" increment="0.01" decimal_digits="2"
-      tool_tip="The outdoor beds and the rain-on-roof beds" />
+      tool_tip="The outdoor loops and the rain-on-roof loops" />
     <button
       follows="left|top" layout="topleft"
       left_pad="4" top_delta="0" height="20" width="24"
@@ -100,20 +100,20 @@
       follows="left|top" layout="topleft"
       left="12" top_pad="6" height="16" width="142"
       name="T_SSAtmoSoundResponse"
-      tool_tip="How fast the beds crossfade when you move indoors or outdoors; higher is snappier">
+      tool_tip="How fast the loops crossfade when you move indoors or outdoors; higher is snappier">
         Fade speed:
     </text>
     <slider_bar
       control_name="SSAtmoSoundResponse" name="SB_SSAtmoSoundResponse"
       follows="left|top" layout="topleft"
       left_pad="4" top_delta="0" height="16" width="136" min_val="0.5" max_val="10" increment="0.1"
-      tool_tip="How fast the beds crossfade when you move indoors or outdoors; higher is snappier" />
+      tool_tip="How fast the loops crossfade when you move indoors or outdoors; higher is snappier" />
     <spinner
       control_name="SSAtmoSoundResponse" name="S_SSAtmoSoundResponse"
       follows="left|top" layout="topleft"
       left_pad="4" top_delta="-2" height="20" width="62"
       label_width="0" min_val="0.5" max_val="10" increment="0.1" decimal_digits="1"
-      tool_tip="How fast the beds crossfade when you move indoors or outdoors; higher is snappier" />
+      tool_tip="How fast the loops crossfade when you move indoors or outdoors; higher is snappier" />
     <button
       follows="left|top" layout="topleft"
       left_pad="4" top_delta="0" height="20" width="24"

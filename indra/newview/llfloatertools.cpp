@@ -111,6 +111,23 @@ const std::string PANEL_NAMES[LLFloaterTools::PANEL_COUNT] =
 };
 
 
+// <SS:Nexii> Local landscape objects (Atmo Magic) have no simulator, so Link/Unlink and the Content tab are meaningless for them; see doc/atmo_landscape/design_synthesis.md section 15.
+static bool ss_selection_has_local_content()
+{
+    LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
+    for (LLObjectSelection::iterator iter = selection->begin(); iter != selection->end(); ++iter)
+    {
+        LLSelectNode* node = *iter;
+        LLViewerObject* object = node ? node->getObject() : NULL;
+        if (object && object->ssIsLocalContent())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+// </SS:Nexii>
+
 // Local prototypes
 void commit_grid_mode(LLUICtrl *ctrl);
 void commit_select_component(void *data);
@@ -581,7 +598,9 @@ void LLFloaterTools::refresh()
 
     mTab->enableTabButton(idx_features, all_volume);
     mTab->enableTabButton(idx_face, all_volume);
-    mTab->enableTabButton(idx_contents, all_volume);
+    // <SS:Nexii> Content tab is meaningless for local content - no simulator means no task inventory; llpanelcontents.cpp also disables its own controls for the case where the tab is already selected.
+    mTab->enableTabButton(idx_contents, all_volume && !ss_selection_has_local_content());
+    // </SS:Nexii>
 
     // Refresh object and prim count labels
     LLLocale locale(LLLocale::USER_LOCALE);
@@ -815,7 +834,9 @@ void LLFloaterTools::refresh()
     }
 
     // <FS:CR> Only enable Copy Keys when we have something selected
-    mBtnCopyKeys->setEnabled(have_selection);
+    // <SS:Nexii> Copy Keys is part of the General tab permissions block; local content has no server-side key worth copying for permissions purposes.
+    mBtnCopyKeys->setEnabled(have_selection && !ss_selection_has_local_content());
+    // </SS:Nexii>
     // </FS:CR>
 }
 
@@ -951,8 +972,11 @@ void LLFloaterTools::updatePopup(LLCoordGL center, MASK mask)
     mBtnLink->setVisible(edit_visible);
     mBtnUnlink->setVisible(edit_visible);
 
-    mBtnLink->setEnabled(LLSelectMgr::instance().enableLinkObjects());
-    mBtnUnlink->setEnabled(LLSelectMgr::instance().enableUnlinkObjects());
+    // <SS:Nexii> Nothing client-side can be unlinked/relinked for local content; gate here since LLSelectMgr::enable{Link,Unlink}Objects live in llselectmgr.cpp.
+    bool ss_local_content_selected = ss_selection_has_local_content();
+    mBtnLink->setEnabled(!ss_local_content_selected && LLSelectMgr::instance().enableLinkObjects());
+    mBtnUnlink->setEnabled(!ss_local_content_selected && LLSelectMgr::instance().enableUnlinkObjects());
+    // </SS:Nexii>
 
     // <FS:PP> FIRE-14493: Buttons to cycle through linkset
     mBtnPrevPart->setVisible(edit_visible);

@@ -380,6 +380,15 @@ public:
 
         // <SS:Nexii> HUD supersample: preserve world depth during resolve
         HUD_WORLD_DEPTH,                    //  "worldDepthMap"
+
+        // <SS:Nexii> Atmo Magic: haze altitude falloff - 1/H (H the scale height derived from the authored cirrus/dome height), 0 when off/inactive (see SSHaze::invHeight, sshazecore.h).
+        SS_HAZE_INV_HEIGHT,                 //  "ss_haze_inv_height"
+
+        // <SS:Nexii> Atmo Magic: the camera's altitude above the owning track's floor, metres - presentation-only (per-client, never world state), 0 when off/inactive.
+        SS_HAZE_CAM_HEIGHT,                 //  "ss_haze_cam_height"
+
+        // <SS:Nexii> Atmo Magic: the world-up axis (world Z) expressed in the shader's view/eye space, i.e. (r.z, u.z, -f.z) of the camera's world-space right/up/forward axes - lets rel_pos.y (a VIEW-space coordinate) be replaced by dot(rel_pos, this) to get the fragment's true world altitude delta from the camera, instead of the camera's own up axis (which swims as the camera pitches). (0,1,0) reproduces the old rel_pos.y behaviour when Atmo/the falloff is inactive.
+        SS_HAZE_UP_VIEW,                    //  "ss_haze_up_view"
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;
     // clang-format on

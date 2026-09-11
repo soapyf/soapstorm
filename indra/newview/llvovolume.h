@@ -430,7 +430,14 @@ public:
 
 protected:
     S32 computeLODDetail(F32 distance, F32 radius, F32 lod_factor);
-    bool calcLOD();
+    // <SS:Nexii> calcLOD virtual so viewer-local objects can stretch their LOD ranges (Atmo
+    // Magic landscape scenery holds its authored LOD out to region-far distances). The hook is
+    // ssLODDistanceScale() - a multiplier folded into the distance term at calcLOD's
+    // sDistanceFactor line, so the stock formula, Mesh-detail preference and DebugObjectLODs
+    // all keep working, just at scaled distances.
+    virtual bool calcLOD();
+    virtual F32 ssLODDistanceScale() const { return 1.f; }
+    // </SS:Nexii>
     LLFace* addFace(S32 face_index);
 
     // stats tracking for render complexity

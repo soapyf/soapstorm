@@ -131,6 +131,18 @@ void LLPanelContents::getState(LLViewerObject *objectp )
         return;
     }
 
+    // <SS:Nexii> Local content has no simulator and no task inventory; disable the whole Content tab, same as the no-object path above.
+    if (objectp->ssIsLocalContent())
+    {
+        getChildView("button new script")->setEnabled(false);
+        getChildView("btn_reset_scripts")->setEnabled(false);
+        getChildView("button new notecard")->setEnabled(false);
+        getChildView("button permissions")->setEnabled(false);
+        mPanelInventoryObject->setEnabled(false);
+        return;
+    }
+    // </SS:Nexii>
+
     LLUUID group_id;            // used for SL-23488
     LLSelectMgr::getInstance()->selectGetGroup(group_id);  // sets group_id as a side effect SL-23488
 

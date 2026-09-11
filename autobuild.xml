@@ -2626,11 +2626,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>0c3d01b7e9e39c23f0f40c56a1a04d1fba08ead0</string>
+              <string>248a6049b67bb7eda3d019623e2f71193ac8a58ead51d6d8a738b18f375a4496314163deab9fd2fb94d5eb9fd785aee284bd178d44bff8c626aa806af5870b91</string>
               <key>hash_algorithm</key>
-              <string>sha1</string>
+              <string>blake2b</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-tracy/releases/download/v0.11.1-r1/tracy-v0.11.1.11706699176-darwin64-11706699176.tar.zst</string>
+              <string>https://github.com/Martin-Pitt/3p-tracy/releases/download/v0.14.1-r1/tracy-v0.14.1.34227741375-darwin64-34227741375.tar.zst</string>
             </map>
             <key>name</key>
             <string>darwin64</string>
@@ -2640,11 +2640,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>b46cef5646a8d0471ab6256fe5119220fa238772</string>
+              <string>e80a3fd04fa922f888ef22ed6e401107d2312ae5a43ae35f22254bad0f3f3d90568f539852c5563224939eb71759aee89e3b3fcacbf82e2be8ed88b3b3f3ef93</string>
               <key>hash_algorithm</key>
-              <string>sha1</string>
+              <string>blake2b</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-tracy/releases/download/v0.11.1-r1/tracy-v0.11.1.11706699176-windows64-11706699176.tar.zst</string>
+              <string>https://github.com/Martin-Pitt/3p-tracy/releases/download/v0.14.1-r1/tracy-v0.14.1.34227741375-windows64-34227741375.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -2654,11 +2654,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>beab04c9ea6036b1851a485b65c66cf6a38f0be4</string>
+              <string>8f8957a15ef752a9dc57dfb3692f01a8f8b0470b7fab465326a2a0a75bdf438dbb43e260e500cd62e28da2a16b558ffa680ed66e46bd2cdfa37f7e68926c107a</string>
               <key>hash_algorithm</key>
-              <string>sha1</string>
+              <string>blake2b</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-tracy/releases/download/v0.11.1-r1/tracy-v0.11.1.11706699176-linux64-11706699176.tar.zst</string>
+              <string>https://github.com/Martin-Pitt/3p-tracy/releases/download/v0.14.1-r1/tracy-v0.14.1.34227741375-linux64-34227741375.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -2671,7 +2671,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
         <key>copyright</key>
         <string>Copyright (c) 2017-2024, Bartosz Taudul (wolf@nereid.pl)</string>
         <key>version</key>
-        <string>v0.11.1.11706699176</string>
+        <string>v0.14.1.34227741375</string>
         <key>name</key>
         <string>tracy</string>
         <key>canonical_repo</key>

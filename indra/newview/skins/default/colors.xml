@@ -1063,6 +1063,9 @@
      name="SilhouetteParentColor"
      reference="Yellow" />
     <color
+     name="SSLocalContentSilhouetteColor"
+     value="0.75 0.25 1 1" />
+    <color
      name="SliderDisabledThumbColor"
      reference="White_25" />
     <color

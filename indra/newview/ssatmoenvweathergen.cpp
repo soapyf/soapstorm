@@ -25,9 +25,14 @@
 
 #include "ssatmoenvweathergen.h"
 
+#include "sssquallcore.h" // <SS:Nexii> SSSquall::severeDayBias, ::Onset/::onsetValue, ::KIND_SQUALL - the severe-day option's and the 8a authored-event's numeric formulas, core-side
+#include "sswindprofilecore.h" // <SS:Nexii> SSWindProfile::fromHeading - the authored event's upwind-offset formula, core-side
+
 #include "llrand.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
 #include <utility>
 #include <vector>
 
@@ -143,6 +148,77 @@ namespace
     const F32 TEMPERATURE_MIN = -30.f, TEMPERATURE_MAX = 40.f;
     const F32 HEADING_MIN = 0.f,      HEADING_MAX = 360.f;
     const F32 WIND_MIN = 0.f,         WIND_MAX = 30.f;
+    const F32 SHEAR_MIN = 0.f,        SHEAR_MAX = 1.f;
+
+    // <SS:Nexii> The two cloud-deck rows and the one dome row the authored event reaches, same rule as the five
+    // above: keep in step with the Clouds > Deck and Clouds > Dome panels (cloud_coverage_* 0..2,
+    // cloud_thickness_* 10..2000, dome_coverage_* 0..1).
+    const F32 COVERAGE_SCALE_MIN = 0.f,  COVERAGE_SCALE_MAX = 2.f;
+    const F32 THICKNESS_MIN = 10.f,      THICKNESS_MAX = 2000.f;
+    const F32 DOME_COVERAGE_MIN = 0.f,   DOME_COVERAGE_MAX = 1.f;
+
+    // <SS:Nexii> The severe-day option's own baseline: what an ordinary roll's shear would have been had it
+    // rolled one at all. The generator otherwise leaves mShearAuto on throughout - shear derives from moisture/
+    // convection/temperature the same as gusts do - so there is no rolled shear peak of the roll's own to hand
+    // SSSquall::severeDayBias; this nominal floor stands in for it, matching the mild jet SSWindProfile::autoShear
+    // itself derives on an ordinary wet day. Severe day authors the curve explicitly (mShearAuto off) only when
+    // it fires, so an unchecked roll never touches shear at all.
+    const F32 SHEAR_DAY_BASELINE = 0.30f;
+
+    // <SS:Nexii> Phase 8a: how far AHEAD of the cue each of the authored squall's curves starts moving. The
+    // deck leads the wall - moisture first, convection just behind it, both wide enough to read as a sky going
+    // over before anything arrives - while the wind and the rain itself step at the cue on the core's own
+    // ONSET_RAMP_PHASE, which is the abrupt one (~5 min of a 4 h day). That contrast IS the show: an hour of
+    // thickening cloud, then a wall, then rain in the same instant. Ramps, not the shape - the shape is
+    // SSSquall::onsetValue's, sampled through layOnsetCurve below.
+    const F32 ONSET_RAMP_MOISTURE = 0.06f;
+    const F32 ONSET_RAMP_CONVECTION = 0.05f;
+
+    // <SS:Nexii> Phase 8a, the clear sky the wall arrives INTO. The deck's coverage is
+    // (1 - (1 - moisture)^3) * mCoverageScale, and the cube's dry baseline moisture is around 0.22, which is still
+    // 0.53 of the sky covered before the storm has done anything - a wall arriving into an overcast is not an
+    // arrival. So the scale itself is authored down to CLEAR_SCALE for the approach and stepped back up at the cue:
+    // the sky OPENS while the moisture ramp is already thickening what is left of it, and then shuts. Thickness
+    // does the same in the vertical (a low thin deck before, a tall one at the cue - the wall is what is tall), and
+    // the cirrus dome thins to DOME_CLEAR_FRACTION so the blue is blue rather than milky. Multipliers, not
+    // absolutes, everywhere the author's own value can stand in for "ordinary": only the cleared scale is a number,
+    // because "clear" is a property of the sky and not of what this deck was dialled to.
+    const F32 CLEAR_SCALE = 0.15f;
+    const F32 CUE_SCALE = 1.f;
+    const F32 THIN_BEFORE_MUL = 0.5f;
+    const F32 TALL_AT_CUE_MUL = 1.6f;
+    const F32 DOME_CLEAR_FRACTION = 0.3f;
+
+    // <SS:Nexii> Lays one field as the core's onset curve: four keys at the four phases the shape itself has -
+    // ramp start, cue, hold end, taper end - each carrying what SSSquall::onsetValue reads AT the phase the key
+    // lands on, so this file never respells the curve and a snapped key never disagrees with the core about the
+    // value there. Keys go down on the preview grid like every other generated key (ss_atmoenv_snap_phase), and
+    // a phase that snaps onto its predecessor is dropped rather than inserted twice.
+    // <SS:Nexii> `after` is what the TAPER returns to, which is not always what the ramp left: the deck's coverage
+    // scale is dropped to a cleared value for the approach and has to come back to the author's own scale rather
+    // than to the clearing, or every authored squall would leave the sky permanently open behind it. It is still
+    // one onset curve - the ramp reads `before`, the taper reads `after`, and the two branches agree everywhere
+    // they overlap because onsetValue returns `peak` across the whole hold whatever baseline it is handed. Pass
+    // `before` again for the symmetric case (moisture, convection, wind: back to the day's baseline).
+    void layOnsetCurve(SSAtmoEnvKeyframed<F32>& field, const SSSquall::Onset& onset,
+                       F32 before, F32 peak, F32 after, F32 lo, F32 hi, SSAtmoEnvCurve curve)
+    {
+        const F64 cue = (F64)onset.cuePhase;
+        const F64 phases[4] = { cue - (F64)onset.rampPhase,
+                                cue,
+                                cue + (F64)onset.holdPhase,
+                                cue + (F64)onset.holdPhase + (F64)onset.taperPhase };
+
+        F64 last = -1.0;
+        for (const F64 phase : phases)
+        {
+            const F64 at = ss_atmoenv_snap_phase(phase);
+            if (last >= 0.0 && llabs(at - last) < 1e-9) continue;
+            const F32 baseline = (phase > cue) ? after : before;
+            field.addKeyframe(at, llclamp(SSSquall::onsetValue((F32)at, onset, baseline, peak), lo, hi), curve);
+            last = at;
+        }
+    }
 
     // Snaps to the keyframe grid, sorts, clamps, drops duplicates and lays the curve into a float
     // field. Snapping runs BEFORE the sort: two raw times close enough to swap order under the
@@ -463,7 +539,11 @@ void SSAtmoEnvWeatherGenerator::clear(SSAtmoEnvWeather& weather)
 // wrote. Lightning and gusts are deliberately left on auto throughout - convection, moisture and
 // temperature already decide the cadence through the resolver, and a generator that also authored
 // either would be arguing with itself about what a storm is.
-SSAtmoEnvWeatherRoll SSAtmoEnvWeatherGenerator::randomize(SSAtmoEnvWeather& weather)
+SSAtmoEnvWeatherRoll SSAtmoEnvWeatherGenerator::randomize(SSAtmoEnvWeather& weather,
+                                                          SSAtmoEnvCloudField& field,
+                                                          SSAtmoEnvCloudDome& dome,
+                                                          bool severeDay, F32 severeDayStrength,
+                                                          SSAtmoEnvWeatherInfluence& influence)
 {
     clear(weather);
 
@@ -471,8 +551,9 @@ SSAtmoEnvWeatherRoll SSAtmoEnvWeatherGenerator::randomize(SSAtmoEnvWeather& weat
 
     // The fantasy path: a whole archetype, no seasonal band and no event on top. Layering an
     // ordinary cold snap over the Stormlands would only sand the archetype's edges off, and its
-    // edges are the entire reason it exists.
-    if (rollChance(0.20f))
+    // edges are the entire reason it exists. A severe day skips it: the checkbox promises an authored arrival
+    // (8a), and the fantasy path lays no event to arrive.
+    if (!severeDay && rollChance(0.20f))
     {
         const Fantasy& world = rollFantasy();
 
@@ -525,7 +606,13 @@ SSAtmoEnvWeatherRoll SSAtmoEnvWeatherGenerator::randomize(SSAtmoEnvWeather& weat
     F32 peak_convection_low = 0.20f;
     F32 peak_convection_high = 0.55f;
 
-    const Event event = rollChance(0.45f) ? rollEvent(roll.mSeason) : Event::NONE;
+    Event event = rollChance(0.45f) ? rollEvent(roll.mSeason) : Event::NONE;
+    // <SS:Nexii> Severe Day promises an arrival, so the two events that dry the day out (both zero the spell count) are
+    // re-rolled away; whatever else the season admits may carry the severe spell.
+    while (severeDay && (event == Event::HEATWAVE || event == Event::STILL_FOG))
+    {
+        event = rollEvent(roll.mSeason);
+    }
     roll.mEvent = eventName(event);
 
     switch (event)
@@ -618,10 +705,243 @@ SSAtmoEnvWeatherRoll SSAtmoEnvWeatherGenerator::randomize(SSAtmoEnvWeather& weat
     layTemperature(weather, trough_c, swing_c);
     layWindHeading(weather, veer);
 
+    // <SS:Nexii> Severe day: at least one spell (the arrival the checkbox promises needs a spell to be cued from -
+    // before 8f-b a quarter of severe rolls missed the plain spell chance and authored nothing), then lifts the peak
+    // RANGE a spell may roll into before any spell is actually rolled - the bias reaches the ceiling scatterSpells
+    // draws from, same as an event's own peak_*_high overrides above, rather than editing a spell after the fact.
+    if (severeDay)
+    {
+        spell_count = llmax(spell_count, 1);
+    }
+    if (severeDay && spell_count > 0)
+    {
+        const SSSquall::DayPeaks rolled{ peak_moisture_high, peak_convection_high, SHEAR_DAY_BASELINE };
+        const SSSquall::DayPeaks biased = SSSquall::severeDayBias(rolled, severeDayStrength);
+        peak_moisture_high   = llmax(peak_moisture_high,   biased.mMoisture);
+        peak_moisture_low    = llmax(peak_moisture_low,    biased.mMoisture * 0.85f);
+        peak_convection_high = llmax(peak_convection_high, biased.mConvection);
+        peak_convection_low  = llmax(peak_convection_low,  biased.mConvection * 0.85f);
+    }
+
     std::vector<Spell> spells = scatterSpells(spell_count,
                                               peak_moisture_low, peak_moisture_high,
                                               peak_convection_low, peak_convection_high);
     layWeatherCurves(weather, spells, base_moisture, base_convection, base_wind);
+
+    // <SS:Nexii> Severe day's shear half: authors mShearStrength explicitly (auto stays off) over a window
+    // shaped exactly like the rolled peak's own lead/fall/tail - centred on the same phase moisture and
+    // convection already peak at - rather than the whole cycle, so a severe SPELL gets severe shear and the
+    // fair-weather rest of the day is untouched. Picks the most severe of the day's spells (highest combined
+    // moisture+convection peak) when more than one rolled; the core's severeDayBias is the only formula here.
+    if (severeDay && !spells.empty())
+    {
+        const Spell* peak_spell = &spells.front();
+        for (const Spell& spell : spells)
+        {
+            const F32 severity = spell.mPeakMoisture + spell.mPeakConvection;
+            const F32 peak_severity = peak_spell->mPeakMoisture + peak_spell->mPeakConvection;
+            if (severity > peak_severity) peak_spell = &spell;
+        }
+
+        const SSSquall::DayPeaks rolled{ peak_spell->mPeakMoisture, peak_spell->mPeakConvection, SHEAR_DAY_BASELINE };
+        const SSSquall::DayPeaks biased = SSSquall::severeDayBias(rolled, severeDayStrength);
+
+        const F64 peak_phase = peak_spell->mStart + peak_spell->mDuration * 0.5;
+
+        std::vector<std::pair<F64, F32>> shear;
+        shear.emplace_back(0.0, SHEAR_DAY_BASELINE);
+        shear.emplace_back(llclamp(peak_phase - peak_spell->mLead, 0.0, 1.0), SHEAR_DAY_BASELINE);
+        shear.emplace_back(peak_phase, biased.mShear);
+        shear.emplace_back(llclamp(peak_phase + peak_spell->mDuration * 0.5 + peak_spell->mTail, 0.0, 0.98),
+                           SHEAR_DAY_BASELINE);
+        shear.emplace_back(0.98, SHEAR_DAY_BASELINE);
+
+        weather.mShearAuto = false;
+        layCurve(weather.mShearStrength, shear, SHEAR_MIN, SHEAR_MAX);
+    }
+
+    // <SS:Nexii> Phase 8a (doc/atmo_magic_phase8_show.md section 3): a severe day AUTHORS the event, not just
+    // its curves. "A generated squall line IS the weather change" - so this writes the forced-storm keyframes
+    // (mStormOverride idiom, HOLD like every other field in that group) and then RESHAPES moisture, convection
+    // and wind speed around the cue with SSSquall::onsetValue, superseding the spell's own natural onset shape
+    // laid by layWeatherCurves above. Kind: squall line 40%, tornado day 60% (ll_frand, authoring-time only -
+    // no runtime randomness). Cue: the rolled peak spell's own mStart - its ONSET, the phase its rain was going
+    // to begin at, not mStart + mLead: mLead is the ramp BEFORE mStart everywhere else in this file (see
+    // layWeatherCurves, whose lead keys sit at mStart - mLead), so adding it put the wall's arrival a lead's
+    // width INTO the rain it was supposed to be bringing. Offset: 1500 m upwind of the anchor at the wind of
+    // that phase - the CUBE's own wind speed/heading keyframes at the cue, through
+    // SSWindProfile::fromHeading, because SSAtmoEnvApplier::windProfileAt needs a full SSAtmoEnvTrack and this
+    // generator only ever sees the SSAtmoEnvWeather cube (no track in scope) - never callable here.
+    std::string severe_event_summary; // appended to roll.mSummary after its own assembly below, never overwritten by it
+    if (severeDay && !spells.empty())
+    {
+        const Spell* peak_spell = &spells.front();
+        for (const Spell& spell : spells)
+        {
+            const F32 severity = spell.mPeakMoisture + spell.mPeakConvection;
+            const F32 peak_severity = peak_spell->mPeakMoisture + peak_spell->mPeakConvection;
+            if (severity > peak_severity) peak_spell = &spell;
+        }
+
+        const bool is_squall = rollChance(0.40f); // squall line 40%, tornado day 60%
+        const F64 cue_phase = ss_atmoenv_snap_phase(peak_spell->mStart);
+
+        // Upwind unit vector at the cue: the wind vector points where the air MOVES (SSWindProfile::fromHeading's
+        // own contract), so upwind is its negation; a degenerate (zero-speed) wind falls back to due south, the
+        // same "unit north" degenerate convention SSSquall::unitOrNorth uses but negated (upwind, not downwind).
+        const F32 heading_at_cue = weather.mWindHeading.valueAt(cue_phase);
+        const F32 speed_at_cue = weather.mWindSpeed.valueAt(cue_phase);
+        const SSWindProfile::Vec2 wind_at_cue = SSWindProfile::fromHeading(heading_at_cue, speed_at_cue);
+        const F32 wind_len = std::sqrt(wind_at_cue.x * wind_at_cue.x + wind_at_cue.y * wind_at_cue.y);
+        F32 upwind_x = 0.f, upwind_y = -1.f;
+        if (wind_len >= 1e-4f)
+        {
+            upwind_x = -wind_at_cue.x / wind_len;
+            upwind_y = -wind_at_cue.y / wind_len;
+        }
+        constexpr F32 STORM_OVERRIDE_OFFSET_M = 1500.f;
+
+        weather.mStormOverride.reset(is_squall ? std::string("squall") : std::string("tornado"));
+        weather.mStormOverridePhase.reset((F32)cue_phase);
+        weather.mStormOverrideOffsetXM.reset(upwind_x * STORM_OVERRIDE_OFFSET_M);
+        weather.mStormOverrideOffsetYM.reset(upwind_y * STORM_OVERRIDE_OFFSET_M);
+        // 7b F4 idiom: these three curves are forced HOLD on every write, same as ssatmoenvasset.cpp's fromLLSD -
+        // a piecewise-constant cue that cannot slide under EASE/LINEAR interpolation.
+        weather.mStormOverride.forceCurve(SSAtmoEnvCurve::HOLD);
+        weather.mStormOverridePhase.forceCurve(SSAtmoEnvCurve::HOLD);
+        weather.mStormOverrideOffsetXM.forceCurve(SSAtmoEnvCurve::HOLD);
+        weather.mStormOverrideOffsetYM.forceCurve(SSAtmoEnvCurve::HOLD);
+
+        // The onset: dry/calm before the ramp, a rise INTO the cue, held for the peak spell's own duration,
+        // then a taper back down - SSSquall::Onset's own default taper width, only cuePhase, holdPhase and
+        // each curve's own ramp are the roll's.
+        SSSquall::Onset onset;
+        onset.cuePhase = (F32)cue_phase;
+        onset.holdPhase = (F32)peak_spell->mDuration;
+
+        const F64 hold_end_at = cue_phase + (F64)onset.holdPhase;
+        const F64 taper_end_at = hold_end_at + (F64)onset.taperPhase;
+
+        // <SS:Nexii> The window is REBUILT, not written over. layWeatherCurves has already laid this same
+        // spell's natural arrival across it - a lead that thickens from mStart - mLead, a peak at mid-spell, a
+        // tail out to mStart + mDuration + mTail - and adding the cue's own keys on top of those leaves one
+        // storm with two humps: the sky wets up, rains, dries part way, and rains again for the same event.
+        // So every keyframe of the four curves the cue owns is dropped over [start of the spell's own lead
+        // minus the widest onset ramp, taper end] first, and only then laid back in the cue's shape. Wrapping
+        // is the container's (removeKeyframesInPhaseRange); spells never wrap midnight (SPELL_WINDOW_END) but
+        // a taper past 0.98 does. The window's low edge is clamped to the peak spell's OWN lead start (mStart -
+        // mLead, which scatterSpells keeps inside the spell's slice), so a second spell earlier in the day keeps
+        // every key of its tail (8a re-audit: unclamped, the moisture ramp's reach-back ate the other spell's
+        // back-to-base key on ~10% of two-spell rolls) - the cue reshapes one spell, not the roll.
+        const F64 window_lo = llmax(cue_phase - peak_spell->mLead - (F64)ONSET_RAMP_MOISTURE,
+                                    peak_spell->mStart - peak_spell->mLead);
+        weather.mMoisture.removeKeyframesInPhaseRange(window_lo, taper_end_at);
+        weather.mConvection.removeKeyframesInPhaseRange(window_lo, taper_end_at);
+        weather.mWindSpeed.removeKeyframesInPhaseRange(window_lo, taper_end_at);
+        weather.mPrecipitationFalls.removeKeyframesInPhaseRange(window_lo, taper_end_at);
+
+        // Precipitation intensity derives from moisture alone (SSAtmoEnvWeatherResolver::classifyIntensity) -
+        // the cube has no separate intensity field - so mMoisture IS the precipitation intensity curve, and it
+        // leads the cue by the widest ramp of the four: the deck is already heavy when the wall shows up.
+        SSSquall::Onset moisture_onset = onset;
+        moisture_onset.rampPhase = ONSET_RAMP_MOISTURE;
+        layOnsetCurve(weather.mMoisture, moisture_onset, base_moisture, peak_spell->mPeakMoisture, base_moisture,
+                      MOISTURE_MIN, MOISTURE_MAX, SSAtmoEnvCurve::EASE);
+
+        // Convection follows moisture in a fractionally tighter ramp - the air stirs once the deck is on its way.
+        SSSquall::Onset convection_onset = onset;
+        convection_onset.rampPhase = ONSET_RAMP_CONVECTION;
+        layOnsetCurve(weather.mConvection, convection_onset, base_convection, peak_spell->mPeakConvection,
+                      base_convection, CONVECTION_MIN, CONVECTION_MAX, SSAtmoEnvCurve::EASE);
+
+        // The gust front: wind speed JUMPS at the cue rather than easing into it. Same four keys, but on the
+        // core's abrupt ONSET_RAMP_PHASE and every key HOLD, so the segment before the cue stands at the base
+        // wind and the cue itself is the step. Clamped like every other generated key - a 2.2 gain on a gale's
+        // 27 m/s baseline asks for 59 from a slider that stops at 30 (see WIND_MAX above).
+        SSSquall::Onset wind_onset = onset;
+        wind_onset.rampPhase = SSSquall::ONSET_RAMP_PHASE;
+        layOnsetCurve(weather.mWindSpeed, wind_onset, base_wind, base_wind * peak_spell->mWindGain, base_wind,
+                      WIND_MIN, WIND_MAX, SSAtmoEnvCurve::HOLD);
+
+        // <SS:Nexii> The rain is a switch, not a curve, so it gets the shape rather than the values: dry
+        // through the ramp the deck is thickening over, falling AT the cue - the wall's arrival IS the first
+        // drop - and off again where the moisture taper has it back at the day's baseline. Three keys, not
+        // four: a flag holds from its own key to the next (ss_atmoenv_default_curve<bool>), so a second key
+        // saying "still true" at the hold end would be a mark the author can delete with nothing changing.
+        // The pre-cue sky this leaves is deliberately DRY, which is only safe because the line the cue
+        // authors carries its own weather floor (SSSquall::forcedLine's mHasFloor) - its members no longer
+        // gate on the sky they are arriving into.
+        weather.mPrecipitationFalls.addKeyframe(ss_atmoenv_snap_phase(cue_phase - (F64)SSSquall::ONSET_RAMP_PHASE), false);
+        weather.mPrecipitationFalls.addKeyframe(cue_phase, true);
+        weather.mPrecipitationFalls.addKeyframe(ss_atmoenv_snap_phase(taper_end_at), false);
+
+        // <SS:Nexii> The clear sky the wall arrives into. Everything above this reshapes the CUBE, and the cube
+        // alone cannot open the sky: deck coverage is (1 - (1 - moisture)^3) * mCoverageScale
+        // (ssatmoenvcloudfieldstate.cpp), so even with the moisture curve driven down to the day's dry baseline
+        // (~0.22) the deck still stands over 0.53 of the sky, and the dome's cirrus is on its own dial that no
+        // weather curve reaches at all. The author's report - no clear sky before the squall - is those two facts.
+        // So the same rebuild-window discipline is applied to three more curves, all of them the SKY's rather than
+        // the weather's: the deck's coverage scale and depth, and the dome's coverage. Same window, same shape
+        // through SSSquall::onsetValue, same snapped phases, EASE so the opening and the shutting are both gradual
+        // reads rather than cuts, and nothing laid outside [window_lo, taper_end_at].
+        //
+        // These are the only writes this generator makes outside the weather cube, and they happen ONLY here, on
+        // an authored severe event - an ordinary roll never touches the deck or the dome.
+        //
+        // The values the taper returns to are read BEFORE the removals, at the taper end, so a deck the author has
+        // keyframed gets its own value back rather than a constant: the event borrows the sky for its window and
+        // hands it back. [interaction: SSAtmoEnvCloudFieldResolver::resolve now reads mCoverageScale under Auto
+        // too (8f-1) - it derives a baseline of 1.0 and multiplies the authored curve onto it, so these onset keys
+        // open the sky whether or not the deck's Auto is on. mBaseThicknessM is still Auto's alone (for a deck
+        // that owns its own geometry - the primary deck does) and these keys sit unread there; that split is 8b-1,
+        // not this generator's business to close. Not flipped here: Auto also owns the deck's seasonal altitude
+        // and its moisture-led darkening, and a weather roll has no business taking those off an author who chose
+        // Auto.]
+        {
+            const F32 prior_scale_at_cue   = field.mCoverageScale.valueAt(cue_phase);
+            const F32 prior_scale_after    = field.mCoverageScale.valueAt(taper_end_at);
+            const F32 prior_thick_at_cue   = field.mBaseThicknessM.valueAt(cue_phase);
+            const F32 prior_thick_after    = field.mBaseThicknessM.valueAt(taper_end_at);
+            const F32 prior_dome_at_cue    = dome.mCoverage.valueAt(cue_phase);
+            const F32 prior_dome_after     = dome.mCoverage.valueAt(taper_end_at);
+
+            field.mCoverageScale.removeKeyframesInPhaseRange(window_lo, taper_end_at);
+            field.mBaseThicknessM.removeKeyframesInPhaseRange(window_lo, taper_end_at);
+            dome.mCoverage.removeKeyframesInPhaseRange(window_lo, taper_end_at);
+
+            // All three step AT the cue on the core's abrupt ramp rather than leading it: the deck's own lead is
+            // already spent on the moisture and convection curves above, and what arrives at the cue is a wall -
+            // the sky is open one step before it and shut on it. The ramp key's own value is the cleared one, so
+            // the approach to it (the wrap segment back from the taper end, EASE) is the sky visibly opening over
+            // the hours before the event rather than a jump.
+            SSSquall::Onset sky_onset = onset;
+            sky_onset.rampPhase = SSSquall::ONSET_RAMP_PHASE;
+
+            // Coverage scale: cleared to CLEAR_SCALE, full at the cue, back to the author's own scale. The cue
+            // value takes the larger of CUE_SCALE and what was there, so a deck already dialled past 1 is never
+            // REDUCED by a storm arriving over it.
+            layOnsetCurve(field.mCoverageScale, sky_onset, CLEAR_SCALE,
+                          llmax(CUE_SCALE, prior_scale_at_cue), prior_scale_after,
+                          COVERAGE_SCALE_MIN, COVERAGE_SCALE_MAX, SSAtmoEnvCurve::EASE);
+
+            // Depth: a thin remnant deck before, a tall one at the cue. Convection multiplies this downstream
+            // (height_factor) and the storm lid caps the product, so the multipliers are deliberately modest.
+            layOnsetCurve(field.mBaseThicknessM, sky_onset, prior_thick_at_cue * THIN_BEFORE_MUL,
+                          prior_thick_at_cue * TALL_AT_CUE_MUL, prior_thick_after,
+                          THICKNESS_MIN, THICKNESS_MAX, SSAtmoEnvCurve::EASE);
+
+            // The cirrus band thins to a fraction of itself for the approach and comes straight back at the cue -
+            // the dome is the anvil-level cloud, so it belongs to the storm, not to the clearing.
+            layOnsetCurve(dome.mCoverage, sky_onset, prior_dome_at_cue * DOME_CLEAR_FRACTION,
+                          prior_dome_at_cue, prior_dome_after,
+                          DOME_COVERAGE_MIN, DOME_COVERAGE_MAX, SSAtmoEnvCurve::EASE);
+        }
+
+        const S32 cue_minutes_of_day = (S32)ll_round(llclamp(cue_phase, 0.0, 1.0) * 24.0 * 60.0);
+        char cue_hhmm[8];
+        std::snprintf(cue_hhmm, sizeof(cue_hhmm), "%02d:%02d", (cue_minutes_of_day / 60) % 24, cue_minutes_of_day % 60);
+        severe_event_summary = (is_squall ? ", squall line arriving at " : ", tornado day, cue at ") + std::string(cue_hhmm);
+    }
 
     // The fog morning is the one case that wants a wet sky curve without a spell in it: heavy at
     // dawn, thinning through the afternoon, and never once raining.
@@ -633,6 +953,19 @@ SSAtmoEnvWeatherRoll SSAtmoEnvWeatherGenerator::randomize(SSAtmoEnvWeather& weat
         fog.emplace_back(0.62, base_moisture * 0.45f);
         fog.emplace_back(0.98, base_moisture * 0.8f);
         layCurve(weather.mMoisture, fog, MOISTURE_MIN, MOISTURE_MAX);
+    }
+
+    // <SS:Nexii> V2 legend fix: Randomize Severe Day IS the author opting the track into severe weather - a roll
+    // that authors a cue and a floor for the pinned cell but leaves the track's Allow flags off means no
+    // background supercell and no spontaneous hero can ever form on the track (SSStormCells::birthMemo's
+    // influence_enabled gate, ssstormcells.cpp). So a severe roll turns the master and both Allow flags on here;
+    // strengths are untouched, and an ordinary (non-severe) roll leaves the track's permissions exactly as it
+    // found them - flipping permissions is not something an ordinary roll of the day's weather does.
+    if (severeDay)
+    {
+        influence.mEnabled = true;
+        influence.mAllowSupercells = true;
+        influence.mAllowTornadoes = true;
     }
 
     roll.mSummary = roll.mTheme;
@@ -648,6 +981,15 @@ SSAtmoEnvWeatherRoll SSAtmoEnvWeatherGenerator::randomize(SSAtmoEnvWeather& weat
     {
         roll.mSummary += (spells.size() == 1) ? " - one spell of precipitation"
                                               : " - two spells of precipitation";
+    }
+    if (severeDay && !spells.empty())
+    {
+        roll.mSummary += ", severe day";
+    }
+    roll.mSummary += severe_event_summary;
+    if (severeDay)
+    {
+        roll.mSummary += ", supercells and tornadoes allowed";
     }
 
     return roll;

@@ -268,7 +268,9 @@ bool SSGLReadback::submit(const Job& job)
     mPending.push_back(pending);
 
     LL::WorkQueue::ptr_t main = LL::WorkQueue::getInstance("mainloop");
-    const bool posted = mWorker->getQueue().post([pending, write_fence, main]()
+    // <SS:Nexii> The worker holds its own reference to the buffer: finish() on the main thread resets pending->mBuffer once mDone has run, and poll()'s overdue fallback can do that while the worker is still mid-glGetTexImage - the write must land in memory that is still ours, not in a freed vector. [interaction: poll, finish]
+    std::shared_ptr<std::vector<U8>> buffer = pending->mBuffer;
+    const bool posted = mWorker->getQueue().post([pending, buffer, write_fence, main]()
     {
         if (write_fence)
         {
@@ -278,9 +280,9 @@ bool SSGLReadback::submit(const Job& job)
         }
 
         const Job& job = pending->mJob;
-        SSGLReadback::readTexture(job, pending->mBuffer->data());
+        SSGLReadback::readTexture(job, buffer->data());
 
-        if (job.mConvert) job.mConvert(pending->mBuffer->data(), pending->mBuffer->size());
+        if (job.mConvert) job.mConvert(buffer->data(), buffer->size());
         pending->mReadDone.store(true, std::memory_order_release);
 
         // Low-latency delivery; poll() is the net that catches a worker the
@@ -289,7 +291,7 @@ bool SSGLReadback::submit(const Job& job)
         {
             main->post([pending]()
             {
-                SSGLReadback::getInstance()->finish(pending);
+                if (SSGLReadback::instanceExists()) SSGLReadback::getInstance()->finish(pending);
             });
         }
     });
@@ -306,7 +308,9 @@ bool SSGLReadback::submit(const Job& job)
 // delivery raced ahead of us, and - after a generous holdout - reads unserviced
 // jobs inline and disarms the worker so nothing stays stranded. The inline
 // read races a hypothetical mid-read worker, but the holdout only trips when
-// the worker is dead or hung, and the read is the same texture, same layout.
+// the worker is dead or hung, and the read is the same texture, same layout;
+// the worker keeps its own reference to the buffer, so finish() releasing ours
+// cannot pull the memory out from under a late write.
 void SSGLReadback::poll()
 {
     static const std::chrono::milliseconds HOLDOUT(1000);

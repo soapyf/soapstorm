@@ -87,14 +87,19 @@
 #include "llworld.h"
 #include "pipeline.h"
 // <SS:Nexii> Atmo Magic weather
+#include "ssatmoinfoview.h" // <SS:Nexii> Atmo Magic info views: SSAtmoInfoView::renderDimAndWorld, drawn post-tonemap in render_ui
 #include "ssatmomagic.h"
 #include "ssatmoenvapplier.h"
 #include "ssatmoenvdiscovery.h"
 #include "sswater.h"
+#include "ssatmolandscape.h"
 #include "ssrainshadow.h"
+#include "ssgpucull.h" // <SS:Nexii> GPU frustum + occlusion culling
 #include "sswindflow.h"
 #include "ssglreadback.h"
 #include "ssworldfield.h"
+#include "ssworldfieldshapes.h"
+#include "ssnavmesh.h"
 
 #include <boost/json.hpp>
 // [RLVa:KB] - Checked: 2011-05-22 (RLVa-1.3.1a)
@@ -993,9 +998,17 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
                     // state (doc/atmo_magic_water.md).
                     SSWaterWorld::getInstance()->update();
 
+                    // Atmo Magic: the landscape scenery set ticks after the applier and
+                    // water, so it follows the same frame's resolved track.
+                    SSAtmoLandscapeWorld::getInstance()->update();
+
                     SSRainShadowMap::getInstance()->capture();
                     SSWindFlowMap::getInstance()->update();
                     SSWorldField::getInstance()->update();
+                    // <SS:Nexii> Atmo Magic: the declared-shape query census rots and rebuilds on the same tick (doc/atmo_magic_worldfield_competition.md 7).
+                    SSWorldFieldShapes::getInstance()->update();
+                    // <SS:Nexii> The census navmesh (Recast/Detour over the same census) schedules its bands off each rebuild and pumps its tile cache (doc/atmo_magic_navmesh.md).
+                    SSNavMesh::getInstance()->update();
 
                     // Atmo Magic: the readback worker's per-frame poll. Completes
                     // texture readbacks the worker has finished and, after a
@@ -1003,13 +1016,12 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
                     // never leave a capture hanging (see ssglreadback.cpp).
                     SSGLReadback::getInstance()->poll();
 
-                    // Atmo Magic: this singleton is otherwise never
-                    // touched (it is purely event-driven via
-                    // LLParcelObserver, no per-frame work of its own), so
-                    // this call exists only to bring it - and its parcel
-                    // observer registration - into existence on the first
-                    // frame the pipeline runs, rather than never at all.
-                    SSAtmoEnvDiscoveryManager::getInstance();
+                    // Atmo Magic: parcel discovery maintenance. The first
+                    // call checks the parcel that arrived during login,
+                    // before the singleton (and its parcel hooks) existed;
+                    // later calls retry a notecard fetch that was deferred
+                    // because the LSL Bridge had not attached yet.
+                    SSAtmoEnvDiscoveryManager::getInstance()->idle();
                 }
 
                 LLVertexBuffer::unbind();
@@ -1238,6 +1250,14 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
 
         if (LLPipeline::sRenderDeferred)
         {
+            // <SS:Nexii> GPU culling: opaque depth is final and unbound here -
+            // build the Hi-Z pyramid, run the cull dispatch, and queue the
+            // readback that gates next frame's draw loop
+            SSGPUCull::getInstance()->submit(*LLViewerCamera::getInstance(),
+                                             gPipeline.mRT->deferredScreen.getDepth(),
+                                             gPipeline.mRT->deferredScreen.getWidth(),
+                                             gPipeline.mRT->deferredScreen.getHeight());
+
             gPipeline.renderDeferredLighting();
         }
 
@@ -1722,6 +1742,13 @@ void render_ui(F32 zoom_factor, int subfield)
 
     // apply gamma correction and post effects
     gPipeline.renderFinalize();
+
+    // <SS:Nexii> Atmo Magic info views draw their 3-D half HERE: the LOOK pass (a full-screen triangle that rewrites the just-presented world as warm gray), then the active view's in-world layer on top of it, with the WORLD camera (renderDimAndWorld calls setup3DRender itself) into the default framebuffer renderFinalize just presented into. This is the one spot that is both post-tonemap and still 3-D - the same window in which render_hud_attachments below draws HUD geometry - and the look pass needs both halves of that: it SAMPLES the presented image (gPipeline.mSSLastPresented, recorded where renderFinalize binds it) and it needs the world camera's projection to unproject depth. It also has to be after the luminance sample, or auto-exposure would chase the look's own tone; the dim quad this replaced learned that the hard way from LLPipeline::renderDebug, inside renderGeomPostDeferred, where it went into the HDR screen buffer ahead of generateLuminance and the scene pumped for about a second. Ahead of render_hud_elements/render_hud_attachments so nametags, beacons and HUD attachments stay untouched on top; renderDimAndWorld saves and restores both matrix stacks, the get_current_* cache and the viewport, so what follows sees exactly the state renderFinalize left. Skipped for cube snapshots, still snapshots, the disconnected/teleport screen and "hide UI" (Ctrl+Alt+F1 - the legend and chart that explain the overlay go with the UI, so the overlay goes too) - none of them want a debug overlay baked in. The gate is SSAtmoInfoView::wantsDraw() rather than a bare "a mode is selected": V9's lightning layer also answers to the RENDER_DEBUG_LIGHTNING checkbox with no mode picked, and that knowledge belongs to the view, not to this call site. [interaction: SSAtmoInfoView]
+    if (!gCubeSnapshot && !gSnapshot && !gDisconnected && SSAtmoInfoView::wantsDraw()
+        && gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
+    {
+        SSAtmoInfoView::renderDimAndWorld();
+    }
 
     {
         LLGLState::checkStates();

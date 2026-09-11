@@ -105,6 +105,7 @@
 #include "llviewerdisplay.h"
 #include "sspreciprenderer.h"
 #include "ssvolcloud.h"
+#include "ssvortexrender.h" // <SS:Nexii> Atmo Magic vortex funnels
 #include "sslightningrender.h"
 #include "sslightning.h" // <SS:Nexii> Atmo Magic weather
 #include "sswindflow.h"  // <SS:Nexii> Atmo Magic wind flowmap
@@ -112,7 +113,10 @@
 #include "ssatmoenvapplier.h" // <SS:Nexii> celestial debug overlay
 #include "sssurfacefield.h" // <SS:Nexii> Atmo Magic surface field
 #include "ssworldfield.h"   // <SS:Nexii> Atmo Magic shared world field
-#include "sswhiteout.h"     // <SS:Nexii> Atmo Magic whiteout
+#include "ssnavmesh.h"      // <SS:Nexii> Atmo Magic census navmesh overlay
+#include "ssheightfog.h"    // <SS:Nexii> Atmo Magic height fog (replaces the whiteout)
+#include "ssgpucull.h"      // <SS:Nexii> GPU frustum + occlusion culling
+#include "ssscreenfx.h"     // <SS:Nexii> Atmo Magic heat shimmer / lens drops screen-space shell
 #include "ssatmomagic.h" // <SS:Nexii> Atmo Magic geometry settling overlay
 #include "llspatialpartition.h"
 #include "llmutelist.h"
@@ -1370,6 +1374,9 @@ void LLPipeline::releaseGLBuffers()
     mPostPongMap.release();
 
     mFXAAMap.release();
+
+    // <SS:Nexii> The height fog's own depth-staging FBO (mDepthCopy) - had no caller anywhere, so it never released on GL teardown (L10). instanceExists() guard so a viewer that shut down before the singleton was ever touched does not construct it here, and so a repeat teardown after deletion does not logerrs on a dead singleton.
+    if (SSHeightFog::instanceExists()) SSHeightFog::getInstance()->releaseGL();
 
     mUIScreen.release();
 
@@ -3796,6 +3803,17 @@ void LLPipeline::postSort(LLCamera &camera)
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
 
     assertInitialized();
+
+    // <SS:Nexii> GPU culling: hand out a fresh candidate frame for the world
+    // camera only - the shadow pass re-enters postSort and must not clobber it
+    if (LLViewerCamera::sCurCameraID == LLViewerCamera::CAMERA_WORLD
+        && !gCubeSnapshot
+        && !sShadowRender
+        && !sReflectionRender)
+    {
+        SSGPUCull::getInstance()->beginFrame();
+    }
+
     sVolumeSAFrame = 0.f; //ZK LBG
 
     LL_PUSH_CALLSTACKS();
@@ -3843,6 +3861,10 @@ void LLPipeline::postSort(LLCamera &camera)
             continue;
         }
 
+        // <SS:Nexii> GPU culling: register the group (and its batches below)
+        // as a candidate for the compute occlusion pass
+        S32 ss_cull_id = SSGPUCull::getInstance()->registerGroup(group);
+
         if (group->hasState(LLSpatialGroup::NEW_DRAWINFO) && group->hasState(LLSpatialGroup::GEOM_DIRTY) && !gCubeSnapshot)
         {  // no way this group is going to be drawable without a rebuild
             group->rebuildGeom();
@@ -3859,6 +3881,11 @@ void LLPipeline::postSort(LLCamera &camera)
             for (LLSpatialGroup::drawmap_elem_t::iterator k = src_vec.begin(); k != src_vec.end(); ++k)
             {
                 LLDrawInfo *info = *k;
+
+                if (ss_cull_id >= 0)
+                {
+                    SSGPUCull::getInstance()->registerDrawInfo(info, ss_cull_id); // <SS:Nexii> GPU culling
+                }
 
                 sCull->pushDrawInfo(j->first, info);
                 if (!sShadowRender && !sReflectionRender && !gCubeSnapshot)
@@ -4474,8 +4501,14 @@ void LLPipeline::renderGeomPostDeferred(LLCamera& camera)
                 SSLightningRender::getInstance()->renderFlash();
                 SSVolCloud::getInstance()->render();
 
-                // <SS:Nexii> Atmo Magic whiteout: the local, height-limited fog veil, composited exactly like the haze above - depth staged, one alpha-lerped fullscreen pass. This is its proven placement - the identical machinery moved after the alpha pools flickered the whole frame (world frozen, UI and sky strobing), and back here it draws clean. Drawn after the volumetric deck so the puffs dissolve into the fog with the sky behind them when the camera stands in the storm; before the lightning and the precipitation, which stay crisp in front of their own weather. The trade: alpha surfaces drawn later - windows, foliage - composite over the veil and read unfogged, their fog taken from the geometry behind them.
-                SSWhiteout::getInstance()->render();
+                // <SS:Nexii> The vortex funnels, right after the volumetric deck they hang under and in the SAME
+                // sky forward pass with REAL alpha (never post-deferred additive - see doc/viewer/glow_and_alpha.md
+                // and ssvortexcore.h's own file-top comment: "a dark funnel that writes additive alpha blooms").
+                // Own draw, own shader, own cap (SSVortex::MAX_ACTIVE * SSVortex::COLLARS quads) - never enters
+                // mPuffs or the puff budget. [interaction: SSVolCloud squash/depth-copy, SSVortices scheduler]
+                SSVortexRender::getInstance()->render();
+
+                // <SS:Nexii> The height fog (formerly the whiteout veil drawn here) moved to renderFinalize as a post layer that fogs everything drawn - see SSHeightFog::render() there.
 
                 SSLightningRender::getInstance()->render();
                 SSPrecipRenderer::getInstance()->render();
@@ -5685,15 +5718,16 @@ void LLPipeline::renderDebug()
         gAgent.getRegion()->mWind.renderVectors();
     }
 
+    // <SS:Nexii> Every Atmo Magic block below is world-space and runs ONCE per frame: renderDebug is entered a second time from render_hud_attachments (renderGeomPostDeferred with the HUD camera and hud_only set), and an unguarded block there draws its geometry again under the HUD's ortho matrices into the HUD target - V1's flow arrows smeared across the HUD layer whenever the avatar wore an attachment. Same discipline as the stock blocks above (!hud_only). [interaction: SSAtmoInfoView]
     // <SS:Nexii> Atmo Magic wind flowmap: every slab translucently, plus an arrow field on the slab the camera is in
-    if (mRenderDebugMask & RENDER_DEBUG_WIND_FLOW)
+    if (!hud_only && (mRenderDebugMask & RENDER_DEBUG_WIND_FLOW))
     {
         SSWindFlowMap::getInstance()->renderDebug();
     }
 
     // Atmo Magic rain shadow: every captured depth texel unprojected to the
     // world point it saw, so holes, eaves and grazed faces read directly
-    if (mRenderDebugMask & RENDER_DEBUG_RAIN_SHADOW)
+    if (!hud_only && (mRenderDebugMask & RENDER_DEBUG_RAIN_SHADOW))
     {
         SSRainShadowMap::getInstance()->renderDebug();
     }
@@ -5705,7 +5739,7 @@ void LLPipeline::renderDebug()
     // toggled from the Effects & LOD floater's Rain pane, like the celestial overlay.
     {
         static LLCachedControl<bool> rain_trace_debug(gSavedSettings, "SSAtmoRainTraceDebug", false);
-        if (rain_trace_debug)
+        if (rain_trace_debug && !hud_only)
         {
             SSRainShadowMap::getInstance()->renderColumnTrace();
         }
@@ -5714,7 +5748,7 @@ void LLPipeline::renderDebug()
     // <SS:Nexii> Atmo Magic celestial debug: a ray and a label per body in the sky. Toggled from the System Designer rather than from Render Metadata, because it is an authoring aid for the floater beside it - hence a setting rather than a debug mask.
     {
         static LLCachedControl<bool> celestial_debug(gSavedSettings, "SSAtmoPlanetaryDebugOverlay", false);
-        if (celestial_debug)
+        if (celestial_debug && !hud_only)
         {
             SSAtmoEnvApplier::getInstance()->renderCelestialDebug();
         }
@@ -5723,7 +5757,7 @@ void LLPipeline::renderDebug()
     // Atmo Magic surface field: what the weather has worked into that surface
     // over time - damp, settled snow, standing water - washed over the cells
     // it is held in
-    if (mRenderDebugMask & RENDER_DEBUG_SURFACE_FIELD)
+    if (!hud_only && (mRenderDebugMask & RENDER_DEBUG_SURFACE_FIELD))
     {
         SSSurfaceField::getInstance()->renderDebug();
     }
@@ -5731,32 +5765,44 @@ void LLPipeline::renderDebug()
     // Atmo Magic world field: what the shared capture resolved, what the air
     // flood decided about its connectivity, and the drainage topology it
     // feeds - view chosen by SSWorldFieldDebugView
-    if (mRenderDebugMask & RENDER_DEBUG_WORLD_FIELD)
+    if (!hud_only && (mRenderDebugMask & RENDER_DEBUG_WORLD_FIELD))
     {
         SSWorldField::getInstance()->renderDebug();
+    }
+
+    // <SS:Nexii> Atmo Magic census navmesh: its own overlay switches live in the navmesh floater's View tab,
+    // independent of the world field mask (doc/atmo_magic_navmesh.md).
+    if (!hud_only && SSNavMesh::overlayEnabled())
+    {
+        // World-field view 7 already drew it this frame; do not blend it twice.
+        static LLCachedControl<U32> field_view(gSavedSettings, "SSWorldFieldDebugView", 1);
+        const bool via_field = (mRenderDebugMask & RENDER_DEBUG_WORLD_FIELD) && field_view == 7;
+        if (!via_field) SSNavMesh::getInstance()->renderDebug();
     }
 
     // Atmo Magic volumetric cloud field: the puffs as geometry, their anvil and
     // form shaping, the cell gate and tower map on the builder's own grid, or
     // the vertical profile ramp - view chosen in the Effects & LOD floater
-    if (mRenderDebugMask & RENDER_DEBUG_CLOUD_FIELD)
+    if (!hud_only && (mRenderDebugMask & RENDER_DEBUG_CLOUD_FIELD))
     {
         SSVolCloud::getInstance()->renderDebug();
     }
 
     // Atmo Magic roof runoff: the eaves, the water they hold, the gates that
     // quiet them, or what they shed - view chosen in the Simulation floater
-    if (mRenderDebugMask & RENDER_DEBUG_ROOF_RUNOFF)
+    if (!hud_only && (mRenderDebugMask & RENDER_DEBUG_ROOF_RUNOFF))
     {
         SSSurfaceField::getInstance()->renderRunoffDebug();
     }
 
     // Atmo Magic geometry settling: a beacon over every prim change still
     // waiting to be believed, so a queue that never drains can be walked to
-    if (mRenderDebugMask & RENDER_DEBUG_GEOM_SETTLE)
+    if (!hud_only && (mRenderDebugMask & RENDER_DEBUG_GEOM_SETTLE))
     {
         SSAtmoMagic::getInstance()->renderDebug();
     }
+
+    // <SS:Nexii> Atmo Magic info views used to draw their 3-D half here (dim quad + the active view's in-world layer). They do not any more: renderDebug runs inside renderGeomPostDeferred, so the dim quad went into the HDR screen buffer BEFORE generateLuminance/tonemap - the tint read washed-out and auto-exposure then opened up to cancel it, pumping the scene for about a second. The call now lives in render_ui() in llviewerdisplay.cpp, after gPipeline.renderFinalize() and before render_hud_attachments(): post-tonemap, still a 3-D pass, still the world camera. See SSAtmoInfoView::renderDimAndWorld. [interaction: SSAtmoInfoView]
 
     if (mRenderDebugMask & RENDER_DEBUG_COMPOSITION)
     {
@@ -9317,6 +9363,9 @@ void LLPipeline::renderFinalize()
 
     assertInitialized();
 
+    // <SS:Nexii> Invalidate the presented-target pointer for the duration of this function: if anything below returns early, a post-screen consumer must see null rather than the previous frame's buffer. It is set again immediately before the present pass binds it.
+    mSSLastPresented = nullptr;
+
     LL_RECORD_BLOCK_TIME(FTM_RENDER_BLOOM);
     LL_PROFILE_GPU_ZONE("renderFinalize");
 
@@ -9329,6 +9378,9 @@ void LLPipeline::renderFinalize()
 
     gGL.setColorMask(true, true);
     glClearColor(0, 0, 0, 0);
+
+    // <SS:Nexii> Atmo Magic height fog: the first thing drawn onto the linear HDR screen, before tonemapping, so it fogs everything the frame drew (alpha surfaces, particles, clouds) by the opaque depth behind each pixel.
+    SSHeightFog::getInstance()->render();
 
     static LLCachedControl<bool> has_hdr(gSavedSettings, "RenderHDREnabled", true);
     bool hdr = gGLManager.mGLVersion > 4.05f && has_hdr();
@@ -9366,6 +9418,9 @@ void LLPipeline::renderFinalize()
     combineGlow(sourceBuffer, targetBuffer);
     std::swap(sourceBuffer, targetBuffer);
 
+    // <SS:Nexii> Atmo Magic heat shimmer: a mirage ripple over distant, low-screen pixels.
+    if (SSScreenFXPost::getInstance()->renderHeat(sourceBuffer, targetBuffer)) std::swap(sourceBuffer, targetBuffer);
+
     gGLViewport[0] = gViewerWindow->getWorldViewRectRaw().mLeft;
     gGLViewport[1] = gViewerWindow->getWorldViewRectRaw().mBottom;
     gGLViewport[2] = gViewerWindow->getWorldViewRectRaw().getWidth();
@@ -9379,6 +9434,9 @@ void LLPipeline::renderFinalize()
         renderDoF(sourceBuffer, targetBuffer);
         std::swap(sourceBuffer, targetBuffer);
     }
+
+    // <SS:Nexii> Atmo Magic lens drops: rain on the camera lens, after depth of field so the drops are sharp and blur what is behind them, before anti-aliasing.
+    if (SSScreenFXPost::getInstance()->renderLens(sourceBuffer, targetBuffer)) std::swap(sourceBuffer, targetBuffer);
 
      if (RenderFSAAType == 1)
     {
@@ -9394,7 +9452,8 @@ void LLPipeline::renderFinalize()
 
     // <FS:Beq> Restore shader post proc for Vignette
     LLRenderTarget* auxActiveBuffer = sourceBuffer;
-    LLRenderTarget* auxTargetBuffer = RenderFSAAType ? &mRT->screen : &mPostPingMap;
+    // <SS:Nexii> was hard-coded to mPostPingMap, which breaks when the new heat/lens passes leave sourceBuffer already pointing at mPostPingMap - pick whichever ping/pong buffer isn't the active one so auxTargetBuffer is never the same target as auxActiveBuffer.
+    LLRenderTarget* auxTargetBuffer = RenderFSAAType ? &mRT->screen : (auxActiveBuffer == &mPostPingMap ? &mPostPongMap : &mPostPingMap);
 // [RLVa:KB] - @setsphere
     if (RlvActions::hasBehaviour(RLV_BHVR_SETSPHERE))
     {
@@ -9456,6 +9515,9 @@ void LLPipeline::renderFinalize()
     // Present the screen target.
 
     gDeferredPostNoDoFNoiseProgram.bind(); // Add noise as part of final render to screen pass to avoid damaging other post effects
+
+    // <SS:Nexii> THE definition of "the presented image": sourceBuffer is what the line below hands the present pass as DEFERRED_DIFFUSE, so recording it here - and only here - is what makes mSSLastPresented true by construction rather than by a guess about which post stage ran. [interaction: SSAtmoInfoView::renderInfoLook]
+    mSSLastPresented = sourceBuffer;
 
     // Whatever is last in the above post processing chain should _always_ be rendered directly here.  If not, expect problems.
     gDeferredPostNoDoFNoiseProgram.bindTexture(LLShaderMgr::DEFERRED_DIFFUSE, sourceBuffer);
@@ -9933,10 +9995,10 @@ void LLPipeline::renderDeferredLighting()
             unbindDeferredShader(gDeferredBlurLightProgram);
         }
 
+        // <SS:Nexii> AUDIT (finding 12): Atmo Magic albedo pass FIRST (doc/atmo_magic_surface_weather.md sec 3/4) - this order is what lets the ALBEDO pass alone read both spec and albedo pristine; it does NOT give the wet/normal passes a pristine input (the wet pass keeps pristine spec regardless of order since nothing writes spec before it; the normal pass runs after both albedo and wet have tinted/darkened the diffuse attachment, which is exactly why it uses the roughness-free ssPorosityFromAlbedo rather than ssPorosityAt - a deliberate second-best, not a shared "pristine" estimate across all three).
+        SSSurfaceField::getInstance()->renderAlbedoPass();
         // <SS:Nexii> Atmo Magic wet surfaces. Ahead of every lighting pass below, so the sun, the local lights, the projectors and the probes all read one consistent gbuffer rather than each being taught about the weather on its own.
         SSSurfaceField::getInstance()->renderWetPass();
-        // <SS:Nexii> Atmo Magic snow surfaces: same family, same reasoning - the settled depth the field carries becomes albedo before anything lights it.
-        SSSurfaceField::getInstance()->renderSnowPass();
 
         screen_target->bindTarget();
         // clear color buffer here - zeroing alpha (glow) is important or it will accumulate against sky
@@ -10871,7 +10933,7 @@ static LLTrace::BlockTimerStatHandle FTM_SHADOW_ALPHA_TREE("Alpha Tree");
 static LLTrace::BlockTimerStatHandle FTM_SHADOW_ALPHA_GRASS("Alpha Grass");
 static LLTrace::BlockTimerStatHandle FTM_SHADOW_FULLBRIGHT_ALPHA_MASKED("Fullbright Alpha Masked");
 
-void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCamera& shadow_cam, LLCullResult& result, bool depth_clamp)
+void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCamera& shadow_cam, LLCullResult& result, bool depth_clamp, GLenum depth_func)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE; //LL_RECORD_BLOCK_TIME(FTM_SHADOW_RENDER);
     LL_PROFILE_GPU_ZONE("renderShadow");
@@ -10905,7 +10967,7 @@ void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCa
     //enable depth clamping if available
     LLGLEnable clamp_depth(depth_clamp ? GL_DEPTH_CLAMP : 0);
 
-    LLGLDepthTest depth_test(GL_TRUE, GL_TRUE, GL_LESS);
+    LLGLDepthTest depth_test(GL_TRUE, GL_TRUE, depth_func);
 
     updateCull(shadow_cam, result);
 

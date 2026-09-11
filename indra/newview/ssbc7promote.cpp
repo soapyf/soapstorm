@@ -498,9 +498,7 @@ namespace
         // Login state is checked BEFORE the agent's teleport state, so nothing here reads gAgent until there is a session for it to describe.
         if (gDisconnected || LLStartUp::getStartupState() != STATE_STARTED) return SSBC7_PROMOTE_DECLINE_NET_LOGIN;
         if (gTeleportDisplay || gAgent.getTeleportState() != LLAgent::TELEPORT_NONE) return SSBC7_PROMOTE_DECLINE_NET_TELEPORT;
-        // <SS:Nexii> No whole-session ceiling and no bytes-per-second bucket. Three bounds already exist and each is the RIGHT shape: the want list empties, so the work is finite by construction; the store budget caps what can be kept; and the foreground check below plus the in-flight limit stop this competing with the user. A fourth bound expressed in total bytes only ever fires on the user who left the viewer running longest, which is precisely the user it should be helping.
-        //
-        // Pacing is not this module's job either. Texture fetches go out through the AP_TEXTURE HTTP policy class, which already limits connections and pipelining depth for the whole viewer, so a byte bucket layered on top does not protect the connection - it just makes this slower than every other fetch the viewer makes.
+        // <SS:Nexii> The structural bounds live here: the want list empties, so the work is finite; the store budget caps what can be kept; the foreground check below and the in-flight limit keep this off the user's own fetches. The byte bucket and session ceiling (SSSqueezeNetworkPromoteKBPerSec / MaxMB, applied in issueOne through st->mBudget) are the user-facing dials on top of those, so a metered connection can cap what this tier spends; both were documented from the start and only wired on 2026-09-10, before which the tier never issued a fetch at all. doc/super_compressed_textures.md.
         if (st->mNetInFlight.size() >= (size_t)ssBC7PromoteMaxInFlight())   return SSBC7_PROMOTE_DECLINE_NET_IN_FLIGHT;
 
         LLTextureFetch* fetcher = LLAppViewer::getTextureFetch();
@@ -540,7 +538,8 @@ namespace
     // One continuation fetch. Returns true when a request went out.
     //
     // WHY THIS IS THE FETCH PIPELINE'S NATIVE MODE and not a bespoke transfer: createRequest at discard 0 asks for the whole asset, and LLTextureFetchWorker resumes from whatever is already in the cache using the offset arithmetic it uses for every other progressive fetch. The completed J2C is written back to the texture cache by the ordinary WRITE_TO_CACHE state and the encode is triggered by the ordinary DONE hook, so this module contributes no new transfer code, no new cache code and no new encode code - only the decision to ask.
-    bool issueOne(PromoteState* st, const NetCandidate& cand, F64 now)
+    // <SS:Nexii> Squeeze network completion - throttled_out is SSBC7_PROMOTE_VERDICT_COUNT unless the budget was what stopped this candidate, in which case it names WHICH limit bit so the pass can report the throttle instead of reporting "no target", which is what a bandwidth stall used to look like from the diagnostics side.
+    bool issueOne(PromoteState* st, const NetCandidate& cand, F64 now, ESSBC7PromoteVerdict& throttled_out)
     {
         LLTextureFetch* fetcher = LLAppViewer::getTextureFetch();
         if (!fetcher) return false;
@@ -582,7 +581,19 @@ namespace
         }
 
         const U64 estimate = cand.mMissing > 0 ? (U64)cand.mMissing : (U64)1024;
-        if (!st->mBudget.spend(estimate)) return false;
+        if (!st->mBudget.spend(estimate))
+        {
+            // <SS:Nexii> Squeeze network completion - a refusal by the budget is a DEFERRAL, not a rejection: the candidate goes back exactly where it was taken from so the next pass with credit still has it, and the reason is handed up so the pass records the throttle. The session ceiling is separated from the per-second bucket because they mean completely different things to a person reading the overlay - one clears in a second, the other does not clear until the viewer restarts.
+            const U64 cap = st->mBudget.sessionCap();
+            throttled_out = (cap != 0 && st->mBudget.spentTotal() + estimate > cap)
+                          ? SSBC7_PROMOTE_DECLINE_NET_SESSION
+                          : SSBC7_PROMOTE_DECLINE_NET_BANDWIDTH;
+            {
+                std::lock_guard<std::mutex> lock(st->mMutex);
+                st->mNetCandidates.push_back(cand);
+            }
+            return false;
+        }
 
         // Priority is a small positive number rather than zero: LLTextureFetchWorker aborts outright below F_ALMOST_ZERO (lltexturefetch.cpp:1158), and the UDP queue orders by this value, so one is the lowest number that still means "do this eventually" and sits below every priority the texture list ever assigns.
         const S32 rc = fetcher->createRequest(tex->getFTType(), tex->getUrl(), cand.mID, tex->getTargetHost(),
@@ -736,10 +747,19 @@ void ssBC7PromoteRefreshPolicy()
     st->mEnabled        = gSavedSettings.getBOOL("SSSqueezeEnabled") && gSavedSettings.getBOOL("SSSqueezePromote");
     st->mNetworkEnabled = gSavedSettings.getBOOL("SSSqueezeNetworkPromote");
 
+    // <SS:Nexii> Squeeze network completion - the two limits tier (b) is documented to obey, applied here rather than at issue time so a changed setting takes effect on the very next pass and so configure() can clamp held credit down the instant the rate is lowered. Re-reading every refresh is safe on purpose: configure() sets the two limits and trims the token bucket and touches neither the session total nor the clock, so nobody can win a fresh session allowance by opening preferences. Without this call mRate stayed at its constructed zero, canSpend() refused everything, and the whole network tier was dead code that looked from the outside like "no target".
+    const U64 net_rate = (U64)gSavedSettings.getU32("SSSqueezeNetworkPromoteKBPerSec") * 1024;
+    const U64 net_cap  = (U64)gSavedSettings.getU32("SSSqueezeNetworkPromoteMaxMB") * 1024 * 1024;
+    st->mBudget.configure(net_rate, net_cap);
+    // </SS:Nexii>
+
     if (!st->mCache) st->mCache = LLAppViewer::getTextureCache();
 
     LL_INFOS("Squeeze") << "BC7 promotion policy: engine " << (st->mEnabled.load() ? "on" : "off")
                         << ", network completion " << (st->mNetworkEnabled.load() ? "on" : "off")
+                        << " at up to " << (net_rate / 1024) << " KB/s"
+                        << " and " << (net_cap / (1024 * 1024)) << " MB this session (spent "
+                        << (st->mBudget.spentTotal() / (1024 * 1024)) << " MB so far)"
                         << ", up to " << ssBC7PromoteMaxInFlight()
                         << " continuation fetches at a time, paced by the texture HTTP policy class like every other fetch" << LL_ENDL;
 }
@@ -852,6 +872,8 @@ void ssBC7PromoteTick()
     const ESSBC7PromoteVerdict gate = networkGate(st);
 
     bool issued = false;
+    // <SS:Nexii> Squeeze network completion - VERDICT_COUNT is the "no throttle happened" value; it is not a verdict and is never recorded, it only marks the slot as empty.
+    ESSBC7PromoteVerdict throttled = SSBC7_PROMOTE_VERDICT_COUNT;
     if (gate == SSBC7_PROMOTE_RAN_NETWORK)
     {
         while (st->mNetInFlight.size() < (size_t)ssBC7PromoteMaxInFlight())
@@ -864,7 +886,9 @@ void ssBC7PromoteTick()
                 st->mNetCandidates.pop_back();
             }
 
-            if (issueOne(st, cand, now)) issued = true;
+            if (issueOne(st, cand, now, throttled)) issued = true;
+            // <SS:Nexii> Squeeze network completion - the loop MUST stop the moment the budget refuses, because issueOne puts that candidate straight back: carrying on would spin over the same deque forever rather than simply waiting for the next pass to hold credit.
+            else if (throttled != SSBC7_PROMOTE_VERDICT_COUNT) break;
         }
 
         if (issued)
@@ -909,6 +933,14 @@ void ssBC7PromoteTick()
         record(st, gate);
         return;
     }
+
+    // <SS:Nexii> Squeeze network completion - the throttle outranks the fall-through verdict, because "the budget is empty" and "nothing on the list was worth fetching" are the two answers a person most needs told apart: one is the setting doing its job and will clear by itself, the other means targeting rejected everything and raising the limits would change nothing.
+    if (throttled != SSBC7_PROMOTE_VERDICT_COUNT)
+    {
+        record(st, throttled);
+        return;
+    }
+    // </SS:Nexii>
 
     record(st, candidates_left ? SSBC7_PROMOTE_DECLINE_NET_NO_TARGET : SSBC7_PROMOTE_IDLE_EMPTY);
 }

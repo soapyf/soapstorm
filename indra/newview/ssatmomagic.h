@@ -24,6 +24,7 @@
 #ifndef SS_ATMOMAGIC_H
 #define SS_ATMOMAGIC_H
 
+#include "ssatmonoisecore.h"
 #include "ssprecippreset.h"
 
 #include "llpointer.h"
@@ -46,24 +47,7 @@ class LLViewerObject;
 class SSPrecipSim;
 struct SSGranularParams;
 
-namespace SSAtmoNoise
-{
-    inline U32 hashU32(U32 x)
-    {
-        x = x * 747796405u + 2891336453u;
-        U32 w = ((x >> ((x >> 28u) + 4u)) ^ x) * 277803737u;
-        return (w >> 22u) ^ w;
-    }
-
-    inline U32 combine(U32 a, U32 b) { return hashU32(a ^ (b + 0x9e3779b9u + (a << 6) + (a >> 2))); }
-
-    inline F32 hash01(U32 x) { return (F32)(hashU32(x) & 0x00ffffffu) / (F32)0x01000000; }
-
-    F32 value1(F32 x, U32 seed);
-    F32 value2(F32 x, F32 y, U32 seed);
-    F32 fbm1(F32 x, U32 seed, S32 octaves = 3);
-    F32 fbm2(F32 x, F32 y, U32 seed, S32 octaves = 3);
-}
+// <SS:Nexii> SSAtmoNoise (hashU32/combine/hash01/value1/value2/fbm1/fbm2) moved header-only into ssatmonoisecore.h on 2026-09-05 so the scratch tests can compile it without the viewer; every consumer still reaches it through this include. SSRandStream stays here - it is a per-burst stream, not the shared field hash.
 
 class SSRandStream
 {
@@ -117,6 +101,10 @@ public:
 
     F32 temperatureC() const { return mTemperatureC; }
 
+    // <SS:Nexii> Surface weather slice B: the weather cube's moisture 0..1 (SSAtmoTrackConfig::mMoisture, filled beside temperature in the bridge), falling back to clamp(precipitation*2,0,1) with no environment; sun direction Z clamped 0..1, the frost/fog "how much sun is up" input. Both recomputed in refreshParams. doc/atmo_magic_surface_weather.md sec 2.
+    F32 humidity() const { return mHumidity; }
+    F32 sunUp() const { return mSunUp; }
+
     // <SS:Nexii> Storm-approach look-ahead: how imminent an approaching thunderstorm is (0..1) from the weather cube's next keyframe (SSAtmoEnvBridge::stormApproach), plus the upwind heading in degrees it comes FROM - negative when none approaches. SSLightning's bolt-from-the-blue anticipation reads these every frame.
     F32 stormApproach() const { return mStormApproach; }
     F32 stormApproachHeadingDeg() const { return mStormApproachHeading; }
@@ -141,7 +129,7 @@ public:
     ERegime regime() const { return mRegime; }
     static const char* regimeName(ERegime r);
 
-    // Bounded by design: soundscape bed crossfade, floater stats, whiteout ramp. A second event type gets promoted to a real pump consciously, never by accretion.
+    // Bounded by design: soundscape ambience crossfade, floater stats, whiteout ramp. A second event type gets promoted to a real pump consciously, never by accretion.
     typedef boost::signals2::signal<void(ERegime, ERegime)> RegimeSignal;
     RegimeSignal& regimeSignal() { return mRegimeSignal; }
 
@@ -203,6 +191,9 @@ public:
 
     static void drawInfo();
 
+    // <SS:Nexii> GL teardown for every Atmo singleton, from LLViewerWindow::shutdownGL while the window, the context and the texture list still exist. LLSingletonBase::deleteAll runs after all of them are gone, so anything left holding textures, vertex buffers, render targets or a shared-context worker until then releases into a dead pipeline. [interaction: LLAppViewer::cleanup order]
+    static void shutdownGL();
+
     // <SS:Nexii> Click hit-test for the info overlay's orange headings: x/y in
     // scaled window coordinates (the space drawInfo lays out in). A hit toggles
     // that section's collapse and returns true so the click is consumed.
@@ -248,6 +239,8 @@ private:
     bool mSwitchedOn = false;
 
     F32 mTemperatureC = 15.f;
+    F32 mHumidity = 0.5f;
+    F32 mSunUp = 0.f;
 
     // <SS:Nexii> The bolt-from-the-blue storm look-ahead, recomputed every refresh. See the getters.
     F32 mStormApproach = 0.f;

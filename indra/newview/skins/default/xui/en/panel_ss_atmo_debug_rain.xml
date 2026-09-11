@@ -89,6 +89,16 @@
         <button.commit_callback function="SSAtmo.ResetGroup"
          parameter="SSAtmoShadowDebugView,SSAtmoShadowDebugStride" />
     </button>
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="8"
+     height="16"
+     width="382"
+     name="shadow_overlay_check"
+     label="Draw the rain shadow map"
+     tool_tip="Every captured depth texel drawn where it saw the world, in the view picked below" />
     <text
       follows="left|top" layout="topleft"
       left="12" top_pad="8" height="16" width="106"
@@ -143,6 +153,16 @@
      font="SansSerifSmallBold">
         Roof Runoff
     </text>
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     height="16"
+     width="382"
+     name="runoff_overlay_check"
+     label="Draw the roof runoff"
+     tool_tip="The eaves, the water they hold and what they shed, in the stage picked below" />
     <text
       follows="left|top" layout="topleft"
       left="12" top_pad="6" height="16" width="106"

@@ -208,10 +208,14 @@ S32 FSCommon::secondsSinceEpochFromString(const std::string& format, const std::
 
 void FSCommon::applyDefaultBuildPreferences(LLViewerObject* object)
 {
-    if (!object || !object->getRegion())
+    // <SS:Nexii> Local-content objects (Atmo Magic landscape) are authored, not built -
+    // the default build prefs (which send ObjectPermissions/ObjectFlagUpdate/TE updates)
+    // must not touch them.
+    if (!object || !object->getRegion() || object->ssIsLocalContent())
     {
         return;
     }
+    // </SS:Nexii>
 
     LLTextureEntry texture_entry;
     texture_entry.setID(LLUUID(gSavedSettings.getString("FSDefaultObjectTexture")));

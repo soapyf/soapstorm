@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <SS:Nexii> Info views (doc/atmo_magic_debug_views.md): pick ONE curated
+     mode, the world dims, one data layer pops, the legend bottom-left says what
+     the colours mean, and a chart shows what a 3D overlay cannot. This panel is
+     just the picker and its dials now (CHART, design section 6.2): the chart
+     itself (ss_atmo_graph_view) no longer lives here - it moved onto the debug
+     HUD itself, built by SSAtmoInfoView::attach docked to the right of the
+     legend, so it reads beside the world it describes instead of on a tab
+     underneath the floater. The engineering checkboxes on the Overlays tab
+     stay untouched underneath; a mode may drive them (V1 turns the flow arrows
+     on for its near-ground layer) and restores them on the way out. Everything
+     here is read-only: no view ever triggers a build, and V2 never spawns or
+     steers a storm cell (its sibling, the V7 sync console, lives under
+     Advanced > Consoles). Rects follow the stretch rule - explicit left and
+     right, never left_pad with right. -->
+<panel
+ name="debug_views_panel"
+ follows="all"
+ layout="topleft"
+ background_visible="false"
+ border="false"
+ top="0"
+ left="0"
+ height="400"
+ width="412">
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top="8"
+     height="14"
+     width="382"
+     name="views_label"
+     font="SansSerifSmallBold">
+        Info view
+    </text>
+    <check_box
+     control_name="SSAtmoShowInfo"
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     height="16"
+     width="382"
+     name="info_overlay_check"
+     label="Show info overlay"
+     tool_tip="On-screen readout of weather values, the maps&apos; capture health, particle counts, lightning state and the indoor/outdoor probe result. Click an orange heading to collapse that section" />
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="106"
+      name="T_info_view"
+      tool_tip="One curated view at a time. Off leaves every overlay exactly as the Overlays tab has it">
+        Mode:
+    </text>
+    <combo_box
+      control_name="SSAtmoInfoView" name="C_info_view"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="250"
+      tool_tip="Off: no look pass, no legend, no chart. Wind Profile (V1): the altitude wind profile - the boundary-layer curve with rails at 10m, the 1500m boundary-layer top, the deck base and lid and the cirrus band's CURRENT altitude, live speed and heading at each, a hodograph inset, and an in-world wind mast ahead of the camera whose arrow stack twists with the shear. Storm Cells (V2): the storm scheduler's lattice within 12km tinted by potential (energy ramp, the spawn threshold is the tint's floor), alive cells as influence rings coloured by lifecycle stage, squall lines as a bar through their own active members with leading-edge QLCS junction markers, forced/authored cells with a distinct double outline, the hero cell's flyby ribbon (origin - now - death, age ticks, closest approach at the anchor), rotation as orbiting purple arrows, and a 'why not' readout in the legend when the Allow checkboxes are on but nothing spawns. The chart is the active-cell timeline, hero row on top. Deck LOD (V3): the cloud deck's distance LOD ramp - five rings about the camera (sub-count full/2-to-1, far-thinning start, edge-fade start, deck edge) and a coarse grey-tinted tile grid by keep fraction, the legend and chart showing the live puff count against the budget dial and the LOD-predicted (pre-thin, pre-budget) count. Precip &amp; Virga (V4): the last build's distant-rain shaft cells outlined at the deck base and tinted by drive (bright = kept, dim = trimmed by MAX_SHAFTS), a fall-tilt line per kept cell from the deck-base entry point to its landing point (precip's own wind tilt, for comparison against the shaft's own vertical card stack), and the particle rain's handoff ring and ramp band on the ground plane; its chart is the shaft budget bar against MAX_SHAFTS, the drive histogram (kept inside total) and the handoff ramp against camera distance. Weather Cube (V5): a pure chart, no in-world layer - the applied track's day-cycle curves (moisture, convection, temperature, wind speed/heading, shear strength/veer) in the top lane, the derived gates (storm consolidation, puff gloom, anvil ramp, the lightning gate, storm spawn score at the anchor) in the bottom lane, a 'now' cursor tied to the sky's own applied phase, and a marker at every authored storm/precipitation override cue. Lightning (V9): every live strike as the model holds it - the channel node by node, solid where the leader has passed and faint ahead of it, coloured by lifecycle stage; the ground crawl and attachment; the occlusion box when the renderer has hidden a ground show; the deferred scene lights at their true radius and a ring on every strike bright enough to light the cloud deck. Its chart is the strike timeline, and its legend carries the light budgets and, when nothing is striking, the weather's own lightning gate. The same layer is available on its own as the Lightning diagram checkbox on the Overlays tab. Read-only: it never spawns, steers or reorders a cell or a puff">
+        <combo_box.item label="Off" value="0" name="info_view_off" />
+        <combo_box.item label="Wind Profile (V1)" value="1" name="info_view_wind" />
+        <combo_box.item label="Storm Cells (V2)" value="2" name="info_view_storm" />
+        <combo_box.item label="Deck LOD (V3)" value="3" name="info_view_decklod" />
+        <combo_box.item label="Precip &amp; Virga (V4)" value="4" name="info_view_virga" />
+        <combo_box.item label="Weather Cube (V5)" value="5" name="info_view_cube" />
+        <!-- <SS:Nexii> 6, 7 and 8 are deliberately absent, not forgotten: the
+             numbering is settled in ssatmoinfoviewcore.h - 6 is World Field
+             (designed, not built), 7 is the sync console and never a mode at
+             all, 8 is Anatomy (phase 8b). Selecting one would only reach the
+             legend's "not implemented yet" branch, so they stay out of the
+             picker until their views exist. -->
+        <combo_box.item label="Lightning (V9)" value="9" name="info_view_lightning" />
+        <combo_box.item label="Acoustics (V10)" value="10" name="info_view_acoustics" />
+    </combo_box>
+
+    <check_box
+      control_name="SSAtmoInfoViewLook" name="CB_info_look"
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="380"
+      label="Info-view look (warm gray)"
+      tool_tip="Redraws the world under the active view as a warm-gray model: the frame's own luminance mapped onto a clay-to-cream ramp, shaped by ambient occlusion recomputed from depth and normals and by a soft sky-lit hemisphere shade, then faded into a light warm haze with distance. It replaces the old world-dim slider, which only pushed the world toward black. The data overlay, legend and chart always draw on top of it; off leaves the world exactly as rendered" />
+
+    <check_box
+      control_name="SSAtmoInfoViewTileTint" name="CB_tile_tint"
+      follows="left|top" layout="topleft"
+      left="12" right="392" top_pad="6" height="16"
+      label="Tile tints (lattice / LOD diagrams)"
+      tool_tip="Storm Cells (V2)'s lattice-potential tile tint and tile outlines, and Deck LOD (V3)'s keep-fraction tile tint - off by default, since the tile grid can bury the entities sitting on top of it. Also Lightning (V9)'s ground-fire blob discs and its filled scene-light radii - off by default for the same reason. Off still draws every other entity in each view (V2: rings, hero ribbon, vortex icons, line band, pins, labels; V3: the LOD rails and their labels; V9: channels, crawl, attachment, occlusion box, light rings and every label), and swaps each view's legend ramp row for &apos;(tile tint off)&apos;" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="12"
+     height="14"
+     width="382"
+     name="wind_profile_label"
+     font="SansSerifSmallBold">
+        Wind Profile options
+    </text>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_mast_offset"
+      tool_tip="Metres ahead of the camera the wind mast stands. 0 stands it on the camera column itself, which reads best looking straight up">
+        Mast offset:
+    </text>
+    <slider_bar
+      control_name="SSAtmoInfoViewMastOffset" name="SB_mast_offset"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0" max_val="500" increment="10"
+      tool_tip="Metres ahead of the camera the wind mast stands. 0 stands it on the camera column itself, which reads best looking straight up" />
+    <spinner
+      control_name="SSAtmoInfoViewMastOffset" name="S_mast_offset"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="2000" increment="10" decimal_digits="0"
+      tool_tip="Metres ahead of the camera the wind mast stands. 0 stands it on the camera column itself, which reads best looking straight up" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_mast_offset" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoInfoViewMastOffset" />
+    </button>
+    <check_box
+      control_name="SSAtmoInfoViewCompare" name="CB_compare"
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="380"
+      label="Compare exponent sources (cube vs flowmap region vs gradient setting)"
+      tool_tip="Overlays the curves the flowmap's camera-region roughness exponent and the SSAtmoWindFlowGradient fallback WOULD give beside the live weather-cube curve, so which source is live and what each would do is visible at once. Only the cube's curve ever drives the sky" />
+</panel>

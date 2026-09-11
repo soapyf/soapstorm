@@ -54,6 +54,21 @@ uniform vec3 ss_sun_dir;
 uniform vec3  ss_sun_light;
 uniform vec3  ss_moon_light;
 uniform float ss_light_max;
+
+// <SS:Nexii> Atmo Magic: haze altitude falloff (SSHaze::invHeight/pathFactor, sshazecore.h). ss_haze_inv_height is
+// 1/H, H the scale height derived from the authored cirrus/dome height - 0 when off or Atmo is inactive, which
+// reproduces the stock density_dist line exactly. ss_haze_cam_height is the camera's altitude above the owning
+// track's floor (mTrackFloorZ) - presentation-only and per-client by nature (it is the camera's own altitude), so
+// it never feeds world state.
+uniform float ss_haze_inv_height;
+uniform float ss_haze_cam_height;
+
+// <SS:Nexii> ss_haze_up_view: the world-up axis (world Z) expressed in this shader's view/eye space - rel_pos here
+// is a VIEW-space vector (view space is x right, y up, -z forward; see softenLightF.glsl's ss_cshadow note), so
+// rel_pos.y is the CAMERA's up axis, not world altitude, whenever the camera is pitched off level. dot(rel_pos,
+// ss_haze_up_view) recovers the true world Delta-altitude instead. (0,1,0) when Atmo is inactive, which reproduces
+// the old rel_pos.y reading exactly (moot anyway: ss_haze_inv_height is 0 too, so ss_dh is 0 regardless of axis).
+uniform vec3 ss_haze_up_view;
 #endif
 
 float getAmbientClamp() { return 1.0f; }
@@ -65,6 +80,17 @@ void calcAtmosphericVars(vec3 inPositionEye, vec3 light_dir, float ambFactor, ou
                          out vec3 atten)
 {
     vec3 rel_pos = inPositionEye;
+
+    // <SS:Nexii> Atmo Magic: haze altitude falloff - capture the fragment's TRUE world altitude delta from the
+    // camera (dot with ss_haze_up_view, the world-up axis expressed in this view-space frame - rel_pos.y alone is
+    // the CAMERA's up axis, which swims as the camera pitches) BEFORE the stock clamp below mutates rel_pos. The
+    // clamp bounds ray LENGTH (and, for a steep look, flips rel_pos's direction - haze_glow below relies on that
+    // flip happening exactly like stock); the falloff scales density by real altitude. They are different
+    // quantities, so the clamp stays live under SS_ATMO too rather than being skipped - skipping it re-baselines
+    // the haze against a ray length the design's shares table never assumed, inverting the effect on steep views.
+#ifdef SS_ATMO
+    float ss_world_dh = dot(rel_pos, ss_haze_up_view);
+#endif
 
     //(TERRAIN) limit altitude
     if (abs(rel_pos.y) > max_y) rel_pos *= (max_y / rel_pos.y);
@@ -100,7 +126,17 @@ void calcAtmosphericVars(vec3 inPositionEye, vec3 light_dir, float ambFactor, ou
     }
 
     // main atmospheric scattering line integral
+    // <SS:Nexii> Atmo Magic: haze altitude falloff, LOCKSTEP with SSHaze::pathFactor (sshazecore.h). The stock line
+    // is homogeneous (no altitude term); this is the closed-form exponential-atmosphere path integral, which
+    // reduces EXACTLY to the stock line when ss_haze_inv_height is 0 (falloff off / Atmo inactive). ss_world_dh
+    // (captured above, before the clamp) is dHeightM - the fragment's TRUE world altitude minus the camera's.
+#ifdef SS_ATMO
+    float ss_dh = ss_world_dh * ss_haze_inv_height;
+    float ss_t  = (abs(ss_dh) < 1e-4) ? 1.0 : (1.0 - exp(-ss_dh)) / ss_dh;
+    float density_dist = rel_pos_len * density_multiplier * exp(-ss_haze_cam_height * ss_haze_inv_height) * ss_t;
+#else
     float density_dist = rel_pos_len * density_multiplier;
+#endif
 
     // Transparency (-> combined_haze)
     // ATI Bugfix -- can't store combined_haze*density_dist*distance_multiplier in a variable because the ati
@@ -111,7 +147,7 @@ void calcAtmosphericVars(vec3 inPositionEye, vec3 light_dir, float ambFactor, ou
     atten = combined_haze.rgb;
 
     // compute haze glow
-    // <SS:Nexii> The glow's direction tracks the disc (ss_sun_dir), not the lightnorm - lightnorm belongs to the moon below centre-set. See the ss_sun_dir note in skyV.glsl. .yzx puts the world-axes ss_sun_dir into the ogl frame rel_pos and lightnorm share (LLEnvironment::toLightNorm permutes world x,y,z to y,z,x) - see the frame note in skyV.
+    // <SS:Nexii> The glow's direction tracks the disc (ss_sun_dir), not the lightnorm - lightnorm belongs to the moon below centre-set. See the ss_sun_dir note in skyV.glsl. .yzx puts the world-axes ss_sun_dir into the frame rel_pos and lightnorm share here - NOT a genuinely shared "ogl frame": lightnorm is world-permuted only (LLEnvironment::toLightNorm swaps world x,y,z to y,z,x, llenvironment.cpp, never further transformed - see llsettingsvo.cpp), while rel_pos is a VIEW-space vector (this stock dot product has always mixed the two; ss_haze_up_view above is the fix applied only where altitude, not glow direction, is being read out).
 #ifdef SS_ATMO
     vec3 glow_dir = (ss_sun_rise > 0.0) ? ss_sun_dir.yzx : lightnorm.xyz;
 #else

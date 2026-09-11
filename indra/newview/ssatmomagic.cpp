@@ -34,10 +34,18 @@
 #include "ssvolcloud.h"
 #include "sslightning.h"
 #include "sslightningrender.h"
+#include "ssstormcells.h"
 #include "sssurfacefield.h"
-#include "sswhiteout.h"
+#include "ssheightfog.h"
+#include "ssscreenfx.h"
 #include "sswindflow.h"
+#include "ssvortices.h"
 #include "ssworldfield.h"
+#include "ssnavmesh.h"
+#include "ssglreadback.h"
+#include "ssgpucull.h"
+#include "sspreciprenderer.h"
+#include "ssprecipvariants.h"
 
 #include "llviewerobject.h"
 #include "llviewerobjectlist.h"
@@ -50,6 +58,7 @@
 #include "llappviewer.h"
 #include "llaudioengine.h"
 #include "lldate.h"
+#include "llenvironment.h"
 #include "llfetchedgltfmaterial.h"
 #include "llgltfmateriallist.h"
 #include "llfasttimer.h"
@@ -84,77 +93,6 @@ static const F32 REGIME_DWELL_SQUALL    = 30.f;
 static LLTrace::BlockTimerStatHandle FTM_SS_ATMO("Atmo Magic");
 static LLTrace::BlockTimerStatHandle FTM_SS_ATMO_IMPACTS("Impacts");
 
-namespace SSAtmoNoise
-{
-
-// 1D lattice hash to [-1,1].
-static F32 latticeGrad(U32 seed, S32 ix)
-{
-    return hash01(combine(seed, (U32)ix)) * 2.f - 1.f;
-}
-
-// 2D lattice hash to [-1,1].
-static F32 latticeGrad2(U32 seed, S32 ix, S32 iy)
-{
-    return hash01(combine(seed, combine((U32)ix, (U32)iy * 0x27d4eb2fu))) * 2.f - 1.f;
-}
-
-// Quintic fade.
-static inline F32 quintic(F32 t) { return t * t * t * (t * (t * 6.f - 15.f) + 10.f); }
-
-// 1D value noise.
-F32 value1(F32 x, U32 seed)
-{
-    const S32 ix = llfloor(x);
-    const F32 fx = (F32)ix;
-    F32 t = quintic(x - fx);
-    return lerp(latticeGrad(seed, ix), latticeGrad(seed, ix + 1), t);
-}
-
-// 2D value noise.
-F32 value2(F32 x, F32 y, U32 seed)
-{
-    const S32 ix = llfloor(x);
-    const S32 iy = llfloor(y);
-    const F32 fx = (F32)ix;
-    const F32 fy = (F32)iy;
-    F32 tx = quintic(x - fx);
-    F32 ty = quintic(y - fy);
-    F32 a = lerp(latticeGrad2(seed, ix, iy),     latticeGrad2(seed, ix + 1, iy),     tx);
-    F32 b = lerp(latticeGrad2(seed, ix, iy + 1), latticeGrad2(seed, ix + 1, iy + 1), tx);
-    return lerp(a, b, ty);
-}
-
-// 1D fractal noise - the deterministic wobble everything shares.
-F32 fbm1(F32 x, U32 seed, S32 octaves)
-{
-    F32 sum = 0.f, amp = 0.5f, freq = 1.f, norm = 0.f;
-    for (S32 i = 0; i < octaves; ++i)
-    {
-        sum += amp * value1(x * freq, combine(seed, (U32)i));
-        norm += amp;
-        amp *= 0.5f;
-        freq *= 2.03f;
-    }
-    return sum / norm;
-}
-
-// 2D fractal noise.
-F32 fbm2(F32 x, F32 y, U32 seed, S32 octaves)
-{
-    F32 sum = 0.f, amp = 0.5f, freq = 1.f, norm = 0.f;
-    for (S32 i = 0; i < octaves; ++i)
-    {
-        sum += amp * value2(x * freq, y * freq, combine(seed, (U32)i));
-        norm += amp;
-        amp *= 0.5f;
-        freq *= 2.03f;
-    }
-    return sum / norm;
-}
-
-}
-
 static const F32 TRACK_FADE_RATE = 0.45f;
 static const F32 WIND_FADE_RATE  = 0.8f;
 
@@ -167,6 +105,30 @@ SSAtmoMagic::SSAtmoMagic()
 
 SSAtmoMagic::~SSAtmoMagic()
 {
+}
+
+// Release order: the shared-context workers first (they destroy their contexts through the window), then everything holding GL objects, then this singleton's own texture and the precipitation sim.
+void SSAtmoMagic::shutdownGL()
+{
+    if (SSGLReadback::instanceExists())      SSGLReadback::getInstance()->shutdown();
+    if (SSWindFlowMap::instanceExists())     SSWindFlowMap::getInstance()->shutdownGL();
+    if (SSRainShadowMap::instanceExists())   SSRainShadowMap::getInstance()->shutdownGL();
+    if (SSWorldField::instanceExists())      SSWorldField::getInstance()->shutdownGL();
+    if (SSSurfaceField::instanceExists())    SSSurfaceField::getInstance()->releaseGL();
+    if (SSHeightFog::instanceExists())       SSHeightFog::getInstance()->releaseGL();
+    if (SSGPUCull::instanceExists())         SSGPUCull::getInstance()->shutdownGL();
+    if (SSScreenFXPost::instanceExists())    SSScreenFXPost::getInstance()->shutdownGL();
+    if (SSVolCloud::instanceExists())        SSVolCloud::getInstance()->shutdownGL();
+    if (SSLightningRender::instanceExists()) SSLightningRender::getInstance()->shutdownGL();
+    if (SSPrecipRenderer::instanceExists())  SSPrecipRenderer::getInstance()->cleanupGL();
+    if (SSPrecipVariants::instanceExists())  SSPrecipVariants::getInstance()->clearCache();
+    if (SSAtmoEnvApplier::instanceExists())  SSAtmoEnvApplier::getInstance()->releaseDebugLabels();
+    if (instanceExists())
+    {
+        SSAtmoMagic* self = getInstance();
+        self->mSim.reset();
+        self->mRippleTexture = nullptr;
+    }
 }
 
 // The static seed all deterministic weather derives from.
@@ -236,6 +198,10 @@ void SSAtmoMagic::refreshParams()
 
     mTemperatureC = cfg.mTemperatureC;
 
+    // <SS:Nexii> Surface weather slice B: humidity from the weather cube's moisture when an environment resolved one, else the stated fallback (rain implies humid air); reads cfg.mPrecipitation (pre-blend) rather than the mPrecipitation member, which this function has not updated yet this call. Sun-up from the sky's own sun direction, not the track - frost/fog want "is the sun actually up" regardless of which track resolved. [interaction: SSSurfaceField/ssheightfog consumers via humidity()/sunUp()]
+    mHumidity = v3_active ? llclamp(cfg.mMoisture, 0.f, 1.f) : llclamp(llclamp(cfg.mPrecipitation, 0.f, 1.f) * 2.f, 0.f, 1.f);
+    mSunUp = llclamp(LLEnvironment::instance().getSunDirection().mV[VZ], 0.f, 1.f);
+
     // <SS:Nexii> The bolt-from-the-blue look-ahead: when the weather cube's next keyframe is stormier than now and the day phase has run most of the way toward it, a thunderstorm approaches from upwind - lightning starts arriving from that direction before the storm itself does (SSLightning::idle's blue scheduler). Zero without a live environment.
     mStormApproach = 0.f;
     mStormApproachHeading = -1.f;
@@ -271,11 +237,12 @@ void SSAtmoMagic::refreshParams()
     mWindXY.set(mWind.mV[VX], mWind.mV[VY], 0.f);
     mWindSpeed = mWind.magVec();
 
+    // <SS:Nexii> Seeded from the wall clock UNCONDITIONALLY on the first update (doc/atmo_magic_wind_profile.md section 4, gust seed fix): the seed used to wait for the first frame with a non-zero target speed, so the gust phase depended on when in the session the wind first rose - two clients that logged in at different moments of a calm spell disagreed forever after. Now the seed no longer depends on when the wind first rose; what follows is still each client's own eased-speed integration, which is allowed for gusts (feel-only, never positional).
     if (mWindDriftSeeded)
     {
         mWindDrift = fmod(mWindDrift + (F64)mWindSpeed * dt, WIND_DRIFT_WRAP);
     }
-    else if (target_speed > 0.f)
+    else
     {
         mWindDrift = fmod(mNow * (F64)target_speed, WIND_DRIFT_WRAP);
         mWindDriftSeeded = true;
@@ -505,6 +472,29 @@ void SSAtmoMagic::processImpacts()
             continue;
         }
 
+        // <SS:Nexii> Surface weather slice B: near the camera and onto wet/puddled ground, the analytic ring (SSSurfaceField::RingBuffer, drawn in the normal pass) replaces the ripple quad - it is driven by the actual impact so the ring sits where the drop fell. [interaction: SSSurfaceField rings]
+        static LLCachedControl<bool> surface_rings(gSavedSettings, "SSAtmoSurfaceRings", true);
+        if (surface_rings && !impact.mOnWater && !impact.mRunoff && dist < SSSurfaceState::RING_NEAR_M)
+        {
+            const SSSurfaceField::Sample s = SSSurfaceField::getInstance()->sample(impact.mPosAgent);
+            if (s.mPuddle > 0.001f || s.mWet > 0.3f)
+            {
+                SSSurfaceField::getInstance()->noteImpact(impact.mPosAgent, impact.mStrength);
+                // <SS:Nexii> The ring replaces the RIPPLE QUAD, and only that. The crown is the drop's own water thrown back up out of the surface - it is what a landing looks like from the side, it has nothing to do with which way the ring under it is drawn, and the near field is exactly where it is worth seeing. Same finding as the shatter burst below, one effect over.
+                if (ripples && mSim)
+                {
+                    mSim->spawnCrown(impact.mPosAgent, impact.mStrength, impact.mNormal, rng);
+                }
+                // <SS:Nexii> AUDIT (finding 9): the ring replaces the RIPPLE quad only (doc sec 6) - a hail impact's shatter burst is not a ripple and was being silently dropped by this same continue.
+                if (impact.mShatter && mSim)
+                {
+                    mSim->spawnShatter(impact.mPosAgent, impact.mNormal, impact.mVelocity,
+                                       impact.mStrength, rng);
+                }
+                continue;
+            }
+        }
+
         if (ripples && mSim)
         {
             mSim->spawnRipple(impact.mPosAgent, impact.mStrength, impact.mOnWater, impact.mNormal, rng);
@@ -690,12 +680,21 @@ void SSAtmoMagic::idle()
 
     SSSurfaceField::getInstance()->idle(gFrameIntervalSeconds);
 
-    // <SS:Nexii> The whiteout layer's intensity state: regime ramps applied CPU-side, the pass itself draws in the pool loop after the haze.
-    SSWhiteout::getInstance()->idle(gFrameIntervalSeconds);
+    // <SS:Nexii> The height fog layer's intensity state: regime ramps applied CPU-side, the pass itself draws at the start of renderFinalize.
+    SSHeightFog::getInstance()->idle(gFrameIntervalSeconds);
+
+    // <SS:Nexii> The screen-space shell's per-frame state: thermal shock/mirage for the heat shimmer, lens wet/condensation for the lens drops.
+    SSScreenFXPost::getInstance()->idle(gFrameIntervalSeconds);
 
     SSAvatarWet::getInstance()->idle(gFrameIntervalSeconds);
 
     SSLightning::getInstance()->idle(gFrameIntervalSeconds);
+
+    // <SS:Nexii> The storm-cell schedule, re-derived from (seed, wall clock, weather at birth) right before the deck builds, so a consumer in the deck (phase 3) reads this frame's cells; this phase only makes them exist for the debug views. No dt: the schedule is closed-form on mNow.
+    SSStormCells::getInstance()->update();
+
+    // <SS:Nexii> Phase 5: the vortex scheduler, right after the storm cells it children off of are resolved for this frame (doc/atmo_magic_storm_dynamics.md section 4) - childVortex/vortexAt/dust devils, all closed-form on (seed, parent id, slot, mNow); no rendering happens here.
+    SSVortices::getInstance()->update();
 
     SSVolCloud::getInstance()->update(gFrameIntervalSeconds);
 
@@ -1084,6 +1083,11 @@ void SSAtmoMagic::drawInfo()
                                  surface->peakSnow() * 1000.f,
                                  surface->peakPuddle() * 1000.f,
                                  surface->lastTickMS()));
+        // <SS:Nexii> Surface weather slice B: the new state channels and the resolved looks - what the field's Mix currently shows, not what the preset authored (a mix in progress shows the old look until it promotes).
+        surface_section.lines.push_back(llformat("state      ice %.2f   frost %.2f   stain %.2f   liquid opacity %.2f   deposit tint %.2f/%.2f/%.2f",
+                                 surface->peakIce(), surface->peakFrost(), surface->peakStain(),
+                                 surface->liquidLook().mOpacity,
+                                 surface->depositLook().mTint.r, surface->depositLook().mTint.g, surface->depositLook().mTint.b));
     }
 
     // <SS:Nexii> The shared world field: capture health, the state of the air flood, and what its labels say about the camera's own cell.
@@ -1092,31 +1096,39 @@ void SSAtmoMagic::drawInfo()
         SSWorldField* field = SSWorldField::getInstance();
         const LLViewerRegion* cam_region = LLWorld::getInstance()->getRegionFromPosAgent(cam);
 
-        field_section.lines.push_back(llformat("capture    %d tiles, %d cells/axis, %.0fm bands, %d cap",
+        field_section.lines.push_back(llformat("grids      %d regions, %d cells/axis (%.2f m), ceiling %.0f m",
                                  field->tileCount(), field->resolution(),
-                                 (F32)field->bandHeight(), field->bandCount()));
-        field_section.lines.push_back(llformat("builds     %u total, %u dirty rects, last %.1f ms",
-                                 field->captureCount(), field->dirtyCaptureCount(),
-                                 field->lastCaptureMS()));
+                                 field->cellSize(), field->ceilingAt(cam)));
+        field_section.lines.push_back(llformat("builds     %u total, last %.1f ms on the worker",
+                                 field->gridBuilds(), field->lastBuildMS()));
 
         const F64 age = field->tileAge(cam);
         if (age >= 0.0)
         {
-            field_section.lines.push_back(llformat("tile       %.0fs old, %d bands live",
-                                     age, field->effectiveBands(cam)));
+            field_section.lines.push_back(llformat("grid       %.0fs old, %d band sheets",
+                                     age, field->sheetsAt(cam)));
         }
 
         const U8 air = field->airLabelAt(cam);
-        static const char* AIR_NAME[] = { "solid", "outside", "interior", "unknown" };
+        static const char* AIR_NAME[] = { "solid", "outdoors", "sheltered", "interior", "unknown" };
         const U32 air_depth = field->airDepthAt(cam);
-        field_section.lines.push_back(llformat("air        %s, depth %s",
-                                 AIR_NAME[llclamp((S32)air, 0, 3)],
+        field_section.lines.push_back(llformat("air        %s, %s",
+                                 AIR_NAME[llclamp((S32)air, 0, 4)],
                                  air_depth == SSWorldField::AIR_DEPTH_UNREACHED
-                                     ? "n/a" : llformat("%u cells", air_depth).c_str()));
+                                     ? "not reached from outdoors" : llformat("%u m covered from the opening", air_depth).c_str()));
         if (cam_region)
         {
-            field_section.lines.push_back(llformat("flood      %.0f%% of cells labelled",
-                                     field->airCoverage(cam_region->getHandle()) * 100.f));
+            field_section.lines.push_back(llformat("surveyed   %.0f%% of cells covered by a band sheet%s",
+                                     field->airCoverage(cam_region->getHandle()) * 100.f,
+                                     field->gridStale(cam_region->getHandle()) ? ", REBUILD PENDING" : ""));
+        }
+        // <SS:Nexii> The navmesh's one stat line: what it holds and what it still owes.
+        if (SSNavMesh::instanceExists() && SSNavMesh::getInstance()->active())
+        {
+            SSNavMesh* nav = SSNavMesh::getInstance();
+            field_section.lines.push_back(llformat("navmesh    %d columns, %d bands, %d to build, %u polys, %.1f MB",
+                                     nav->columnCount(), nav->bandCount(), nav->pendingCount() + nav->inFlightCount(),
+                                     nav->polyCount(), nav->layerBytes() / 1048576.0));
         }
     }
 
@@ -1157,10 +1169,14 @@ void SSAtmoMagic::drawInfo()
             snow_section.lines.push_back("           no lift: is snow settled, is the wind over SSAtmoSnowLiftLo?");
         }
 
-        SSWhiteout* whiteout = SSWhiteout::getInstance();
-        snow_section.lines.push_back(llformat("whiteout  in %.2f   squall %.2f   drift %.2f   falloff %.0fm",
-                                 whiteout->intensity(), whiteout->squallPart(),
-                                 whiteout->liftPart(), whiteout->falloff()));
+        SSHeightFog* fog = SSHeightFog::getInstance();
+        snow_section.lines.push_back(llformat("height fog in %.2f   ground %.2f   precip %.2f   squall %.2f   lift %.2f   mist %.2f   falloff %.0fm",
+                                 fog->intensity(), fog->groundPart(), fog->precipPart(),
+                                 fog->squallPart(), fog->liftPart(), fog->mistPart(), fog->falloff()));
+
+        SSScreenFXPost* fx = SSScreenFXPost::getInstance();
+        snow_section.lines.push_back(llformat("screen fx  shock %.2f   mirage %.2f   lens %.2f   fog %.2f",
+                                 fx->shock(), fx->mirage(), fx->lensWet(), fx->lensFog()));
     }
 
     // <SS:Nexii> Lightning on its own heading: the draw, segment and charge stats are render debug, not audio.
@@ -1203,6 +1219,16 @@ void SSAtmoMagic::drawInfo()
     }
     audio_section.lines.push_back(llformat("walls      %d hit   avg %.1fm   blend %.2f",
                              audio->wallCount(), audio->wallDistance(), audio->coverBlend()));
+    {
+        const F32 enc = audio->enclosure();
+        audio_section.lines.push_back(llformat("spectrum   %s   shelter budget %s",
+                                 enc < 0.f ? "n/a (probes)"
+                                           : llformat("%.2f %s", enc,
+                                                      enc < 0.15f ? "outdoors"
+                                                    : enc < 0.5f  ? "sheltered"
+                                                                  : "enclosed").c_str(),
+                                 audio->isInterior() ? "spent (sealed)" : "live"));
+    }
     for (S32 self = 1; self >= 0; --self)
     {
         const SSSoundscape::StepDebug& st = audio->lastStep(self != 0);
@@ -1251,6 +1277,12 @@ void SSAtmoMagic::drawInfo()
                                     st.mStepGap,
                                     st.mStepGap > 0.01f ? 1.f / st.mStepGap : 0.f,
                                     st.mStepDropped));
+            // <SS:Nexii> The footfall detector's inputs: each foot's body-frame offset along the direction of travel (metres, + is ahead), '^' while that foot is swinging forward, and the
+            // classified locomotion. A foot that never alternates between '^' and stance while walking is a detector that silently produces nothing. gain is the speed-scaled step level.
+            audio_section.lines.push_back(llformat("  gait     L %+.2f%s   R %+.2f%s   loco %d   gain %.2f",
+                                    st.mFootS[0], st.mFootSwing[0] ? " ^" : "  ",
+                                    st.mFootS[1], st.mFootSwing[1] ? " ^" : "  ",
+                                    st.mLoco, st.mSpeedGain));
         }
     }
 

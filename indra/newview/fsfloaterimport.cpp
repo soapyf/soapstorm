@@ -1152,6 +1152,12 @@ void FSFloaterImport::postLink()
 
 void FSFloaterImport::setPrimPosition(U8 type, LLViewerObject* object, LLVector3 position, LLQuaternion rotation, LLVector3 scale)
 {
+    // <SS:Nexii> Local-content objects (Atmo Magic landscape) are never importer targets.
+    if (!object || object->ssIsLocalContent())
+    {
+        return;
+    }
+    // </SS:Nexii>
     gMessageSystem->newMessage(_PREHASH_MultipleObjectUpdate);
     gMessageSystem->nextBlockFast(_PREHASH_AgentData);
     gMessageSystem->addUUIDFast(_PREHASH_AgentID, gAgentID);

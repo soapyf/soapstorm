@@ -99,6 +99,9 @@ public:
     void spawnRipple(const LLVector3& pos_agent, F32 strength, bool on_water,
                      const LLVector3& normal, SSRandStream& rng);
 
+    // The splash crown alone, for the near-camera landings whose ring is drawn analytically by the surface pass instead of as a quad.
+    void spawnCrown(const LLVector3& pos_agent, F32 strength, const LLVector3& normal, SSRandStream& rng);
+
     void spawnDrip(const LLVector3& lip_agent, const LLVector3& out_dir,
                    const LLVector3& land_agent, F32 volume, SSRandStream& rng);
 

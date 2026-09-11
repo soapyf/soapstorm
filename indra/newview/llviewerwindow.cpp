@@ -2700,6 +2700,9 @@ void LLViewerWindow::shutdownGL()
     gSky.cleanup();
     stop_glerror();
 
+    SSAtmoMagic::shutdownGL(); // <SS:Nexii> Atmo GL holders release here, before the pipeline and texture list go
+    stop_glerror();
+
     LL_INFOS() << "Cleaning up pipeline" << LL_ENDL;
     gPipeline.cleanup();
     stop_glerror();

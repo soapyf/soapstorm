@@ -111,12 +111,16 @@
 #include "llsceneview.h"
 #include "llscenemonitor.h"
 #include "llselectmgr.h"
+#include "ssatmolandscape.h"          // <SS:Nexii> Duplicate for local landscape records
+#include "ssatmolandscapeobject.h"
+#include <algorithm>
 #include "llsidepanelappearance.h"
 #include "llspellcheckmenuhandler.h"
 #include "llstatusbar.h"
 #include "llterrainpaintmap.h"
 #include "lltextureview.h"
 #include "ssstatsview.h" // <SS:Nexii>
+#include "ssatmosynconsole.h" // <SS:Nexii> Atmo Magic V7 sync console
 #include "lltoolbarview.h"
 #include "lltoolcomp.h"
 #include "lltoolmgr.h"
@@ -193,6 +197,62 @@ using namespace LLAvatarAppearanceDefines;
 typedef LLPointer<LLViewerObject> LLViewerObjectPtr;
 
 static std::unordered_map<std::string, LLStringExplicit> sDefaultItemLabels;
+
+// <SS:Nexii> Atmo Magic local landscape objects have no simulator, no inventory and no permissions; every context-menu/enable callback that means a server round-trip (Take, Buy, Pay, Return, Open, Touch, Sit, Wear, scripts, Save as, Report Abuse, Block, Profile, pathfinding "show in") must come back false the moment any selected object is local content. See doc/atmo_landscape/design_synthesis.md section 15.
+static bool ss_selection_has_local_content()
+{
+    LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
+    for (LLObjectSelection::iterator iter = selection->begin(); iter != selection->end(); ++iter)
+    {
+        LLSelectNode* node = *iter;
+        LLViewerObject* object = node ? node->getObject() : NULL;
+        if (object && object->ssIsLocalContent())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// <SS:Nexii> Build > Object > Duplicate: a stock selection duplicates through the sim; a local landscape selection duplicates its RECORD (one copy per linkset, whichever parts were selected), the sim never hears of it.
+static void ss_duplicate_selection()
+{
+    if (!ss_selection_has_local_content())
+    {
+        LLSelectMgr::getInstance()->duplicate();
+        return;
+    }
+    std::vector<LLUUID> records;
+    LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
+    for (LLObjectSelection::iterator iter = selection->begin(); iter != selection->end(); ++iter)
+    {
+        LLSelectNode* node = *iter;
+        const SSAtmoLandscapeObject* landscape = node ? dynamic_cast<const SSAtmoLandscapeObject*>(node->getObject()) : nullptr;
+        if (landscape && std::find(records.begin(), records.end(), landscape->recordId()) == records.end())
+        {
+            records.push_back(landscape->recordId());
+        }
+    }
+    for (const LLUUID& record_id : records)
+    {
+        std::string reason;
+        if (SSAtmoLandscapeWorld::getInstance()->duplicateRecord(record_id, reason) < 0)
+        {
+            LLNotificationsUtil::add("GenericAlert", LLSD().with("MESSAGE", std::string("The landscape object could not be duplicated: ") + reason));
+        }
+    }
+}
+
+// Link/Unlink have no client-side meaning for local content (nothing client-side can be unlinked, per doc/atmo_landscape/design_synthesis.md); LLSelectMgr::enableLinkObjects/enableUnlinkObjects live in llselectmgr.cpp, so the gate goes here at the call site instead.
+static bool ss_tools_enable_link()
+{
+    return !ss_selection_has_local_content() && LLSelectMgr::getInstance()->enableLinkObjects();
+}
+static bool ss_tools_enable_unlink()
+{
+    return !ss_selection_has_local_content() && LLSelectMgr::getInstance()->enableUnlinkObjects();
+}
+// </SS:Nexii>
 
 LLVOAvatar* find_avatar_from_object(LLViewerObject* object);
 LLVOAvatar* find_avatar_from_object(const LLUUID& object_id);
@@ -836,6 +896,10 @@ class LLAdvancedToggleConsole : public view_listener_t
         {
             toggle_visibility(gSSStatsView);
         }
+        else if ("atmo sync" == console_type)
+        {
+            toggle_visibility(gSSAtmoSyncConsole); // <SS:Nexii> Atmo Magic V7 sync console
+        }
         // </SS:Nexii>
 
         return true;
@@ -871,6 +935,10 @@ class LLAdvancedCheckConsole : public view_listener_t
         else if ("soapstorm" == console_type)
         {
             new_value = get_visibility(gSSStatsView);
+        }
+        else if ("atmo sync" == console_type)
+        {
+            new_value = get_visibility(gSSAtmoSyncConsole); // <SS:Nexii> Atmo Magic V7 sync console
         }
         // </SS:Nexii>
 
@@ -3497,6 +3565,9 @@ class LLObjectDerender : public view_listener_t
 // <FS:CR> FIRE-10082 - Don't enable derendering own attachments when RLVa is enabled
 bool enable_derender_object()
 {
+    // <SS:Nexii> Owner verdict: Derender is not useful for local content (it already has a Delete that removes the record) - hide it here too.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
     return (!rlv_handler_t::isEnabled());
 }
 // </FS:CR>
@@ -3695,6 +3766,9 @@ class LLObjectEnableReportAbuse : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
+        // <SS:Nexii> Report Abuse files a server-side report against a real object; local content has no abuse-report target.
+        if (ss_selection_has_local_content()) return false;
+        // </SS:Nexii>
         bool new_value = LLSelectMgr::getInstance()->getSelection()->getObjectCount() != 0;
         return new_value;
     }
@@ -3825,6 +3899,9 @@ static LLStringExplicit get_default_item_label(const std::string& item_name)
 bool enable_object_touch(LLUICtrl* ctrl)
 {
     bool new_value = false;
+    // <SS:Nexii> Touch is a server message; local content has no simulator to send it to.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
     LLViewerObject* obj = LLSelectMgr::getInstance()->getSelection()->getPrimaryObject();
     if (obj)
     {
@@ -3915,6 +3992,9 @@ void handle_object_open()
 
 bool enable_object_inspect()
 {
+    // <SS:Nexii> "Profile" opens the server-side object profile floater; meaningless for local content.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
     LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
     LLViewerObject* selected_objectp = selection->getFirstRootObject();
     return selected_objectp != NULL;
@@ -3965,6 +4045,9 @@ bool enable_object_edit_gltf_material()
 
 bool enable_object_open()
 {
+    // <SS:Nexii> Local content holds no inventory; there is nothing for LLFloaterOpenObject to open.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
     // Look for contents in root object, which is all the LLFloaterOpenObject
     // understands.
     LLViewerObject* obj = LLSelectMgr::getInstance()->getSelection()->getPrimaryObject();
@@ -4264,6 +4347,9 @@ bool enable_mute_particle()
 
 bool enable_object_select_in_pathfinding_linksets()
 {
+    // <SS:Nexii> Local content is never in the region's pathfinding linkset table.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
     return LLPathfindingManager::getInstance()->isPathfindingEnabledForCurrentRegion() && LLSelectMgr::getInstance()->selectGetEditableLinksets();
 }
 
@@ -4274,6 +4360,9 @@ bool visible_object_select_in_pathfinding_linksets()
 
 bool enable_object_select_in_pathfinding_characters()
 {
+    // <SS:Nexii> Local content is never in the region's pathfinding character table.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
     return LLPathfindingManager::getInstance()->isPathfindingEnabledForCurrentRegion() &&  LLSelectMgr::getInstance()->selectGetViewableCharacters();
 }
 
@@ -4383,6 +4472,9 @@ bool enable_has_attachments()
 
 bool enable_object_mute()
 {
+    // <SS:Nexii> Blocking is a mute-list entry keyed to a server object/avatar id; meaningless for local content.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
     LLViewerObject* object = LLSelectMgr::getInstance()->getSelection()->getPrimaryObject();
     if (!object) return false;
 
@@ -4429,6 +4521,9 @@ bool enable_object_mute()
 
 bool enable_object_unmute()
 {
+    // <SS:Nexii> Local content can never be on the mute list in the first place.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
     LLViewerObject* object = LLSelectMgr::getInstance()->getSelection()->getPrimaryObject();
     if (!object) return false;
 
@@ -5090,6 +5185,9 @@ void append_aggregate(std::string& string, const LLAggregatePermissions& ag_perm
 
 bool enable_buy_object()
 {
+    // <SS:Nexii> Local content is never for sale; there is no simulator transaction to run.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
     // In order to buy, there must only be 1 purchaseable object in
     // the selection manager.
     if(LLSelectMgr::getInstance()->getSelection()->getRootObjectCount() != 1) return false;
@@ -5414,6 +5512,9 @@ bool enable_move_lock()
 
 bool enable_script_info()
 {
+    // <SS:Nexii> Local content holds no scripts; nothing for Script Info to report.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
     return (!LLSelectMgr::getInstance()->getSelection()->isEmpty()
             && enable_bridge_function());
 }
@@ -6321,6 +6422,17 @@ static bool get_derezzable_objects(
             }
             break;
         }
+
+        // <SS:Nexii> Local-content objects (Atmo Magic landscape) cannot be derezzed -
+        // they exist only in this viewer, on this environment asset. Skip local content so
+        // Take / Take Copy / Delete / Return / Save Into Task all resolve against real
+        // objects only (and never busy-spin the client derezzing a phantom).
+        if (object->ssIsLocalContent())
+        {
+            can_derez_current = false;
+        }
+        // </SS:Nexii>
+
         if(can_derez_current)
         {
             found = true;
@@ -6572,6 +6684,12 @@ class LLObjectEnableReturn : public view_listener_t
             return false;
         }
 // [/RLVa:KB]
+        // <SS:Nexii> Return sends the object back to its owner via the simulator; local content has neither. Checked ahead of the godlike bypass below, which would otherwise ignore can_derez()'s own local-content gate.
+        if (ss_selection_has_local_content())
+        {
+            return false;
+        }
+        // </SS:Nexii>
 #ifdef HACKED_GODLIKE_VIEWER
         bool new_value = true;
 #else
@@ -6788,6 +6906,9 @@ bool confirm_take_separate(const LLSD &notification, const LLSD &response, LLObj
 // one item selected can be copied to inventory.
 bool enable_take()
 {
+    // <SS:Nexii> Take derezzes the object into inventory via the simulator; local content has no inventory home to go to.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
 //  if (sitting_on_selection())
 // [RLVa:KB] - Checked: 2010-03-24 (RLVa-1.2.0e) | Modified: RLVa-1.0.0b
     if ( (sitting_on_selection()) || ((rlv_handler_t::isEnabled()) && (!rlvCanDeleteOrReturn())) )
@@ -8662,6 +8783,9 @@ bool enable_pay_avatar()
 
 bool enable_pay_object()
 {
+    // <SS:Nexii> Paying an object is a currency transaction with the simulator; local content has none.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
     LLViewerObject* object = LLSelectMgr::getInstance()->getSelection()->getPrimaryObject();
     if( object )
     {
@@ -8679,6 +8803,9 @@ bool enable_pay_object()
 
 bool enable_object_stand_up()
 {
+    // <SS:Nexii> Sitting is a simulator concept (agent update + animation state); local content has no sit target.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
     // 'Object Stand Up' menu item is enabled when agent is sitting on selection
 //  return sitting_on_selection();
 // [RLVa:KB] - Checked: 2010-07-24 (RLVa-1.2.0g) | Added: RLVa-1.2.0g
@@ -8688,6 +8815,9 @@ bool enable_object_stand_up()
 
 bool enable_object_sit(LLUICtrl* ctrl)
 {
+    // <SS:Nexii> Sit here sends the agent a simulator sit request; local content has no sit target.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
     // 'Object Sit' menu item is enabled when agent is not sitting on selection
     bool sitting_on_sel = sitting_on_selection();
     if (!sitting_on_sel)
@@ -9827,6 +9957,9 @@ bool object_selected_and_point_valid(const LLSD& sdParam)
 
 bool object_is_wearable()
 {
+    // <SS:Nexii> Wear/Add attach a real inventory object to the avatar; local content is not in inventory.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
     if (!isAgentAvatarValid())
     {
         return false;
@@ -10702,6 +10835,9 @@ class LLSomethingSelectedNoHUD : public view_listener_t
 
 static bool is_editable_selected()
 {
+    // <SS:Nexii> Drives Compile LSL/Mono, Reset/Run/Stop/Remove Scripts; local content holds no scripts to act on.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
 // [RLVa:KB] - Checked: 2010-09-28 (RLVa-1.2.1f) | Modified: RLVa-1.0.5a
     // Changed for Firestorm because of script reset function in object menus (see FIRE-8213)
     if (rlv_handler_t::isEnabled())
@@ -10759,6 +10895,9 @@ class LLEditableSelectedMono : public view_listener_t
 
 bool enable_object_take_copy()
 {
+    // <SS:Nexii> Take Copy derezzes a copy into inventory via the simulator; local content has neither.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
     bool all_valid = false;
     if (LLSelectMgr::getInstance())
     {
@@ -10842,6 +10981,9 @@ class LLToolsEnableSaveToObjectInventory : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
+        // <SS:Nexii> Local content holds no inventory (task inventory) to save an item into.
+        if (ss_selection_has_local_content()) return false;
+        // </SS:Nexii>
         bool new_value = enable_save_into_task_inventory();
         return new_value;
     }
@@ -12632,6 +12774,9 @@ void toggleTeleportHistory()
 // <FS:Techwolf Lupindo> export
 bool enable_export_object()
 {
+    // <SS:Nexii> Local content has no server-side mesh/texture asset chain to export a copy of.
+    if (ss_selection_has_local_content()) return false;
+    // </SS:Nexii>
     for (LLObjectSelection::root_iterator iter = LLSelectMgr::getInstance()->getSelection()->root_begin();
          iter != LLSelectMgr::getInstance()->getSelection()->root_end(); iter++)
     {
@@ -13097,8 +13242,8 @@ void initialize_menus()
 
     view_listener_t::addMenu(new LLToolsEnableToolNotPie(), "Tools.EnableToolNotPie");
     view_listener_t::addMenu(new LLToolsEnableSelectNextPart(), "Tools.EnableSelectNextPart");
-    enable.add("Tools.EnableLink", boost::bind(&LLSelectMgr::enableLinkObjects, LLSelectMgr::getInstance()));
-    enable.add("Tools.EnableUnlink", boost::bind(&LLSelectMgr::enableUnlinkObjects, LLSelectMgr::getInstance()));
+    enable.add("Tools.EnableLink", boost::bind(&ss_tools_enable_link)); // <SS:Nexii> was LLSelectMgr::enableLinkObjects directly; wrapped to also gate on local content.
+    enable.add("Tools.EnableUnlink", boost::bind(&ss_tools_enable_unlink)); // <SS:Nexii> was LLSelectMgr::enableUnlinkObjects directly; wrapped to also gate on local content.
     view_listener_t::addMenu(new LLToolsEnableBuyOrTake(), "Tools.EnableBuyOrTake");
     enable.add("Tools.EnableTakeCopy", boost::bind(&enable_object_take_copy));
     enable.add("Tools.EnableCopySeparate", boost::bind(&enable_take_copy_objects));
@@ -13451,7 +13596,7 @@ void initialize_menus()
     view_listener_t::addMenu(new LLObjectAttachToAvatar(true), "Object.AttachToAvatar");
     view_listener_t::addMenu(new LLObjectAttachToAvatar(false), "Object.AttachAddToAvatar");
     view_listener_t::addMenu(new LLObjectReturn(), "Object.Return");
-    commit.add("Object.Duplicate", boost::bind(&LLSelectMgr::duplicate, LLSelectMgr::getInstance()));
+    commit.add("Object.Duplicate", boost::bind(&ss_duplicate_selection));    // <SS:Nexii> branches to the landscape record copy for local content
     view_listener_t::addMenu(new LLObjectReportAbuse(), "Object.ReportAbuse");
     view_listener_t::addMenu(new LLObjectMute(), "Object.Mute");
     view_listener_t::addMenu(new LLObjectDerender(), "Object.Derender");

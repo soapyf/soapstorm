@@ -14,7 +14,32 @@
          own environment. Most systems below are independent once the engine is
          on; the wind flow rows are its consumers, so the master wise they only
          matter while SSAtmoWindFlow is on. Every row is a live setting - a
-         checkbox here is the same control as the one in the Simulation floater. -->
+         checkbox here is the same control as the one in the Simulation floater.
+
+         The body is taller than the tab's own 480-tall host (the last rows sit
+         past y=600), so it lives in a scroll_container the way the Simulation
+         floater's own body does - the outer panel here stays a fixed 480 to
+         match every sibling preferences panel; only the inner one scrolls. -->
+    <scroll_container
+     name="soapstorm_atmo_scroll"
+     follows="all"
+     layout="topleft"
+     left="0"
+     top="0"
+     height="480"
+     width="540"
+     opaque="false"
+     reserve_scroll_corner="false">
+    <panel
+     name="soapstorm_atmo_scroll_panel"
+     follows="left|top"
+     layout="topleft"
+     background_visible="false"
+     border="false"
+     left="0"
+     top="0"
+     height="640"
+     width="540">
 
     <!-- ===== Weather engine ===== -->
     <text
@@ -169,17 +194,6 @@
      tool_tip="Eaves and overhangs drip into the street below while it is raining."
      top_pad="4"
      width="500" />
-<check_box
-     control_name="SSAtmoRunoff"
-     follows="left|top"
-     height="16"
-     label="Shed collected rain off roof edges"
-     layout="topleft"
-     left="10"
-     name="atmo_runoff_prefs"
-     tool_tip="Eaves and overhangs drip into the street below while it is raining."
-     top_pad="4"
-     width="500" />
 
     <!-- ===== Wet, snow & whiteout materials ===== -->
     <text
@@ -228,14 +242,69 @@
      top_pad="4"
      width="500" />
     <check_box
-     control_name="SSAtmoWhiteout"
+     control_name="SSAtmoSurfaceRings"
      follows="left|top"
      height="16"
-     label="Render the snow whiteout fog"
+     label="Ripple rings on nearby puddles"
+     layout="topleft"
+     left="10"
+     name="atmo_surfacerings_prefs"
+     tool_tip="Puddles within a few metres of the camera show the analytic ring from each rain impact the simulation actually landed, not just the drift ripple quads."
+     top_pad="4"
+     width="480" />
+    <check_box
+     control_name="SSAtmoSurfaceIce"
+     follows="left|top"
+     height="16"
+     label="Freeze puddles and wet ground below zero"
+     layout="topleft"
+     left="10"
+     name="atmo_surfaceice_prefs"
+     tool_tip="Below freezing, puddles glaze into frosted-glass ice and wet films go slick. Off keeps the wet look regardless of temperature."
+     top_pad="4"
+     width="500" />
+    <check_box
+     control_name="SSAtmoSurfaceFrost"
+     follows="left|top"
+     height="16"
+     label="Grow hoar frost on cold humid nights"
+     layout="topleft"
+     left="10"
+     name="atmo_surfacefrost_prefs"
+     tool_tip="Exposed surfaces grow a white frost lift and grain on cold, humid nights with no rain needed, and sublimate off in morning sun."
+     top_pad="4"
+     width="500" />
+    <check_box
+     control_name="SSAtmoHeightFog"
+     follows="left|top"
+     height="16"
+     label="Render the height fog layer (whiteout, ground fog, rain veil)"
      layout="topleft"
      left="10"
      name="atmo_whiteout_prefs"
-     tool_tip="The local, height-limited volumetric fog that collapses visibility inside the squall and the ground blizzard. Off keeps the storm but never the veil."
+     tool_tip="The screen-space veil that sums ground fog, the precipitation veil, the old squall/drift-band whiteout, and a coloured mist toward standing liquid. Off keeps the storm but never the veil."
+     top_pad="4"
+     width="500" />
+    <check_box
+     control_name="SSAtmoHeatShimmer"
+     follows="left|top"
+     height="16"
+     label="Heat shimmer after sudden warmth and on hot sunny days"
+     layout="topleft"
+     left="10"
+     name="atmo_heatshimmer_prefs"
+     tool_tip="A mirage ripple over distant, low-screen pixels after a thermal shock (a sudden warm-up) or under strong midday sun."
+     top_pad="4"
+     width="500" />
+    <check_box
+     control_name="SSAtmoLensDrops"
+     follows="left|top"
+     height="16"
+     label="Rain drops on the camera lens"
+     layout="topleft"
+     left="10"
+     name="atmo_lensdrops_prefs"
+     tool_tip="A rain-on-glass post pass: static drops stuck to the lens, moving drops with trails, and condensation the trails wipe clear."
      top_pad="4"
      width="500" />
 
@@ -292,12 +361,14 @@
      control_name="SSWorldField"
      follows="left|top"
      height="16"
-     label="Build the shared solid-structure field"
+     label="Classify the shared solid-structure field"
      layout="topleft"
      left="10"
      name="worldfield_enabled_prefs"
-     tool_tip="One region-anchored capture of the build's solid structure that the surface, coverage and future channels read instead of each capturing its own. Builds nothing until a channel needs it."
+     tool_tip="The per-cell classification of the census navmesh's own rasterization - solid spans, outdoors/sheltered/interior air, acoustic probes - that the surface, coverage, fog and audio channels read instead of each capturing or raycasting its own. Needs the census navmesh."
      top_pad="6"
      width="500" />
 
+    </panel>
+    </scroll_container>
 </panel>

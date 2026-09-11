@@ -141,3 +141,7 @@ local_tools/
 .venv/
 
 
+
+# <SS:Nexii> The vendored recastnavigation library must ship its build file and licence despite the *.txt rule above.
+!indra/recastnavigation/CMakeLists.txt
+!indra/recastnavigation/License.txt

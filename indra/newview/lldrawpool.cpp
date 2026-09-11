@@ -50,6 +50,7 @@
 #include "llviewercamera.h"
 #include "lldrawpoolwlsky.h"
 #include "llglslshader.h"
+#include "ssgpucull.h" // <SS:Nexii> GPU frustum + occlusion culling
 #include "llglcommonfunc.h"
 #include "llvoavatar.h"
 #include "llviewershadermgr.h"
@@ -395,6 +396,12 @@ LLRenderPass::~LLRenderPass()
 void LLRenderPass::renderGroup(LLSpatialGroup* group, U32 type, bool texture)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
+
+    if (!SSGPUCull::getInstance()->shouldDrawGroup(group))
+    {
+        return; // <SS:Nexii> GPU culling: the compute pass marked this group hidden last frame
+    }
+
     LLSpatialGroup::drawmap_elem_t& draw_info = group->mDrawMap[type];
 
     for (LLSpatialGroup::drawmap_elem_t::iterator k = draw_info.begin(); k != draw_info.end(); ++k)
@@ -440,6 +447,11 @@ void LLRenderPass::pushBatches(U32 type, bool texture, bool batch_textures)
             LLDrawInfo* pparams = *i;
             LLCullResult::increment_iterator(i, end);
 
+            if (!SSGPUCull::getInstance()->shouldDrawInfo(pparams))
+            {
+                continue; // <SS:Nexii> GPU culling: parent group reported hidden
+            }
+
             pushBatch(*pparams, texture, batch_textures);
         }
     }
@@ -458,6 +470,11 @@ void LLRenderPass::pushUntexturedBatches(U32 type)
     {
         LLDrawInfo* pparams = *i;
         LLCullResult::increment_iterator(i, end);
+
+        if (!SSGPUCull::getInstance()->shouldDrawInfo(pparams))
+        {
+            continue; // <SS:Nexii> GPU culling: parent group reported hidden
+        }
 
         pushUntexturedBatch(*pparams);
     }

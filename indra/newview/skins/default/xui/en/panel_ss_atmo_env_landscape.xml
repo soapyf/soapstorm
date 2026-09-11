@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<panel
+ border="true"
+ follows="all"
+ label="Landscape"
+ layout="topleft"
+ left="0"
+ name="panel_ss_atmo_env_landscape"
+ top="0"
+ width="580"
+ height="1180">
+
+    <!-- <SS:Nexii> Atmo Magic: Landscape tab - prim and mesh scenery owned by the
+         environment instead of the region. Scenery is made by CONVERSION: rez and
+         build a linkset in world with the stock tools, select it, and press Convert
+         selection - the viewer captures the whole linkset (volume params, per-part
+         transforms, faces, light and flexi) into the active track and sends the
+         original to your Trash.
+
+         The scenery itself is then edited with the normal build tools: select-in-world,
+         then move/rotate/scale and drop textures on faces exactly like any object.
+         The list here manages membership: convert, delete, lock-to-region, and
+         jump-to-selection. The lock toggle re-anchors the scenery to the region
+         origin on every region crossing (estate copies render identically) or pins
+         it to one fixed global spot. -->
+
+    <scroll_list
+     follows="all"
+     layout="topleft"
+     left="10"
+     name="landscape_list"
+     top="10"
+     height="1020"
+     multi_select="false"
+     width="560">
+        <columns>
+            <column
+             label="Name"
+             name="name"
+             width="220" />
+            <column
+             label="Mesh"
+             name="mesh"
+             width="100" />
+            <column
+             label="Position"
+             name="mode"
+             width="120" />
+        </columns>
+    </scroll_list>
+
+    <button
+     follows="bottom|left"
+     height="24"
+     label="Select in world"
+     layout="topleft"
+     left="10"
+     name="landscape_select_button"
+     tool_tip="Select this scenery with the normal selection tools - edit it like any object"
+     top="1040"
+     width="130" />
+
+    <button
+     follows="bottom|left"
+     height="24"
+     label="Lock to region"
+     layout="topleft"
+     left="150"
+     name="landscape_lock_button"
+     tool_tip="Toggle between region-locked (scenery sits at the same spot relative to every region of the estate) and free (pinned to one global position)"
+     top="1040"
+     width="130" />
+
+    <button
+     follows="bottom|left"
+     height="24"
+     label="Delete"
+     layout="topleft"
+     left="290"
+     name="landscape_delete_button"
+     tool_tip="Remove this scenery from the environment"
+     top="1040"
+     width="90" />
+
+    <button
+     follows="bottom|left"
+     height="24"
+     label="Convert selection"
+     layout="topleft"
+     left="390"
+     name="landscape_convert_button"
+     tool_tip="Turn the linkset you have selected in world into this track's scenery - every prim must be full permission and owned by you; the original goes to your Trash"
+     top="1040"
+     width="130" />
+
+    <text
+     follows="bottom|left"
+     height="48"
+     layout="topleft"
+     left="10"
+     name="landscape_hint"
+     top="1070"
+     width="560"
+     word_wrap="true">
+        Build a linkset in world, select it, then press Convert selection: every prim must be
+        full permission (copy, modify, transfer) and owned by you, and any object contents are
+        dropped - a local landscape object has no simulator. The scenery renders only while Atmo
+        Magic is active and its own gate is on (the SSAtmoLandscape debug setting, under SSAtmoEnabled).
+    </text>
+</panel>
