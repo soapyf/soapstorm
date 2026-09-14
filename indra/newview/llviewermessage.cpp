@@ -4397,8 +4397,13 @@ void send_agent_update(bool force_send, bool send_reliable)
     // avatar is hiding behind. Substitute the avatar's eye, aimed at the
     // crosshair's world target, so scripts see exactly what mouselook
     // would have told them. The render camera is untouched.
+    //
+    // Seated avatars bypass this: vehicle turrets and weapons fire from the
+    // vehicle's prims, not the avatar's eyeballs. Vehicle scripts expect the
+    // pure camera look direction and position to calculate turret aim.
     static LLCachedControl<bool> fs_ots_eye_camera(gSavedSettings, "FSOTSReportEyeCamera", true);
-    if (fs_ots_eye_camera && gAgentCamera.cameraOTS() && isAgentAvatarValid() && gAgentAvatarp->mHeadp
+    const bool is_sitting = isAgentAvatarValid() && gAgentAvatarp->isSitting();
+    if (fs_ots_eye_camera && !is_sitting && gAgentCamera.cameraOTS() && isAgentAvatarValid() && gAgentAvatarp->mHeadp
         && tp_state == LLAgent::TELEPORT_NONE) // never raycast a world that is mid-teleport teardown
     {
         const LLVector3 eye = gAgentAvatarp->mHeadp->getWorldPosition();
