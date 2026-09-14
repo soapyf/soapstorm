@@ -1795,7 +1795,14 @@ LLVector3d LLAgentCamera::calcFocusPositionTargetGlobal()
         static LLCachedControl<F32> ots_focus_dist(gSavedSettings, "OTSFocusDistance", 10.0f);
         static LLCachedControl<F32> ots_height(gSavedSettings,     "OTSCameraHeight",   0.5f);
         static LLCachedControl<F32> ots_side(gSavedSettings,       "OTSCameraSide",    -0.5f);
-        LLVector3 focus_local((F32)ots_focus_dist, (F32)ots_side * 0.3f, (F32)ots_height * 0.5f);
+        F32 focus_height = (F32)ots_height * 0.5f;
+        F32 focus_side = (F32)ots_side * 0.3f;
+        if (isAgentAvatarValid() && gAgentAvatarp->isSitting() && mSitCameraEnabled)
+        {
+            focus_height = mSitCameraPos.mV[VZ] * 0.5f;
+            focus_side = mSitCameraPos.mV[VY] * 0.3f;
+        }
+        LLVector3 focus_local((F32)ots_focus_dist, focus_side, focus_height);
         LLQuaternion agent_rot = gAgent.getFrameAgent().getQuaternion();
         LLVector3 focus_world = focus_local * agent_rot;
         LLVector3d avatar_pos = gAgent.getPosGlobalFromAgent(getAvatarRootPosition());
@@ -1992,6 +1999,19 @@ LLVector3d LLAgentCamera::calcCameraPositionTargetGlobal(bool *hit_limit)
         static LLCachedControl<F32> ots_side(gSavedSettings,   "OTSCameraSide",    -0.5f);
         static LLCachedControl<F32> ots_height(gSavedSettings, "OTSCameraHeight",   0.5f);
         LLVector3 local_offset(-(F32)ots_dist, (F32)ots_side, (F32)ots_height);
+        F32 pivot_height = (F32)ots_height;
+
+        const bool is_sitting = isAgentAvatarValid() && gAgentAvatarp->isSitting();
+        const LLViewerObject* seated_root = is_sitting ? (const LLViewerObject*)gAgentAvatarp->getRoot() : nullptr;
+
+        if (is_sitting && mSitCameraEnabled)
+        {
+            // Vehicle creator specified a sit camera offset: honor their exact intended
+            // X (distance back), Y (side offset), and Z (elevation).
+            local_offset.setVec(-fabs(mSitCameraPos.mV[VX]), mSitCameraPos.mV[VY], mSitCameraPos.mV[VZ]);
+            pivot_height = mSitCameraPos.mV[VZ];
+        }
+
         LLQuaternion agent_rot = gAgent.getFrameAgent().getQuaternion();
         LLVector3 world_offset = local_offset * agent_rot;
         LLVector3 avatar_pos_agent = getAvatarRootPosition();
@@ -2002,7 +2022,7 @@ LLVector3d LLAgentCamera::calcCameraPositionTargetGlobal(bool *hit_limit)
         // strafing near walls swings it into geometry). Raycast from a pivot at
         // shoulder height out to the desired camera position and pull the camera
         // in just in front of anything solid. World geometry only; avatars and
-        // attachments never block the camera.
+        // attachments never block the camera. Also skips the seated vehicle linkset.
         static LLCachedControl<bool> ots_collision(gSavedSettings, "OTSCameraCollision", true);
         if (ots_collision && gAgent.getTeleportState() == LLAgent::TELEPORT_NONE) // never raycast mid-teleport
         {
@@ -2012,7 +2032,7 @@ LLVector3d LLAgentCamera::calcCameraPositionTargetGlobal(bool *hit_limit)
             const F32 OTS_MIN_CAMERA_DISTANCE = 0.30f;       // never pull in closer than just behind the head
             const F32 OTS_COLLISION_EASE_OUT_HALF_LIFE = 0.15f; // seconds; recovery speed when an obstruction clears
 
-            LLVector3 pivot = avatar_pos_agent + LLVector3(0.f, 0.f, (F32)ots_height);
+            LLVector3 pivot = avatar_pos_agent + LLVector3(0.f, 0.f, pivot_height);
             LLVector3 dir = cam_pos_agent - pivot;
             F32 desired_dist = dir.normalize();
             F32 target_dist = desired_dist;
@@ -2020,7 +2040,7 @@ LLVector3d LLAgentCamera::calcCameraPositionTargetGlobal(bool *hit_limit)
             LLVector4a ray_start, ray_end, hit_pos;
             ray_start.load3(pivot.mV);
             ray_end.load3(cam_pos_agent.mV);
-            if (gPipeline.lineSegmentIntersectWorldGeometry(ray_start, ray_end, &hit_pos, true /*skip_phantom*/))
+            if (gPipeline.lineSegmentIntersectWorldGeometry(ray_start, ray_end, &hit_pos, true /*skip_phantom*/, false /*pick_transparent*/, seated_root))
             {
                 LLVector3 hit(hit_pos.getF32ptr());
                 F32 hit_dist = (hit - pivot).length();
