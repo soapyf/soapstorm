@@ -33,6 +33,8 @@
 #include "llconsole.h"
 #include "lltextureview.h"
 #include "ssstatsview.h" // <SS:Nexii>
+#include "ssatmoinfoview.h" // <SS:Nexii> Atmo Magic info views: dim quad + legend
+#include "ssatmosynconsole.h" // <SS:Nexii> Atmo Magic V7 sync console
 #include "llresmgr.h"
 #include "llviewercontrol.h"
 #include "llviewerwindow.h"
@@ -127,7 +129,21 @@ void LLDebugView::init()
     ssp.mouse_opaque(false);
     gSSStatsView = LLUICtrlFactory::create<SSStatsView>(ssp);
     addChild(gSSStatsView);
+
+    // <SS:Nexii> Atmo Magic V7 sync console: shares the texture console's top-left corner (the two are rarely wanted together) and sizes itself to content each frame, so it stacks beside the stats overlay and over an info view without either painting the other out.
+    r.set(150, rect.getHeight() - 60, 150 + 600, rect.getHeight() - 60 - 100);
+    SSAtmoSyncConsole::Params syncp;
+    syncp.name("gSSAtmoSyncConsole");
+    syncp.rect(r);
+    syncp.follows.flags(FOLLOWS_TOP|FOLLOWS_LEFT);
+    syncp.visible(false);
+    syncp.mouse_opaque(false);
+    gSSAtmoSyncConsole = LLUICtrlFactory::create<SSAtmoSyncConsole>(syncp);
+    addChild(gSSAtmoSyncConsole);
     // </SS:Nexii>
+
+    // <SS:Nexii> Atmo Magic info views: the world-dimming quad goes in at the BACK (drawn first, under every console here) and the legend on top; both draw nothing while SSAtmoInfoView is 0.
+    SSAtmoInfoView::attach(this);
 }
 
 void LLDebugView::draw()

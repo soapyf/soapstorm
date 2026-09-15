@@ -213,6 +213,9 @@ set(viewer_SOURCE_FILES
     fsregioncross.cpp
     fsrezqueue.cpp
     ssatmomagic.cpp
+    ssstormcells.cpp
+    ssvortices.cpp
+    ssvortexrender.cpp
     ssatmotrack.cpp
     ssatmoenvapplier.cpp
     ssdiscpad.cpp
@@ -240,7 +243,10 @@ set(viewer_SOURCE_FILES
     ssfloateratmoplanetary.cpp
     ssfloaterpreset.cpp
     ssfloateratmodebug.cpp
+    ssatmoinfoview.cpp
+    ssatmosynconsole.cpp
     ssfloatersim.cpp
+    ssfloaternavmesh.cpp
     ssfloaterworldfield.cpp
     ssatmostore.cpp
     ssprecippreset.cpp
@@ -249,16 +255,22 @@ set(viewer_SOURCE_FILES
     sspreciprenderer.cpp
     ssgranular.cpp
     ssglreadback.cpp
+    ssgpucull.cpp
     ssrainshadow.cpp
     sssurfacefield.cpp
-    sswhiteout.cpp
+    ssheightfog.cpp
+    ssscreenfx.cpp
     sslightning.cpp
     sslightningrender.cpp
     sssoundmeta.cpp
     sssoundscape.cpp
     sswater.cpp
+    ssatmolandscape.cpp
+    ssatmolandscapeobject.cpp
     sswindflow.cpp
     ssworldfield.cpp
+    ssworldfieldshapes.cpp
+    ssnavmesh.cpp
     fsscriptlibrary.cpp
     fsscrolllistctrl.cpp
     fsslurlcommand.cpp
@@ -1150,6 +1162,29 @@ set(viewer_HEADER_FILES
     fsregioncross.h
     fsrezqueue.h
     ssatmomagic.h
+    ssdeckboilcore.h
+    ssdeckcellsoftcore.h
+    ssdeckflowcore.h
+    ssdeckframecore.h
+    ssdecklodcore.h
+    ssdeckmacrocore.h
+    ssdecknoisecore.h
+    ssdeckshadecore.h
+    ssdaycyclecore.h
+    ssatmonoisecore.h
+    ssairlightcore.h
+    ssacousticcore.h
+    ssinfolookcore.h
+    ssstormcellcore.h
+    ssstormcouplecore.h
+    sssquallcore.h
+    ssvortexcore.h
+    ssveilcore.h
+    ssvirgacore.h
+    ssshellcore.h
+    ssvortices.h
+    ssvortexrender.h
+    ssstormcells.h
     ssatmotrack.h
     ssatmoenvapplier.h
     ssdiscpad.h
@@ -1167,6 +1202,7 @@ set(viewer_HEADER_FILES
     ssatmoenvweatherstate.h
     ssatmoenvweathergen.h
     ssfloateratmo.h
+    ssfloaternavmesh.h
     ssfloateratmoenv.h
     ssfloateratmoinfluence.h
     ssfloateratmoskyimport.h
@@ -1178,6 +1214,9 @@ set(viewer_HEADER_FILES
     ssfloateratmoplanetary.h
     ssfloaterpreset.h
     ssfloateratmodebug.h
+    ssatmoinfoview.h
+    ssatmoinfoviewcore.h
+    ssatmosynconsole.h
     ssfloatersim.h
     ssatmostore.h
     ssprecippreset.h
@@ -1186,16 +1225,31 @@ set(viewer_HEADER_FILES
     sspreciprenderer.h
     ssgranular.h
     ssglreadback.h
+    ssgpucull.h
     ssrainshadow.h
     sssurfacefield.h
-    sswhiteout.h
+    sssurfacestatecore.h
+    sssurfacedropcore.h
+    sssheltercore.h
+    ssscreenfxcore.h
+    sslensdropcore.h
+    sshazecore.h
+    ssheightfog.h
+    ssscreenfx.h
     sslightning.h
     sslightningrender.h
     sssoundmeta.h
     sssoundscape.h
     sswater.h
+    ssatmolandscape.h
+    ssatmolandscapeobject.h
+    sslocalcontentlimits.h
     sswindflow.h
+    sswindprofilecore.h
     ssworldfield.h
+    ssworldfieldcore.h
+    ssworldfieldshapes.h
+    ssnavmesh.h
     fsscriptlibrary.h
     fsscrolllistctrl.h
     fsslurl.h
@@ -2781,6 +2835,7 @@ target_link_libraries(${VIEWER_BINARY_NAME}
         llcorehttp
         llcommon
         llmeshoptimizer
+        recastnavigation
         llwebrtc
         lllogin
         llprimitive

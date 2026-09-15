@@ -26,6 +26,7 @@
 #include "ssatmoenvweatherstate.h"
 
 #include "llviewercontrol.h"
+#include "sswindprofilecore.h" // <SS:Nexii> the wind profile's auto shear derivation
 
 namespace
 {
@@ -315,6 +316,20 @@ SSAtmoEnvWeatherState SSAtmoEnvWeatherResolver::resolve(const SSAtmoEnvWeather& 
         state.mGustDepth  = weather.mGustDepth.valueAt(phase);
         state.mGustLength = weather.mGustLength.valueAt(phase);
         state.mGustVeer   = weather.mGustVeer.valueAt(phase);
+    }
+
+    // <SS:Nexii> The wind profile's shear, the gust idiom again: auto derives it from the same three dials that make the weather (the storm consolidation figure lives inside autoShear - the accepted duplication of the wet band), authored reads the curves. Clamped here so every consumer sees the core's domain.
+    if (weather.mShearAuto)
+    {
+        const SSWindProfile::AutoShear shear = SSWindProfile::autoShear(
+            llclamp(moisture, 0.f, 1.f), llclamp(convection, 0.f, 1.f), temperature);
+        state.mShearStrength = shear.mStrength;
+        state.mVeerDeg       = shear.mVeerDeg;
+    }
+    else
+    {
+        state.mShearStrength = llclamp(weather.mShearStrength.valueAt(phase), 0.f, 1.f);
+        state.mVeerDeg       = llclamp(weather.mVeerDeg.valueAt(phase), -180.f, 180.f);
     }
 
     state.mLightningColor = weather.mLightningColor.valueAt(phase);

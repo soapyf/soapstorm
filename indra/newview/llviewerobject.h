@@ -609,6 +609,14 @@ public:
     inline bool     flagObjectCopy() const          { return ((mFlags & FLAGS_OBJECT_COPY) != 0); }
     inline bool     flagObjectMove() const          { return ((mFlags & FLAGS_OBJECT_MOVE) != 0); }
     inline bool     flagObjectTransfer() const      { return ((mFlags & FLAGS_OBJECT_TRANSFER) != 0); }
+
+    // <SS:Nexii> Viewer-local content - an object that exists only on this client (Atmo Magic
+    // landscape scenery). Every server send touching such objects is gated on this flag.
+    bool ssIsLocalContent() const { return mIsLocalContent; }
+    void ssSetLocalContent(bool v) { mIsLocalContent = v; }
+    // <SS:Nexii> The accumulated llTargetOmega spin, so the world-field census can divide it back out of getRotation() and see the object as the sim does. [interaction: ssworldfieldshapes.cpp ss_world_rotation_unspun]
+    const LLQuaternion& ssAngularVelocityRot() const { return mAngularVelocityRot; }
+    // </SS:Nexii>
     inline bool     flagObjectPermanent() const     { return ((mFlags & FLAGS_AFFECTS_NAVMESH) != 0); }
     inline bool     flagCharacter() const           { return ((mFlags & FLAGS_CHARACTER) != 0); }
     inline bool     flagVolumeDetect() const        { return ((mFlags & FLAGS_VOLUME_DETECT) != 0); }
@@ -625,7 +633,7 @@ public:
     inline bool     flagCameraDecoupled() const     { return ((mFlags & FLAGS_CAMERA_DECOUPLED) != 0); }
 
     // <FS:Techwolf Lupindo> prim export
-    U32 getFlags() { return mFlags; }
+    U32 getFlags() const { return mFlags; }    // <SS:Nexii> const so read-only inspectors can use it
     // <FS:Techwolf Lupindo>
 
     U8       getPhysicsShapeType() const;
@@ -823,6 +831,10 @@ private:
     // Grabbed from UPDATE_FLAGS
     U32             mFlags;
 
+    // <SS:Nexii> Viewer-local content flag - see ssIsLocalContent() above.
+    bool            mIsLocalContent = false;
+    // </SS:Nexii>
+
     bool mFlexibleObjectDataInUse = false,
         mLightParamsInUse = false,
         mSculptParamsInUse = false,
@@ -949,6 +961,8 @@ protected:
 
     F64Seconds      mLastInterpUpdateSecs;          // Last update for purposes of interpolation
     F64Seconds      mLastMessageUpdateSecs;         // Last update from a message from the simulator
+    // <SS:Nexii> SS timing inversion: running center of the implied update-age offset
+    F64             mSSTimingTauCenterSecs;
     TPACKETID       mLatestRecvPacketID;            // Latest time stamp on message from simulator
     F64SecondsImplicit mRegionCrossExpire;      // frame time we detected region crossing in + wait time
 

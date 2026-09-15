@@ -3951,6 +3951,15 @@
                function="RLV.MainToggleVisible" />
         </menu_item_check>
 
+        <!-- <SS:Nexii> Atmo Magic's settings floater, one shortcut from the menu it is usually reached through. -->
+        <menu_item_call
+         label="Atmo Magic Settings..."
+         name="SS Atmo Settings">
+            <menu_item_call.on_click
+             function="Floater.Toggle"
+             parameter="ss_atmo" />
+        </menu_item_call>
+
         <menu_item_call
          label="Show Debug Settings"
          shortcut="control|alt|shift|S"
@@ -4030,6 +4039,7 @@
                  function="Advanced.ToggleConsole"
                  parameter="fast timers" />
             </menu_item_check>
+            <!-- </SS:Nexii> -->
             <menu_item_check
                label="Scene Statistics"
                name="Scene Statistics">
@@ -4060,6 +4070,17 @@
               <menu_item_check.on_click
                function="Advanced.ToggleConsole"
                parameter="soapstorm" />
+            </menu_item_check>
+            <!-- <SS:Nexii> Atmo Magic V7 sync console (doc/atmo_magic_debug_views.md): every shared-state input the sky and the storm scheduler derive from, so two clients screenshot it side by side and localise a divergence. Read-only. -->
+            <menu_item_check
+                 label="Atmo Sync Console"
+                 name="Atmo Sync Console">
+              <menu_item_check.on_check
+               function="Advanced.CheckConsole"
+               parameter="atmo sync" />
+              <menu_item_check.on_click
+               function="Advanced.ToggleConsole"
+               parameter="atmo sync" />
             </menu_item_check>
             <!-- </SS:Nexii> -->
             <menu_item_separator/>
@@ -5112,6 +5133,16 @@
                 <menu_item_check.on_click
                  function="ToggleControl"
                  parameter="PingInterpolate" />
+            </menu_item_check>
+            <menu_item_check
+             label="Timing Inversion (Object Updates)"
+             name="Timing Inversion (Object Updates)">
+                <menu_item_check.on_check
+                 function="CheckControl"
+                 parameter="SSTimingInversion" />
+                <menu_item_check.on_click
+                 function="ToggleControl"
+                 parameter="SSTimingInversion" />
             </menu_item_check>
 
             <menu_item_separator/>

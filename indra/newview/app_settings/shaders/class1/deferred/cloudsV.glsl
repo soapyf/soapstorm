@@ -173,8 +173,10 @@ void main()
     vec3 sunlight = sunlight_color;
     vec3 light_atten;
 
+    // <SS:Nexii> THE AIRLIGHT, ONE AUTHORITY (doc/atmo_magic_phase8_show.md section 5b). Everything from this line down to oHazeColorBelowCloud is a transliteration of indra/newview/ssairlightcore.h: that header holds the formulas, this block spells its function bodies statement for statement in GLSL (a shader cannot include a C++ header, so the transliteration IS the wiring), and V:\Scratch\atmo\tests\twin_airlight.cpp reads this file's text and asserts the core reproduces every intermediate of it bit-for-bit. Each site below names the core function it is. Where this file used to disagree with skyV.glsl - the zero-density weight guard, the ambient headroom clamp, the shadow-dim clamp and the non-Atmo glow's grouping - it now says exactly what skyV says, which is what the core says; the reason is written at each of those four sites.
     // Sunlight attenuation effect (hue and brightness) due to atmosphere
     // this is used later for sunlight modulation at various altitudes
+    // <SS:Nexii> ssairlightcore.h : lightAtten() - the haze share and the (multiplier * ceiling) product are grouped exactly as the core groups them, which is what makes the twin's equality bit-for-bit rather than algebraic.
     light_atten = (blue_density + vec3(haze_density * 0.25)) * (density_multiplier * max_y);
 
 #ifdef SS_ATMO
@@ -185,19 +187,23 @@ void main()
 #endif
 
     // Calculate relative weights
-    vec3 combined_haze = abs(blue_density) + vec3(abs(haze_density));
+    // <SS:Nexii> ssairlightcore.h : hazeSplit(), transliterated - and the max() is the core's DENSITY_FLOOR, which this file did not carry and skyV.glsl always has. The weights DIVIDE by this sum, so a sky authored with a black blue_density and haze_density 0 divided zero by zero here and handed every cirrus vertex NaN weights - and that sky is two clicks away, not a degenerate impossibility: blue_density is a colour swatch (reaches black) and haze_density a slider whose floor is exactly 0 (panel_ss_atmo_env_sky_scattering.xml, panel_settings_sky_atmos.xml), both inside EEP's own validated ranges (blue_density [0,3] per channel, haze_density [0,5]; llsettingssky.cpp legacyHazeValidationList). Guarded, the weights are 0 there instead of NaN. Identical to the old line for every summed density >= 1e-6, which every non-degenerate authored sky is by about five orders of magnitude - twin_airlight.cpp measures both halves of that claim.
+    vec3 combined_haze = max(abs(blue_density) + vec3(abs(haze_density)), vec3(1e-6));
     vec3 blue_weight   = blue_density / combined_haze;
     vec3 haze_weight   = haze_density / combined_haze;
 
     // Compute sunlight from rel_pos & lightnorm (for long rays like sky)
+    // <SS:Nexii> ssairlightcore.h : offAxis() - the airmass the beam crosses to reach this point, as a multiple of the vertical path.
     float off_axis = 1.0 / max(1e-6, max(0., rel_pos_norm.y) + sun_elev);
 #ifdef SS_ATMO
     // The pre-attenuation light, kept for the glow's own extinction below - see skyV.glsl.
     vec3 ss_raw_light = sunlight;
 #endif
+    // <SS:Nexii> ssairlightcore.h : beamToElevation() - the beam's extinction to this elevation, and the only place the sunset's reddening comes from.
     sunlight *= exp(-light_atten * off_axis);
 
     // Distance
+    // <SS:Nexii> ssairlightcore.h : pathTransmittance() - density_dist then the exp, in the core's own two steps.
     float density_dist = rel_pos_len * density_multiplier;
 
     // Transparency (-> combined_haze)
@@ -230,11 +236,10 @@ void main()
     else
 #endif
     {
-        haze_glow *= sun_moon_glow_factor;
-
         // Add "minimum anti-solar illumination"
         // For sun, add to glow.  For moon, remove glow entirely. SL-13768
-        haze_glow = (sun_moon_glow_factor < 1.0) ? 0.0 : (haze_glow + 0.25);
+        // <SS:Nexii> ONE SPELLING with skyV.glsl. This branch used to scale the angular term by the factor on its own line and then add the floor - `f * haze_glow + 0.25` - while skyV.glsl reads `f * (haze_glow + 0.25)` - the same expression only when f is exactly 1, and the old form left the anti-solar FLOOR at full strength under a dimmed light while the hotspot was scaled. skyV's grouping is the one kept: the 0.25 is part of the glow's light and dims with it. This is not a behaviour change at any value the viewer binds - LLSettingsSky::getSunMoonGlowFactor() returns exactly 1.0 with the sun up and moon_brightness * 0.25 (<= 0.25, so < 1) otherwise, and the ternary zeroes both forms below 1 - which twin_airlight.cpp asserts over the bound set with an unreachable f = 1.5 as its failing control. The term is ANGULAR, not air, so ssairlightcore.h deliberately does not own it (see its header note); the two shaders still have to say it the same way.
+        haze_glow = (sun_moon_glow_factor < 1.0) ? 0.0 : (sun_moon_glow_factor * (haze_glow + 0.25));
     }
 
 #ifdef SS_ATMO
@@ -249,16 +254,18 @@ void main()
 #endif
 
     // Increase ambient when there are more clouds
-    vec3 tmpAmbient = ambient_color;
-    tmpAmbient += (1. - tmpAmbient) * cloud_shadow * 0.5;
+    // <SS:Nexii> ssairlightcore.h : ambientUnderClouds(), transliterated - and the ONE site in this consolidation that is a real behaviour change rather than a guard on input nothing can bind. The stock comment above says "increase ambient when there are more clouds"; without the max() an ambient above 1 does the opposite, because the headroom (1 - ambient) goes negative and cover DARKENS the sky. Ambient above 1 is not off-range: it is the top two thirds of Atmo's own ambient dial (SSFloaterAtmoEnv scales that colour swatch by SCALE_SUN_AMBIENT = 3) and well inside EEP's validator ([0,3] per channel). So at an authored ambient of 1.4 under the default cover 0.2699 this line used to hand the cirrus band a 1.346 ambient while skyV.glsl handed the dome 1.4 - and the band and the dome are built to land on the SAME colour at the rim (section 5b's handoff, which is what phase 8c's shell inherits). skyV's guard is adopted: the lift is monotone in cover at every ambient, the band meets the dome again, and every ambient <= 1 is bit-identical to the old line. twin_airlight.cpp measures the identity below 1 and the size of the change above it. Note this ambient is also the cloud body's own (vary_CloudColorAmbient below), which is the same lifted value skyV composes with - one ambient, one spelling.
+    vec3 tmpAmbient = ambient_color + max(vec3(0), (1. - ambient_color)) * cloud_shadow * 0.5;
 
     // Dim sunlight by cloud shadow percentage
-    sunlight *= (1. - cloud_shadow);
+    // <SS:Nexii> ssairlightcore.h : dimByCloudShadow(). The max() is skyV.glsl's and is INERT here - measured, not inferred: cloud_shadow is bound from the dome's coverage dial, whose slider AND spinner are both [0,1] (panel_ss_atmo_env_clouds_dome.xml) through an identity modulation (SSAtmoEnvSkyModulation::cloudCoverage with mCoverTarget frozen at 0), and EEP validates SETTING_CLOUD_SHADOW to [0,1] as well. twin_airlight.cpp asserts old and new bit-identical across that whole range, with the divergence above 1 - where the unguarded form NEGATES the light - as the failing control.
+    sunlight *= max(0.0, (1. - cloud_shadow));
 #ifdef SS_ATMO
-    ss_glow_light *= (1. - cloud_shadow);
+    ss_glow_light *= max(0.0, (1. - cloud_shadow));
 #endif
 
     // Haze color below cloud
+    // <SS:Nexii> ssairlightcore.h : skyColor() - two scattering populations, each taking its share of the beam and the ambient, grouped left to right as the core groups them. This is the composition skyV.glsl spells twice (above and below cloud) and the volumetric deck spells once; the core is the authority for all of them.
     vec3 additiveColorBelowCloud =
 #ifdef SS_ATMO
         (blue_horizon * blue_weight * (sunlight + tmpAmbient) + (haze_horizon * haze_weight) * (ss_glow_light * haze_glow + tmpAmbient));
@@ -289,6 +296,7 @@ void main()
 #endif
     vary_CloudColorSun *= combined_haze;
     vary_CloudColorAmbient *= combined_haze;
+    // <SS:Nexii> ssairlightcore.h : airlightOverPath() - the light this path has scattered into the eye, weighted by exactly the complement of what the path let through. As the transmittance goes to zero this goes to the pure below-cloud sky colour, which is what skyV.glsl's dome blend lands on at the horizon too: that coincidence is the rim handoff section 5b's shell is built on, and it is only a handoff while both sides read the same composition - which is what this rewire makes true.
     vec3 oHazeColorBelowCloud = additiveColorBelowCloud * (1. - combined_haze);
 
     // Make a nice cloud density based on the cloud_shadow value that was passed in.

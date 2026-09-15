@@ -1606,6 +1606,14 @@ void LLShaderMgr::initAttribsAndUniforms()
     // <SS:Nexii> HUD supersample: preserve world depth during resolve
     mReservedUniforms.push_back("worldDepthMap");
 
+    // <SS:Nexii> Atmo Magic haze altitude falloff - see SSHaze::invHeight (sshazecore.h) and SSAtmoEnvApplier
+    mReservedUniforms.push_back("ss_haze_inv_height");
+    mReservedUniforms.push_back("ss_haze_cam_height");
+
+    // <SS:Nexii> Atmo Magic haze altitude falloff - the world-up axis in view space (review F2 fix); see
+    // ss_haze_up_view's comment in atmosphericsFuncs.glsl and SSAtmoEnvApplier::hazeUpView.
+    mReservedUniforms.push_back("ss_haze_up_view");
+
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);
 
     std::set<std::string> dupe_check;

@@ -34,7 +34,7 @@ SSFloaterAtmoDebug::SSFloaterAtmoDebug(const LLSD& key) :
 {
 }
 
-// Wires the seven overlay switches to their render debug masks; everything
+// Wires the eight overlay switches to their render debug masks; everything
 // else on these tabs binds itself in the XML through control_name.
 bool SSFloaterAtmoDebug::postBuild()
 {
@@ -45,6 +45,12 @@ bool SSFloaterAtmoDebug::postBuild()
     bindOverlayToggle("field_overlay_check", LLPipeline::RENDER_DEBUG_WORLD_FIELD);
     bindOverlayToggle("cloud_overlay_check", LLPipeline::RENDER_DEBUG_CLOUD_FIELD);
     bindOverlayToggle("settle_overlay_check", LLPipeline::RENDER_DEBUG_GEOM_SETTLE);
+    // <SS:Nexii> The eighth: Atmo Magic lightning (doc/atmo_magic_debug_views.md V9). Lightning is a shipped
+    // entity class that had neither an info view nor a mask, against the rule that every entity class gets one
+    // before its phase closes. The layer itself is SSAtmoInfoView::renderLightning, drawn from render_ui rather
+    // than LLPipeline::renderDebug (see RENDER_DEBUG_LIGHTNING's own note in pipeline.h), so this checkbox and
+    // the V9 info view drive the same layer from either side. [interaction: SSAtmoInfoView::renderLightning]
+    bindOverlayToggle("lightning_overlay_check", LLPipeline::RENDER_DEBUG_LIGHTNING);
     return true;
 }
 

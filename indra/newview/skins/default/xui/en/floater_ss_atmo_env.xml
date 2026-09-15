@@ -202,7 +202,7 @@
      height="22"
      width="22"
      name="preview_play_button"
-     tool_tip="Run the preview through the cycle"
+     tool_tip="Run the preview through the cycle (60 s). Shift-click: real time, the track's own day length. Alt-click: a third of the speed. Shift+Alt: half."
      image_overlay="Play_Off"
      image_disabled="PushButton_Disabled"
      image_disabled_selected="PushButton_Disabled"
@@ -784,6 +784,16 @@
          name="look_tab"
          label="Look"
          filename="panel_ss_atmo_env_look.xml" />
+        <!-- <SS:Nexii> Landscape scenery tab - mesh objects owned by the environment. -->
+        <panel
+         border="true"
+         layout="topleft"
+         left_delta="0"
+         top_pad="5"
+         name="landscape_tab"
+         label="Landscape"
+         filename="panel_ss_atmo_env_landscape.xml" />
+        <!-- </SS:Nexii> -->
     </tab_container>
 
     <!-- CRUD row, docked at the floater's bottom edge, same as Save/Cancel

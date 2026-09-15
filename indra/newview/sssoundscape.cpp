@@ -30,12 +30,15 @@
 #include "ssprecippreset.h"
 #include "sssurfacefield.h"
 #include "sssoundmeta.h"
+#include "ssworldfieldshapes.h"
 
 #include "llrand.h"
 
 #include "llagent.h"
 #include "llfasttimer.h"
 #include "llaudioengine.h"
+#include "llmutelist.h"
+#include "llviewerparcelmgr.h"
 #include "llviewercamera.h"
 #include "llviewercontrol.h"
 #include "llviewerobject.h"
@@ -67,6 +70,12 @@ static const F32 BURIAL_BLEND_RATE = 2.5f;
 // as the muffle can express, whether or not the band stack shows a roof only
 // a few metres up.
 static const F32 BURIAL_INTERIOR_DEPTH = 18.f;
+
+// <SS:Nexii> The through-solid transmission's half-loss thickness (the doc's Part 3):
+// a direct line crossing this many solid metres loses half its energy. One material
+// until span flags grow absorption classes - the doc's own stated guess - so the dial
+// sits between "a 0.5 m wall barely matters" and "a 10 m berm is silence".
+static const F32 OCCLUSION_HALF_LOSS_M = 2.f;
 
 static LLTrace::BlockTimerStatHandle FTM_SS_AUDIO("Atmo Magic Audio");
 static LLTrace::BlockTimerStatHandle FTM_SS_AUDIO_PROBE("Cover Probes");
@@ -122,10 +131,22 @@ void SSSoundscape::stopAll()
     {
         releaseLoop(loop);
     }
+    // <SS:Nexii> The auto-sort ladder's voices live outside mLoops: without this drain an ambient voice active when the gate hit keeps its looping source alive on a parcel with no environment.
+    if (gAudiop)
+    {
+        for (auto& pair : mAmbientVoices)
+        {
+            if (LLAudioSource* source = gAudiop->findAudioSource(pair.second.mSourceID))
+            {
+                gAudiop->cleanupAudioSource(source);
+            }
+        }
+    }
+    mAmbientVoices.clear();
     mImpactRate = 0.f;
 }
 
-// Feeds an impact into the rate estimate that drives the ambient beds.
+// Feeds an impact into the rate estimate that drives the ambient mix.
 void SSSoundscape::notifyImpact(F32 strength)
 {
     mImpactRate += strength;
@@ -138,6 +159,21 @@ bool SSSoundscape::castUpProbe(S32 index, F32& hit_dist)
     const F32 azimuth = (F32)index * (F_TWO_PI / (F32)UP_RAY_COUNT) + 0.7f;
     const F32 tilt = UP_RAY_TILT * DEG_TO_RAD;
     const LLVector3 dir(cosf(azimuth) * sinf(tilt), sinf(azimuth) * sinf(tilt), cosf(tilt));
+
+    // <SS:Nexii> Exact declared-shape cast first (doc/atmo_magic_worldfield_competition.md 10):
+    // wall-exact ceiling answers without the octree walk; the census includes
+    // phantom decks the stock ray's skip_phantom would ignore, so a phantom
+    // roof finally shelters. Unanswered census falls through to the stock ray.
+    static LLCachedControl<bool> shapes_cast(gSavedSettings, "SSWorldFieldShapes", false);
+    if (shapes_cast)
+    {
+        SSWorldFieldShapes::SegmentHit probe_hit;
+        if (SSWorldFieldShapes::getInstance()->segmentCast(cam, cam + dir * UP_RAY_LENGTH, probe_hit))
+        {
+            hit_dist = probe_hit.mHit ? probe_hit.mDistance : UP_RAY_LENGTH;
+            return probe_hit.mHit;
+        }
+    }
 
     LLVector4a start4, end4, intersect;
     start4.load3(cam.mV);
@@ -164,6 +200,19 @@ F32 SSSoundscape::castSideProbe(S32 index)
     };
 
     const LLVector3 cam = LLViewerCamera::getInstance()->getOrigin();
+
+    // <SS:Nexii> Exact declared-shape cast first - the wall profile becomes
+    // wall-exact instead of cell-quantized; unanswered census falls through.
+    static LLCachedControl<bool> shapes_cast(gSavedSettings, "SSWorldFieldShapes", false);
+    if (shapes_cast)
+    {
+        SSWorldFieldShapes::SegmentHit probe_hit;
+        if (SSWorldFieldShapes::getInstance()->segmentCast(cam, cam + cardinals[index] * SIDE_RAY_LENGTH, probe_hit))
+        {
+            return probe_hit.mHit ? probe_hit.mDistance : SIDE_RAY_LENGTH;
+        }
+    }
+
     LLVector4a start4, end4, intersect;
     start4.load3(cam.mV);
     const LLVector3 end = cam + cardinals[index] * SIDE_RAY_LENGTH;
@@ -195,6 +244,13 @@ void SSSoundscape::updateProbes(F64 now)
     const bool stale = now - mLastCycleDone > STALE_TRIGGER;
     if (!moved && !stale) return;
     if (now - mLastCycleDone < PROBE_INTERVAL) return;
+
+    // The enclosure spectrum's validity resets only with a cycle that
+    // re-answers it - unlike the interior flag it is read every frame by the
+    // ambient blend, so clearing it above the gates would flip the mix to the
+    // fallback and back between a standing listener's cycles. Between cycles
+    // the last verdict holds, eased.
+    mEnclosureValid = false;
 
     mProbeAnchor = cam;
     mProbeOrigin = cam;
@@ -266,12 +322,47 @@ void SSSoundscape::updateProbes(F64 now)
             {
                 mBuriedDepth = llmax(mBuriedDepth, BURIAL_INTERIOR_DEPTH);
             }
+
+            // The enclosure spectrum: 0 outdoors, 1 sealed interior, ramped
+            // on the flood's depth back to open sky. -1 while the labels are
+            // still flooding (or the point sits inside a band's implied
+            // solid) keeps this cycle on the raycast mix.
+            const F32 enc = field->enclosureAt(cam);
+            if (enc >= 0.f)
+            {
+                mEnclosure = enc;
+                mEnclosureValid = true;
+            }
         }
     }
     else if (mCoverageClaim)
     {
         mCoverageClaim = SSWorldField::Interest();
         mCoverageRegion = 0;
+    }
+
+    // <SS:Nexii> The ACOUSTIC stake: the channel that bakes the gap-anchored probes
+    // and the propagation graph. Held for the camera's region while its switch is
+    // on, independently of the coverage switch - the wall profile and the
+    // classification want the bake even where cover is still answered by rays.
+    static LLCachedControl<bool> field_acoustics(gSavedSettings, "SSWorldFieldAcoustics", true);
+    if ((bool)field_acoustics)
+    {
+        LLViewerRegion* regionp = LLWorld::getInstance()->getRegionFromPosAgent(cam);
+        if (regionp)
+        {
+            if (!mAcousticClaim || mAcousticRegion != regionp->getHandle())
+            {
+                mAcousticRegion = regionp->getHandle();
+                mAcousticClaim = SSWorldField::getInstance()->claim(
+                    mAcousticRegion, SSWorldField::EChannel::ACOUSTIC);
+            }
+        }
+    }
+    else if (mAcousticClaim)
+    {
+        mAcousticClaim = SSWorldField::Interest();
+        mAcousticRegion = 0;
     }
 
     if (!field_answered)
@@ -304,11 +395,85 @@ void SSSoundscape::updateProbes(F64 now)
     }
     }
 
+    // <SS:Nexii> The listener blend from the probe bake where it stands (the doc's
+    // Part 3): the connected probes' blended wall profile, room class and size,
+    // inverse-distance weighted over the listener's own gap plus graph-adjacent
+    // probes - never a raw trilinear tap over the lattice, because the nearest probe
+    // through a wall is exactly the one that must not contribute. This replaces the
+    // classification the cycle used to run its own math for; the lattice read and
+    // the four raycasts below are the fallbacks, in that order.
+    bool probe_answered = false;
+    if ((bool)field_acoustics && SSWorldField::instanceExists())
+    {
+        SSWorldField::ProbeSample samples[4];
+        S32 ns = 0;
+        if (SSWorldField::getInstance()->probesAt(cam, samples, ns) && ns > 0)
+        {
+            F32 wsum = 0.f;
+            F32 wall[4] = { 0.f, 0.f, 0.f, 0.f };
+            F32 space_w[5] = { 0.f, 0.f, 0.f, 0.f, 0.f };
+            F32 size_w[3] = { 0.f, 0.f, 0.f };
+            for (S32 i = 0; i < ns; ++i)
+            {
+                const F32 w = llmax(samples[i].mWeight, 0.f);
+                wsum += w;
+                wall[0] += w * samples[i].mWall[0];
+                wall[1] += w * samples[i].mWall[2];
+                wall[2] += w * samples[i].mWall[4];
+                wall[3] += w * samples[i].mWall[6];
+                space_w[llclamp(samples[i].mSpaceClass, 0, 4)] += w;
+                size_w[llclamp(samples[i].mSizeClass, 0, 2)] += w;
+            }
+            if (wsum > 0.f)
+            {
+                probe_answered = true;
+                const F32 inv = 1.f / wsum;
+                for (S32 i = 0; i < 4; ++i) mSideDist[i] = wall[i] * inv;
+
+                S32 walls = 0;
+                F32 sum = 0.f;
+                for (S32 i = 0; i < 4; ++i)
+                {
+                    if (mSideDist[i] < SIDE_RAY_LENGTH - 0.5f) ++walls;
+                    sum += mSideDist[i];
+                }
+                mWallCount = walls;
+                mWallAvg = sum * 0.25f;
+
+                S32 space = 0;
+                for (S32 i = 1; i < 5; ++i) if (space_w[i] > space_w[space]) space = i;
+                S32 size = 0;
+                for (S32 i = 1; i < 3; ++i) if (size_w[i] > size_w[size]) size = i;
+                mSpace = (ESpace)space;
+                mOutdoorSize = (ESize)size;
+            }
+        }
+    }
+
+    if (!probe_answered)
+    {
+    // The wall profile: the probe bake's nearest probe where the channel stands -
+    // one read standing in for four live raycasts per cycle, walking the flood's
+    // solid map on the worker instead of the render pipeline - else the four
+    // raycasts. The classification math below is shared; a stale bake (edited tile,
+    // flood pending) falls back automatically.
+    F32 lattice_walls[4];
+    if (field_answered && SSWorldField::getInstance()->acousticAt(cam, lattice_walls))
+    {
+        for (S32 i = 0; i < 4; ++i) mSideDist[i] = lattice_walls[i];
+    }
+    else
+    {
+        for (S32 i = 0; i < 4; ++i)
+        {
+            mSideDist[i] = castSideProbe(i);
+        }
+    }
+
     S32 walls = 0;
     F32 sum = 0.f;
     for (S32 i = 0; i < 4; ++i)
     {
-        mSideDist[i] = castSideProbe(i);
         if (mSideDist[i] < SIDE_RAY_LENGTH - 0.5f) ++walls;
         sum += mSideDist[i];
     }
@@ -339,6 +504,7 @@ void SSSoundscape::updateProbes(F64 now)
     {
         mSpace = SPACE_BIG;
     }
+    }
 }
 
 // How buried under geometry the listener is, 0..1.
@@ -346,6 +512,12 @@ F32 SSSoundscape::burialOcclusion() const
 {
     const F32 t = llclamp(mBuriedSmooth / BURIAL_FULL, 0.f, 1.f);
     return t * t * (3.f - 2.f * t);
+}
+
+// The eased enclosure spectrum, or -1 when the field has no current verdict.
+F32 SSSoundscape::enclosure() const
+{
+    return mEnclosureValid ? mEnclosureSmooth : -1.f;
 }
 
 // Debug label for a cover space.
@@ -399,10 +571,41 @@ F32 SSSoundscape::occlusionGain(const LLVector3& source_pos) const
     const F32 dist = to_source.normVec();
     if (dist < 1.f) return 1.f;
 
+    // <SS:Nexii> The real trace where the store answers (the doc's Part 3 replaces
+    // the heuristic): transmission through every solid metre the direct line
+    // crosses - the 2D DDA over the columns, exact against the span store, no scene
+    // raycast - floored by the diffracted path's energy when the probe graph
+    // answers. Sound through a wall or around it, whichever survives better.
+    if (SSWorldField::instanceExists())
+    {
+        SSWorldField* field = SSWorldField::getInstance();
+        F32 solid_m = 0.f;
+        S32 crossings = 0;
+        if (field->traceSolid(mProbeOrigin, source_pos, solid_m, crossings))
+        {
+            F32 gain = exp2f(-solid_m / OCCLUSION_HALF_LOSS_M);
+            SSWorldField::Propagation prop;
+            if (field->propagationQuery(source_pos, mProbeOrigin, prop)
+                && prop.mDirectM > 1.f && prop.mPathM > 1.f)
+            {
+                // Diffracted amplitude scales ~ direct/path; energy squares it.
+                const F32 diffracted = prop.mDirectM / prop.mPathM;
+                gain = llmax(gain, diffracted * diffracted);
+            }
+            return llclamp(gain, 0.02f, 1.f);
+        }
+    }
+
+    // No tile, or the segment left it: the old cover heuristic, unchanged - the
+    // migration rule's "every intermediate state degrades to today's behaviour".
     const F32 wall = wallDistanceToward(to_source);
     if (dist <= wall + 0.5f) return 1.f;
 
-    return lerp(0.6f, 0.22f, mCoverSmooth);
+    // The spectrum deepens the attenuation beyond what cover alone says: a
+    // source beyond the walls of a space the flood ranks deeply enclosed
+    // loses more than one under an eave, at whatever depth the walk measured.
+    const F32 close = llmax(mCoverSmooth, mEnclosureValid ? mEnclosureSmooth : 0.f);
+    return lerp(0.6f, 0.22f, close);
 }
 
 // Smoothed impacts per second around the camera.
@@ -487,7 +690,7 @@ void SSSoundscape::applyLoop(Loop& loop, const std::string& configured, F32 mast
 
         if (sequence)
         {
-            gAudiop->preloadSound(loop.mSounds[(loop.mIndex + 1) % (U32)loop.mSounds.size()]);
+            SSSoundMeta::getInstance()->fetch(loop.mSounds[(loop.mIndex + 1) % (U32)loop.mSounds.size()]);
         }
     }
 
@@ -496,13 +699,40 @@ void SSSoundscape::applyLoop(Loop& loop, const std::string& configured, F32 mast
         LLViewerCamera::getInstance()->getOrigin() + loop.mOffset));
 }
 
-// Mixes the whole ambient bed set - rain beds by impact rate, wind by speed, roof beds by cover - and applies each loop.
+// Mixes the whole ambient set - rain ambiences by impact rate, wind by speed, roof ambiences by cover - and applies each loop.
 void SSSoundscape::updateLoops(F64 now, F32 dt)
 {
     SSAtmoMagic* atmo = SSAtmoMagic::getInstance();
 
+    static LLCachedControl<F32> master_setting(gSavedSettings, "SSAtmoVolumeMaster", 0.8f);
+    static LLCachedControl<F32> ambient_setting(gSavedSettings, "SSAtmoVolumeAmbient", 1.f);
+    static LLCachedControl<F32> wind_setting(gSavedSettings, "SSAtmoVolumeWind", 1.f);
+    const F32 master = llclamp((F32)master_setting, 0.f, 1.f);
+    const F32 ambient_vol = llclamp((F32)ambient_setting, 0.f, 1.f);
+    const F32 wind_vol = llclamp((F32)wind_setting, 0.f, 1.f);
+
+    const F32 category[LOOP_COUNT] = {
+        ambient_vol, ambient_vol, ambient_vol,
+        ambient_vol, ambient_vol, ambient_vol, ambient_vol,
+        wind_vol, wind_vol,
+    };
+
     mCoverSmooth = lerp(mCoverSmooth, mCovered ? 1.f : 0.f, llclamp(COVER_BLEND_RATE * dt, 0.f, 1.f));
+    mEnclosureSmooth = lerp(mEnclosureSmooth, mEnclosure, llclamp(COVER_BLEND_RATE * dt, 0.f, 1.f));
     mBuriedSmooth = lerp(mBuriedSmooth, mBuriedDepth, llclamp(BURIAL_BLEND_RATE * dt, 0.f, 1.f));
+
+    // <SS:Nexii> The environment is the soundscape's source: with none resolved, stand down on the loops' own crossfade. Gating on mEnabled alone rode the weather blend's ~10 s fade-out, where no-env precipitation/turbulence defaults and the stale preset kept wet and wind targets sounding on a parcel with no environment; isSwitchedOn is the same immediate gate footsteps use.
+    if (!atmo->isSwitchedOn())
+    {
+        mLadderTargets.clear();
+        for (S32 i = 0; i < LOOP_COUNT; ++i)
+        {
+            mLoops[i].mTarget = 0.f;
+            applyLoop(mLoops[i], mLoops[i].mConfigured, master * category[i], dt);
+        }
+        updateAmbientVoices(now, dt, master * ambient_vol);
+        return;
+    }
 
     const F32 env = llclamp(atmo->gustEnvelopeAt(now), 0.f, 2.5f);
     const SSPrecipPreset& preset = atmo->preset();
@@ -523,8 +753,16 @@ void SSSoundscape::updateLoops(F64 now, F32 dt)
 
     const bool sheltered = (mSpace == SPACE_SHELTERED);
 
+    // The enclosure spectrum drives the ambient blend where the field answered:
+    // the old sheltered/room duck pair became the two ends of a continuous
+    // ramp, so a cave mouth, an arcade and a warehouse interior each sit
+    // between them at their own measured depth. Without the field, the probe
+    // verdict's own rungs stand in - the same two values the discrete mix
+    // used, so the raycast fallback is unchanged.
+    const F32 enc = mEnclosureValid ? mEnclosureSmooth : (sheltered ? 0.f : 1.f);
+
     const F32 buried = burialOcclusion();
-    const F32 outdoor = (1.f - (sheltered ? 0.4f : 0.85f) * mCoverSmooth)
+    const F32 outdoor = (1.f - lerp(0.4f, 0.85f, enc) * mCoverSmooth)
                       * (1.f - BURIAL_MAX_DUCK * buried);
 
     F32 w_light = tri(wet, 0.01f, 0.18f, 0.55f);
@@ -541,8 +779,8 @@ void SSSoundscape::updateLoops(F64 now, F32 dt)
 
     mLadderTargets.clear();
     {
-        static LLCachedControl<bool> auto_beds(gSavedSettings, "SSAtmoAmbientAutoSort", true);
-        if (auto_beds)
+        static LLCachedControl<bool> auto_sort(gSavedSettings, "SSAtmoAmbientAutoSort", true);
+        if (auto_sort)
         {
             std::vector<std::pair<F32, LLUUID>> rungs;
             for (const std::string* csv : { &preset.mSounds.mAmbientLight, &preset.mSounds.mAmbientMedium, &preset.mSounds.mAmbientHeavy })
@@ -582,17 +820,31 @@ void SSSoundscape::updateLoops(F64 now, F32 dt)
     }
 
     const F32 roof = mCoverSmooth * wet * (1.f - BURIAL_MAX_DUCK * buried);
-    targets[LOOP_ROOF_OPEN]   = sheltered ? roof : 0.f;
-    targets[LOOP_ROOF_SMALL]  = (mSpace == SPACE_SMALL) ? roof : 0.f;
-    targets[LOOP_ROOF_MEDIUM] = (mSpace == SPACE_MEDIUM) ? roof : 0.f;
-    targets[LOOP_ROOF_BIG]    = (mSpace == SPACE_BIG && mCovered) ? roof : 0.f;
+    // The roof ambience's open-cover share: an eave or canopy sits at the outdoors
+    // end of the spectrum and takes the open recording, the room-character
+    // ambiences take what it leaves. Without the field, the probe verdict's own
+    // sheltered rung stands in - the exact discrete split this generalises.
+    const F32 open_w = mEnclosureValid ? llclamp(1.f - enc / 0.4f, 0.f, 1.f)
+                                       : (sheltered ? 1.f : 0.f);
+    targets[LOOP_ROOF_OPEN] = roof * open_w;
+    // A sheltered space reads its own wall-distance size for the room ambiences,
+    // so a deep tunnel lands on the big-hall ambience instead of dropping out.
+    const bool small_room  = (mSpace == SPACE_SMALL)
+                          || (mSpace == SPACE_SHELTERED && mOutdoorSize == SIZE_SMALL);
+    const bool medium_room = (mSpace == SPACE_MEDIUM)
+                          || (mSpace == SPACE_SHELTERED && mOutdoorSize == SIZE_MEDIUM);
+    const bool big_room    = (mSpace == SPACE_BIG && mCovered)
+                          || (mSpace == SPACE_SHELTERED && mOutdoorSize == SIZE_LARGE);
+    targets[LOOP_ROOF_SMALL]  = small_room  ? roof * (1.f - open_w) : 0.f;
+    targets[LOOP_ROOF_MEDIUM] = medium_room ? roof * (1.f - open_w) : 0.f;
+    targets[LOOP_ROOF_BIG]    = big_room    ? roof * (1.f - open_w) : 0.f;
 
     const F32 probe_openness = (mOutdoorSize == SIZE_SMALL)  ? 0.55f
                              : (mOutdoorSize == SIZE_MEDIUM) ? 0.8f : 1.f;
     const F32 outdoor_openness = flow->isValid()
         ? llclamp(flow->exposure(cam_pos), 0.f, 1.5f)
         : probe_openness;
-    const F32 wind_indoor = (1.f - (sheltered ? 0.3f : 0.75f) * mCoverSmooth)
+    const F32 wind_indoor = (1.f - lerp(0.3f, 0.75f, enc) * mCoverSmooth)
                           * lerp(outdoor_openness, 1.f, mCoverSmooth);
     targets[LOOP_WIND_LIGHT]  = tri(wind, 0.02f, 0.3f, 0.75f) * wind_indoor;
     targets[LOOP_WIND_STRONG] = llclamp((wind - 0.45f) / 0.4f, 0.f, 1.f) * wind_indoor;
@@ -602,19 +854,6 @@ void SSSoundscape::updateLoops(F64 now, F32 dt)
         for (S32 i = 0; i < LOOP_COUNT; ++i) targets[i] = 0.f;
         mLadderTargets.clear();
     }
-
-    static LLCachedControl<F32> master_setting(gSavedSettings, "SSAtmoVolumeMaster", 0.8f);
-    static LLCachedControl<F32> ambient_setting(gSavedSettings, "SSAtmoVolumeAmbient", 1.f);
-    static LLCachedControl<F32> wind_setting(gSavedSettings, "SSAtmoVolumeWind", 1.f);
-    const F32 master = llclamp((F32)master_setting, 0.f, 1.f);
-    const F32 ambient_vol = llclamp((F32)ambient_setting, 0.f, 1.f);
-    const F32 wind_vol = llclamp((F32)wind_setting, 0.f, 1.f);
-
-    const F32 category[LOOP_COUNT] = {
-        ambient_vol, ambient_vol, ambient_vol,
-        ambient_vol, ambient_vol, ambient_vol, ambient_vol,
-        wind_vol, wind_vol,
-    };
 
     const std::string sources[LOOP_COUNT] = {
         preset.mSounds.mAmbientLight,
@@ -643,25 +882,25 @@ void SSSoundscape::updateLoops(F64 now, F32 dt)
         applyLoop(mLoops[i], sources[i], master * category[i], dt);
     }
 
-    updateBedVoices(now, dt, master * ambient_vol);
+    updateAmbientVoices(now, dt, master * ambient_vol);
 }
 
-// Per-bed voice management: which recording each bed plays and at what level, levelled by the analysed metadata.
-void SSSoundscape::updateBedVoices(F64 now, F32 dt, F32 master_mul)
+// Per-ambience voice management: which recording each ambience plays and at what level, levelled by the analysed metadata.
+void SSSoundscape::updateAmbientVoices(F64 now, F32 dt, F32 master_mul)
 {
     if (!gAudiop) return;
 
-    for (auto& pair : mBedVoices) pair.second.mTarget = 0.f;
+    for (auto& pair : mAmbientVoices) pair.second.mTarget = 0.f;
     for (const auto& want : mLadderTargets)
     {
-        mBedVoices[want.first].mTarget = llclamp(want.second, 0.f, 1.f);
+        mAmbientVoices[want.first].mTarget = llclamp(want.second, 0.f, 1.f);
     }
 
     const F32 fade = llclamp(dt * 1.5f, 0.f, 1.f);
 
-    for (auto it = mBedVoices.begin(); it != mBedVoices.end(); )
+    for (auto it = mAmbientVoices.begin(); it != mAmbientVoices.end(); )
     {
-        BedVoice& voice = it->second;
+        AmbientVoice& voice = it->second;
         voice.mGain = lerp(voice.mGain, voice.mTarget, fade);
 
         LLAudioSource* source = voice.mSourceID.notNull() ? gAudiop->findAudioSource(voice.mSourceID) : nullptr;
@@ -674,11 +913,11 @@ void SSSoundscape::updateBedVoices(F64 now, F32 dt, F32 master_mul)
                 if (const SSSoundMeta::Meta* meta = SSSoundMeta::getInstance()->get(it->first)) len = meta->mLengthMS;
                 if (len > 0)
                 {
-                    mBedResume[it->first] = (U32)((voice.mOffsetMS + (U64)((now - voice.mStartedAt) * 1000.0)) % len);
+                    mAmbientResume[it->first] = (U32)((voice.mOffsetMS + (U64)((now - voice.mStartedAt) * 1000.0)) % len);
                 }
                 gAudiop->cleanupAudioSource(source);
             }
-            it = mBedVoices.erase(it);
+            it = mAmbientVoices.erase(it);
             continue;
         }
 
@@ -686,8 +925,8 @@ void SSSoundscape::updateBedVoices(F64 now, F32 dt, F32 master_mul)
         {
             voice.mSourceID.generate();
             voice.mStartedAt = now;
-            auto resume = mBedResume.find(it->first);
-            voice.mOffsetMS = (resume != mBedResume.end()) ? resume->second : 0;
+            auto resume = mAmbientResume.find(it->first);
+            voice.mOffsetMS = (resume != mAmbientResume.end()) ? resume->second : 0;
 
             source = new LLAudioSource(voice.mSourceID, gAgent.getID(), 0.f, LLAudioEngine::AUDIO_TYPE_AMBIENT);
             source->setStartOffsetMS(voice.mOffsetMS);
@@ -896,40 +1135,92 @@ void SSSoundscape::scheduleThunder(const LLVector3& pos_agent, F32 distance_m,
     if (!sounds || !gAudiop) return;
     muffle = llclamp(muffle, 0.f, 1.f);
 
+    // <SS:Nexii> The ACOUSTIC channel's propagation query turns the storm system's
+    // muffle guess into three outputs (the doc's Part 3): the travel time walks the
+    // graph's PATH metres - around buildings, through alleys, into courtyards -
+    // instead of the euclidean distance, the portal count and the path-vs-direct
+    // ratio become a muffle share of their own, and the arrival direction renders
+    // the sound from the doorway it actually came through. The cloud-burial guess
+    // stays in the mix: intra-cloud lightning is a rumble however close it is.
+    ThunderPath& dbg = mThunderPath;
+    dbg = ThunderPath();
+    dbg.mValid = true;
+    dbg.mSource = pos_agent;
+    dbg.mDirectM = distance_m;
+    dbg.mMuffleCloud = muffle;
+    dbg.mWhen = SSAtmoMagic::getInstance()->sharedTime();
+
+    F32 travel_m = distance_m;
+    F32 field_muffle = 0.f;
+    bool has_arrival = false;
+    LLVector3 arrival_dir(0.f, 0.f, 1.f);
+    const LLVector3 cam = LLViewerCamera::getInstance()->getOrigin();
+    if (SSWorldField::instanceExists())
+    {
+        SSWorldField* field = SSWorldField::getInstance();
+        SSWorldField::Propagation prop;
+        if (field->propagationQuery(pos_agent, cam, prop))
+        {
+            dbg.mPropagated = true;
+            dbg.mPathM = prop.mPathM;
+            dbg.mPortals = prop.mPortals;
+            dbg.mMuffleField = prop.mMuffle;
+            dbg.mPath = prop.mPath;
+            travel_m = llmax(prop.mPathM, distance_m);
+            field_muffle = prop.mMuffle;
+            has_arrival = prop.mHaveArrival;
+            arrival_dir = prop.mArrivalDir;
+        }
+
+        F32 solid_m = -1.f;
+        S32 crossings = 0;
+        if (field->traceSolid(pos_agent, cam, solid_m, crossings))
+        {
+            dbg.mSolidM = solid_m;
+            dbg.mCrossings = crossings;
+        }
+    }
+    dbg.mDelayS = (F32)llmax(0.0, (F64)(travel_m - distance_m) / (F64)speed_of_sound_ms());
+
+    const F32 total_muffle = llclamp(1.f - (1.f - muffle) * (1.f - field_muffle), 0.f, 1.f);
+
     SSRandStream rng((U32)(fire_at * 6151.0) ^ (U32)distance_m);
 
-    const F64 travel = (F64)(distance_m / speed_of_sound_ms());
+    const F64 travel = (F64)(travel_m / speed_of_sound_ms());
     const F64 heard_at = fire_at + travel;
 
     const F32 crack_gain = (1.f - llclamp(
         (distance_m - THUNDER_CRACK_M) / (THUNDER_RUMBLE_M - THUNDER_CRACK_M), 0.f, 1.f))
-        * (1.f - muffle);
+        * (1.f - total_muffle);
 
-    const F32 fade = 1.f / (1.f + (distance_m / 3000.f));
+    const F32 fade = 1.f / (1.f + (travel_m / 3000.f));
     const F32 gain = llclamp(intensity * fade * windCarryGain(pos_agent), 0.f, 1.f)
-                   * (1.f - 0.45f * muffle);
+                   * (1.f - 0.45f * total_muffle);
 
     if (crack_gain > 0.02f)
     {
         queueThunder(pick_thunder(false, rng),
-                     pos_agent, distance_m, gain * crack_gain, heard_at, muffle);
+                     pos_agent, distance_m, gain * crack_gain, heard_at, total_muffle,
+                     has_arrival, arrival_dir);
     }
 
     const F64 spread = (F64)(rng.frand(2000.f, 5000.f) * (0.6f + intensity * 0.7f)
-                             / speed_of_sound_ms()) * (F64)(1.f - 0.45f * muffle);
+                             / speed_of_sound_ms()) * (F64)(1.f - 0.45f * total_muffle);
 
     queueThunder(pick_thunder(true, rng),
                  pos_agent, distance_m, gain * (0.5f + 0.5f * (1.f - crack_gain)),
-                 heard_at + spread * (F64)(1.f - crack_gain), muffle);
+                 heard_at + spread * (F64)(1.f - crack_gain), total_muffle,
+                 has_arrival, arrival_dir);
 }
 
 // Queues one thunder playback at an absolute time.
 void SSSoundscape::queueThunder(const LLUUID& sound, const LLVector3& pos_agent,
-                                F32 distance_m, F32 gain, F64 heard_at, F32 muffle)
+                                F32 distance_m, F32 gain, F64 heard_at, F32 muffle,
+                                bool has_arrival, const LLVector3& arrival_dir)
 {
     if (sound.isNull() || gain <= 0.f) return;
 
-    gAudiop->preloadSound(sound);
+    SSSoundMeta::getInstance()->fetch(sound);
 
     PendingThunder pending;
     pending.mPos = pos_agent;
@@ -939,6 +1230,8 @@ void SSSoundscape::queueThunder(const LLUUID& sound, const LLVector3& pos_agent,
     pending.mGain = gain;
     pending.mHeardAt = heard_at;
     pending.mPlayAt = heard_at;
+    pending.mHasArrival = has_arrival;
+    pending.mArrivalDir = arrival_dir;
 
     mThunder.push_back(pending);
 }
@@ -989,9 +1282,20 @@ void SSSoundscape::updateThunder(F64 now)
 
         {
             const LLVector3 cam = LLViewerCamera::getInstance()->getOrigin();
-            LLVector3 dir = p.mPos - cam;
-            const F32 d = dir.normalize();
-            const LLVector3 near_pos = cam + dir * llmin(d, 12.f);
+            // <SS:Nexii> The propagation solve's arrival direction wins when it has
+            // one: sound entering through a doorway is rendered FROM the doorway.
+            LLVector3 dir;
+            if (p.mHasArrival)
+            {
+                dir = p.mArrivalDir;
+                dir.normVec();
+            }
+            else
+            {
+                dir = p.mPos - cam;
+                dir.normVec();
+            }
+            const LLVector3 near_pos = cam + dir * 12.f;
 
             const F32 occ = llclamp(skyOcclusion() + p.mMuffle * 0.55f, 0.f, 1.f);
             registerFollower(ss_play_oneshot(p.mSound, gAgent.getPosGlobalFromAgent(near_pos), gain, occ),
@@ -1122,13 +1426,24 @@ void SSSoundscape::reapStepLoops(F64 now)
     }
 }
 
+// Whether this avatar's steps may sound at all: parcel sound setting, then the per-avatar object-sound mute.
+bool SSSoundscape::stepsAudible(const LLUUID& avatar_id, const LLVector3& pos_agent)
+{
+    // <SS:Nexii> The two gates stock applied to its own trigger-style footsteps, kept for the Atmo paths after the trigger function they lived in was left callerless by the loop rework - muting an avatar silenced its chat and its attachments but not its boots, and a no-sound parcel was ignored outright. The mute is keyed on the WALKER, not the listener, and the parcel is the one under the walker's feet, so a muted neighbour two parcels over stays silent while your own steps follow your own ground. [interaction] called from footstepEvent, updateFootstepLoop and footstepImpact - every live step path there is.
+    return LLViewerParcelMgr::getInstance()->canHearSound(gAgent.getPosGlobalFromAgent(pos_agent))
+        && !LLMuteList::getInstance()->isMuted(avatar_id, LLMute::flagObjectSounds);
+}
+
 // The per-avatar walking loop: surface pick, cadence from the analysed onsets, start and stop with movement.
 void SSSoundscape::updateFootstepLoop(const LLUUID& avatar_id, const LLVector3& pos_agent,
-                                      bool on_land, S32 locomotion, bool is_self)
+                                      bool on_land, S32 locomotion, F32 speed_gain, bool is_self)
 {
     if (!gAudiop) return;
 
     const F64 now = SSAtmoMagic::getInstance()->sharedTime();
+
+    // <SS:Nexii> Going inaudible mid-stride has to STOP the loop, not merely refuse to start it - a mute or a parcel crossing while walking would otherwise leave the running source playing forever. Reporting it as airborne reuses the existing teardown and skips the cadence-gap wait, which is the right cut here: this is not a halt to round off, it is a sound that should not be playing.
+    if (!stepsAudible(avatar_id, pos_agent)) locomotion = STEP_JUMP;
 
     if (locomotion != STEP_WALK && STEP_RUN != locomotion)
     {
@@ -1137,7 +1452,12 @@ void SSSoundscape::updateFootstepLoop(const LLUUID& avatar_id, const LLVector3& 
         StepLoop& loop = it->second;
         loop.mLastSeen = now;
 
-        if (loop.mStopAt <= 0.0)
+        // <SS:Nexii> STEP_JUMP is the avatar saying airborne: no cut-point wait, the loop was audibly running on into the jump.
+        if (locomotion == STEP_JUMP)
+        {
+            loop.mStopAt = now;
+        }
+        else if (loop.mStopAt <= 0.0)
         {
             F64 wait = 0.0;
             const SSSoundMeta::Meta* meta = SSSoundMeta::getInstance()->get(loop.mSound);
@@ -1175,6 +1495,7 @@ void SSSoundscape::updateFootstepLoop(const LLUUID& avatar_id, const LLVector3& 
     StepLoop& loop = mStepLoops[avatar_id];
     loop.mLastSeen = now;
     loop.mStopAt = 0.0;
+    loop.mSpeedGain = llclamp(speed_gain, 0.f, 1.f);
     if (fresh)
     {
         // Per-walk, so the debug readout counts drops for the walk you are listening to rather than every walk this session.
@@ -1258,19 +1579,24 @@ void SSSoundscape::updateFootstepLoop(const LLUUID& avatar_id, const LLVector3& 
         source->setOcclusion(0.f);
         gAudiop->addAudioSource(source);
         source->play(sound);
-        gAudiop->preloadSound(sound);
+        SSSoundMeta::getInstance()->fetch(sound);
         markStepSource(loop.mSourceID);
     }
 
     if (source)
     {
+        static LLCachedControl<F32> vol(gSavedSettings, "SSAtmoVolumeFootsteps", 0.5f);
+        source->setGain(llclamp((F32)vol, 0.f, 1.f) * loop.mSpeedGain);
         source->setPositionGlobal(gAgent.getPosGlobalFromAgent(pos_agent));
     }
 }
 
-// One discrete footstep: pick and play at the foot.
+// One discrete footstep from a live segmented loop: gate, then cut at the foot.
 void SSSoundscape::footstepImpact(const LLUUID& avatar_id, const LLVector3& foot_pos_agent, bool is_self)
 {
+    // <SS:Nexii> Gated on its own rather than trusting the loop's gate: the cut fires at the FOOT, which can be across a parcel line from the body the loop was positioned at, and the call comes straight from the avatar's detector.
+    if (!stepsAudible(avatar_id, foot_pos_agent)) return;
+
     auto it = mStepLoops.find(avatar_id);
     if (it == mStepLoops.end() || !it->second.mSegmented || it->second.mSound.isNull() || !gAudiop) return;
 
@@ -1292,27 +1618,37 @@ void SSSoundscape::footstepImpact(const LLUUID& avatar_id, const LLVector3& foot
     if (gap < 5.0) dbg.mStepGap = (F32)gap;   // the first footfall of a walk has no predecessor to measure against - mLastImpactAt is still the epoch
     it->second.mLastImpactAt = now;
 
+    static LLCachedControl<F32> vol(gSavedSettings, "SSAtmoVolumeFootsteps", 0.5f);
+
+    fadeKill(it->second.mSegSourceID);
+    it->second.mSegSourceID = playStepCut(it->second.mSound, foot_pos_agent, llclamp((F32)vol, 0.f, 1.f) * it->second.mSpeedGain);
+}
+
+// One discrete footfall window cut from a recording, at the foot; no step loop required.
+LLUUID SSSoundscape::playStepCut(const LLUUID& sound, const LLVector3& pos_agent, F32 gain)
+{
+    if (!gAudiop || sound.isNull()) return LLUUID::null;
+
+    const SSSoundMeta::Meta* meta = SSSoundMeta::getInstance()->get(sound);
+    if (!meta || meta->mOnsets.size() < 2 || meta->mLengthMS == 0) return LLUUID::null;
+
     const size_t k = (size_t)ll_rand((S32)meta->mOnsets.size() - 1);
 
     const U32 start = (meta->mOnsets[k] > 60) ? meta->mOnsets[k] - 60 : 0;
     const U32 cut = meta->mOnsets[k] + (meta->mOnsets[k + 1] - meta->mOnsets[k]) * 2 / 3;
     const F64 window_s = llclamp((F64)(cut - start) / 1000.0, 0.1, 0.9);
 
-    static LLCachedControl<F32> vol(gSavedSettings, "SSAtmoVolumeFootsteps", 0.5f);
-
-    fadeKill(it->second.mSegSourceID);
-
     const LLUUID id = LLUUID::generateNewID();
-    it->second.mSegSourceID = id;
     LLAudioSource* source = new LLAudioSource(id, gAgent.getID(),
-                                              llclamp((F32)vol, 0.f, 1.f), LLAudioEngine::AUDIO_TYPE_AMBIENT);
+                                              llclamp(gain, 0.f, 1.f), LLAudioEngine::AUDIO_TYPE_AMBIENT);
     source->setStartOffsetMS(start);
-    source->setPositionGlobal(gAgent.getPosGlobalFromAgent(foot_pos_agent));
+    source->setPositionGlobal(gAgent.getPosGlobalFromAgent(pos_agent));
     gAudiop->addAudioSource(source);
-    source->play(it->second.mSound);
+    source->play(sound);
     markStepSource(id);
 
     mSegmentStops.emplace_back(id, SSAtmoMagic::getInstance()->sharedTime() + window_s);
+    return id;
 }
 
 // Stops segment-scheduled sources at their planned end.
@@ -1334,13 +1670,50 @@ void SSSoundscape::updateSegmentStops(F64 now)
 void SSSoundscape::footstepEvent(const LLUUID& avatar_id, const LLVector3& pos_agent,
                                  bool on_land, S32 action, bool is_self)
 {
+    // <SS:Nexii> The jump and land one-shots gate here, before the surface roll: nothing below this line makes a sound a muted avatar or a no-sound parcel is allowed to make.
+    if (!stepsAudible(avatar_id, pos_agent)) return;
+
     const LLUUID sound = footstepSound(avatar_id, pos_agent, on_land, action, is_self);
-    if (sound.isNull() || !gAudiop) return;
+    if (sound.isNull())
+    {
+        // <SS:Nexii> A touchdown is a footstep even with no Land recording configured:
+        // cut one step from the walk recording instead of going silent. The touchdown
+        // edge fires once per landing, so a two-foot soft landing sounds once; a live
+        // loop mode no-ops the impact because the restarted loop already sounds.
+        if (action == STEP_LAND)
+        {
+            footstepImpact(avatar_id, pos_agent, is_self);
+            if (mStepLoops.find(avatar_id) == mStepLoops.end())
+            {
+                static LLCachedControl<F32> vol(gSavedSettings, "SSAtmoVolumeFootsteps", 0.5f);
+                // <SS:Nexii> footstepSound wipes the debug record on entry, so asking it for the walk sound here overwrote the landing it was just asked about and the readout showed every touchdown as a walk step. The land record is the one worth keeping - the walk lookup is a fallback for a UUID, not an event - so it is saved across the query and put back.
+                StepDebug& dbg = is_self ? mStepSelf : mStepOther;
+                const StepDebug land_dbg = dbg;
+                const LLUUID fallback = footstepSound(avatar_id, pos_agent, on_land, STEP_WALK, is_self);
+                dbg = land_dbg;
+                playStepCut(fallback, pos_agent, llclamp((F32)vol, 0.f, 1.f));
+            }
+        }
+        return;
+    }
 
     static LLCachedControl<F32> vol(gSavedSettings, "SSAtmoVolumeFootsteps", 0.5f);
 
     markStepSource(ss_play_oneshot(sound, gAgent.getPosGlobalFromAgent(pos_agent),
                                    llclamp((F32)vol, 0.f, 1.f), 0.f));
+}
+
+// Mirrors the avatar-side footfall detector into the debug readout: foot offsets along travel, swing/stance phase and the speed gain.
+void SSSoundscape::noteFootGait(bool is_self, S32 loco, const F32 s[2], const bool swing[2], F32 speed_gain)
+{
+    StepDebug& dbg = is_self ? mStepSelf : mStepOther;
+    dbg.mLoco = loco;
+    dbg.mSpeedGain = speed_gain;
+    for (S32 f = 0; f < 2; ++f)
+    {
+        dbg.mFootS[f] = s[f];
+        dbg.mFootSwing[f] = swing[f];
+    }
 }
 
 // Tags a source as a step sound for the reaper.
@@ -1377,7 +1750,23 @@ void SSSoundscape::updateStepMarks(F64 now)
         if (mark.mText)
         {
             const LLVector3 pos = gAgent.getPosAgentFromGlobal(source->getPositionGlobal());
-            mark.mText->setPositionAgent(pos + LLVector3(0.f, 0.f, 0.3f));
+            const LLVector3 mark_pos = pos + LLVector3(0.f, 0.f, 0.3f);
+            mark.mText->setPositionAgent(mark_pos);
+
+            // <SS:Nexii> Only marks the camera could actually see: within 24m and with clear line of sight. The ray runs from the mark towards the camera through world geometry only -
+            // avatars are not in that partition set and alpha texels are not picked - so a crowd or a foliage wall never hides a step, but a floor or a solid wall does. Cheap enough per
+            // frame: there is one mark per live step source.
+            const LLVector3 cam = LLViewerCamera::getInstance()->getOrigin();
+            const F32 MARK_RANGE = 24.f;
+            bool visible = (cam - mark_pos).magVecSquared() < MARK_RANGE * MARK_RANGE;
+            if (visible)
+            {
+                LLVector4a start4, end4, hit;
+                start4.load3(mark_pos.mV);
+                end4.load3(cam.mV);
+                visible = !gPipeline.lineSegmentIntersectWorldGeometry(start4, end4, &hit, false, false);
+            }
+            mark.mText->setHidden(!visible);
 
             const bool fresh = now - mark.mStart < 0.25;
             mark.mText->setString(fresh ? std::string(">> STEP <<") : std::string("."));

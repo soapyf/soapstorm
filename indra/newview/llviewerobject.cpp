@@ -143,6 +143,13 @@ F64Seconds  LLViewerObject::sMaxUpdateInterpolationTime(3.0);       // For motio
 F64Seconds  LLViewerObject::sPhaseOutUpdateInterpolationTime(2.0);  // For motion interpolation: after Y seconds with no updates, taper off motion prediction
 F64Seconds  LLViewerObject::sMaxRegionCrossingInterpolationTime(1.0);// For motion interpolation: don't interpolate over this time on region crossing
 
+// <SS:Nexii> SS timing inversion tuning (derived from the scratch benchmark bullet_interp_bench.py)
+const F32 SS_TIMING_WINDOW_SECS = 0.2f;      // tau deviation from its running center before falling back to a hard snap
+const F32 SS_TIMING_PERP_GATE_M = 0.25f;     // cross-track residual allowed on a re-timed update
+const F32 SS_TIMING_SPEED_GATE_MPS = 5.f;    // below this, correction snaps are imperceptible
+const F64 SS_TIMING_PRIOR_BOUND_SECS = 0.25; // absolute bound on the back-dated state age
+const F64 SS_TIMING_TAU_CENTER_ALPHA = 0.2;  // EWMA weight tracking the protocol timing offset
+
 std::map<std::string, U32> LLViewerObject::sObjectDataMap;
 std::unordered_map<LLUUID, std::vector<LLViewerObject*>> LLViewerObject::sPendingUpdatesByOwner;
 
@@ -300,6 +307,7 @@ LLViewerObject::LLViewerObject(const LLUUID &id, const LLPCode pcode, LLViewerRe
     mGhostProjectileProbeCount(0),
     mOnGhostProjectileWatch(false),
     mLatestRecvPacketID(0),
+    mSSTimingTauCenterSecs(F64_MAX),
     mRegionCrossExpire(0),
     mData(NULL),
     mAudioSourcep(NULL),
@@ -1367,6 +1375,11 @@ U32 LLViewerObject::processUpdateMessage(LLMessageSystem *mesgsys,
     LL_DEBUGS_ONCE("SceneLoadTiming") << "Received viewer object data" << LL_ENDL;
 
     LL_DEBUGS("ObjectUpdate") << " mesgsys " << mesgsys << " dp " << dp << " id " << getID() << " update_type " << (S32) update_type << LL_ENDL;
+
+    // <SS:Nexii> SS timing inversion needs the pre-update motion state
+    const LLVector3 ss_prev_vel(getVelocity());
+    const LLVector3 ss_prev_accel(getAcceleration());
+    const F64Seconds ss_prev_msg_time(mLastMessageUpdateSecs);
 
     // The new OBJECTDATA_FIELD_SIZE_124, OBJECTDATA_FIELD_SIZE_140, OBJECTDATA_FIELD_SIZE_80
     // and OBJECTDATA_FIELD_SIZE_64 lengths should be supported in the existing cases below.
@@ -2505,6 +2518,50 @@ U32 LLViewerObject::processUpdateMessage(LLMessageSystem *mesgsys,
         mProjectileHeuristicTagged = true;
     }
 
+    // <SS:Nexii> SS timing inversion: updates carry no timestamp, so per-packet latency jitter lands as
+    // position snaps (the fast-projectile stagger). Solve the update's age from the along-track residual
+    // against the extrapolated trajectory; if the residual is timing-shaped, advance the received state to
+    // now by the solved age instead of hard-snapping.
+    LLVector3 ss_apply_pos = new_pos_parent;
+    static LLCachedControl<bool> ss_timing_inversion(gSavedSettings, "SSTimingInversion", true);
+    if (ss_timing_inversion && sVelocityInterpolate
+        && mesgsys != NULL && update_type == OUT_TERSE_IMPROVED
+        && !mParent && !isAvatar() && !isAttachment() && !mOrphaned && !mStatic
+        && !isSelected() && mRegionp)
+    {
+        LLCircuitData *ss_cdp = gMessageSystem->mCircuitInfo.findCircuit(mesgsys->getSender());
+        const F32 ss_speed = getVelocity().magVec();
+        const F64Seconds ss_dt_upd = F64Seconds(LLFrameTimer::getElapsedSeconds()) - ss_prev_msg_time;
+        if (ss_cdp && ss_speed >= SS_TIMING_SPEED_GATE_MPS
+            && ss_prev_msg_time > 0.0 && ss_dt_upd > 0.0 && ss_dt_upd < F64Seconds(1.0))
+        {
+            const F32 ss_dilation = mRegionp->getTimeDilation();
+            const F64 ss_l0 = 0.5 * ss_dilation * (F64)((F32)ss_cdp->getPingDelay().value()) * 0.001;
+            const F64 ss_state_age = (mLastInterpUpdateSecs - ss_prev_msg_time).value();
+            const LLVector3 ss_vel_state = ss_prev_vel + ss_prev_accel * (F32)ss_state_age;
+            const LLVector3 ss_p_exp = getPositionRegion() - ss_vel_state * (F32)ss_l0 + ss_prev_accel * (F32)(0.5 * ss_l0 * ss_l0);
+            const LLVector3 ss_r = new_pos_parent - ss_p_exp;
+            LLVector3 ss_v_hat(getVelocity());
+            ss_v_hat.normVec();
+            const F32 ss_along = ss_r * ss_v_hat;
+            const F32 ss_perp = (ss_r - ss_v_hat * ss_along).magVec();
+            const F64 ss_tau = (F64)ss_along / ss_speed;
+            const F64 ss_center = (mSSTimingTauCenterSecs == F64_MAX)
+                ? ss_tau
+                : (SS_TIMING_TAU_CENTER_ALPHA * ss_tau + (1.0 - SS_TIMING_TAU_CENTER_ALPHA) * mSSTimingTauCenterSecs);
+            const F32 ss_dv = (getVelocity() - ss_prev_vel).magVec();
+            const bool ss_real_change = ss_dv > llmax(1.0f, 3.f * getAcceleration().magVec() * (F32)ss_dt_upd.value());
+            if (fabs(ss_tau - ss_center) <= SS_TIMING_WINDOW_SECS
+                && ss_perp < SS_TIMING_PERP_GATE_M
+                && !ss_real_change)
+            {
+                const F64 ss_l_hat = llclamp(ss_l0 - ss_tau, ss_l0 - SS_TIMING_PRIOR_BOUND_SECS, ss_l0 + SS_TIMING_PRIOR_BOUND_SECS);
+                ss_apply_pos = new_pos_parent + getVelocity() * (F32)ss_l_hat + getAcceleration() * (F32)(0.5 * ss_l_hat * ss_l_hat);
+            }
+            mSSTimingTauCenterSecs = SS_TIMING_TAU_CENTER_ALPHA * ss_tau + (1.0 - SS_TIMING_TAU_CENTER_ALPHA) * ss_center;
+        }
+    }
+
     // first, let's see if the new position is actually a change
 
     //static S32 counter = 0;
@@ -2524,7 +2581,8 @@ U32 LLViewerObject::processUpdateMessage(LLMessageSystem *mesgsys,
         F32 mag_sqr = diff.magVecSquared() ;
         if(llfinite(mag_sqr))
         {
-            setPositionParent(new_pos_parent);
+            // <SS:Nexii> SS timing inversion applies the latency-corrected position
+            setPositionParent(ss_apply_pos);
         }
         else
         {
@@ -5483,6 +5541,7 @@ void LLViewerObject::sendMaterialUpdate() const
 {
     LLViewerRegion* regionp = getRegion();
     if(!regionp) return;
+    if (ssIsLocalContent()) return;    // <SS:Nexii> no simulator owns this object; the landscape record is the store
     gMessageSystem->newMessageFast(_PREHASH_ObjectMaterial);
     gMessageSystem->nextBlockFast(_PREHASH_AgentData);
     gMessageSystem->addUUIDFast(_PREHASH_AgentID, gAgent.getID() );
@@ -5501,6 +5560,7 @@ void LLViewerObject::sendShapeUpdate()
     LLViewerRegion *regionp = getRegion();
     if (!regionp) return;
     // </FS:Ansariel>
+    if (ssIsLocalContent()) return;    // <SS:Nexii> no simulator owns this object; the landscape record is the store
 
     gMessageSystem->newMessageFast(_PREHASH_ObjectShape);
     gMessageSystem->nextBlockFast(_PREHASH_AgentData);
@@ -5522,6 +5582,7 @@ void LLViewerObject::sendTEUpdate() const
     LLViewerRegion *regionp = getRegion();
     if (!regionp) return;
     // </FS:Ansariel>
+    if (ssIsLocalContent()) return;    // <SS:Nexii> no simulator owns this object; the landscape record is the store
 
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_ObjectImage);
@@ -7128,6 +7189,8 @@ void LLViewerObject::parameterChanged(U16 param_type, bool local_origin)
 
 void LLViewerObject::parameterChanged(U16 param_type, LLNetworkData* data, bool in_use, bool local_origin)
 {
+    // <SS:Nexii> Local content (Atmo Magic landscape) has no simulator: the Features tab's light and flexi edits land in the entry and the landscape capture persists them, but the ObjectExtraParams send below would go to whatever region the object is anchored to. This is the one extra-params path that bypasses the LLSelectMgr funnel.
+    if (local_origin && ssIsLocalContent()) return;
     if (local_origin)
     {
         // *NOTE: Do not send the render material ID in this way as it will get
@@ -7529,6 +7592,7 @@ void LLViewerObject::updateFlags(bool physics_changed)
 {
     LLViewerRegion* regionp = getRegion();
     if(!regionp) return;
+    if (ssIsLocalContent()) return;    // <SS:Nexii> no simulator owns this object; the landscape record is the store
     gMessageSystem->newMessage("ObjectFlagUpdate");
     gMessageSystem->nextBlockFast(_PREHASH_AgentData);
     gMessageSystem->addUUIDFast(_PREHASH_AgentID, gAgent.getID() );
@@ -8141,9 +8205,14 @@ void LLViewerObject::setRenderMaterialID(S32 te_in, const LLUUID& id, bool updat
         {
             param_block->setMaterial(te, id);
         }
+        // <SS:Nexii> The block is only ever flagged in use when the sim echoes the change back through an ObjectUpdate; local content (Atmo Magic landscape) has no sim, so without this getRenderMaterialID() read null while the material rendered - the texture panel showed no material and the landscape capture wrote the null into the record, stripping every PBR material within a second of applying it. local_origin = true keeps parameterChanged from sending.
+        if (ssIsLocalContent())
+        {
+            setParameterEntryInUse(LLNetworkData::PARAMS_RENDER_MATERIAL, true, true);
+        }
     }
 
-    if (update_server)
+    if (update_server && !ssIsLocalContent())    // <SS:Nexii> nothing to echo for local content; the local state above is the whole story
     {
         // update via ModifyMaterialParams cap (server will echo back changes)
         for (S32 te = start_idx; te < end_idx; ++te)

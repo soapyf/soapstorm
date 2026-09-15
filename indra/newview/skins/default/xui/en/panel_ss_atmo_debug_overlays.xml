@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
-<!-- <SS:Nexii> The switchboard: every overlay that draws Atmo Magic debug
-     geometry into the world or text onto the screen. The seven render debug
-     masks that used to hang off Develop > Render Metadata lead the list in the
-     menu's own order; the markers and the info readout follow. The pickers and
-     dials that shape what each overlay draws live on the tabs behind this one. -->
+<!-- <SS:Nexii> What is left after the TABS move: the settle beacon and the
+     three world-space marker toggles, none of which has a dial-bearing tab of
+     its own to sit on top of. Every other render debug switch that used to
+     live here now sits at the top of the tab that shapes it - Wind Flow,
+     Rain (shadow map and runoff), Fields (surface, world and cloud) and
+     Views (the info readout). -->
 <panel
  name="debug_overlays_panel"
  follows="all"
@@ -44,111 +45,6 @@
      top="8"
      height="14"
      width="382"
-     name="debug_views_label"
-     font="SansSerifSmallBold">
-        Debug Views
-    </text>
-    <text
-     follows="left|top"
-     layout="topleft"
-     left="12"
-     top_pad="4"
-     height="44"
-     width="382"
-     name="debug_views_help"
-     word_wrap="true"
-     font="SansSerifSmall">
-        Everything that draws Atmo Magic debug geometry, one switch each. The pickers and dials for each view are on the other tabs. The info readout&apos;s own orange headings collapse their section on click.
-    </text>
-    <check_box
-     control_name="SSAtmoShowInfo"
-     follows="left|top"
-     layout="topleft"
-     left="12"
-     top_pad="6"
-     height="16"
-     width="382"
-     name="info_overlay_check"
-     label="Show info overlay"
-     tool_tip="On-screen readout of weather values, the maps&apos; capture health, particle counts, lightning state and the indoor/outdoor probe result. Click an orange heading to collapse that section" />
-    <check_box
-     follows="left|top"
-     layout="topleft"
-     left="12"
-     top_pad="4"
-     height="16"
-     width="382"
-     name="flow_overlay_check"
-     label="Draw the wind flowmap"
-     tool_tip="The solved field drawn over the world - arrows or flow lines, capture passes, all picked on the Wind Flow tab" />
-    <check_box
-     follows="left|top"
-     layout="topleft"
-     left="12"
-     top_pad="4"
-     height="16"
-     width="382"
-     name="shadow_overlay_check"
-     label="Draw the rain shadow map"
-     tool_tip="Every captured depth texel drawn where it saw the world, in the view picked on the Rain tab" />
-    <check_box
-     follows="left|top"
-     layout="topleft"
-     left="12"
-     top_pad="4"
-     height="16"
-     width="382"
-     name="runoff_overlay_check"
-     label="Draw the roof runoff"
-     tool_tip="The eaves, the water they hold and what they shed, in the stage picked on the Rain tab" />
-    <check_box
-     follows="left|top"
-     layout="topleft"
-     left="12"
-     top_pad="4"
-     height="16"
-     width="382"
-     name="surface_overlay_check"
-     label="Draw the surface field"
-     tool_tip="The wet/snow/puddle landing grid and its runoff traces, drawn over the ground they land on" />
-    <check_box
-     follows="left|top"
-     layout="topleft"
-     left="12"
-     top_pad="4"
-     height="16"
-     width="382"
-     name="field_overlay_check"
-     label="Draw the world field"
-     tool_tip="The shared capture&apos;s view - band surfaces, air labels, drainage or true ground - picked on the Fields tab. The drainage and air views are distance-thinned" />
-    <check_box
-     follows="left|top"
-     layout="topleft"
-     left="12"
-     top_pad="4"
-     height="16"
-     width="382"
-     name="cloud_overlay_check"
-     label="Draw the cloud field"
-     tool_tip="The volumetric deck&apos;s builder views, picked on the Fields tab" />
-    <check_box
-     follows="left|top"
-     layout="topleft"
-     left="12"
-     top_pad="4"
-     height="16"
-     width="382"
-     name="settle_overlay_check"
-     label="Mark geometry changes waiting to settle"
-     tool_tip="A beacon over every prim change still waiting out its settle delay, green as it comes due and red once it has re-armed too often to ever settle" />
-
-    <text
-     follows="left|top"
-     layout="topleft"
-     left="12"
-     top_pad="16"
-     height="14"
-     width="382"
      name="markers_label"
      font="SansSerifSmallBold">
         Markers
@@ -158,13 +54,40 @@
      layout="topleft"
      left="12"
      top_pad="4"
-     height="28"
+     height="44"
      width="382"
      name="markers_help"
      word_wrap="true"
      font="SansSerifSmall">
-        World-space tags over things the systems are holding or doing right now.
+        The settle beacon and the world-space tags over things the systems are holding or doing right now - everything else with a switch moved to the top of the tab that shapes it.
     </text>
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     height="16"
+     width="382"
+     name="settle_overlay_check"
+     label="Mark geometry changes waiting to settle"
+     tool_tip="A beacon over every prim change still waiting out its settle delay, green as it comes due and red once it has re-armed too often to ever settle" />
+
+    <!-- <SS:Nexii> The eighth render-debug mask (RENDER_DEBUG_LIGHTNING), bound in
+         SSFloaterAtmoDebug::postBuild beside the other seven: the lightning
+         diagram, which is also the V9 info view on the Views tab. Distinct from
+         the pending-strike markers below it - those announce a strike before it
+         fires; this draws every live strike's channel, state and lights. -->
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     height="16"
+     width="382"
+     name="lightning_overlay_check"
+     label="Lightning diagram (channels, state and lights)"
+     tool_tip="Every live strike drawn as the model holds it: the channel node by node, solid where the leader has already passed and faint ahead of it, coloured by lifecycle stage (charge, leader, stroke, plasma, afterglow); the ground crawl past the foot; the attachment point; a sheet strike&apos;s aim line; the ground show&apos;s bounding box in grey when the renderer&apos;s occlusion query has hidden it; and the two light readings - the deferred scene lights at their true radius and a ring on every strike bright enough to light the cloud deck. The same layer as the Lightning (V9) info view, which adds the legend, the strike timeline and the &apos;why is nothing striking&apos; readout. Far bolts reduce to their trunk; ground-fire discs and filled light radii follow the Views tab&apos;s tile-tint switch" />
+
     <check_box
      control_name="SSAtmoDebugStrikeMarkers"
      follows="left|top"

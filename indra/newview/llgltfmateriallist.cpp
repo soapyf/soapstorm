@@ -327,6 +327,14 @@ void LLGLTFMaterialList::applyQueuedOverrides(LLViewerObject* obj)
 
 void LLGLTFMaterialList::queueModify(const LLViewerObject* obj, S32 side, const LLGLTFMaterial* mat)
 {
+    // <SS:Nexii> Local content (Atmo Magic landscape) has no ModifyMaterialParams cap to answer, so the override the panel just built is applied here the way the sim's echo would apply it (applyOverrideMessage), selection callbacks included so the panel refreshes; the landscape capture then persists it in the record.
+    if (obj && obj->ssIsLocalContent())
+    {
+        LLViewerObject* local = const_cast<LLViewerObject*>(obj);
+        local->setTEGLTFMaterialOverride((U8)side, mat ? new LLGLTFMaterial(*mat) : nullptr);
+        handle_gltf_override_message.doSelectionCallbacks(obj->getID(), side);
+        return;
+    }
     if (obj && obj->getRenderMaterialID(side).notNull())
     {
         if (mat == nullptr)
@@ -342,6 +350,7 @@ void LLGLTFMaterialList::queueModify(const LLViewerObject* obj, S32 side, const 
 
 void LLGLTFMaterialList::queueApply(const LLViewerObject* obj, S32 side, const LLUUID& asset_id)
 {
+    if (obj && obj->ssIsLocalContent()) return;    // <SS:Nexii> no sim to apply on; LLViewerObject::setRenderMaterialID already did the local work
     const LLGLTFMaterial* material_override = obj->getTE(side)->getGLTFMaterialOverride();
     if (material_override)
     {
@@ -357,6 +366,7 @@ void LLGLTFMaterialList::queueApply(const LLViewerObject* obj, S32 side, const L
 
 void LLGLTFMaterialList::queueApply(const LLViewerObject* obj, S32 side, const LLUUID& asset_id, const std::string &override_json)
 {
+    if (obj && obj->ssIsLocalContent()) return;    // <SS:Nexii> local content: see the two-argument overload
     if (asset_id.isNull() || override_json.empty())
     {
         // If there is no asset, there can't be an override
@@ -370,6 +380,7 @@ void LLGLTFMaterialList::queueApply(const LLViewerObject* obj, S32 side, const L
 
 void LLGLTFMaterialList::queueApply(const LLViewerObject* obj, S32 side, const LLUUID& asset_id, const LLGLTFMaterial* material_override)
 {
+    if (obj && obj->ssIsLocalContent()) return;    // <SS:Nexii> local content: see the two-argument overload
     if (asset_id.isNull() || material_override == nullptr)
     {
         // If there is no asset, there can't be an override

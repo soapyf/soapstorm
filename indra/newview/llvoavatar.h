@@ -1333,8 +1333,7 @@ private:
     const static LLUUID sStepSounds[LL_MCODE_END];
     // const static LLUUID  sStepSoundOnLand; - <FS:PP> Commented out for FIRE-3169: Option to change the default footsteps sound
 
-    // <SS:Nexii> Atmo Magic surface-aware footstep sounds. Kept as plain S32 action codes here (0=walk, 1=run, 2=jump, 3=land, matching SSStepAction in ssprecippreset.h) so this header does not need to pull that one in.
-    void        playFootstepSound(const LLVector3& foot_pos_agent, S32 action);
+    // <SS:Nexii> Atmo Magic surface-aware footstep sounds. Action codes travel as plain S32 (0=walk, 1=run, 2=jump, 3=land, matching SSStepAction in ssprecippreset.h) so this header does not need to pull that one in.
     bool        mWasJumping = false;
 
     //--------------------------------------------------------------------
@@ -1348,12 +1347,15 @@ private:
     // <SS:Nexii> Airborne last frame, for the touchdown edge that fires the Land one-shot - see updateFootstepSounds.
     bool                mSSWasInAir = false;
     bool                mSSWasRunning = false;   // hysteresis for the walk/run speed classifier - see updateFootstepSounds
-    // Per-foot touchdown detection state, [0]=left [1]=right. Envelope trackers rather than fixed thresholds because ankle elevation has an unknown DC offset (ankle-to-sole distance scales with
-    // avatar height, and hover/AO shift it further) and an unknown swing amplitude - see updateFootstepSounds.
-    F32                 mSSFootLow[2]   = { 0.f, 0.f };
-    F32                 mSSFootHigh[2]  = { 0.f, 0.f };
-    bool                mSSFootArmed[2] = { false, false };
+    // <SS:Nexii> Per-foot footfall detection state, [0]=left [1]=right: the ankle's body-frame offset projected onto the direction of travel, the running extreme since the last phase
+    // change, and which phase (swing = tracking the foremost point, stance = tracking the rearmost). Pure skeleton, no ground reference - see updateFootstepSounds.
+    F32                 mSSFootS[2]     = { 0.f, 0.f };
+    F32                 mSSFootPeak[2]  = { 0.f, 0.f };
+    bool                mSSFootSwing[2] = { false, false };
     bool                mSSFootTracking = false;
+    // <SS:Nexii> Own-avatar jump key: rising edge starts a short airborne hold that the sim's jump/fall anims take over from, so the round trip does not leak footsteps into the launch.
+    bool                mSSJumpKeyWas = false;
+    F32                 mSSJumpKeyHold = 0.f;
     bool                mWasOnGroundRight;
 
 /**                    Sounds

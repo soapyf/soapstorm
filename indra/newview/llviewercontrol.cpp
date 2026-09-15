@@ -1691,6 +1691,8 @@ void settings_setup_listeners()
     // <SS:Nexii> Squeeze promotion - the four settings the fill engine reads, listened for so the preferences checkboxes take effect the moment they are ticked. SSSqueezeNetworkPromote in particular had a checkbox and no reader at all, which is worse than having no control: it told the user their bandwidth was being spent, or not spent, on the strength of a setting nothing consulted.
     setting_setup_signal_listener(gSavedSettings, "SSSqueezePromote", handleSSSqueezeEnabledChanged);
     setting_setup_signal_listener(gSavedSettings, "SSSqueezeNetworkPromote", handleSSSqueezeEnabledChanged);
+    setting_setup_signal_listener(gSavedSettings, "SSSqueezeNetworkPromoteKBPerSec", handleSSSqueezeEnabledChanged);
+    setting_setup_signal_listener(gSavedSettings, "SSSqueezeNetworkPromoteMaxMB", handleSSSqueezeEnabledChanged);
     // <SS:Nexii/> Squeeze adaptive quality - both of these used to need a restart, because quality was baked into the encoder version and changing it wiped the store. It is a per-record field now, so pinning a profile or unpinning it takes effect on the very next texture and costs nothing already written.
     setting_setup_signal_listener(gSavedSettings, "SSSqueezeEncodeQuality", handleSSSqueezeEnabledChanged);
     setting_setup_signal_listener(gSavedSettings, "SSSqueezeUpgradeIdle", handleSSSqueezeEnabledChanged);

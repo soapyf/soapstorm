@@ -1104,6 +1104,18 @@ U32 LLOcclusionCullingGroup::getLastOcclusionIssuedTime()
     return mOcclusionIssued[LLViewerCamera::sCurCameraID];
 }
 
+void LLOcclusionCullingGroup::abandonQuery()
+{
+    // <SS:Nexii> The exact state the DISCARD_QUERY branch above walks a group back to: no query name held,
+    // nothing pending, and a stale OCCLUDED verdict dropped, so the group renders until a healthy query
+    // refines it. Failures in the query path must fail toward visible - a wrongly buried group's subtree is
+    // skipped by the cull and never re-queried, so an object whose entry lives under it is never created.
+    releaseOcclusionQueryObjectName(mOcclusionQuery[LLViewerCamera::sCurCameraID]);
+    mOcclusionQuery[LLViewerCamera::sCurCameraID] = 0;
+    clearOcclusionState(LLOcclusionCullingGroup::OCCLUDED, LLOcclusionCullingGroup::STATE_MODE_DIFF);
+    clearOcclusionState(QUERY_PENDING | DISCARD_QUERY);
+}
+
 void LLOcclusionCullingGroup::checkOcclusion()
 {
     if (LLPipeline::sUseOcclusion < 2) return;  // 0 - NoOcclusion, 1 = ReadOnly, 2 = ModifyOcclusionState  TODO: DJH 11-2021 ENUM this
@@ -1135,6 +1147,16 @@ void LLOcclusionCullingGroup::checkOcclusion()
                 mOcclusionCheckCount[LLViewerCamera::sCurCameraID]++;
             }
 
+            // <SS:Nexii> A refused availability read never wrote `available`, and reading it would be deciding
+            // the group's fate with uninitialized stack. Observed 2026-09-11: a per-frame GL_INVALID_OPERATION
+            // (begun the instant an Atmo environment unloaded) turned occlusion results into garbage, and the
+            // creation gate buried every fresh region's groups behind them.
+            if (glGetError() != GL_NO_ERROR)
+            {
+                abandonQuery();
+                return;
+            }
+
             static LLCachedControl<U32> occlusion_timeout(gSavedSettings, "RenderOcclusionTimeout", 4);
 
             if (available || mOcclusionCheckCount[LLViewerCamera::sCurCameraID] > occlusion_timeout)
@@ -1150,6 +1172,14 @@ void LLOcclusionCullingGroup::checkOcclusion()
 #if LL_TRACK_PENDING_OCCLUSION_QUERIES
                 sPendingQueries.erase(mOcclusionQuery[LLViewerCamera::sCurCameraID]);
 #endif
+
+                // <SS:Nexii> Same rule on the verdict itself: a failed result read means GL never wrote it, and
+                // treating the stack garbage as "zero samples" marks the group OCCLUDED for good.
+                if (glGetError() != GL_NO_ERROR)
+                {
+                    abandonQuery();
+                    return;
+                }
 
                 if (query_result > 0)
                 {
@@ -1203,6 +1233,10 @@ void LLOcclusionCullingGroup::doOcclusion(LLCamera* camera, const LLVector4a* sh
         {
             if (!isOcclusionState(QUERY_PENDING) || isOcclusionState(DISCARD_QUERY))
             {
+                // <SS:Nexii> A GL state broken elsewhere can refuse the begin; drawing into a query that
+                // never started measures nothing, and reading nothing marks the group OCCLUDED.
+                bool query_failed = false;
+
                 { //no query pending, or previous query to be discarded
                     LL_PROFILE_ZONE_NAMED_CATEGORY_OCTREE("doOcclusion - render");
 
@@ -1241,54 +1275,78 @@ void LLOcclusionCullingGroup::doOcclusion(LLCamera* camera, const LLVector4a* sh
                             glBeginQuery(mode, mOcclusionQuery[LLViewerCamera::sCurCameraID]);
                         }
 
-                        LLGLSLShader* shader = LLGLSLShader::sCurBoundShaderPtr;
-                        llassert(shader);
+                        query_failed = (glGetError() != GL_NO_ERROR);
 
-                        shader->uniform3fv(LLShaderMgr::BOX_CENTER, 1, bounds[0].getF32ptr());
-                        shader->uniform3f(LLShaderMgr::BOX_SIZE, bounds[1][0]+SG_OCCLUSION_FUDGE,
-                                                                 bounds[1][1]+SG_OCCLUSION_FUDGE,
-                                                                 bounds[1][2]+OCCLUSION_FUDGE_Z);
-
-                        if (!use_depth_clamp && mSpatialPartition->mDrawableType == LLPipeline::RENDER_TYPE_VOIDWATER)
+                        if (!query_failed)
                         {
-                            LL_PROFILE_ZONE_NAMED_CATEGORY_OCTREE("doOcclusion - draw water");
+                            LLGLSLShader* shader = LLGLSLShader::sCurBoundShaderPtr;
+                            llassert(shader);
 
-                            LLGLSquashToFarClip squash;
-                            if (camera->getOrigin().isExactlyZero())
-                            { //origin is invalid, draw entire box
-                                gPipeline.mCubeVB->drawRange(LLRender::TRIANGLE_FAN, 0, 7, 8, 0);
-                                gPipeline.mCubeVB->drawRange(LLRender::TRIANGLE_FAN, 0, 7, 8, b111*8);
+                            shader->uniform3fv(LLShaderMgr::BOX_CENTER, 1, bounds[0].getF32ptr());
+                            shader->uniform3f(LLShaderMgr::BOX_SIZE, bounds[1][0]+SG_OCCLUSION_FUDGE,
+                                                                     bounds[1][1]+SG_OCCLUSION_FUDGE,
+                                                                     bounds[1][2]+OCCLUSION_FUDGE_Z);
+
+                            if (!use_depth_clamp && mSpatialPartition->mDrawableType == LLPipeline::RENDER_TYPE_VOIDWATER)
+                            {
+                                LL_PROFILE_ZONE_NAMED_CATEGORY_OCTREE("doOcclusion - draw water");
+
+                                LLGLSquashToFarClip squash;
+                                if (camera->getOrigin().isExactlyZero())
+                                { //origin is invalid, draw entire box
+                                    gPipeline.mCubeVB->drawRange(LLRender::TRIANGLE_FAN, 0, 7, 8, 0);
+                                    gPipeline.mCubeVB->drawRange(LLRender::TRIANGLE_FAN, 0, 7, 8, b111*8);
+                                }
+                                else
+                                {
+                                    gPipeline.mCubeVB->drawRange(LLRender::TRIANGLE_FAN, 0, 7, 8, get_box_fan_indices(camera, bounds[0]));
+                                }
                             }
                             else
                             {
-                                gPipeline.mCubeVB->drawRange(LLRender::TRIANGLE_FAN, 0, 7, 8, get_box_fan_indices(camera, bounds[0]));
+                                LL_PROFILE_ZONE_NAMED_CATEGORY_OCTREE("doOcclusion - draw");
+                                if (camera->getOrigin().isExactlyZero())
+                                { //origin is invalid, draw entire box
+                                    gPipeline.mCubeVB->drawRange(LLRender::TRIANGLE_FAN, 0, 7, 8, 0);
+                                    gPipeline.mCubeVB->drawRange(LLRender::TRIANGLE_FAN, 0, 7, 8, b111*8);
+                                }
+                                else
+                                {
+                                    gPipeline.mCubeVB->drawRange(LLRender::TRIANGLE_FAN, 0, 7, 8, get_box_fan_indices(camera, bounds[0]));
+                                }
+                            }
+
+                            {
+                                LL_PROFILE_ZONE_NAMED_CATEGORY_OCTREE("glEndQuery");
+                                glEndQuery(mode);
                             }
                         }
                         else
                         {
-                            LL_PROFILE_ZONE_NAMED_CATEGORY_OCTREE("doOcclusion - draw");
-                            if (camera->getOrigin().isExactlyZero())
-                            { //origin is invalid, draw entire box
-                                gPipeline.mCubeVB->drawRange(LLRender::TRIANGLE_FAN, 0, 7, 8, 0);
-                                gPipeline.mCubeVB->drawRange(LLRender::TRIANGLE_FAN, 0, 7, 8, b111*8);
-                            }
-                            else
+                            static bool warned = false;
+                            if (!warned)
                             {
-                                gPipeline.mCubeVB->drawRange(LLRender::TRIANGLE_FAN, 0, 7, 8, get_box_fan_indices(camera, bounds[0]));
+                                warned = true;
+                                LL_WARNS("Octree") << "Occlusion query refused to start; groups will render as"
+                                                      " visible until the GL state recovers" << LL_ENDL;
                             }
-                        }
-
-                        {
-                            LL_PROFILE_ZONE_NAMED_CATEGORY_OCTREE("glEndQuery");
-                            glEndQuery(mode);
                         }
                     }
                 }
 
+                if (query_failed)
                 {
-                    LL_PROFILE_ZONE_NAMED_CATEGORY_OCTREE("doOcclusion - set state");
-                    setOcclusionState(LLOcclusionCullingGroup::QUERY_PENDING);
-                    clearOcclusionState(LLOcclusionCullingGroup::DISCARD_QUERY);
+                    // <SS:Nexii> No begin, no verdict: fall back to visible rather than to whatever a read of
+                    // the never-started query would have put on the stack.
+                    abandonQuery();
+                }
+                else
+                {
+                    {
+                        LL_PROFILE_ZONE_NAMED_CATEGORY_OCTREE("doOcclusion - set state");
+                        setOcclusionState(LLOcclusionCullingGroup::QUERY_PENDING);
+                        clearOcclusionState(LLOcclusionCullingGroup::DISCARD_QUERY);
+                    }
                 }
             }
         }

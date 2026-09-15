@@ -28,6 +28,9 @@
 #include "llsingleton.h"
 #include "v4color.h"
 
+// <SS:Nexii> Surface weather slice B: the preset carries the ground looks alongside the particle tint - LiquidLook/DepositLook are the header-only core's structs (sssurfacestatecore.h), resolved and crossfaded by SSSurfaceField's Mix.
+#include "sssurfacestatecore.h"
+
 #include <string>
 #include <vector>
 
@@ -217,6 +220,10 @@ struct SSPrecipPreset
     std::string mPuffTexture;
     SSPrecipSounds mSounds;
     SSFootstepSounds mFootsteps;
+
+    // <SS:Nexii> Surface weather slice B: the ground looks this type wears, crossfaded on the field as it accumulates (doc/atmo_magic_surface_weather.md sec 2). Defaults are water/snow so an untouched preset changes nothing on the ground.
+    SSSurfaceState::LiquidLook mLiquid;
+    SSSurfaceState::DepositLook mDeposit;
 
     LLSD asLLSD() const;
     void fromLLSD(const LLSD& sd);

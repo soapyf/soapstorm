@@ -3,7 +3,7 @@
  positioning="cascading"
  can_minimize="true"
  can_resize="false"
- height="574"
+ height="692"
  layout="topleft"
  name="floater_ss_atmo_weather_influence"
  save_rect="true"
@@ -32,6 +32,7 @@
      height="16"
      width="480"
      name="master_enabled"
+     tool_tip="The master gate for every severe-weather feature below: storm cells, the hero flyby, squall lines and authored storm overrides on the weather cube all need this on. An authored override outranks the Allow checkboxes but never this one."
      label="Weather drives the sky on this track" />
 
     <!-- ================= Clouds ================= -->
@@ -111,6 +112,41 @@
      height="14"
      width="80"
      name="wind_readout"
+     font="SansSerifSmall">
+        -
+    </text>
+
+    <!-- <SS:Nexii> Distant rain shafts (ssvirgacore.h, doc/atmo_magic_far_clouds.md section 3): virga curtains hanging off distant, precipitating cells of the SAME deck this floater's Clouds section otherwise governs. The readout is the resolved precipitation intensity driving the qualifying-cell threshold, not a percentage of the mapping's own effect - there is no single deck-wide scalar for a per-cell gate to report. -->
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="25"
+     top_pad="6"
+     height="16"
+     width="250"
+     name="distant_rain_enabled"
+     tool_tip="Rain falling from distant, precipitating cells of the cloud deck renders as fog-like curtains (virga) instead of stopping abruptly at the render horizon. Higher strength admits fainter/thinner cells into qualifying for a curtain."
+     label="Distant rain shows as curtains" />
+    <slider
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-2"
+     height="18"
+     width="140"
+     name="distant_rain_strength"
+     show_text="false"
+     min_val="0.0"
+     max_val="1.0"
+     increment="0.05"
+     initial_value="1.0" />
+    <text
+     follows="left|top"
+     layout="topleft"
+     left_pad="8"
+     height="14"
+     width="80"
+     name="distant_rain_readout"
      font="SansSerifSmall">
         -
     </text>
@@ -358,6 +394,100 @@
         -
     </text>
 
+    <!-- ================= Severe weather ================= -->
+    <!-- <SS:Nexii> The storm scheduler's two Allow gates (doc/atmo_magic_storm_dynamics.md section 6, layer 1), enable+strength row idiom like every row above. Default OFF: a severe event is opted into per track. The readout is a live cell count, not a percentage. The strength is stored with the track but does not yet reach the gate - the thresholds are the core's constants in this phase. -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="15"
+     top_pad="14"
+     height="14"
+     width="480"
+     name="severe_header"
+     font="SansSerifSmallBold">
+        Severe weather
+    </text>
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="25"
+     top_pad="6"
+     height="16"
+     width="250"
+     name="supercell_enabled"
+     tool_tip="Lets a storm cell born under strong rotation and shear organise into a supercell (deviant motion, persistent rotation). Read at each cell's birth, so cells already alive keep what they were born with. Strength is stored with the track but does not yet scale the rotation threshold - that lands with the deck coupling phase. Watch the result on the debug floater's Views tab, Storm Cells (V2)."
+     label="Allow supercells" />
+    <slider
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-2"
+     height="18"
+     width="140"
+     name="supercell_strength"
+     show_text="false"
+     min_val="0.0"
+     max_val="1.0"
+     increment="0.05"
+     initial_value="1.0" />
+    <text
+     follows="left|top"
+     layout="topleft"
+     left_pad="8"
+     height="14"
+     width="80"
+     name="supercell_readout"
+     font="SansSerifSmall">
+        -
+    </text>
+
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="25"
+     top_pad="6"
+     height="16"
+     width="250"
+     name="tornado_enabled"
+     tool_tip="Lets a long-lived supercell become the hero cell: composed to arrive at maturity and pass the region centre at 0-2km, skewed toward 0 (median about 300m) - it may pass right over the region. Needs Allow supercells too, except for an authored storm override on the weather cube, which grants both Allow flags itself (it still needs the master enable above). Strength is stored with the track but does not yet scale the lifetime threshold. The hero's ribbon and closest approach show on the Storm Cells (V2) info view; the 'why not' rows there say which gate is failing."
+     label="Allow tornadoes (hero flyby)" />
+    <slider
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-2"
+     height="18"
+     width="140"
+     name="tornado_strength"
+     show_text="false"
+     min_val="0.0"
+     max_val="1.0"
+     increment="0.05"
+     initial_value="1.0" />
+    <text
+     follows="left|top"
+     layout="topleft"
+     left_pad="8"
+     height="14"
+     width="80"
+     name="tornado_readout"
+     font="SansSerifSmall">
+        -
+    </text>
+
+    <!-- <SS:Nexii> Squall lines (doc/atmo_magic_storm_dynamics.md section 5, sssquallcore.h SSSquall::lineEvent): a lone bool, not the enable+strength pair every row above uses - a line draw either happens or it does not, with no live effect figure to dial. Default ON: a line is built from ordinary storm cells the track already allows, not a severe-weather opt-in of its own like the two Allow gates above it. -->
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="25"
+     top_pad="6"
+     height="16"
+     width="480"
+     name="squall_lines_enabled"
+     tool_tip="Lets a qualifying severe epoch's lattice draw come out as a squall line - several storm cells sharing one birth and motion along a line - instead of always discrete cells. Needs severe weather (moisture/convection past the storm bands) the same as any other cell; this only decides the SHAPE a severe epoch's event takes."
+     label="Squall lines" />
+
     <!-- The readout column needs saying once rather than per row. -->
     <text
      follows="left|top"
@@ -392,6 +522,6 @@
      height="23"
      width="150"
      name="reset_button"
-     tool_tip="Every mapping on, every strength at full - the defaults a new environment starts with."
+     tool_tip="Every mapping on and every strength at full, except Allow Supercells and Allow Tornadoes - those reset OFF, since a severe event is something you opt a track into. The defaults a new environment starts with."
      label="Reset to Defaults" />
 </floater>

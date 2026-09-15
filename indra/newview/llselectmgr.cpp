@@ -54,6 +54,7 @@
 // viewer includes
 #include "llagent.h"
 #include "llagentcamera.h"
+#include "ssatmolandscape.h" // <SS:Nexii> local-content gate + select-node seeding
 #include "llattachmentsmgr.h"
 #include "llaudioengine.h" // <FS:PP> For object deletion sound
 #include "llviewerwindow.h"
@@ -145,6 +146,7 @@ LLUIColor LLSelectMgr::sHighlightInspectColor;
 LLUIColor LLSelectMgr::sHighlightParentColor;
 LLUIColor LLSelectMgr::sHighlightChildColor;
 LLUIColor LLSelectMgr::sContextSilhouetteColor;
+LLUIColor LLSelectMgr::sSSLocalContentSilhouetteColor; // <SS:Nexii> purple silhouette colour for client-side-only local landscape objects
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // struct LLDeRezInfo
@@ -248,6 +250,7 @@ LLSelectMgr::LLSelectMgr()
     sHighlightChildColor = LLUIColorTable::instance().getColor("HighlightChildColor");
     sHighlightInspectColor = LLUIColorTable::instance().getColor("HighlightInspectColor");
     sContextSilhouetteColor = LLUIColorTable::instance().getColor("ContextSilhouetteColor")*0.5f;
+    sSSLocalContentSilhouetteColor = LLUIColorTable::instance().getColor("SSLocalContentSilhouetteColor"); // <SS:Nexii> purple silhouette colour for client-side-only local landscape objects
 
     sRenderLightRadius = gSavedSettings.getBOOL("RenderLightRadius");
 
@@ -516,14 +519,20 @@ LLObjectSelectionHandle LLSelectMgr::selectObjectOnly(LLViewerObject* object, S3
 
     // Always send to simulator, so you get a copy of the
     // permissions structure back.
-    gMessageSystem->newMessageFast(_PREHASH_ObjectSelect);
-    gMessageSystem->nextBlockFast(_PREHASH_AgentData);
-    gMessageSystem->addUUIDFast(_PREHASH_AgentID, gAgent.getID() );
-    gMessageSystem->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
-    gMessageSystem->nextBlockFast(_PREHASH_ObjectData);
-    gMessageSystem->addU32Fast(_PREHASH_ObjectLocalID, object->getLocalID() );
-    LLViewerRegion* regionp = object->getRegion();
-    gMessageSystem->sendReliable( regionp->getHost());
+    // <SS:Nexii> Local-content objects (Atmo Magic landscape) have no sim counterpart - the
+    // select announcement is client-side bookkeeping only.
+    if (!object->ssIsLocalContent())
+    {
+        gMessageSystem->newMessageFast(_PREHASH_ObjectSelect);
+        gMessageSystem->nextBlockFast(_PREHASH_AgentData);
+        gMessageSystem->addUUIDFast(_PREHASH_AgentID, gAgent.getID() );
+        gMessageSystem->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
+        gMessageSystem->nextBlockFast(_PREHASH_ObjectData);
+        gMessageSystem->addU32Fast(_PREHASH_ObjectLocalID, object->getLocalID() );
+        LLViewerRegion* regionp = object->getRegion();
+        gMessageSystem->sendReliable( regionp->getHost());
+    }
+    // </SS:Nexii>
 
     updatePointAt();
     updateSelectionCenter();
@@ -981,6 +990,13 @@ void LLSelectMgr::deselectObjectAndFamily(LLViewerObject* object, bool send_to_s
     LLMessageSystem* msg = gMessageSystem;
     for (U32 i = 0; i < objects.size(); i++)
     {
+        // <SS:Nexii> Local-content objects (Atmo Magic landscape) are never announced to
+        // the sim - not even on deselect.
+        if (objects[i]->ssIsLocalContent())
+        {
+            continue;
+        }
+        // </SS:Nexii>
         if (start_new_message)
         {
             msg->newMessageFast(_PREHASH_ObjectDeselect);
@@ -1028,14 +1044,19 @@ void LLSelectMgr::deselectObjectOnly(LLViewerObject* object, bool send_to_sim)
 
     if (send_to_sim)
     {
-        LLViewerRegion* region = object->getRegion();
-        gMessageSystem->newMessageFast(_PREHASH_ObjectDeselect);
-        gMessageSystem->nextBlockFast(_PREHASH_AgentData);
-        gMessageSystem->addUUIDFast(_PREHASH_AgentID, gAgent.getID() );
-        gMessageSystem->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
-        gMessageSystem->nextBlockFast(_PREHASH_ObjectData);
-        gMessageSystem->addU32Fast(_PREHASH_ObjectLocalID, object->getLocalID() );
-        gMessageSystem->sendReliable(region->getHost());
+        // <SS:Nexii> Local-content objects (Atmo Magic landscape) have no sim counterpart.
+        if (!object->ssIsLocalContent())
+        {
+            LLViewerRegion* region = object->getRegion();
+            gMessageSystem->newMessageFast(_PREHASH_ObjectDeselect);
+            gMessageSystem->nextBlockFast(_PREHASH_AgentData);
+            gMessageSystem->addUUIDFast(_PREHASH_AgentID, gAgent.getID() );
+            gMessageSystem->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
+            gMessageSystem->nextBlockFast(_PREHASH_ObjectData);
+            gMessageSystem->addU32Fast(_PREHASH_ObjectLocalID, object->getLocalID() );
+            gMessageSystem->sendReliable(region->getHost());
+        }
+        // </SS:Nexii>
     }
 
     // This will refresh dialogs.
@@ -1067,6 +1088,10 @@ void LLSelectMgr::addAsFamily(std::vector<LLViewerObject*>& objects, bool add_to
         if (!objectp->isSelected())
         {
             LLSelectNode *nodep = new LLSelectNode(objectp, true);
+            // <SS:Nexii> Local-content objects (Atmo Magic landscape) get their node seeded
+            // from the record - the sim would otherwise never reply with properties.
+            ss_seed_local_select_node(nodep);
+            // </SS:Nexii>
             if (add_to_end)
             {
                 mSelectedObjects->addNodeAtEnd(nodep);
@@ -1113,6 +1138,10 @@ void LLSelectMgr::addAsIndividual(LLViewerObject *objectp, S32 face, bool undoab
     if (!nodep)
     {
         nodep = new LLSelectNode(objectp, true);
+        // <SS:Nexii> Local-content objects (Atmo Magic landscape) get their node seeded
+        // from the record - see ss_seed_local_select_node.
+        ss_seed_local_select_node(nodep);
+        // </SS:Nexii>
         mSelectedObjects->addNode(nodep);
         llassert_always(nodep->getObject());
     }
@@ -4427,6 +4456,31 @@ bool LLSelectMgr::confirmDelete(const LLSD& notification, const LLSD& response, 
         {
             // TODO: Make sure you have delete permissions on all of them.
             const LLUUID trash_id = gInventory.findCategoryUUIDForType(LLFolderType::FT_TRASH);
+
+            // <SS:Nexii> Local-content objects (Atmo Magic landscape) have no sim object to
+            // derez - Delete removes the environment record instead. The DeRezObject send
+            // below is funnel-gated anyway (no packet), but the record removal is the actual
+            // deletion; the funnel gate alone would silently no-op.
+            // The ids are collected first: removing a record kills its objects, which edits this very selection list.
+            std::vector<LLUUID> local_records;
+            for (LLObjectSelection::iterator iter = handle->begin(); iter != handle->end(); ++iter)
+            {
+                LLViewerObject* obj = (*iter)->getObject();
+                if (obj && obj->ssIsLocalContent())
+                {
+                    const SSAtmoLandscapeObject* landscape = dynamic_cast<const SSAtmoLandscapeObject*>(obj);
+                    if (landscape && std::find(local_records.begin(), local_records.end(), landscape->recordId()) == local_records.end())
+                    {
+                        local_records.push_back(landscape->recordId());
+                    }
+                }
+            }
+            for (const LLUUID& record_id : local_records)
+            {
+                SSAtmoLandscapeWorld::getInstance()->removeByRecord(record_id);
+            }
+            // </SS:Nexii>
+
             // attempt to derez into the trash.
             LLDeRezInfo info(DRD_TRASH, trash_id);
             LLSelectMgr::getInstance()->sendListToRegions("DeRezObject",
@@ -5243,11 +5297,47 @@ void LLSelectMgr::deselectAllIfTooFar()
 }
 
 
+// <SS:Nexii> The one landscape linkset a selection holds, or null: every selected object must be local content sharing one record id (a root, its children, or a single part under Edit Linked Parts). [interaction: ss_landscape_persist_name]
+static const SSAtmoLandscapeObject* ss_single_local_record(LLObjectSelectionHandle selection)    // by value: the handle's const operator-> hands out a const selection, whose begin()/end() are not const
+{
+    if (selection.isNull()) return nullptr;
+    const SSAtmoLandscapeObject* found = nullptr;
+    for (LLObjectSelection::iterator it = selection->begin(); it != selection->end(); ++it)
+    {
+        LLViewerObject* obj = (*it)->getObject();
+        if (!obj) continue;
+        const SSAtmoLandscapeObject* landscape = obj->ssIsLocalContent() ? dynamic_cast<const SSAtmoLandscapeObject*>(obj) : nullptr;
+        if (!landscape) return nullptr;
+        if (found && found->recordId() != landscape->recordId()) return nullptr;
+        if (!found) found = landscape;
+    }
+    return found;
+}
+
 void LLSelectMgr::selectionSetObjectName(const std::string& name)
 {
     std::string name_copy(name);
 
+    // <SS:Nexii> A local-content (Atmo Magic landscape) single selection: the record is the
+    // store - the sim funnel is a no-op for it. The panel already wrote the node; persist
+    // to the record and let the capture baseline follow.
+    LLObjectSelection::iterator first = mSelectedObjects->begin();
+    const SSAtmoLandscapeObject* landscape = ss_single_local_record(mSelectedObjects);    // <SS:Nexii> one landscape linkset however it was selected - Edit Linked Parts makes getRootObjectCount() read 0
+    if (first != mSelectedObjects->end() && landscape)
+    {
+        if (landscape)
+        {
+            // Keep the record's current desc - see the matching note in the description path.
+            const SSAtmoEnvLandscape* record = ss_landscape_record_for(landscape->recordId());
+            const std::string& current_desc = record ? record->mDesc : (*first)->mDescription;
+            ss_landscape_persist_name(landscape->recordId(), name_copy, current_desc);
+            return;
+        }
+    }
+    // </SS:Nexii>
+
     // we only work correctly if 1 object is selected.
+
 // FIRE-777
     if(mSelectedObjects->getRootObjectCount() >= 1)
 //  if(mSelectedObjects->getRootObjectCount() == 1)
@@ -5278,7 +5368,26 @@ void LLSelectMgr::selectionSetObjectDescription(const std::string& desc)
 {
     std::string desc_copy(desc);
 
+    // <SS:Nexii> A local-content (Atmo Magic landscape) single selection: persist to the
+    // record - see selectionSetObjectName.
+    LLObjectSelection::iterator first = mSelectedObjects->begin();
+    const SSAtmoLandscapeObject* landscape = ss_single_local_record(mSelectedObjects);    // <SS:Nexii> one landscape linkset however it was selected - Edit Linked Parts makes getRootObjectCount() read 0
+    if (first != mSelectedObjects->end() && landscape)
+    {
+        if (landscape)
+        {
+            // Keep the record's current name - the node's is stale from seeding and a
+            // desc edit must not revert a recent rename.
+            const SSAtmoEnvLandscape* record = ss_landscape_record_for(landscape->recordId());
+            const std::string& current_name = record ? record->mName : (*first)->mName;
+            ss_landscape_persist_name(landscape->recordId(), current_name, desc_copy);
+            return;
+        }
+    }
+    // </SS:Nexii>
+
     // we only work correctly if 1 object is selected.
+
 // FIRE-777
     if(mSelectedObjects->getRootObjectCount() >= 1)
 //  if(mSelectedObjects->getRootObjectCount() == 1)
@@ -5993,10 +6102,13 @@ void LLSelectMgr::sendListToRegions(LLObjectSelectionHandle selected_handle,
         push_all(std::queue<LLSelectNode*>& n) : nodes_to_send(n) {}
         virtual bool apply(LLSelectNode* node)
         {
-            if (node->getObject())
+            // <SS:Nexii> Local-content objects (Atmo Magic landscape) are never announced to
+            // the sim - this functor is the funnel every send_type flows through.
+            if (node->getObject() && !node->getObject()->ssIsLocalContent())
             {
                 nodes_to_send.push(node);
             }
+            // </SS:Nexii>
             return true;
         }
     };
@@ -6007,7 +6119,9 @@ void LLSelectMgr::sendListToRegions(LLObjectSelectionHandle selected_handle,
         push_some(std::queue<LLSelectNode*>& n, bool roots) : nodes_to_send(n), mRoots(roots) {}
         virtual bool apply(LLSelectNode* node)
         {
-            if (node->getObject())
+            // <SS:Nexii> Local-content objects (Atmo Magic landscape) are never announced to
+            // the sim - the root/child variant of the funnel gets the same gate.
+            if (node->getObject() && !node->getObject()->ssIsLocalContent())
             {
                 bool is_root = node->getObject()->isRootEdit();
                 if ((mRoots && is_root) || (!mRoots && !is_root))
@@ -6015,6 +6129,7 @@ void LLSelectMgr::sendListToRegions(LLObjectSelectionHandle selected_handle,
                     nodes_to_send.push(node);
                 }
             }
+            // </SS:Nexii>
             return true;
         }
     };
@@ -6152,6 +6267,13 @@ void LLSelectMgr::sendListToRegions(LLObjectSelectionHandle selected_handle,
 
 void LLSelectMgr::requestObjectPropertiesFamily(LLViewerObject* object)
 {
+    // <SS:Nexii> Local-content objects (Atmo Magic landscape) have no server-side
+    // properties to request - their record IS the property store.
+    if (!object || object->ssIsLocalContent())
+    {
+        return;
+    }
+    // </SS:Nexii>
     LLMessageSystem* msg = gMessageSystem;
 
     msg->newMessageFast(_PREHASH_RequestObjectPropertiesFamily);
@@ -6173,6 +6295,13 @@ void LLSelectMgr::requestObjectPropertiesFamily(LLViewerObject* object)
 // list, so user selection state is unaffected.
 void LLSelectMgr::requestObjectPropertiesViaSelect(LLViewerObject* object)
 {
+    // <SS:Nexii> Local-content objects (Atmo Magic landscape) must not trigger the
+    // select/deselect ping - there is no sim object to elicit a reply from.
+    if (!object || object->ssIsLocalContent())
+    {
+        return;
+    }
+    // </SS:Nexii>
     LLViewerRegion* regionp = object->getRegion();
     if (!regionp)
     {
@@ -7011,6 +7140,10 @@ void LLSelectMgr::renderSilhouettes(bool for_hud)
                     {
                         hlColor = sContextSilhouetteColor;
                     }
+                    else if (objectp->ssIsLocalContent()) // <SS:Nexii> local landscape objects are always client-side, so parent/child never applies - give them a distinct purple silhouette
+                    {
+                        hlColor = sSSLocalContentSilhouetteColor;
+                    }
                     renderMeshSelection_f(node, objectp, hlColor);
                 }
                 else
@@ -7033,6 +7166,10 @@ void LLSelectMgr::renderSilhouettes(bool for_hud)
                         LLSelectMgr::sRenderHiddenSelections = false;
                         node->renderOneSilhouette(sContextSilhouetteColor);
                         LLSelectMgr::sRenderHiddenSelections = oldHidden;
+                    }
+                    else if (objectp->ssIsLocalContent()) // <SS:Nexii> local landscape objects are always client-side, so parent/child never applies - give them a distinct purple silhouette
+                    {
+                        node->renderOneSilhouette(sSSLocalContentSilhouetteColor);
                     }
                     else if (objectp->isRootEdit())
                     {
@@ -7066,6 +7203,10 @@ void LLSelectMgr::renderSilhouettes(bool for_hud)
                 }
 
                 LLColor4 highlight_color = objectp->isRoot() ? sHighlightParentColor : sHighlightChildColor;
+                if (objectp->ssIsLocalContent()) // <SS:Nexii> keep the subtract-from-selection red below as-is (it signals an action, not object identity), but prefer the purple local-content colour over parent/child otherwise
+                {
+                    highlight_color = sSSLocalContentSilhouetteColor;
+                }
                 if (objectp->mDrawable
                     && objectp->mDrawable->getVOVolume()
                     && objectp->mDrawable->getVOVolume()->isMesh())
@@ -9191,6 +9332,24 @@ void LLSelectMgr::sendSelectionMove()
         return;
     }
 
+    // <SS:Nexii> All-local-content selection (Atmo Magic landscape): the move already applied
+    // client-side in selectionMove(); there is nothing to announce, so skip the packet.
+    bool any_server_object = false;
+    for (LLObjectSelection::root_iterator it = getSelection()->root_begin();
+         it != getSelection()->root_end(); ++it)
+    {
+        if (!(*it)->getObject()->ssIsLocalContent())
+        {
+            any_server_object = true;
+            break;
+        }
+    }
+    if (!any_server_object)
+    {
+        return;
+    }
+    // </SS:Nexii>
+
     //saveSelectedObjectTransform(SELECT_ACTION_TYPE_PICK);
 
     U32 update_type = UPD_POSITION | UPD_ROTATION;
@@ -9213,6 +9372,14 @@ void LLSelectMgr::sendSelectionMove()
          it != getSelection()->root_end(); ++it)
     {
         obj = (*it)->getObject();
+
+        // <SS:Nexii> Local-content objects (Atmo Magic landscape) get no server
+        // transform updates - their structure is held client-side.
+        if (obj->ssIsLocalContent())
+        {
+            continue;
+        }
+        // </SS:Nexii>
 
         // note: following code adapted from sendListToRegions() (@3924)
         last_region = curr_region;

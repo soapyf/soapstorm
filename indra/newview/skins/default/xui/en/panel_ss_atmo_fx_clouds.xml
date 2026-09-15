@@ -52,7 +52,7 @@
      name="R_volumetric" label="Reset group"
      tool_tip="Reset every setting in this section to its default. The per-tier puff counts live on the LOD tab and are not touched">
      <button.commit_callback function="SSAtmo.ResetGroup"
-      parameter="SSAtmoVolumetricClouds,SSAtmoCloudProceduralNoise,SSAtmoCloudTessellation,SSAtmoCloudSeason,SSAtmoCirrusSeason,SSAtmoCloudGroundShadow" />
+      parameter="SSAtmoVolumetricClouds,SSAtmoCloudProceduralNoise,SSAtmoCloudSeason,SSAtmoCirrusSeason,SSAtmoCloudGroundShadow" />
     </button>
     <check_box
      control_name="SSAtmoVolumetricClouds"
@@ -66,12 +66,6 @@
      height="16" width="356" name="procedural_noise_check"
      label="Grow a noise map when the sky authors none"
      tool_tip="Holes, towers and the anvil carving still happen on a plain sky: the map is grown from the weather seed, so every client sharing the environment gets the same geography without anyone uploading a texture. Off leaves an unauthored deck evenly covered" />
-    <check_box
-     control_name="SSAtmoCloudTessellation"
-     follows="left|top" layout="topleft" left="12" top_pad="6"
-     height="16" width="356" name="tessellation_check"
-     label="Refine the field near the viewer"
-     tool_tip="Within a kilometre, each cloud puff grows smaller child puffs around its own body, and the nearest grow a smaller generation still - the field sampling itself finer where it can be seen, a LOD run in puffs rather than vertices. The detail is anchored to each cloud's own frame, so it rides the wind instead of re-rolling, and it fades with distance so it gathers and thins incrementally. The original puffs are untouched; a full puff budget pays for the detail out of the field's far edge" />
     <check_box
      control_name="SSAtmoCloudSeason"
      follows="left|top" layout="topleft" left="12" top_pad="6"

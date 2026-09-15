@@ -26,11 +26,14 @@
 
 #include "llsingleton.h"
 #include "lluuid.h"
+#include "llassettype.h"
+#include "llextendedstatus.h"
 
 #include <condition_variable>
 #include <deque>
 #include <map>
 #include <mutex>
+#include <set>
 #include <thread>
 #include <vector>
 
@@ -72,6 +75,9 @@ public:
 
     void idle();
 
+    // <SS:Nexii> Fetches a sound from the asset server when the cache lacks it, then queues the decode. Stock preloadSound only decodes what is already on disk - the engine fetches solely for live audio sources - so Atmo's own ambience config would otherwise sit unready until something played it.
+    void fetch(const LLUUID& id);
+
     S32 readyCount();
     S32 pendingCount();
 
@@ -82,22 +88,36 @@ private:
     void addList(const std::string& csv, const std::string& source, U32 purpose);
     void pump();
     void startWorkers();
+    static void onAssetFetched(const LLUUID& id, LLAssetType::EType type, void* user_data, S32 status, LLExtStat ext_status);
     static Meta analyze(const std::vector<S16>& pcm, S32 channels, F32 rate, U32 purpose);
 
 public:
-    enum EState { PENDING, ANALYZING, READY, FAILED };
+    enum EState { EMPTY, PENDING, ANALYZING, READY, FAILED };
 private:
     struct Entry
     {
         EState mState = PENDING;
         F64 mFirstTried = -1.0;
+        bool mFetchIssued = false;
         std::string mSource;
         U32 mPurpose = 0;
         Meta mMeta;
+        std::string mFailWhy;
     };
 
 public:
     const std::map<LLUUID, Entry>& entriesForDebug() const { return mEntries; }
+
+    // <SS:Nexii> One record per configured slot from the last gather, in definition order,
+    // so the debug view can keep sequence order visible and show slots that name no sound
+    // at all - those produce no entry of their own.
+    struct SlotInfo
+    {
+        std::string mSource;
+        U32 mPurpose = 0;
+        std::vector<LLUUID> mSounds;    // the slot's sounds in definition (sequence) order
+    };
+    const std::vector<SlotInfo>& slotsForDebug() const { return mSlots; }
 
 private:
 
@@ -112,6 +132,8 @@ private:
     };
 
     std::map<LLUUID, Entry> mEntries;
+    std::vector<SlotInfo> mSlots;
+    std::set<LLUUID> mFetching;
     F64 mLastGather = -1.0;
 
     std::vector<std::thread> mWorkers;

@@ -954,6 +954,12 @@ bool LLToolDragAndDrop::handleDropMaterialProtections(LLViewerObject* hit_obj,
 {
     if (!item) return false;
 
+    // <SS:Nexii> Local content (Atmo Magic landscape) has no task inventory and no sim: the copy-into-contents dance below would send UpdateTaskInventory for an object the region has never heard of. The full-perm rule that matters (copy + transfer, so the notecard may hand it out) is the picker's drag filter; a no-copy material is still refused below.
+    if (hit_obj && hit_obj->ssIsLocalContent())
+    {
+        return item->getPermissions().allowOperationBy(PERM_COPY, gAgent.getID());
+    }
+
     // Always succeed if....
     // material is from the library
     // or already in the contents of the object
@@ -2737,6 +2743,25 @@ EAcceptance LLToolDragAndDrop::dad3dApplyToObject(
     locateInventory(item, cat);
     if (!item || !item->isFinished()) return ACCEPT_NO;
     LLPermissions item_permissions = item->getPermissions();
+
+    // <SS:Nexii> Local-content objects (Atmo Magic landscape) embed whatever is dropped onto
+    // them straight into the environment notecard, which travels the estate - so face
+    // textures/materials must carry the same redistribution contract the mesh drop itself
+    // requires: full copy+modify+transfer. The stock PBR-override check below already asks
+    // copy+transfer for overrides; this is the stricter, consistent rule for scenery.
+    if (obj->ssIsLocalContent()
+        && (cargo_type == DAD_TEXTURE || cargo_type == DAD_MATERIAL)
+        && !item->checkPermissionsSet(PERM_ITEM_UNRESTRICTED))
+    {
+        if (drop)
+        {
+            LLNotificationsUtil::add("GenericAlert", LLSD().with(
+                "MESSAGE", "That texture isn't full permission - scenery faces must be textured with full-perm assets that can travel with the environment."));
+        }
+        return ACCEPT_NO;
+    }
+    // </SS:Nexii>
+
     EAcceptance rv = willObjectAcceptInventory(obj, item);
     if((mask & MASK_CONTROL))
     {

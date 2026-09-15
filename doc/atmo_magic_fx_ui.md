@@ -30,7 +30,7 @@ from 380 to 424 to leave room for the tab border and the scrollbar gutter.
 
 ### The three switches were unreachable
 
-`SSAtmoVolumetricClouds`, `SSAtmoCloudProceduralNoise` and `SSAtmoCloudTessellation` were
+`SSAtmoVolumetricClouds`, `SSAtmoCloudProceduralNoise` and `SSAtmoCloudTessellation` (since removed, 2026-09-06: near-field detail is the anatomy tier's, not a refinement of the field) were
 declared only by lazy `LLCachedControl` constructions inside `ssvolcloud.cpp`. That has two
 consequences nobody wants:
 
@@ -42,54 +42,23 @@ consequences nobody wants:
 
 They are real `settings.xml` entries now, and they have a home in the UI.
 
-### Tessellation
+### Tessellation (removed 2026-09-06)
 
-The toggle used to subdivide the puff's own card — first as `segs = tessellate ? 4 : 1`, then
-by on-screen size, with `skirt = puff.mAnvil * v²` shearing the top rows into an anvil skirt
-and `SSAtmoCloudEdgeBreakup` wandering the rim vertices. Two things killed it:
+The toggle originally subdivided the puff's own card — first as `segs = tessellate ? 4 : 1`,
+then by on-screen size, with `skirt = puff.mAnvil * v²` shearing the top rows into an anvil
+skirt and `SSAtmoCloudEdgeBreakup` wandering the rim vertices. That version boiled in the
+wind (the rim seed quantised the puff's *world* position, so drift re-rolled it every metre)
+and modified the puff it was meant to decorate rather than adding to the field, so it was
+rebuilt as a **puff refinement LOD** in `SSVolCloud::buildDeck`: hashed child and grandchild
+puffs scattered around each near puff, fading in with distance, paid for out of the same
+`SSAtmoCloudPuffBudget` as everything else.
 
-- **It boiled in the wind.** The rim displacement was seeded by quantising the puff's *world*
-  position. The field's positions include the live wind drift, so every metre the wind pushed
-  a cloud re-rolled the seed and the carved rim churned — the pattern was anchored to the
-  world, not to the cloud it decorated.
-- **It modified the puff it was supposed to serve.** The rim breakup and the skirt both moved
-  the original card's vertices, so toggling the feature changed what every puff already was
-  rather than adding anything to the field.
-
-It is a **puff refinement LOD** now, built in `SSVolCloud::buildDeck` where every other puff
-is built:
-
-- **The original puff is untouched.** The render pass emits every puff as the single
-  camera-facing card it always was; there is no per-vertex displacement anywhere in the path.
-- **It adds smaller and smaller puffs.** A placed puff within `SS_TESS_RANGE_M` (1000 m) of
-  the eye grows `SS_TESS_CHILDREN` (4) children at a fraction of its radius, scattered
-  around its body; within `SS_TESS_INNER_M` (500 m) those children grow a smaller generation
-  still (`SS_TESS_GRANDCHILDREN` = 3). Detail scales down geometrically as it climbs toward
-  the viewer, and only exists where cloud already does — children hang off existing parents,
-  so the coverage gate's holes stay holes.
-- **It is stable and moves with the wind.** Every child offset is hashed off the parent's
-  AIR-FRAME cell — the same anchor the parent's own jitter uses, with the drift left out — so
-  a child holds its place inside its cloud while the wind carries both. This is the same
-  air-frame discipline the fragment carving already runs on.
-- **The LOD is a distance fade, not a count switch.** Each ring's puffs fade out approaching
-  their limit (`smoothstep` from half the range to the range, applied to the parent's
-  distance), so walking toward a cloud gathers detail incrementally and no ring boundary ever
-  pops.
-- **The budget pays for it.** Children are ordinary `Puff`s: same sort, same
-  `SSAtmoCloudPuffBudget`, same fragment carve. They are the nearest bodies in the deck, so a
-  full budget trims the field's far edge to make room — the LOD trade that dial already was.
-
-The anvil skirt is gone with the rest of the vertex work; the anvil itself is untouched — it
-is carried by the fragment-stage carving (lid flattening, tower cut, cap band) and by the
-builder's width shaping, neither of which ever needed the tessellation toggle.
-
-`SSAtmoCloudEdgeBreakup` no longer exists.
-
-**Still not structure-aware.** Nothing in the cloud render path knows where buildings or
-terrain are. The only proximity handling is `ss_soft_m` in `ssVolCloudF.glsl`, a
-fragment-stage alpha fade against the depth copy so a puff thins as it approaches a surface
-instead of ending on a hard edge. Doing that in geometry would mean vertex-stage reads of
-the depth copy at billboard corners.
+That LOD is gone too. Near-field detail is the anatomy tier's job — entities such as rain
+clouds and cumulonimbus acting on the container (`doc/atmo_magic_phase8_show.md` section
+4.0) — not a finer sampling of the same field, which only competed with those entities for
+budget and read as more of the same. The setting, the XUI row, `SS_TESS_RANGE_M` /
+`SS_TESS_CHILDREN` / `SS_TESS_GRANDCHILDREN` / `SS_TESS_INNER_M`, and the builder block are
+all gone; `SSAtmoCloudEdgeBreakup` no longer exists either.
 
 ### Field density and budget
 

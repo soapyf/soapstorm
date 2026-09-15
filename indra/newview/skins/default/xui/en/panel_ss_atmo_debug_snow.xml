@@ -57,7 +57,7 @@
      name="R_snow_debug" label="Reset group"
      tool_tip="Reset every setting in this section to its default">
         <button.commit_callback function="SSAtmo.ResetGroup"
-         parameter="SSAtmoSnowDebug,SSAtmoWhiteoutDebug,SSAtmoSnowDriftDebug" />
+         parameter="SSAtmoSnowDebug,SSAtmoHeightFogDebug,SSAtmoSnowDriftDebug" />
     </button>
     <text
       follows="left|top" layout="topleft"
@@ -77,19 +77,18 @@
     <text
       follows="left|top" layout="topleft"
       left="12" top_pad="10" height="16" width="106"
-      name="T_whiteout_view"
-      tool_tip="What the whiteout veil draws in place of its fog">
-        Whiteout view:
+      name="T_heightfog_view"
+      tool_tip="What the height fog layer draws in place of its veil">
+        Height fog view:
     </text>
     <combo_box
-      control_name="SSAtmoWhiteoutDebug" name="C_whiteout_view"
+      control_name="SSAtmoHeightFogDebug" name="C_heightfog_view"
       follows="left|top" layout="topleft"
       left_pad="4" top_delta="-2" height="20" width="250"
-      tool_tip="Fog shows the veil as it renders; coverage shows its amount as grayscale; gate shows the outdoor-air test; split shows the density terms (red squall, green drift, blue height)">
+      tool_tip="Fog shows the veil as it renders; coverage shows the fog amount as grayscale; density shows the ray march's midpoint density (times five, so partial densities read)">
         <combo_box.item label="Fog" value="0" name="view_fog" />
         <combo_box.item label="Coverage" value="1" name="view_coverage" />
-        <combo_box.item label="Outdoor gate" value="2" name="view_gate" />
-        <combo_box.item label="Density split" value="3" name="view_split" />
+        <combo_box.item label="Midpoint density" value="2" name="view_density" />
     </combo_box>
     <check_box
      control_name="SSAtmoSnowDriftDebug"

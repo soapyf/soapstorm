@@ -56,6 +56,7 @@
 #include "llviewerstats.h"
 #include "ssatmomagic.h" // <SS:Nexii> Atmo Magic weather
 #include "sswater.h" // <SS:Nexii> Atmo Magic water planes are torn down with the stock ones
+#include "ssatmolandscape.h" // <SS:Nexii> Atmo Magic landscape objects are torn down with the stock ones
 #include "llvlcomposition.h"
 #include "llvoavatar.h"
 #include "llvocache.h"
@@ -140,6 +141,8 @@ void LLWorld::resetClass()
     mHoleWaterObjects.clear();
     // <SS:Nexii> Kill the Atmo water plane set before the object list dies so no LLPointer outlives teardown holding a dead drawable.
     SSWaterWorld::getInstance()->clearWaterObjects();
+    // <SS:Nexii> Same for the landscape set: SSAtmoLandscapeWorld held LLPointer<LLVOVolume>s until LLSingletonBase::deleteAll, long after the volume manager and GL were gone, so the last unref freed the LLVolume into a dead heap and logout crashed in ~LLVolume. [interaction: LLAppViewer::cleanup order]
+    SSAtmoLandscapeWorld::getInstance()->clearLandscapeObjects();
     gObjectList.destroy();
     gSky.cleanup(); // references an object
     for(region_list_t::iterator region_it = mRegionList.begin(); region_it != mRegionList.end(); )

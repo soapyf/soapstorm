@@ -141,7 +141,7 @@ in vec3 vary_ray_dir;
 uniform float ss_cloud_scale_to;
 uniform float ss_cloud_scale_blend;
 
-// Metres of world per UV at the Scale ANCHOR (SS_SCALE_ANCHOR). Pinned against the band's HEIGHT,
+// Metres of world per UV at the Scale ANCHOR (SSShellPlane::scaleAnchor). Pinned against the band's HEIGHT,
 // so one tile is one fixed piece of world when the altitude moves: the convection merge can
 // descend the cirrus band without breathing the pattern. The Scale dial re-enters the render as a
 // divisor on this pin (see ss_plane_base) - authored scale / anchor multiplies the metres per UV,
@@ -155,13 +155,150 @@ uniform float ss_cloud_scale_blend;
 // is tuned for. (The first pin's 8 km read as ~24 repeats marching into the horizon; the
 // stock-anchored 2*alt*cloud_scale divisor it replaced breathed the pattern every time the
 // band moved.)
-const float SS_DOME_TILE_M = 32000.0;
-
+// (that number is SSShellPlane::tileM below, and it is now an ARGUMENT - see the transliteration note.)
+//
 // The Scale dial's identity point: an authored scale of 0.25 means "the anchor tile, exactly the
-// render before the dial was re-added" - the divisor below collapses to SS_DOME_TILE_M. Above the
+// render before the dial was re-added" - the divisor below collapses to the tile pin. Above the
 // anchor the tile widens (fewer repeats, larger cloud features), below it narrows. Mirrored by the
-// applier's comment at the scale crossfade sample (SSAtmoEnvApplier::applySky).
-const float SS_SCALE_ANCHOR = 0.25;
+// applier's comment at the scale crossfade sample (SSAtmoEnvApplier::applySky). That number is
+// SSShellPlane::scaleAnchor below.
+
+// <SS:Nexii> THE GEOMETRY IN THIS BLOCK IS A TRANSLITERATION, NOT AN ORIGINAL. indra/newview/ssshellcore.h (namespace SSShell) is the AUTHORITY for every formula here - the ray/shell intersection on both faces, the rim derived from its discriminant, the rim fade, the layer's own dissolve, the fine-octave give-up and the flat fallback - and the bodies below follow that header statement for statement so V:\Scratch\atmo\tests\twin_shell.cpp can pin the two together over a grid. The geometry moved out of this file because phase 8c adds a SECOND shell at the volumetric deck's own altitude (doc/atmo_magic_phase8_show.md section 5): three of the constants this band used to bake in - the 32 km tile, the 0.125 parallax damp, the 100/250 km detail rails - were calibrated to the CIRRUS band and blocked a second caller, so they are arguments now and this band passes its own values unchanged.
+struct SSShellPlane
+{
+    float tileM;
+    float scaleAnchor;
+    float parallaxDamp;
+    float deckFold;
+    float throughLoM;
+    float throughHiM;
+    float detailLoM;
+    float detailHiM;
+    float meltGain;
+};
+
+// <SS:Nexii> SSShell::CIRRUS - this band's nine values, the exact literals this file carried inline before the parameterisation (32 km tile pinned against the band's 6 km default height; 0.25 scale anchor; 0.125 damp, the rate the shipped vertex nudge moved at and the eye was tuned to in a live viewer; 0.1 horizon fold; 40..300 m through-fade; 100..250 km detail rails; 1.6 melt gain). The deck shell of 8c passes a DIFFERENT struct - undamped above all, because it must agree with the world-honest, drift-anchored tiled veil at the 10-14 km handoff and a damped shell would slide against it as the camera moves.
+SSShellPlane ss_shell_cirrus()
+{
+    return SSShellPlane(32000.0, 0.25, 0.125, 0.1, 40.0, 300.0, 100000.0, 250000.0, 1.6);
+}
+
+// SSShell::discriminant. The bracket under the intersection's root: with the camera at distance a
+// from the body's centre and the shell at radius a + alt, |C + t*d|^2 = (a+alt)^2 expands to
+// t^2 + 2*a*u*t - (2*a*alt + alt*alt) = 0, so this is a*a*u*u + 2*a*alt + alt*alt. Everything else
+// in this block is derived from it - including, and this is the 8c fix, whether the ray meets the
+// shell at all.
+float ss_shell_disc(float orbit_m, float alt, float ray_up)
+{
+    float u = (alt >= 0.0) ? max(ray_up, 0.0) : ray_up;
+    return orbit_m * orbit_m * u * u + 2.0 * orbit_m * alt + alt * alt;
+}
+
+// SSShell::flatReachM. The no-home-body fallback, SOFTENED not clamped: smooth in the ray
+// everywhere, exact at the zenith, and capped at ~(1+F)/F layer-altitudes in the horizon fold. It
+// is also the orbit -> infinity limit of the curved reach, which the core's ladder measures.
+float ss_shell_flat_reach(float alt, float ray_up, float deck_fold)
+{
+    float side = (alt >= 0.0) ? 1.0 : -1.0;
+    return (1.0 + deck_fold) * abs(alt) / (max(ray_up * side, 0.0) + deck_fold);
+}
+
+// SSShell::shellReachM. Distance along the view ray to the shell, both signs of altitude: the PLUS
+// root below the shell, the MINUS root above it (the near face of the deck as a sky build looks
+// down on it). `side` carries the sign of the root so the two faces are one expression.
+float ss_shell_reach(float orbit_m, float alt, float ray_up, float deck_fold)
+{
+    if (orbit_m > 0.0)
+    {
+        float side = (alt >= 0.0) ? 1.0 : -1.0;
+        float u    = (alt >= 0.0) ? max(ray_up, 0.0) : ray_up;
+        float d    = ss_shell_disc(orbit_m, alt, ray_up);
+        return -orbit_m * u + side * sqrt(max(d, 0.0));
+    }
+    return ss_shell_flat_reach(alt, ray_up, deck_fold);
+}
+
+// SSShell::tangentSin. The rim, taken from the discriminant rather than mirrored off the near
+// face: disc(u) = a*a*u*u + (r*r - a*a) is a parabola in u whose only root is |u| = sqrt(|r*r -
+// a*a|)/a, and r*r - a*a is exactly 2*a*alt + alt*alt. Below the shell that bracket is positive,
+// disc never vanishes, every ray hits, and the root names the elevation at which the shell crosses
+// the camera's horizontal plane - the rail this band's melt has always used. ABOVE the shell the
+// bracket is negative and the same root is a genuine rim: flatter rays miss the shell entirely.
+float ss_shell_tangent_sin(float orbit_m, float alt)
+{
+    float q = 2.0 * orbit_m * alt + alt * alt;
+    return sqrt(abs(q)) / orbit_m;
+}
+
+// SSShell::planeFade. How much of the layer survives the camera's own altitude: the mapping
+// degenerates as the camera meets the layer and the layer's own volume takes over exactly there.
+// The step term drops rays heading away from the face.
+float ss_shell_plane_fade(float alt, float ray_up, float through_lo, float through_hi)
+{
+    float side = (alt >= 0.0) ? 1.0 : -1.0;
+    return step(0.0, ray_up * side) * smoothstep(through_lo, through_hi, abs(alt));
+}
+
+// SSShell::detailFade. Where the fine layers give up: perspective compresses the layer toward its
+// rim and the fine detail's angular size collapses with it, so past these rails the broad layer
+// carries the far sheet alone. The term it gates is zero-mean - the far field's TEXTURE simplifies,
+// its coverage does not change.
+float ss_shell_detail_fade(float reach_m, float lo, float hi)
+{
+    return 1.0 - smoothstep(lo, hi, reach_m);
+}
+
+// SSShell::edgeFade. The layer's curved horizon melt: zero AT the rim, full a melt_gain multiple of
+// the rim sine away from it, so the edge reads as a cloud horizon dissolving into the atmosphere
+// rather than a seam. deck_edge_sin raises the melt's TOP on the NEAR face only - it is the
+// volumetric deck's perceived edge over the camera, and past that edge the band has no cloud in
+// front of it, so the melt spends the whole span between the deck's edge and the rim instead of
+// running a flat grey sheet into it. It has no meaning on the far face and the CPU zeroes it there
+// by construction (lldrawpoolwlsky gates it on deck_top_m > 0).
+//
+// THE alt < 0 BRANCH IS THE 8c FIX. This function used to return 1.0 for every ray whenever the
+// layer sat below the camera, so a deck seen from a sky build covered the whole lower hemisphere at
+// full opacity - including the entire cone of directions where, by the discriminant above, there is
+// no shell to see. It now melts on the DOWN-ness of the ray against the same rim, which lands the
+// fade exactly where the intersection stops existing: alpha reaches 0 as disc reaches 0.
+float ss_shell_edge_fade(float orbit_m, float alt, float ray_up, float deck_edge_sin, float melt_gain)
+{
+    if (orbit_m <= 0.0) return 1.0;
+    float edge_dy = ss_shell_tangent_sin(orbit_m, alt);
+    if (edge_dy <= 0.0) return 1.0;
+    float melt_hi = edge_dy * melt_gain;
+    if (alt < 0.0)
+    {
+        return smoothstep(edge_dy, melt_hi, -ray_up);
+    }
+    if (deck_edge_sin > melt_hi)
+    {
+        melt_hi = deck_edge_sin;
+    }
+    return smoothstep(edge_dy, melt_hi, ray_up);
+}
+
+// SSShell::planeBase. The whole shell mapping for one fragment: intersect, anchor at the region
+// centre, subtract the wind travel, divide by the pinned metres-per-UV. `ray` rides the dome mesh's
+// Y-up local frame, which is why the horizontal components reach the layer as (ray.z, ray.x) -
+// east, north - matching region_off's (world X, world Y) order; the v axis is negated because world
+// north runs down the texture. reach_m comes back out because 8c's deck shell needs its own
+// intersection distance for the veil handoff; this band discards it.
+vec2 ss_shell_plane_base(float orbit_m, float alt, vec3 ray, float scale, vec2 region_off, vec2 drift,
+                         SSShellPlane p, out float plane_fade, out float detail_fade, out float reach_m)
+{
+    plane_fade  = ss_shell_plane_fade(alt, ray.y, p.throughLoM, p.throughHiM);
+    reach_m     = ss_shell_reach(orbit_m, alt, ray.y, p.deckFold);
+    detail_fade = ss_shell_detail_fade(reach_m, p.detailLoM, p.detailHiM);
+
+    float deck_x  = ray.z * reach_m;
+    float deck_y  = ray.x * reach_m;
+    float world_x = p.parallaxDamp * (region_off.x - drift.x);
+    float world_y = p.parallaxDamp * (region_off.y - drift.y);
+    float div     = p.tileM * scale / p.scaleAnchor;
+
+    return vec2((deck_x + world_x) / div, (-deck_y - world_y) / div);
+}
 
 // The fine layers' multiplier. Stock's 16 made the fine tile a fraction of the broad one -
 // dozens of copies of the same clump across the sky, marching in rows under the perspective
@@ -170,6 +307,10 @@ const float SS_SCALE_ANCHOR = 0.25;
 // its 16.
 const float SS_FINE_LAYER = 2.0;
 
+// WHY THIS BAND'S MAPPING LOOKS THE WAY IT DOES (the mechanism itself is ss_shell_plane_base above,
+// transliterated from SSShell::planeBase in indra/newview/ssshellcore.h; this is the call site's own
+// record of the calibration it passes in).
+//
 // One band's base UVs, and how much of the band survives. Intersect the view ray with the band's
 // deck, anchor at the region centre, subtract the wind travel, and divide by a PINNED
 // metres-per-uv (see THE TILE IS PINNED below). vary_ray_dir rides the dome mesh's Y-up local space (renderDome's 120 degree
@@ -182,7 +323,7 @@ const float SS_FINE_LAYER = 2.0;
 // the branch calls in main). One tile is one fixed piece of world: the height above the camera
 // survives into the pattern (vertical parallax, on the flat fallback too), altitude changes slide
 // instead of zoom. What `scale` does here is pick WHICH pin the plane samples at: the divisor is
-// SS_DOME_TILE_M * scale / SS_SCALE_ANCHOR, so an authored 0.25 is identity - the exact
+// p.tileM * scale / p.scaleAnchor, so an authored 0.25 is identity - the exact
 // pre-dial render - and any other authored value tiles the pattern by that factor (wider for
 // larger, like the stock divide-by-cloud_scale it restores). (An earlier cut anchored the tile at
 // 2*alt*cloud_scale - stock EEP's zenith calibration - which matched stock at any altitude but
@@ -219,76 +360,29 @@ const float SS_FINE_LAYER = 2.0;
 // itself periodic, so the warped grid was still a grid, just bent. The mapping is a straight,
 // honest lookup now - the repetition is softened by the fine octave's distance fade and by an
 // authored large map (ss_noise_large) art-directing the broad octave when one is set.
+// <SS:Nexii> The cirrus band's call site: bind this band's uniforms and its own nine constants to the shared shell mapping above. The body that used to live here is ss_shell_plane_base, transliterated from SSShell::planeBase; nothing about the render changes, and the harness proves that rather than asserting it (twin_shell.cpp SS_CHECK_BITS's the core against a transliteration of the PRE-refactor spelling of this function over a grid of altitudes, rays, scales, offsets, drifts and orbits, including the flat fallback).
 vec2 ss_plane_base(float alt, float scale, out float plane_fade, out float detail_fade)
 {
-    const float SS_DECK_FOLD     = 0.1;
-    const float SS_PARALLAX_DAMP = 0.125;
-    const float SS_THROUGH_LO_M  = 40.0;
-    const float SS_THROUGH_HI_M  = 300.0;
-    // Where the fine layers give up. Perspective compresses the deck toward its horizon, and the
-    // fine detail's angular size collapses with it. The fade is a rim-zone cleanup: the last
-    // stretch before the melt, where the compression spikes, lets the broad layer carry the
-    // sheet alone.
-    const float SS_DETAIL_LO_M   = 100000.0;
-    const float SS_DETAIL_HI_M   = 250000.0;
-
-    // The band holds a signed height over the camera. Under it, up-rays hit; over it, down-rays
-    // do - the deck seen from above. Rays heading away from the plane see none of it, and the band
-    // dissolves across its own altitude (the mapping degenerates as the camera meets the plane,
-    // and the deck's own volume takes over exactly there).
-    float side = (alt >= 0.0) ? 1.0 : -1.0;
-    float ah = abs(alt);
-    plane_fade = step(0.0, vary_ray_dir.y * side)
-               * smoothstep(SS_THROUGH_LO_M, SS_THROUGH_HI_M, ah);
-
-    float reach;
-    if (ss_planet_orbit_m > 0.0)
-    {
-        float a = ss_planet_orbit_m;
-        if (alt >= 0.0)
-        {
-            float u = max(vary_ray_dir.y, 0.0);
-            float disc = a * a * u * u + 2.0 * a * alt + alt * alt;
-            reach = -a * u + sqrt(max(disc, 0.0));
-        }
-        else
-        {
-            float disc = a * a * vary_ray_dir.y * vary_ray_dir.y + 2.0 * a * alt + alt * alt;
-            reach = -a * vary_ray_dir.y - sqrt(max(disc, 0.0));
-        }
-    }
-    else
-    {
-        reach = (1.0 + SS_DECK_FOLD) * ah / (max(vary_ray_dir.y * side, 0.0) + SS_DECK_FOLD);
-    }
-
-    detail_fade = 1.0 - smoothstep(SS_DETAIL_LO_M, SS_DETAIL_HI_M, reach);
-
-    vec2 deck_m  = vec2(vary_ray_dir.z, vary_ray_dir.x) * reach;
-    vec2 world_m = SS_PARALLAX_DAMP * (region_offset - ss_cloud_drift);
-
-    return vec2(deck_m.x + world_m.x, -deck_m.y - world_m.y) / (SS_DOME_TILE_M * scale / SS_SCALE_ANCHOR);
+    float reach_m;
+    return ss_shell_plane_base(ss_planet_orbit_m, alt, vary_ray_dir, scale,
+                               region_offset, ss_cloud_drift, ss_shell_cirrus(),
+                               plane_fade, detail_fade, reach_m);
 }
 
-// The curved deck's own horizon fade. The deck exists ABOVE the tangent elevation
-// sqrt(2*alt/orbit) - below it the ray passes under the shell's rim and there is no deck at all -
-// and the last stretch before the rim compresses endlessly, so the band dissolves across the
-// approach: alpha zero at the rim, full a fraction of the rim's elevation above it. The edge
-// reads as a curved cloud horizon melting into the atmosphere rather than a smeared seam.
+// The curved deck's own horizon fade (mechanism: ss_shell_edge_fade above, SSShell::edgeFade in the
+// core). The layer ends at the rim its discriminant defines - sqrt(2*alt/orbit) to first order - and
+// the last stretch before the rim compresses endlessly, so the band dissolves across the approach:
+// alpha zero at the rim, full a fraction of the rim's elevation away from it. The edge reads as a
+// curved cloud horizon melting into the atmosphere rather than a smeared seam. BOTH faces melt now;
+// on the far face the rim is a real miss boundary (flatter rays pass over the shell), on the near
+// face it is the elevation at which the shell crosses the camera's own horizontal plane.
 //
 // <SS:Nexii> The melt's TOP follows the volumetric deck's perceived edge (ss_deck_edge_sin) when one stands over the camera. The deck's own field ends at ~4.9 km horizontal - several degrees UP the sky from the band's rim - and past that edge the band has no cloud in front of it, so letting it run saturated to the waterline painted a flat grey plane across the whole span between the deck's edge and the horizon. The melt now spends that span: full at the deck's edge, gone at the rim. No deck, or the camera up near the deck's top (its edge sine below the old window's top), keeps the old narrow melt.
+// <SS:Nexii> The cirrus band's call site for the rim melt. The `alt < 0.0` early-out this function used to carry - a layer below the camera got no melt at all, so it painted the whole lower hemisphere solid - is gone: ss_shell_edge_fade melts BOTH faces against the rim its own discriminant defines. Nothing on this band's face changes (unit_edge_fade_above_bit_identical), and the far face now ends on a curved horizon.
 float ss_deck_edge_fade(float alt)
 {
-    if (ss_planet_orbit_m <= 0.0 || alt < 0.0) return 1.0;
-    float a = ss_planet_orbit_m;
-    float edge_dy = sqrt(max(2.0 * a * alt + alt * alt, 0.0)) / a;
-    if (edge_dy <= 0.0) return 1.0;
-    float melt_hi = edge_dy * 1.6;
-    if (ss_deck_edge_sin > melt_hi)
-    {
-        melt_hi = ss_deck_edge_sin;
-    }
-    return smoothstep(edge_dy, melt_hi, vary_ray_dir.y);
+    SSShellPlane p = ss_shell_cirrus();
+    return ss_shell_edge_fade(ss_planet_orbit_m, alt, vary_ray_dir.y, ss_deck_edge_sin, p.meltGain);
 }
 #endif
 

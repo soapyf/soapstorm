@@ -61,6 +61,7 @@
 #include "llvoavatar.h"
 #include "llmeshrepository.h"
 #include "lltrans.h"
+#include "sslocalcontentlimits.h"   // <SS:Nexii> local landscape objects scale past the sim's prim ceiling
 
 const F32 MAX_MANIP_SELECT_DISTANCE_SQUARED = 11.f * 11.f;
 const F32 SNAP_GUIDE_SCREEN_OFFSET = 0.05f;
@@ -87,6 +88,25 @@ const LLManip::EManipPart MANIPULATOR_IDS[LLManipScale::NUM_MANIPULATORS] =
     LLManip::LL_FACE_NEGY,
     LLManip::LL_FACE_NEGZ
 };
+
+// <SS:Nexii> The per-object ceiling: local content (Atmo Magic landscape) may reach SS_LOCAL_CONTENT_MAX_SCALE_M, everything else the region's prim limit.
+static F32 ss_max_prim_scale_for(LLViewerObject* obj)
+{
+    return ssMaxPrimScale(obj, get_default_max_prim_scale(LLPickInfo::isFlora(obj)));
+}
+
+// <SS:Nexii> The selection-wide ceiling the drag-distance limits use: the local ceiling only when every selected object is local content.
+static F32 ss_selection_max_prim_scale(LLSafeHandle<LLObjectSelection> selection)    // by value: a const handle hands out a const selection, whose begin()/end() are not const
+{
+    LLObjectSelection* sel = selection.get();    // the const handle only hands out a const pointer, and the selection walkers are non-const
+    if (!sel || sel->getObjectCount() == 0) return get_default_max_prim_scale();
+    for (LLObjectSelection::iterator it = sel->begin(); it != sel->end(); ++it)
+    {
+        LLViewerObject* obj = (*it)->getObject();
+        if (!obj || !obj->ssIsLocalContent()) return get_default_max_prim_scale();
+    }
+    return SS_LOCAL_CONTENT_MAX_SCALE_M;
+}
 
 F32 get_default_max_prim_scale(bool is_flora)
 {
@@ -930,8 +950,9 @@ void LLManipScale::dragCorner( S32 x, S32 y )
 // <AW: opensim-limits>
 //  F32 max_scale_factor = get_default_max_prim_scale() / MIN_PRIM_SCALE;
 //  F32 min_scale_factor = MIN_PRIM_SCALE / get_default_max_prim_scale();
-    F32 max_scale_factor = LLWorld::getInstance()->getRegionMaxPrimScale() / LLWorld::getInstance()->getRegionMinPrimScale();
-    F32 min_scale_factor = LLWorld::getInstance()->getRegionMinPrimScale() / LLWorld::getInstance()->getRegionMaxPrimScale();
+    const F32 selection_max_scale = ss_selection_max_prim_scale(mObjectSelection);    // <SS:Nexii> a local selection may grow to 2048 m in one drag
+    F32 max_scale_factor = selection_max_scale / LLWorld::getInstance()->getRegionMinPrimScale();
+    F32 min_scale_factor = LLWorld::getInstance()->getRegionMinPrimScale() / selection_max_scale;
 // </AW: opensim-limits>
 
     // find max and min scale factors that will make biggest object hit max absolute scale and smallest object hit min absolute scale
@@ -947,7 +968,8 @@ void LLManipScale::dragCorner( S32 x, S32 y )
         {
             const LLVector3& scale = selectNode->mSavedScale;
 
-            F32 cur_max_scale_factor = llmin( get_default_max_prim_scale(LLPickInfo::isFlora(cur)) / scale.mV[VX], get_default_max_prim_scale(LLPickInfo::isFlora(cur)) / scale.mV[VY], get_default_max_prim_scale(LLPickInfo::isFlora(cur)) / scale.mV[VZ] );
+            const F32 cur_max_scale = ss_max_prim_scale_for(cur);    // <SS:Nexii> per-object ceiling, see ss_max_prim_scale_for
+            F32 cur_max_scale_factor = llmin( cur_max_scale / scale.mV[VX], cur_max_scale / scale.mV[VY], cur_max_scale / scale.mV[VZ] );
             max_scale_factor = llmin( max_scale_factor, cur_max_scale_factor );
 // <AW: opensim-limits>
 //          F32 cur_min_scale_factor = llmax( MIN_PRIM_SCALE / scale.mV[VX], MIN_PRIM_SCALE / scale.mV[VY], MIN_PRIM_SCALE / scale.mV[VZ] );
@@ -980,7 +1002,7 @@ void LLManipScale::dragCorner( S32 x, S32 y )
             LLVector3d new_pos_global = drag_global + (selectNode->mSavedPositionGlobal - drag_global) * scale_factor;
             if (!cur->isAttachment())
             {
-                new_pos_global = LLWorld::getInstance()->clipToVisibleRegions(selectNode->mSavedPositionGlobal, new_pos_global);
+                new_pos_global = ssClipLocalContentMove(cur, selectNode->mSavedPositionGlobal, new_pos_global);    // <SS:Nexii> local content stays inside its 2048 m area, not the region
             }
             cur->setPositionAbsoluteGlobal( new_pos_global );
             rebuild(cur);
@@ -1247,7 +1269,7 @@ void LLManipScale::stretchFace( const LLVector3& drag_start_agent, const LLVecto
             F32 desired_delta_size  = is_approx_zero(denom) ? 0.f : (delta_local_mag / denom);  // in meters
 // <AW: opensim-limits>
 //          F32 desired_scale       = llclamp(selectNode->mSavedScale.mV[axis_index] + desired_delta_size, MIN_PRIM_SCALE, get_default_max_prim_scale(LLPickInfo::isFlora(cur)));
-            F32 desired_scale       = llclamp(selectNode->mSavedScale.mV[axis_index] + desired_delta_size, LLWorld::getInstance()->getRegionMinPrimScale(), get_default_max_prim_scale(LLPickInfo::isFlora(cur)));
+            F32 desired_scale       = llclamp(selectNode->mSavedScale.mV[axis_index] + desired_delta_size, LLWorld::getInstance()->getRegionMinPrimScale(), ss_max_prim_scale_for(cur));    // <SS:Nexii> per-object ceiling
 // </AW: opensim-limits>
             // propagate scale constraint back to position offset
             desired_delta_size      = desired_scale - selectNode->mSavedScale.mV[axis_index]; // propagate constraint back to position
@@ -1266,7 +1288,7 @@ void LLManipScale::stretchFace( const LLVector3& drag_start_agent, const LLVecto
 
                 if (cur->isRootEdit() && !cur->isAttachment())
                 {
-                    LLVector3d new_pos_global = LLWorld::getInstance()->clipToVisibleRegions(selectNode->mSavedPositionGlobal, selectNode->mSavedPositionGlobal + delta_pos_global);
+                    LLVector3d new_pos_global = ssClipLocalContentMove(cur, selectNode->mSavedPositionGlobal, selectNode->mSavedPositionGlobal + delta_pos_global);    // <SS:Nexii> local content stays inside its 2048 m area, not the region
                     cur->setPositionGlobal( new_pos_global );
                 }
                 else
@@ -2013,7 +2035,7 @@ F32     LLManipScale::partToMaxScale( S32 part, const LLBBox &bbox ) const
             max_extent = bbox_extents.mV[i];
         }
     }
-    max_scale_factor = bbox_extents.length() * get_default_max_prim_scale() / max_extent;
+    max_scale_factor = bbox_extents.length() * ss_selection_max_prim_scale(mObjectSelection) / max_extent;    // <SS:Nexii> selection-wide ceiling
 
     if (getUniform())
     {
@@ -2028,7 +2050,7 @@ F32     LLManipScale::partToMinScale( S32 part, const LLBBox &bbox ) const
 {
     LLVector3 bbox_extents = unitVectorToLocalBBoxExtent( partToUnitVector( part ), bbox );
     bbox_extents.abs();
-    F32 min_extent = get_default_max_prim_scale();
+    F32 min_extent = ss_selection_max_prim_scale(mObjectSelection);    // <SS:Nexii> selection-wide ceiling
     for (U32 i = VX; i <= VZ; i++)
     {
         if (bbox_extents.mV[i] > 0.f && bbox_extents.mV[i] < min_extent)

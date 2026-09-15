@@ -53,11 +53,12 @@ public:
 
     const LLUUID& sourceAssetId() const { return mSourceAssetId; }
     bool cameFromParcel() const { return mFromParcel; }
-    void noteSource(const LLUUID& asset_id, bool from_parcel)
-    {
-        mSourceAssetId = asset_id;
-        mFromParcel = from_parcel;
-    }
+    // <SS:Nexii> S2: the storm scheduler's weather-domain anchor (SSStormCells) is this region, GLOBAL metres, when
+    // non-zero - the region gAgent stood in when a from_parcel asset was noted, NOT gAgent's current region (which
+    // can move after the note). 0 for inventory loads/creates, so SSStormCells falls back to the agent's own region
+    // (a personal preview, no sync domain - see the header's honesty note on SSStormCells::mAnchor). [interaction: gAgent]
+    U64 sourceRegionHandle() const { return mSourceRegionHandle; }
+    void noteSource(const LLUUID& asset_id, bool from_parcel);
 
     const SSAtmoEnvAsset& asset() const { return mWorking; }
     SSAtmoEnvAsset& editable() { return mWorking; }
@@ -138,6 +139,7 @@ private:
 
     LLUUID mSourceAssetId;
     bool mFromParcel = false;
+    U64 mSourceRegionHandle = 0;
 
     LLUUID mAssetID;
     LLUUID mItemID;

@@ -741,6 +741,360 @@
      hover_glow_amount="0.15"
      label="" />
 
+    <!-- <SS:Nexii> SCHEDULER: the forced-storm cue (doc/atmo_magic_storm_dynamics.md section 6 layer 3, ssatmoenvasset.h SSAtmoEnvWeather::mStormOverride*, sssquallcore.h SSSquall::ForcedOverride) - a single authored instant a track may pin a guaranteed-active cell to, read at the CURRENT day-cycle phase rather than a candidate's own birth phase. Kind None leaves the scheduler's ordinary lattice draw alone; any other kind pins the lattice cell nearest the anchor plus the offset below, mature at the cue phase. The offset is track-floor-relative, the same frame the water plane and under deck author against. -->
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="storm_override_kind_combo_label"
+     tool_tip="Pins a guaranteed-active storm cell near the anchor at the cue phase below. None leaves the ordinary storm-scheduler lattice alone. Supercell/Tornado/Waterspout ask for cyclonic rotation; Anticyclonic flips the sign. Squall line composes a line instead of a pinned cell - the leading edge crosses the region at the cue. Needs the Weather Influence master enable; overrides the Allow Supercells/Tornadoes checkboxes"
+     font="SansSerifSmall">
+        Storm Override
+    </text>
+    <combo_box
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-4"
+     height="23"
+     right="-174"
+     name="storm_override_kind_combo"
+     allow_text_entry="false"
+     tool_tip="Pins a guaranteed-active storm cell near the anchor at the cue phase below. None leaves the ordinary storm-scheduler lattice alone. Supercell/Tornado/Waterspout ask for cyclonic rotation; Anticyclonic flips the sign. Squall line composes a line instead of a pinned cell - the leading edge crosses the region at the cue. Needs the Weather Influence master enable; overrides the Allow Supercells/Tornadoes checkboxes">
+        <combo_box.item label="None" value="" name="storm_override_none" />
+        <combo_box.item label="Supercell" value="supercell" name="storm_override_supercell" />
+        <combo_box.item label="Tornado" value="tornado" name="storm_override_tornado" />
+        <combo_box.item label="Waterspout" value="waterspout" name="storm_override_waterspout" />
+        <combo_box.item label="Anticyclonic" value="anticyclonic" name="storm_override_anticyclonic" />
+        <combo_box.item label="Squall line" value="squall" name="storm_override_squall" />
+    </combo_box>
+    <button
+     follows="right|top"
+     layout="topleft"
+     left="486"
+     top_delta="-2"
+     height="25"
+     width="25"
+     name="storm_override_kind_combo_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left="513"
+     top_delta="0"
+     height="25"
+     width="25"
+     name="storm_override_kind_combo_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left="540"
+     top_delta="0"
+     height="25"
+     width="25"
+     name="storm_override_kind_combo_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="storm_override_phase_label"
+     tool_tip="Where in the day cycle the pinned cell matures - converted to a wall-clock instant the same way every other phase on this floater is, never read as a time itself. The pinned cell is alive and near its peak at this phase regardless of when in the cycle it happens to be viewed"
+     font="SansSerifSmall">
+        Cue Phase
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="storm_override_phase_slider"
+     tool_tip="Where in the day cycle the pinned cell matures - converted to a wall-clock instant the same way every other phase on this floater is, never read as a time itself. The pinned cell is alive and near its peak at this phase regardless of when in the cycle it happens to be viewed"
+     show_text="false"
+     min_val="0"
+     max_val="1"
+     increment="0.001"
+     initial_value="0" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="storm_override_phase_value_spinner"
+     tool_tip="Where in the day cycle the pinned cell matures - converted to a wall-clock instant the same way every other phase on this floater is, never read as a time itself. The pinned cell is alive and near its peak at this phase regardless of when in the cycle it happens to be viewed"
+     min_val="0"
+     max_val="1"
+     increment="0.001"
+     decimal_digits="2" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="storm_override_phase_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="storm_override_phase_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="storm_override_phase_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="storm_override_offset_x_label"
+     tool_tip="Track-floor-relative X offset from the weather-domain anchor - the same frame the water plane and under deck author against. The pin lands exactly at anchor + offset (composeForced solves the origin from this); the storm lattice only picks the hashed id/epoch the offset happens to fall nearest, so a small change can keep that hash even though the placement itself moved"
+     font="SansSerifSmall">
+        Storm Offset X (m)
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="storm_override_offset_x_slider"
+     tool_tip="Track-floor-relative X offset from the weather-domain anchor - the same frame the water plane and under deck author against. The pin lands exactly at anchor + offset (composeForced solves the origin from this); the storm lattice only picks the hashed id/epoch the offset happens to fall nearest, so a small change can keep that hash even though the placement itself moved"
+     show_text="false"
+     min_val="-8000"
+     max_val="8000"
+     increment="10"
+     initial_value="0" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="storm_override_offset_x_value_spinner"
+     tool_tip="Track-floor-relative X offset from the weather-domain anchor - the same frame the water plane and under deck author against. The pin lands exactly at anchor + offset (composeForced solves the origin from this); the storm lattice only picks the hashed id/epoch the offset happens to fall nearest, so a small change can keep that hash even though the placement itself moved"
+     min_val="-8000"
+     max_val="8000"
+     increment="10"
+     decimal_digits="0" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="storm_override_offset_x_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="storm_override_offset_x_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="storm_override_offset_x_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
+     name="storm_override_offset_y_label"
+     tool_tip="Track-floor-relative Y offset from the weather-domain anchor - the same frame the water plane and under deck author against. The pin lands exactly at anchor + offset (composeForced solves the origin from this); the storm lattice only picks the hashed id/epoch the offset happens to fall nearest, so a small change can keep that hash even though the placement itself moved"
+     font="SansSerifSmall">
+        Storm Offset Y (m)
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="storm_override_offset_y_slider"
+     tool_tip="Track-floor-relative Y offset from the weather-domain anchor - the same frame the water plane and under deck author against. The pin lands exactly at anchor + offset (composeForced solves the origin from this); the storm lattice only picks the hashed id/epoch the offset happens to fall nearest, so a small change can keep that hash even though the placement itself moved"
+     show_text="false"
+     min_val="-8000"
+     max_val="8000"
+     increment="10"
+     initial_value="0" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="storm_override_offset_y_value_spinner"
+     tool_tip="Track-floor-relative Y offset from the weather-domain anchor - the same frame the water plane and under deck author against. The pin lands exactly at anchor + offset (composeForced solves the origin from this); the storm lattice only picks the hashed id/epoch the offset happens to fall nearest, so a small change can keep that hash even though the placement itself moved"
+     min_val="-8000"
+     max_val="8000"
+     increment="10"
+     decimal_digits="0" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="storm_override_offset_y_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="storm_override_offset_y_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="storm_override_offset_y_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+
+    <!-- <SS:Nexii> Weathergen's "severe day" option (ssatmoenvweathergen.h/.cpp, sssquallcore.h SSSquall::severeDayBias): authoring-time only, read by Randomize below at the moment it is pressed rather than stored on the track - it is an option on the NEXT roll, not a property of the day already rolled. Raises the rolled convection/moisture peaks (and authors an explicit shear curve, auto off) over a window centred on whichever spell rolls most severe; a dry roll or a strength of 0 leaves the day exactly as it would have rolled unchecked. -->
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="16"
+     width="200"
+     name="weather_severe_day_check"
+     label="Severe Day"
+     tool_tip="Biases the next Randomize roll's convection, moisture and wind shear peaks toward a severe event, over a window centred on whichever spell rolls most severe. Read once, at the moment Randomize is pressed - has no effect on a dry roll" />
+    <text
+     follows="left|top"
+     layout="topleft"
+     left_pad="6"
+     height="14"
+     width="60"
+     name="weather_severe_day_strength_label"
+     font="SansSerifSmall">
+        Strength
+    </text>
+    <spinner
+     follows="left|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-2"
+     height="20"
+     width="70"
+     label_width="0"
+     name="weather_severe_day_strength_spinner"
+     tool_tip="How hard the bias pulls the rolled peaks toward the severe targets (0.9 moisture, 0.85 convection, 0.8 shear) - 0 leaves the roll exactly as it would have come out unchecked, 1 reaches the targets"
+     min_val="0"
+     max_val="1"
+     increment="0.05"
+     initial_value="1"
+     decimal_digits="2"
+     enabled="false" />
+
     <!-- <SS:Nexii> What the last Randomize roll turned out to be, in words. A generator the author presses repeatedly has to report itself or the button is a slot machine with the reels hidden - "Autumn with gale-force winds - two spells of precipitation" is what tells you whether to roll again, where eight changed slider positions do not. Blank until something is rolled, and blanked again by Remove. -->
     <text
      follows="left|bottom|right"

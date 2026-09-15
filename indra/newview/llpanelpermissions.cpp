@@ -1189,6 +1189,26 @@ void LLPanelPermissions::refresh()
 
     getChildView("label click action")->setEnabled(is_perm_modify && is_nonpermanent_enforced  && all_volume);
     getChildView("clickaction")->setEnabled(is_perm_modify && is_nonpermanent_enforced && all_volume);
+
+    // <SS:Nexii> Local content (Atmo Magic landscape) has no simulator-side permissions, sale info or click action; disable the whole General-tab permissions block. Name and description stay enabled - set above, not touched here.
+    if (objectp->ssIsLocalContent())
+    {
+        getChildView("checkbox share with group")->setEnabled(false);
+        getChildView("button deed")->setEnabled(false);
+        getChildView("checkbox allow everyone move")->setEnabled(false);
+        getChildView("checkbox allow everyone copy")->setEnabled(false);
+        getChildView("checkbox allow export")->setEnabled(false);
+        getChildView("checkbox next owner can modify")->setEnabled(false);
+        getChildView("checkbox next owner can copy")->setEnabled(false);
+        getChildView("checkbox next owner can transfer")->setEnabled(false);
+        getChildView("checkbox for sale")->setEnabled(false);
+        getChildView("Edit Cost")->setEnabled(false);
+        getChild<LLComboBox>("sale type")->setEnabled(false);
+        getChildView("search_check")->setEnabled(false);
+        getChildView("label click action")->setEnabled(false);
+        getChildView("clickaction")->setEnabled(false);
+    }
+    // </SS:Nexii>
 }
 
 //// Shorten name if it doesn't fit into max_pixels of two lines
