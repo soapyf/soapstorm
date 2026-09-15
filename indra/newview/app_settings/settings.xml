@@ -12867,6 +12867,17 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Backup</key>
       <integer>1</integer>
     </map>
+    <key>SSAlphaMaskTrustedDiscard</key>
+    <map>
+      <key>Comment</key>
+      <string>Finest texture discard level whose automatic alpha-mask verdict is still provisional. Textures uploaded at a coarser level than this are treated as alpha masks when nearly every texel is opaque, instead of being alpha-blended (and depth-sorted) until a finer level arrives. 2 = quarter resolution and coarser is provisional. -1 = stock behaviour, every level is trusted.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>2</integer>
+    </map>
     <!-- </SS:Nexii> -->
     <key>RenderHighlightSelections</key>
     <map>

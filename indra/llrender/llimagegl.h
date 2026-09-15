@@ -153,6 +153,9 @@ public:
 
     // Squeeze - the store classifies alpha shape from the source pixels at encode time, because BC7 blocks cannot be scanned byte-wise and calcAlphaChannelOffsetAndStride therefore forces mIsMask false for BPTC. This is how that answer reaches the alpha-MASK render path in llface.cpp; there is no other way in, mIsMask having no setter.
     void setIsAlphaMask(bool is_mask) { mIsMask = is_mask; }
+
+    // Finest discard level whose "not a mask" verdict from analyzeAlpha is provisional rather than final; coarser uploads may guess "mask" for a nearly all-opaque histogram. doc/alpha_mask_verdict.md
+    static S32 sSSAlphaMaskTrustedDiscard;
     // </SS:Nexii>
 
     S32  getDiscardLevel() const        { return mCurrentDiscardLevel; }
