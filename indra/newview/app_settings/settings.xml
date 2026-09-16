@@ -25764,13 +25764,13 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>SSSqueezeMinTextureSize</key>
     <map>
       <key>Comment</key>
-      <string>Smallest texture worth compressing, given as a square size. 512 means "at least as many pixels as a 512x512", so a 1024x256 banner counts as large enough because it holds exactly as many. The video memory saved grows with the square of the size while the cost of a record stays flat, so the benefit sits almost entirely in large textures: one 1024 saves as much as two hundred and fifty 64s.</string>
+      <string>Smallest texture worth compressing, given as a square size. 256 means "at least as many pixels as a 256x256", so a 512x128 banner counts as large enough because it holds exactly as many. The video memory saved grows with the square of the size while the cost of a record stays flat, so the benefit sits almost entirely in large textures: one 1024 saves as much as two hundred and fifty 64s.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
       <string>U32</string>
       <key>Value</key>
-      <integer>512</integer>
+      <integer>256</integer>
     </map>
     <key>SSSqueezeCachePercent</key>
     <map>
@@ -25837,17 +25837,6 @@ Change of this parameter will affect the layout of buttons in notification toast
       <string>Boolean</string>
       <key>Value</key>
       <integer>1</integer>
-    </map>
-    <key>SSSqueezeServeAlpha</key>
-    <map>
-      <key>Comment</key>
-      <string>Also use compressed copies for textures that have see-through parts. Saves more video memory, but until per-texel click masks are stored these textures are clicked as whole squares, so fences, plants and hair stop being click-through.</string>
-      <key>Persist</key>
-      <integer>1</integer>
-      <key>Type</key>
-      <string>Boolean</string>
-      <key>Value</key>
-      <integer>0</integer>
     </map>
     <key>SSSqueezeReadThreads</key>
     <map>
@@ -28629,6 +28618,17 @@ Change of this parameter will affect the layout of buttons in notification toast
     <string>U32</string>
     <key>Value</key>
     <integer>1</integer>
+  </map>
+  <key>SSAltCamMaxDistance</key>
+  <map>
+    <key>Comment</key>
+    <string>How far (metres) an ALT-click may reach to find a camera focus point when the ordinary 512 m pick hits nothing: a long-range terrain/object cast, then the region water plane along the same ray (void water included). Lets the camera orbit weather from open water. 512 to 65536.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>F32</string>
+    <key>Value</key>
+    <real>4096.0</real>
   </map>
   <key>SSAtmoCloudTessellation</key>
   <map>

@@ -1687,7 +1687,6 @@ void settings_setup_listeners()
     setting_setup_signal_listener(gSavedSettings, "SSSqueezeMinTextureSize", handleSSSqueezeEnabledChanged);
     // The read side keeps its own snapshot too, and for the same reason the encode side does: both gates are refreshed from ss_squeeze_refresh_enabled so they can never disagree about whether the feature is on.
     setting_setup_signal_listener(gSavedSettings, "SSSqueezeReadEnabled", handleSSSqueezeEnabledChanged);
-    setting_setup_signal_listener(gSavedSettings, "SSSqueezeServeAlpha", handleSSSqueezeEnabledChanged);
     setting_setup_signal_listener(gSavedSettings, "SSSqueezeSelfTest", handleSSSqueezeSelfTest);
     // <SS:Nexii> Squeeze promotion - the four settings the fill engine reads, listened for so the preferences checkboxes take effect the moment they are ticked. SSSqueezeNetworkPromote in particular had a checkbox and no reader at all, which is worse than having no control: it told the user their bandwidth was being spent, or not spent, on the strength of a setting nothing consulted.
     setting_setup_signal_listener(gSavedSettings, "SSSqueezePromote", handleSSSqueezeEnabledChanged);

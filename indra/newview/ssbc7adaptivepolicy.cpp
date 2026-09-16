@@ -32,7 +32,7 @@ namespace
         "this block backend has only one encoder"
     };
 
-    // The rungs, BEST FIRST. Ordered by measured cost rather than by the profile names, which is the whole reason this array exists instead of a loop over the enum: bc7e's `slow` is faster than its `basic` and better on the case that matters, so the ordinal ordering of SSBC7Quality happens to be right here and this array is what pins that down if a fourth profile is ever added in the middle.
+    // The rungs, BEST FIRST. Ordered by measured cost rather than by the profile names, which is the whole reason this array exists instead of a loop over the enum: it was built for bc7e, whose `slow` was faster than its `basic`, and it stays because the ordinal ordering of SSBC7Quality is a fact about the on-disk quality byte, not about whichever backend is linked - this array is what pins the ladder down if a fourth profile is ever added in the middle. With bc7f the three presets happen to be monotonic in both cost and quality.
     const SSBC7Quality s_rungs[SSBC7_QUALITY_COUNT] =
     {
         SSBC7_QUALITY_HIGH,

@@ -1,6 +1,6 @@
 /**
  * @file ssbc7adaptive.h
- * @brief Squeeze adaptive encode quality - measures what the encode pool is actually achieving and picks the bc7e profile that matches the backlog, see doc/super_compressed_textures.md
+ * @brief Squeeze adaptive encode quality - measures what the encode pool is actually achieving and picks the encoder profile that matches the backlog, see doc/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code
@@ -38,10 +38,10 @@ constexpr U32 SSBC7_ADAPT_COOLDOWN_SECONDS   = 60;
 
 // Seeds for a profile nothing has been encoded at yet, in megapixels per second PER WORKER, straight off the offline benchmark at 512x512 single threaded. They exist only so the very first decision of a session is not made against zeroes; the first few real encodes replace them, which matters because these were measured on synthetic content and the machine that counts is the one the user is sat at.
 //
-// Note the ordering is NOT monotonic in the profile names: bc7e's `slow` is repeatably FASTER than its `basic` and bit exact on the multi-hue case that `basic` merely makes acceptable, which is why HIGH maps to slow and `basic` is not on the ladder at all.
-constexpr F32 SSBC7_ADAPT_SEED_MPIX_FAST     = 73.f;
-constexpr F32 SSBC7_ADAPT_SEED_MPIX_BALANCED = 9.f;
-constexpr F32 SSBC7_ADAPT_SEED_MPIX_HIGH     = 3.4f;
+// These are bc7f's Faster, Fast and Default presets on textured content (the whole-image figure, which excludes the mostly-solid cutout class that every encoder short-circuits). bc7f is analytical, so its cost is content dependent: smooth content runs two to three times faster than these, a block of several unrelated hues several times slower.
+constexpr F32 SSBC7_ADAPT_SEED_MPIX_FAST     = 110.f;
+constexpr F32 SSBC7_ADAPT_SEED_MPIX_BALANCED = 89.f;
+constexpr F32 SSBC7_ADAPT_SEED_MPIX_HIGH     = 52.f;
 
 // A texture whose size nothing has measured yet. A 1024 square is 1.05 megapixels, and the mip chain adds about a third, so this is the honest starting guess for the sort of asset the backlog is made of.
 constexpr F32 SSBC7_ADAPT_SEED_MPIX_PER_TEXTURE = 1.4f;
@@ -182,6 +182,10 @@ void ssBC7AdaptiveNoteEncode(SSBC7Quality quality, U32 texels, F64 seconds);
 
 // Worker threads. Brackets the time a worker spends inside an encode, so the overlay can say how many of the cores are actually busy rather than how many exist.
 void ssBC7AdaptiveNoteBusy(bool busy);
+
+// <SS:Nexii> Squeeze capacity-driven promotion - the INSTANT count of workers inside an encode, as against the moving average the overlay shows. The promotion engine sizes each pass from this: pool width minus this minus what it has already queued is the number of cores it may put to work right now, and an average would let it over-post on the way up and under-post on the way down.
+S32 ssBC7AdaptiveBusyWorkersNow();
+// </SS:Nexii>
 
 // Main thread, every frame, and a clock comparison on almost all of them. Feeds the ladder and logs every transition.
 void ssBC7AdaptiveTick();

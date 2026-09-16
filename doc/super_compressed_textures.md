@@ -75,20 +75,31 @@ MIPS: generated at encode time (box filter, LLImageBase::generateMip precedent) 
 
 FORMAT: GL_COMPRESSED_RGBA_BPTC_UNORM (0x8E8C), NOT the SRGB variant — zero GL_SRGB internal formats are used for world textures; shaders do srgb_to_linear, so UNORM preserves sampling semantics exactly. gGLManager.mHasBPTC runtime check (core GL 4.2), silent RGBA8 fallback.
 
-ENCODER: two interchangeable backends behind one seam, `ssBC7EncodeBlocksRGBA(num_blocks, rgba_blocks, out_blocks)` in `indra/llimage/ssbc7encoder.h`. The seam is batched, not per-block, because a SIMD encoder's whole advantage is filling vector lanes with independent blocks; the wrapper hands over one row of blocks per call. Which backend is compiled is decided at configure time by `indra/cmake/ISPC.cmake` — see "Encoder backend" below. The P0 measurement gate is now closed; numbers are in that section.
+ENCODER: two interchangeable backends behind one seam, `ssBC7EncodeBlocksRGBA(num_blocks, rgba_blocks, out_blocks, quality)` in `indra/llimage/ssbc7encoder.h`. The seam is batched, not per-block, because a SIMD encoder's whole advantage is filling vector lanes with independent blocks; the wrapper hands over one row of blocks per call. Which backend is compiled is decided at configure time by the `SS_BC7F` option in `indra/llimage/CMakeLists.txt` — see "Encoder backend" below. The P0 measurement gate is now closed; numbers are in that section.
 
 EXCLUSIONS (enqueue + read side): sculpt (geometry-not-color, FIRE-35428), media, UI/local/explicit-format, mNeedsAux, FTT_SERVER_BAKE in v1 (bake UUIDs churn per outfit; OWNER CALL #2), icon/thumbnail variants — keyed by BOOST_ICON/BOOST_THUMBNAIL boost level, not just ETexListType (the destructive rescale keys off boost). Raw-consuming textures (needsToSaveRawImage etc.) always take the J2C path. NPOT sources skipped.
 
 ## Encoder backend: measurement, choice, and licensing
 
 Two backends implement the block seam. Exactly one is ever compiled, because both define the same
-three functions; `indra/llimage/CMakeLists.txt` swaps them.
+functions; `indra/llimage/CMakeLists.txt` swaps them on the `SS_BC7F` option.
 
-- `ssbc7block_mode6.cpp` — entirely our own code, no third-party dependency, no toolchain beyond a
-  C++ compiler. Implements BC7 mode 6 only: single partition, 7-bit endpoints plus a shared p-bit,
-  4-bit indices. This is always the fallback and is what a build with no ISPC configured gets.
-- `ssbc7block_bc7e.cpp` — a thin shim onto Binomial's bc7e, compiled by Intel ISPC. Used when
-  `SS_ISPC_EXECUTABLE` points at an ISPC install and `indra/llimage/bc7e/bc7e.ispc` is present.
+- `ssbc7block_bc7f.cpp` — the DEFAULT since 2026-09-09: a thin shim onto Binomial's bc7f, the
+  analytical one-shot BC7 encoder inside the Basis Universal transcoder, vendored unmodified in
+  `indra/llimage/basis_universal/` (see the README there). Plain C++, no SIMD, no toolchain beyond
+  the compiler, so every platform and every CI build gets it. Rungs are bc7f's own presets:
+  FAST = `Faster`, BALANCED = `Fast`, HIGH = `Default`, the owner's pick.
+- `ssbc7block_mode6.cpp` — entirely our own code, no third-party dependency. Implements BC7 mode 6
+  only: single partition, 7-bit endpoints plus a shared p-bit, 4-bit indices. Built by
+  `SS_BC7F=OFF`; it exists as the structural licensing hedge described below.
+
+**History.** From 2026-08-27 to 2026-09-09 the default was Binomial's bc7e, compiled by Intel ISPC
+when `SS_ISPC_EXECUTABLE` was configured, with mode 6 as the fallback. It was dropped, together with
+the ISPC dependency and its licence entries, when bc7f was measured (next section but one) and the
+owner chose bc7f Default: it beats the portable backend on every content class at 10-15x the
+speed, and unlike bc7e it needs no toolchain, so the CI builds - which never had ISPC and were
+shipping mode 6 all along - now ship the same encoder the owner runs. The bc7e numbers below are
+kept as the record they were.
 
 ### Measured, not assumed
 
@@ -139,42 +150,122 @@ only ever read back by the installation that wrote it, and what the version stam
 the same machine encoding the same bytes twice gets the same block. `ssbc7encoder.h` states this at
 the seam so nobody later "fixes" it into a cross-machine guarantee we do not need and would pay for.
 
+### bc7f and bc7e_scalar, measured 2026-09-09
+
+Asked: should bc7e be "upgraded" to Binomial's bc7f, the analytical one-shot BC7 encoder that ships
+inside the Basis Universal transcoder (`transcoder/basisu_transcoder.cpp`, namespace `basist::bc7f`,
+v2.50 and later)? Measured rather than assumed. Harness: `V:\Scratch\squeeze` (`bench.cpp`,
+`build.ps1`), same shape as the table above but DIFFERENT synthetic images, so compare rows within
+this table only. Four encoders: bc7e via ISPC exactly as the viewer builds it, `bc7e_scalar`
+(Binomial's pure C++ port of bc7e in `encoder/basisu_bc7e_scalar.cpp`, same API, same output to
+0.01 dB), bc7f at its six upstream presets, and our portable mode 6 backend. Decoded by `bc7decomp`
+and cross-checked block by block against Basis's own `bc7u::unpack_bc7`: every block agreed, and
+every backend was byte-identical run to run. `alphasmooth` is new: smooth colour under a smooth
+alpha ramp, because bc7f's own comments call its cheap presets "very weak particularly on alpha".
+
+PSNR dB over RGBA, 512x512, single thread, 99.00 = bit exact:
+
+| backend | smooth | skin | cutout | alphasmooth | twotone | fourhue | noise |
+|---|---|---|---|---|---|---|---|
+| ss mode6 (portable)   | 50.86 | 52.63 | 58.94 | 52.66 | 53.17 | 15.78 | 15.08 |
+| bc7e ispc ultrafast   | 51.17 | 53.46 | 73.68 | 54.81 | 53.17 | 15.62 | 15.02 |
+| bc7e ispc veryfast    | 54.12 | 53.68 | 73.68 | 54.27 | 53.24 | 43.15 | 17.96 |
+| bc7e ispc slow        | 55.27 | 54.01 | 99.00 | 55.99 | 55.23 | 51.83 | 19.00 |
+| bc7f Default          | 51.92 | 52.64 | 73.68 | 52.68 | 53.17 | 32.33 | 17.66 |
+| bc7f PartAnalytical   | 51.97 | 52.67 | 73.68 | 53.56 | 53.17 | 34.22 | 18.45 |
+| bc7f NonAnalytical    | 54.47 | 54.69 | 73.68 | 54.17 | 53.28 | 34.24 | 18.45 |
+
+Mpix/s per class (the whole-image average is misleading because `cutout` is mostly solid blocks,
+which every encoder short-circuits):
+
+| backend | smooth | skin | cutout | alphasmooth | twotone | fourhue | noise |
+|---|---|---|---|---|---|---|---|
+| ss mode6 (portable)   |   6.5 |   6.2 |  69.1 |   6.5 |   6.5 |   6.3 |   6.1 |
+| bc7e ispc ultrafast   |  71.2 |  72.0 |  28.8 |  11.0 |  69.6 |  71.0 |  70.4 |
+| bc7e ispc veryfast    |   8.3 |   9.2 |  11.2 |   5.4 |   8.8 |   8.5 |   7.4 |
+| bc7e ispc slow        |   2.7 |   2.9 |   6.6 |   3.6 |   2.7 |   2.7 |   2.4 |
+| bc7e scalar slow      |   0.5 |   0.5 |  27.4 |   0.7 |   0.6 |   0.7 |   0.5 |
+| bc7f Default          |  70.0 | 102.5 | 896.8 |  54.4 |  61.8 |  14.5 |  11.5 |
+| bc7f PartAnalytical   |  35.2 |  76.4 | 792.2 |  28.2 |  46.6 |   8.0 |   6.5 |
+| bc7f NonAnalytical    |   7.9 |   7.2 | 386.5 |  12.2 |   6.8 |   7.9 |   6.5 |
+
+Reading it:
+
+- **bc7f is a speed encoder, not a quality one.** Against the HIGH rung the viewer defaults to
+  (bc7e slow), bc7f NonAnalytical is about 3x faster and gives up 0.8 dB on smooth, 1.8 on
+  alphasmooth, 2 on twotone, bit-exactness on cutouts (73.7 vs 99.0) and 17.6 dB on the multi-hue
+  case. Under this feature's economics — encode once, quality is permanent, the pool is supply
+  limited — that is a regression, so **HIGH stays bc7e slow** and bc7f is not an upgrade there.
+- **bc7f Default dominates the portable mode 6 backend on every column** at 10-15x the speed on
+  textured content: +14.7 dB on cutouts, +16.5 dB on the multi-hue case, +2.6 dB on noise, never
+  worse anywhere. It is the right thing for a build with no ISPC to fall back to, and it also
+  removes ultrafast's multi-hue blind spot from the FAST rung (32 dB against 15.6) at a similar
+  speed on textured content.
+- **bc7e_scalar is not a substitute for ISPC.** Its output matches the ISPC build, but at `slow` it
+  is 5x slower on every textured class. It is the most direct way to give a no-ISPC build the real
+  bc7e ladder, but that costs the very throughput the ladder exists to buy.
+- Cost of carrying bc7f: it cannot be lifted out of `basisu_transcoder.cpp` without modifying an
+  upstream file, so the whole transcoder directory (4 MB of source, one 46k-line translation unit)
+  would be vendored unmodified and built as its own component. That is cheaper than it sounds:
+  about 4 s to compile at /O2 and a 2.7 MB object. `BASISD_SUPPORT_KTX2=0` and
+  `BASISD_SUPPORT_KTX2_ZSTD=0` are the only trims that build; switching off every format except
+  XUASTC (where bc7f is guarded) fails to compile upstream. The API is per block
+  (`bc7f::fast_pack_bc7_auto_rgba`), portable, no SIMD, thread safe once
+  `basisu_transcoder_init()` has run (wrap it in `std::call_once` like bc7e's init).
+- Licence: identical to bc7e's. Basis Universal is Apache 2.0 from the same rights holder
+  (Binomial LLC); its DEP5 file marks only `zstd/` and `encoder/3rdparty/` as third party, and
+  neither is touched. The posture below applies unchanged — separate, unmodified component, credit
+  in `licenses-*.txt`, APR precedent. Two additions: the repository ships a NOTICE file whose
+  attribution text must be reproduced (Apache 2.0 §4(d)), and "Basis Universal" is a trademark, so
+  the credit names it without implying endorsement.
+
 ### Licensing
 
 Recorded because it constrains the design, not as an afterthought. **Not legal advice — flagged for
 the owner.**
 
 - Soapstorm inherits **LGPL v2.1** (`doc/LICENSE-source.txt`, "version 2.1", with no "or later").
-- bc7e is **Apache 2.0**. So is Basis Universal, so the same analysis would have applied there.
+- Basis Universal (bc7f) is **Apache 2.0**, from Binomial LLC. So was bc7e before it, so the analysis
+  below is unchanged by the 2026-09-09 swap; what changed is listed at the end.
 - The FSF treats Apache 2.0 as **incompatible with GPLv2/LGPLv2.1**: its patent-termination and
   notice terms are further restrictions those licences do not permit. It *is* compatible with
   (L)GPLv3, which is not an option here — there is no "or later".
 - But this tree **already ships Apache-2.0 third-party code**: APR is Apache 2.0 and is listed in
   `indra/newview/licenses-*.txt`. The project's established posture is that an Apache-2.0 component
   is acceptable as a *separate library* with its notices preserved, the same treatment cURL, expat
-  and OpenSSL get. That is the precedent bc7e is placed under, deliberately and not by accident.
+  and OpenSSL get. That is the precedent the Basis Universal transcoder is placed under, deliberately
+  and not by accident.
 
 What that means concretely, and why the code looks the way it does:
 
-1. bc7e lives **unmodified** in `indra/llimage/bc7e/` with its upstream `LICENSE` and `README`
-   beside it. Not one line of bc7e source is copied into any file carrying our licence header.
-2. `ssbc7block_bc7e.cpp` is **our** code under our licence. It calls bc7e only through the C API in
-   the ISPC-generated header. It compiles to its own objects, exactly like any linked library.
+1. The transcoder lives **unmodified** in `indra/llimage/basis_universal/transcoder/` with the
+   upstream `LICENSE` and `NOTICE` beside it and a README recording the upstream commit. Not one
+   line of it is copied into any file carrying our licence header, and no file in it is edited —
+   editing would trigger Apache 2.0 §4(b) and break this posture. The zstd and encoder third-party
+   parts of the upstream repository are not vendored at all.
+2. `ssbc7block_bc7f.cpp` is **our** code under our licence. It calls bc7f only through the
+   transcoder's public header. The transcoder compiles to its own object, at its own warning level,
+   exactly like any linked library.
 3. Notices are recorded in all three `indra/newview/licenses-*.txt`, which ship as the installer's
-   `licenses.txt` — that is the copy that satisfies the licence.
+   `licenses.txt` — that is the copy that satisfies the licence. Because upstream ships a NOTICE
+   file, §4(d) applies: its attribution notices are reproduced there verbatim (ASCII-folded).
 4. The About box reads build-generated `packages-info.txt`, which is produced from the autobuild
    packages and therefore cannot know about a backend chosen at configure time. So the linked
    backend supplies its own credit via `ssBC7BlockBackendAttribution()`, returning null for the
    portable one. Asking the backend rather than testing a build flag means the credit shown can
    never describe code that is not in the binary.
-5. Intel ISPC (BSD 3-Clause) is credited too. The compiler is not distributed, but object code it
-   generated is linked in, so the notice travels.
+5. "Basis Universal" is Binomial's trademark. The credit names it and claims nothing.
 
-**The hedge is structural, and it is the reason to be relaxed about all of the above.** bc7e is
-opt-in: a build with no `SS_ISPC_EXECUTABLE` configured contains no bc7e at all and uses
+**The hedge is structural, and it is the reason to be relaxed about all of the above.** bc7f is a
+configure option: `SS_BC7F=OFF` builds a viewer with none of the transcoder in it, using
 `ssbc7block_mode6.cpp`, which is entirely ours. If the licence question is ever decided against us,
 backing out is a configure flag and a measured quality regression on multi-colour blocks — not a
 rewrite. That is worth more than any confidence about how the compatibility argument would land.
+
+What the 2026-09-09 swap removed: bc7e (`indra/llimage/bc7e/`, `ssbc7block_bc7e.cpp`), the ISPC
+toolchain hook (`indra/cmake/ISPC.cmake`, `SS_ISPC_EXECUTABLE`), and the BC7E and Intel ISPC
+sections of `licenses-*.txt`. The ISPC install on the owner's machine and the `SS_ISPC_EXECUTABLE`
+line in the gitignored `build.ps1` are no longer read by anything.
 
 ## The four critical fixes (designed in from day one — each was a verified would-have-shipped bug)
 
@@ -203,7 +294,7 @@ Three stages on three threads, and the split is forced by what each API locks ra
 
 **Explicit-format lifecycle** is now a named transition, `LLImageGL::dropCompressedFormat(reason)`, which clears the flag AND re-derives the uncompressed format in the same breath — clearing alone leaves a window where `isCompressed()` still answers true, and that window is the crash. It is called deliberately from every BC7 exit (`addToCreateTexture`, `preCreateTexture`, `forceToSaveRawImage`, `forceToRefetchTexture`, `setLoadedCallback`, `clearFetchedResults`, `destroyTexture`) and logs at debug level, because in a healthy session that transition is entirely ordinary. The guards inside `setImage` and `createGLTexture` remain as genuine last resorts and warn, because arriving there means a caller failed to declare itself; the one inside `setImage` in particular converts what was a fatal `LL_ERRS` into one lost texture.
 
-**Pick masks are the one deliberate limitation.** The encode worker never fills `SSBC7Encoded::mPickMask`, so a BC7 resident has none, and `LLImageGL::getMask` returns TRUE unconditionally in that case — which picks the whole quad of every cutout instead of its visible texels. A texture with no real alpha never had a pick mask under the ordinary path either, so serving those regresses nothing. Everything else is declined with its own counted reason (`SSBC7_SERVE_DECLINE_ALPHA`) until the encode side stores a mask at parity resolution; `SSSqueezeServeAlpha` exists to measure what that exclusion costs. The alpha SHAPE is already carried (`SSBC7_FLAG_ALPHA_IS_MASK`) and is injected through a tagged `LLImageGL::setIsAlphaMask`, because `calcAlphaChannelOffsetAndStride` forces `mIsMask` false for BPTC and `analyzeAlpha` never runs.
+**Pick masks are stored (since 2026-09-09; before that they were the one deliberate limitation).** A BC7 upload has no alpha bytes for `LLImageGL::updatePickMask` to read, so without a mask `getMask` answers TRUE for the whole quad and every fence, plant and hair card stops being click-through - which is why alpha textures were declined (`SSBC7_SERVE_DECLINE_ALPHA`) and `SSSqueezeServeAlpha` existed to measure the cost. Now the encode worker builds the mask from the decoded base level (`buildPickMask` in `ssbc7encodequeue.cpp`, bit-identical to `updatePickMask`'s layout: one bit per 2x2 cell, alpha > 32, at PARITY resolution rather than a cap), the store keeps it after the payload with its own CRC, `readBlobPrefix` fetches it in the same open as the prefix, and `LLImageGL::ssSetPickMask` installs it after the compressed upload. An alpha texture is served whenever its record carries `SSBC7_FLAG_HAS_PICKMASK`; a record without one is still declined with the same counted reason. `SSSqueezeServeAlpha` is removed. The alpha SHAPE is already carried (`SSBC7_FLAG_ALPHA_IS_MASK`) and is injected through a tagged `LLImageGL::setIsAlphaMask`, because `calcAlphaChannelOffsetAndStride` forces `mIsMask` false for BPTC and `analyzeAlpha` never runs.
 
 **Down-rez** re-uploads a shorter prefix instead of queueing. `LLImageGL::scaleDown` refuses a block compressed texture and `processTextureStats` calls `scaleDown()` every pass while current is below desired, so a BC7 resident left on `mDownScaleQueue` is re-queued forever, `mCurrentDiscardLevel` never moves and the memory governor never gets those bytes back — the opposite of the point, at the moment it matters most.
 
@@ -213,7 +304,7 @@ IMPLEMENTED 2026-08-27, in `indra/newview/ssbc7promote.cpp` with the decisions s
 
 TWO TIERS IN STRICT ORDER, and the order is the whole safety argument. Tier (b) is not considered at all until the want list is empty.
 
-**TIER (a), free, no network.** When `ssBC7EncodePendingCount()` is zero - the demand path has nothing in flight - a bounded SCAN is posted onto the existing BC7Encode pool. It takes the newest 48 want-list uuids, drops those the store already has, and asks `LLTextureCache::ssProbeJ2C` whether each J2C is complete on this disk. COMPLETE ones are claimed and posted as fused items: `[read -> decode -> mips -> encode -> store]`, one work item, wholly on the pool, never touching the ImageDecode pool. PARTIAL ones move to the network candidate list. NO_ENTRY, UNKNOWN and READ_FAILED are dropped with their own counted reason, because keeping them would make the want list a list of textures the engine can never act on.
+**TIER (a), free, no network.** When `ssBC7EncodePendingCount()` is zero - the demand path has nothing in flight - a bounded SCAN is posted onto the existing BC7Encode pool. It takes the newest want-list uuids (48, or four per spare worker if that is more), drops those the store already has, and asks `LLTextureCache::ssProbeJ2C` whether each J2C is complete on this disk. **CAPACITY-DRIVEN since 2026-09-09.** There is no fixed number of fused encodes per pass. The tick measures SPARE WORKERS - pool width, minus workers inside an encode right now, minus fused encodes already posted that no worker has reached - and offers exactly that many, gated on the adaptive controller: HEADROOM ("keeping up easily") gets the full count, HOLDING gets a trickle of one so the controller keeps receiving samples, STEPPED_DOWN gets nothing. Other load on the machine shows up in the controller as falling throughput, so this is the system-stress signal as well as the texture-volume one. While anything is waiting the pass cadence is `SSBC7_PROMOTE_FOLLOWUP_SECONDS` (0.25 s) rather than the 2 s idle tick. The previous fixed ceiling of four per two seconds was sized for bc7e and left sixteen cores idle behind a list of two hundred textures - the owner's rule that replaced it: "if there is a spare core and it is keeping up easily, add another to the pile". COMPLETE ones are claimed and posted as fused items: `[read -> decode -> mips -> encode -> store]`, one work item, wholly on the pool, never touching the ImageDecode pool. PARTIAL ones move to the network candidate list. NO_ENTRY, UNKNOWN and READ_FAILED are dropped with their own counted reason, because keeping them would make the want list a list of textures the engine can never act on.
 
 COMPLETENESS is decided by the J2C tier's own partial sentinel and nowhere else: `LLTextureCacheWorker` stores the asset's total size in the entry, but a fetch that only had part of it stores total+1 (`lltexturefetch.cpp:2079-2088`), so "header record + body >= total" makes a partial fall exactly one byte short. That arithmetic is `ssBC7J2CExtent` and is unit tested offline against both the real record size and a different one, because the rule must not depend on `FIRST_PACKET_SIZE`.
 

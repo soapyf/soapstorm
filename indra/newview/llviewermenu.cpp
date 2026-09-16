@@ -6050,7 +6050,14 @@ class LLViewMouselook : public view_listener_t
 
         if (!gAgentCamera.cameraMouselook())
         {
+            // If the user is seated on an object/vehicle that has NOT defined a custom
+            // sit camera offset (llSetCameraEyeOffset), fall back to vanilla first-person
+            // mouselook (cockpit view) to prevent awkward camera clipping and placement.
+            const bool is_sitting = isAgentAvatarValid() && gAgentAvatarp->isSitting();
+            const bool has_sit_cam = gAgentCamera.sitCameraEnabled();
+
             if (gSavedSettings.getBOOL("OTSEnabled")
+                && (!is_sitting || has_sit_cam)
                 && !(gSavedSettings.getBOOL("OTSRememberLastView")
                      && gSavedSettings.getBOOL("OTSLastViewFirstPerson")))
             {
@@ -6058,6 +6065,7 @@ class LLViewMouselook : public view_listener_t
                 return true;
             }
             gAgentCamera.changeCameraToMouselook();
+            return true;
         }
         else
         {

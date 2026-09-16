@@ -21,6 +21,7 @@
 #include "llfile.h"
 #include "llviewercontrol.h"
 #include "ssstratabudget.h"   // <SS:Nexii/> budgetBytes is a share of CacheSize decided by the arbiter, not a number of this store's own
+#include "ssserial.h"         // <SS:Nexii/> Squeeze pick masks - crc32Of, to check the mask read off the blob's tail against the header
 
 #include <cstdio>
 #include <cstring>
@@ -262,9 +263,10 @@ bool SSBC7Store::readBlob(const LLUUID& id, std::vector<U8>& out_blob, SSBC7Reco
 // </SS:Nexii>
 
 // <SS:Nexii> Squeeze read path - the short read the smallest-mip-first layout was designed for. Everything about the failure handling is deliberately identical to readBlob: a record that is wrong about the disk is erased from this process's map so a stale snapshot stops asking forever, the index file is never touched because a read-only second instance must never write, and the caller falls back to J2C.
-bool SSBC7Store::readBlobPrefix(const LLUUID& id, U32 levels, std::vector<U8>& out_blob, SSBC7Record& out_record)
+bool SSBC7Store::readBlobPrefix(const LLUUID& id, U32 levels, std::vector<U8>& out_blob, SSBC7Record& out_record, std::vector<U8>* out_pickmask)
 {
     out_blob.clear();
+    if (out_pickmask) out_pickmask->clear();
 
     // <SS:Nexii> Every exit below says which one it was. These used to be six bare returns, and because the pump maps any false onto the single verdict DECLINE_READ, "this texture has no record", "its record was evicted while we were reading" and "the index disagrees with itself about its geometry" arrived at the log as the same number - which is precisely the failure this tier's own verdict enum exists to prevent, and which this project has already paid for twice elsewhere.
     //
@@ -321,9 +323,34 @@ bool SSBC7Store::readBlobPrefix(const LLUUID& id, U32 levels, std::vector<U8>& o
     out_blob.resize((size_t)want);
     const bool read_ok = fseek(f, (long)out_record.mBlobOffset, SEEK_SET) == 0
                       && fread(out_blob.data(), 1, (size_t)want, f) == (size_t)want;
+    const bool prefix_ok = read_ok && ssBC7VerifyBlobPrefix(out_blob.data(), out_blob.size(), id, levels);
+
+    // <SS:Nexii> Squeeze pick masks - the mask sits after the WHOLE payload, so it is a second seek in the same open rather than part of the prefix. Its failure is not the prefix's failure: a mask that does not read or does not checksum is dropped and the texture serves without one - which the serve gate then declines for an alpha texture, exactly as it would a record that never had a mask - while the payload, which verified on its own CRCs, stays good.
+    if (prefix_ok && out_pickmask && (out_record.mFlags & SSBC7_FLAG_HAS_PICKMASK) && out_record.mPickMaskBytes)
+    {
+        SSBC7BlobHeader hdr;
+        bool mask_ok = ssBC7ParseBlobHeaderOnly(out_blob.data(), out_blob.size(), hdr)
+                    && hdr.mPickMaskBytes == out_record.mPickMaskBytes
+                    && (U64)SSBC7_BLOB_HEADER_SIZE + hdr.mPayloadBytes + hdr.mPickMaskBytes <= (U64)out_record.mBlobSize;
+        if (mask_ok)
+        {
+            out_pickmask->resize(hdr.mPickMaskBytes);
+            const U64 mask_at = out_record.mBlobOffset + SSBC7_BLOB_HEADER_SIZE + hdr.mPayloadBytes;
+            mask_ok = fseek(f, (long)mask_at, SEEK_SET) == 0
+                   && fread(out_pickmask->data(), 1, hdr.mPickMaskBytes, f) == (size_t)hdr.mPickMaskBytes
+                   && ssserial::crc32Of(out_pickmask->data(), hdr.mPickMaskBytes) == hdr.mPickMaskCRC;
+        }
+        if (!mask_ok)
+        {
+            out_pickmask->clear();
+            LL_WARNS("Squeeze") << "BC7 pick mask for " << id << " in segment " << out_record.mSegment
+                                << " did not read or verify, the texture will serve without per-texel picking" << LL_ENDL;
+        }
+    }
+    // </SS:Nexii>
     LLFile::close(f);
 
-    if (!read_ok || !ssBC7VerifyBlobPrefix(out_blob.data(), out_blob.size(), id, levels))
+    if (!prefix_ok)
     {
         {
             std::lock_guard<std::mutex> lock(mMapMutex);

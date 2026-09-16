@@ -7545,7 +7545,8 @@ LLViewerObject* LLPipeline::lineSegmentIntersectInWorld(const LLVector4a& start,
 // is safe. Used by the OTS shoulder camera for collision.
 LLDrawable* LLPipeline::lineSegmentIntersectWorldGeometry(const LLVector4a& start, const LLVector4a& end,
                                                           LLVector4a* intersection, bool skip_phantom,
-                                                          bool pick_transparent)
+                                                          bool pick_transparent,
+                                                          const LLViewerObject* skip_root)
 {
     static const U32 world_partitions[] =
     {
@@ -7558,6 +7559,8 @@ LLDrawable* LLPipeline::lineSegmentIntersectWorldGeometry(const LLVector4a& star
     // through them. When skip_phantom is set, step the ray past each phantom hit
     // and re-cast until we find solid geometry (or nothing). The cap bounds the
     // pathological case of many stacked phantom layers.
+    // Likewise, skip_root allows raycasts (e.g. OTS camera collision and aim convergence)
+    // to step past a vehicle or object the player is seated on.
     const S32 MAX_PHANTOM_SKIPS = 16;
 
     LLVector4a seg_start = start;
@@ -7594,24 +7597,24 @@ LLDrawable* LLPipeline::lineSegmentIntersectWorldGeometry(const LLVector4a& star
             return NULL;
         }
 
-        if (skip_phantom)
+        const LLViewerObject* obj = drawable->getVObj();
+        const bool hit_phantom = skip_phantom && obj && obj->flagPhantom();
+        const bool hit_skip_root = skip_root && obj && (obj->getRoot() == skip_root);
+
+        if (hit_phantom || hit_skip_root)
         {
-            const LLViewerObject* obj = drawable->getVObj();
-            if (obj && obj->flagPhantom())
+            // Advance just past this surface and keep looking.
+            LLVector3 s(seg_start.getF32ptr());
+            LLVector3 e(end.getF32ptr());
+            LLVector3 hit_pos(local_end.getF32ptr());
+            LLVector3 dir = e - s;
+            if (dir.normalize() <= 0.f)
             {
-                // Advance just past this phantom surface and keep looking.
-                LLVector3 s(seg_start.getF32ptr());
-                LLVector3 e(end.getF32ptr());
-                LLVector3 hit_pos(local_end.getF32ptr());
-                LLVector3 dir = e - s;
-                if (dir.normalize() <= 0.f)
-                {
-                    return NULL; // degenerate ray
-                }
-                LLVector3 next = hit_pos + dir * 0.05f; // 5 cm past the surface
-                seg_start.load3(next.mV);
-                continue;
+                return NULL; // degenerate ray
             }
+            LLVector3 next = hit_pos + dir * 0.05f; // 5 cm past the surface
+            seg_start.load3(next.mV);
+            continue;
         }
 
         if (intersection)

@@ -471,6 +471,7 @@ jobs:
             echo "No custom user-agent string provided."
           fi
         shell: bash
+
       - name: Configure
         run: |
           autobuild configure -c ReleaseFS -A${addrsize} -- --package --chan ${{env.FS_RELEASE_CHAN}} ${{env.EXTRA_ARGS}} ${{env.FS_GRID}}

@@ -174,6 +174,13 @@ void ssBC7AdaptiveNoteBusy(bool busy)
     else      --st->mBusyWorkers;
 }
 
+// <SS:Nexii/> Squeeze capacity-driven promotion - one atomic read; clamped because the decrement in a scope guard can briefly race the increment of another worker and read minus one.
+S32 ssBC7AdaptiveBusyWorkersNow()
+{
+    AdaptiveState* st = state();
+    return st ? llmax(0, st->mBusyWorkers.load()) : 0;
+}
+
 void ssBC7AdaptiveNoteUpgradeRunning(bool running)
 {
     AdaptiveState* st = state();

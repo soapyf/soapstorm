@@ -35,7 +35,7 @@ struct SSBC7EncodeScratch
 
 // <SS:Nexii> Squeeze adaptive quality - the profile is a PARAMETER of an encode rather than a property of the process, because the adaptive controller in newview changes it while the session runs and a record now carries the profile it was made at. Declared here, above everything that takes one, rather than beside the backend seam where it used to live.
 //
-// The portable mode 6 backend has only one setting and ignores this. bc7e maps them onto its own profiles, where the step from FAST to BALANCED is the one that matters: it is what brings in the partitioned modes, and with them a block holding several unrelated colours goes from unusable to good.
+// The portable mode 6 backend has only one setting and ignores this. bc7f maps them onto its own presets, where each step brings in more of the BC7 format: FAST is mode 6 plus the alpha modes, BALANCED adds the two-subset modes, and HIGH adds the three-subset and dual-plane modes, so a block holding several unrelated colours improves at every rung.
 //
 // The ordering is by MEASURED cost, not by name, and these values are the on-disk meaning of SSBC7Record::mQuality - so they may be extended but must never be renumbered.
 enum SSBC7Quality
@@ -85,12 +85,12 @@ U32 ssBC7EncMipCount(U32 width, U32 height);
 // ---------------------------------------------------------------------------
 // Block backend seam
 //
-// Everything above is the pipeline and is independent of encode quality. Everything below is implemented in exactly one translation unit - ssbc7block_mode6.cpp when only a C++ compiler is available, ssbc7block_bc7e.cpp when ISPC is configured - chosen by indra/llimage/CMakeLists.txt. Nothing above the seam knows which one it got.
+// Everything above is the pipeline and is independent of encode quality. Everything below is implemented in exactly one translation unit - ssbc7block_bc7f.cpp by default, ssbc7block_mode6.cpp when SS_BC7F is off - chosen by indra/llimage/CMakeLists.txt. Nothing above the seam knows which one it got.
 // ---------------------------------------------------------------------------
 
 // Compresses a run of 4x4 RGBA blocks. `rgba_blocks` holds num_blocks consecutive blocks of 64 bytes each, row major within a block; `out_blocks` receives num_blocks consecutive 16 byte BC7 blocks.
 //
-// Batched rather than one block at a time because a SIMD backend fills its vector lanes with independent blocks - the reason bc7e asks for dozens per call. A scalar backend simply loops.
+// Batched rather than one block at a time because a SIMD backend fills its vector lanes with independent blocks - the reason the bc7e backend this seam was first built for asked for dozens per call. A scalar backend such as bc7f simply loops, and the batching costs it nothing.
 //
 // Determinism required of a backend is per machine, not universal: the same bytes encoded twice on one machine must give the same block, because that is what makes a stored blob comparable against the version stamped beside it. A SIMD backend dispatching on the host's instruction set, or compiled with fast maths, may legitimately differ from another machine's - which costs nothing here, because a blob is only ever read back by the installation that wrote it.
 //

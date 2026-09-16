@@ -252,7 +252,8 @@ public:
     bool readBlob(const LLUUID& id, std::vector<U8>& out_blob, SSBC7Record& out_record);
 
     // <SS:Nexii> Squeeze read path - reader-pool thread only, blocking IO, no lock held across the read, exactly as readBlob. `levels` counts store-order levels up from the smallest and zero means the whole chain; serving discard d wants (mMipCount - d) of them, so a coarse serve costs a short read instead of a full-resolution one. The returned buffer is header plus that prefix and NOTHING else, which is what makes the pointer arithmetic at the upload site the same in both cases.
-    bool readBlobPrefix(const LLUUID& id, U32 levels, std::vector<U8>& out_blob, SSBC7Record& out_record);
+    // <SS:Nexii/> Squeeze pick masks - `out_pickmask`, when given and the record carries one, receives the mask from the tail of the blob, checksummed against the header, in the same file open as the prefix. It lives after the payload precisely so the prefix read stays a prefix; the cost of fetching it is one more seek and a read of a few tens of kilobytes at most.
+    bool readBlobPrefix(const LLUUID& id, U32 levels, std::vector<U8>& out_blob, SSBC7Record& out_record, std::vector<U8>* out_pickmask = nullptr);
     // </SS:Nexii>
 
     // Any thread. Marks every uuid still referenced by the running viewer, which is the other half of the heat signal: permanently resident textures - avatar skins, UI, system assets - decode once at login and never again, so a fetch-time-only signal would rank exactly those as the coldest things in the store. Returns the referenced uuids a kill dropped this session, which is the only subset worth re-encoding straight away.

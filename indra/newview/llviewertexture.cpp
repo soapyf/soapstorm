@@ -1699,7 +1699,8 @@ bool LLViewerFetchedTexture::ssBC7NeedsRawCallback() const
 }
 
 // The sibling of createTexture() above. Everything here is main thread and every step is load bearing; the order in particular is the upload contract, proven in sssqueezedebug.cpp's self test before this path existed.
-bool LLViewerFetchedTexture::ssBC7UploadFromStore(const U8* data_in, S32 serve_discard, S32 full_width, S32 full_height, S32 src_components, S32 mip_count, bool alpha_is_mask)
+bool LLViewerFetchedTexture::ssBC7UploadFromStore(const U8* data_in, S32 serve_discard, S32 full_width, S32 full_height, S32 src_components, S32 mip_count, bool alpha_is_mask,
+                                                  const U8* pick_mask, U32 pick_mask_bytes)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
 
@@ -1752,6 +1753,12 @@ bool LLViewerFetchedTexture::ssBC7UploadFromStore(const U8* data_in, S32 serve_d
 
     // BC7 blocks cannot be scanned for alpha shape, so calcAlphaChannelOffsetAndStride forces mIsMask false and analyzeAlpha never runs. The store classified the source pixels at encode time; without this, cutout content served from BC7 falls into alpha blending instead of the alpha-MASK path.
     glimage->setIsAlphaMask(alpha_is_mask);
+
+    // <SS:Nexii/> Squeeze pick masks - installed AFTER createGLTexture, because setImage's own updatePickMask would free anything installed before it. The mask is for the full base level whatever discard is being served; getMask reads it through normalised texture coordinates, so resolution and serving discard are independent. A mask that does not fit is refused inside ssSetPickMask and the texture picks as a whole quad, which is the pre-2026-09-09 behaviour and not a failure of the upload.
+    if (pick_mask && pick_mask_bytes)
+    {
+        glimage->ssSetPickMask(full_width, full_height, pick_mask, pick_mask_bytes);
+    }
 
     // There is no LLGLTexture wrapper for the data_hasmips overload, so the four things the imageraw wrapper refreshes are mirrored by hand. Miss setTexelsPerImage and processTextureStats divides by zero.
     mFullWidth  = glimage->getCurrentWidth();

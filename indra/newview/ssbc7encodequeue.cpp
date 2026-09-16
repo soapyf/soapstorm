@@ -194,6 +194,33 @@ namespace
         else if (!any_midtone)  out_flags |= SSBC7_FLAG_ALPHA_IS_MASK;
     }
 
+    // <SS:Nexii> Squeeze pick masks - the per-texel click mask, built at encode from the decoded base level and stored beside the payload, because a BC7 upload has no alpha bytes for LLImageGL::updatePickMask to read and without a mask every cutout picks as a whole quad. The layout is updatePickMask's to the bit - one bit per 2x2 cell, row major, set where alpha exceeds 32, packed LSB first - so LLImageGL::ssSetPickMask can install it unchanged; the only difference is that this is always built from the FULL base level, where the stock path builds from whatever level happened to be uploaded last. Parity resolution rather than a cap, because coarsening it changes picking on vegetation and fences, which is the case the mask exists for.
+    void buildPickMask(const U8* data, U32 width, U32 height, U32 components, std::vector<U8>& out)
+    {
+        out.clear();
+        if (components != 2 && components != 4) return;
+
+        const U32 pick_width  = width / 2 + 1;
+        const U32 pick_height = height / 2 + 1;
+        out.assign(((size_t)pick_width * pick_height + 7) / 8, 0);
+
+        const U32 stride = components;
+        U32 pick_bit = 0;
+        for (U32 y = 0; y < height; y += 2)
+        {
+            for (U32 x = 0; x < width; x += 2)
+            {
+                const U8 alpha = data[((size_t)y * width + x) * stride + (components - 1)];
+                if (alpha > 32)
+                {
+                    out[pick_bit / 8] |= (U8)(1 << (pick_bit % 8));
+                }
+                ++pick_bit;
+            }
+        }
+    }
+    // </SS:Nexii>
+
     bool isPowerOfTwo(U32 v) { return v != 0 && (v & (v - 1)) == 0; }
 }
 
@@ -238,9 +265,9 @@ void ssBC7EncodeRefreshPolicy()
             //
             // Width is NOT what keeps this out of the way. The pool runs at background QoS, which deprioritises CPU, disk and memory pressure together, so a wide pool yields to foreground work exactly as readily as a narrow one and merely finishes sooner when nothing is competing. Being polite is the scheduler's job here, not the width's.
             //
-            // What actually stops paying is the hardware. This encoder is bc7e through AVX2, so it lives in the vector units - and the two logical processors on one physical core SHARE those units. The second thread per core therefore buys something like a fifth of a thread's work, not a whole one, while costing a whole thread's worth of wakeups, cache pressure and pinned decoded image. Past the physical core count the curve is nearly flat.
+            // What actually stops paying is the hardware. The rule was set when this encoder was bc7e through AVX2, living in the vector units that the two logical processors on one physical core SHARE, so the second thread per core bought something like a fifth of a thread's work while costing a whole thread's worth of wakeups, cache pressure and pinned decoded image. bc7f is scalar floating point and the sharing is less severe, but the half rule stays because the other half of the argument below is now the stronger one.
             //
-            // And upstream of all of it the pool is SUPPLY limited, not compute limited: at bc7e veryfast a worker turns over roughly six 1024 square textures a second, so even half of a large machine can consume far more than the fetch path can deliver. Widening past this point would buy idle workers.
+            // And upstream of all of it the pool is SUPPLY limited, not compute limited: at bc7f Default a single worker turns over roughly thirty-five 1024 square textures a second on textured content, so even a couple of workers can consume far more than the fetch path can deliver. Widening past this point would buy idle workers.
             //
             // Anyone who wants every thread can still say so - SSSqueezeEncodeThreads is an explicit override and this branch only runs when it is left at zero.
             const unsigned hw = std::thread::hardware_concurrency();
@@ -656,6 +683,7 @@ bool ssBC7EncodeAndStore(const LLUUID& id, const LLPointer<LLImageRaw>& raw, SSB
     static thread_local SSBC7EncodeScratch scratch;
 
     std::vector<U8> payload;
+    std::vector<U8> pickmask;   // <SS:Nexii/> Squeeze pick masks - empty for an opaque texture
     SSBC7EncodeResult result;
     U16 flags = 0;
     U32 width = 0;
@@ -679,6 +707,12 @@ bool ssBC7EncodeAndStore(const LLUUID& id, const LLPointer<LLImageRaw>& raw, SSB
         }
 
         classifyAlpha(src, width, height, components, flags);
+
+        // <SS:Nexii/> Squeeze pick masks - only a texture with something transparent gets one; a fully opaque texture never had a mask under the stock path either and getMask answers true without one. Built inside the shared lock because it reads the raw, and outside the encode timing because it is not the encoder's cost.
+        if ((flags & SSBC7_FLAG_FULLY_OPAQUE) == 0)
+        {
+            buildPickMask(src, width, height, components, pickmask);
+        }
 
         // <SS:Nexii/> Squeeze adaptive quality - the encode is timed and NOTHING ELSE IS. The decode, the J2C read, the alpha classification and the store append are all excluded deliberately: the number the controller acts on has to be the cost of the profile it is choosing between, and folding in work that is identical at every profile would flatten the ladder and make a step down look as though it bought almost nothing.
         const std::chrono::steady_clock::time_point encode_began = std::chrono::steady_clock::now();
@@ -707,6 +741,7 @@ bool ssBC7EncodeAndStore(const LLUUID& id, const LLPointer<LLImageRaw>& raw, SSB
     enc.mQuality       = result.mQuality;         // <SS:Nexii/> Squeeze adaptive quality - taken from the RESULT rather than from the argument, so the record says what the encoder actually did even if a future backend clamps a profile it cannot honour
     enc.mFlags         = flags;
     enc.mPayload       = std::move(payload);
+    enc.mPickMask      = std::move(pickmask);   // <SS:Nexii/> Squeeze pick masks - ssBC7BuildBlob sets SSBC7_FLAG_HAS_PICKMASK from this being non-empty
 
     // The append is done here rather than posted back to the main thread for the same reason the accounting is: a completion callback does not run once the main loop stops, and a store write is disk work that has no business on the frame thread anyway.
     if (!st->mStore->append(enc, ssBC7EncoderVersion(), allow_supersede))

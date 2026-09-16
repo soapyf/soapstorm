@@ -55,6 +55,7 @@ namespace
         LLViewerFetchedTexture* mTex = nullptr;   // holds one reference taken on the main thread before the post, released by the pump
         LLUUID                  mUUID;
         std::vector<U8>         mBlob;
+        std::vector<U8>         mPickMask;    // <SS:Nexii/> Squeeze pick masks - read from the tail of the blob in the same open; empty for an opaque texture or a record without one
         U16                     mWidth = 0;
         U16                     mHeight = 0;
         U16                     mFlags = 0;
@@ -76,7 +77,6 @@ namespace
     struct ServeState
     {
         std::atomic<bool>            mEnabled{false};
-        std::atomic<bool>            mServeAlpha{false};
         std::atomic<bool>            mGpuSupported{false};
         std::atomic<SSBC7ReadPool*>  mPool{nullptr};
         SSBC7Store*                  mStore{nullptr};   // resolved on the main thread at init, because a worker must never be the first toucher of an LLSingleton
@@ -167,10 +167,12 @@ namespace
         if (rec.mSrcComponents < 1 || rec.mSrcComponents > 4) return SSBC7_SERVE_DECLINE_GEOMETRY;
 
         // PICK MASKS ARE NOT STORED YET. The encode worker never fills SSBC7Encoded::mPickMask, so a BC7 resident has none, and LLImageGL::getMask returns TRUE unconditionally in that case - which picks the whole quad of every cutout instead of its visible texels. A texture with no real alpha never had a pick mask under the ordinary path either, so serving those regresses nothing; everything else waits for the encode side to fill the mask.
-        if (!st->mServeAlpha.load() && (rec.mFlags & SSBC7_FLAG_FULLY_OPAQUE) == 0)
+        // <SS:Nexii> Squeeze pick masks - SINCE 2026-09-09 THEY ARE STORED. The encode worker builds one from the decoded base level for every texture with something transparent, the store keeps it after the payload, the read path fetches it in the same open as the prefix, and LLImageGL::ssSetPickMask installs it after the upload. So an alpha texture is served whenever its record carries a mask, and declined only when it does not - a record from before masks were stored, or one whose mask failed its checksum - because serving that one would pick as a whole quad. The old SSSqueezeServeAlpha override is gone with the limitation it measured.
+        if ((rec.mFlags & (SSBC7_FLAG_FULLY_OPAQUE | SSBC7_FLAG_HAS_PICKMASK)) == 0)
         {
             return SSBC7_SERVE_DECLINE_ALPHA;
         }
+        // </SS:Nexii>
 
         return SSBC7_SERVE_HIT;
     }
@@ -240,7 +242,6 @@ void ssBC7ServeRefreshPolicy()
     const bool was_enabled = st->mEnabled.load();
 
     st->mEnabled      = gSavedSettings.getBOOL("SSSqueezeEnabled") && gSavedSettings.getBOOL("SSSqueezeReadEnabled");
-    st->mServeAlpha   = gSavedSettings.getBOOL("SSSqueezeServeAlpha");
     st->mGpuSupported = LLImageGL::canUseSqueeze();
 
     // <SS:Nexii> Turning serving OFF now actually takes effect on what is already on screen, which it did not before: flipping mEnabled stopped NEW serves while every texture already uploaded as BC7 stayed exactly where it was. That made the setting useless as the one thing it most needs to be - a live A/B for "is Squeeze causing what I am looking at" - because the artefact under investigation would still be there after switching it off.
@@ -265,7 +266,7 @@ void ssBC7ServeRefreshPolicy()
 
     LL_INFOS("Squeeze") << "BC7 read policy: serving " << (st->mEnabled.load() ? "on" : "off")
                         << ", gpu " << (st->mGpuSupported.load() ? "supports BC7" : "has no BC7, nothing will ever be served")
-                        << ", alpha textures " << (st->mServeAlpha.load() ? "served despite having no stored pick mask" : "left on the J2C path until pick masks are stored")
+                        << ", alpha textures served when their record carries a pick mask"
                         << LL_ENDL;
 
     if (!st->mEnabled || !st->mGpuSupported || st->mShuttingDown) return;
@@ -483,7 +484,7 @@ ESSBC7ServeVerdict ssBC7ServeRequest(LLViewerFetchedTexture* tex, S32 desired_di
             if (!st->mAbandon.load())
             {
                 SSBC7Record rec2;
-                if (store->readBlobPrefix(id, levels, done.mBlob, rec2))
+                if (store->readBlobPrefix(id, levels, done.mBlob, rec2, &done.mPickMask))
                 {
                     st->mReadBytesTotal += (S64)done.mBlob.size();   // <SS:Nexii/> see mReadBytesTotal
                     done.mWidth         = rec2.mWidth;
@@ -615,7 +616,7 @@ F32 ssBC7ServePumpUploads(F32 max_time)
                 //
                 // The store's two flags are mutually exclusive - classifyAlpha sets FULLY_OPAQUE when nothing is transparent and ALPHA_IS_MASK only otherwise - but LLImageGL::analyzeAlpha does not partition them that way. Work its arithmetic on an all-255 alpha channel: every sample lands in the top bucket so there is no midrange, and its disqualifier alphatotal != 255*length is false because a four component image counts two samples per texel. Stock therefore sets mIsMask TRUE on a fully opaque RGBA texture, and mIsMask is what LLFace::canRenderAsMask reads to choose between the deferred alpha-mask pass and forward blending.
                 //
-                // Getting this wrong is invisible and expensive: the texture still looks broadly right, but it renders blended instead of masked, loses its depth write, and leaves the deferred path. And because SSSqueezeServeAlpha ships off, FULLY_OPAQUE is not an edge case here - it is the entire population being served.
+                // Getting this wrong is invisible and expensive: the texture still looks broadly right, but it renders blended instead of masked, loses its depth write, and leaves the deferred path. And FULLY_OPAQUE is not an edge case here - it is most of the population being served.
                 //
                 // Components one and three carry no alpha at all and must stay false, which is the same line calcAlphaChannelOffsetAndStride draws when it returns early for GL_LUMINANCE and GL_RGB.
                 const bool has_alpha_channel = (done.mSrcComponents == 2 || done.mSrcComponents == 4);
@@ -623,7 +624,8 @@ F32 ssBC7ServePumpUploads(F32 max_time)
                                            && ((done.mFlags & (SSBC7_FLAG_ALPHA_IS_MASK | SSBC7_FLAG_FULLY_OPAQUE)) != 0);
 
                 if (tex->ssBC7UploadFromStore(data_in, done.mServeDiscard, (S32)done.mWidth, (S32)done.mHeight,
-                                              (S32)done.mSrcComponents, (S32)done.mMipCount, alpha_is_mask))
+                                              (S32)done.mSrcComponents, (S32)done.mMipCount, alpha_is_mask,
+                                              done.mPickMask.empty() ? nullptr : done.mPickMask.data(), (U32)done.mPickMask.size()))
                 {
                     const S32 w = (S32)(done.mWidth  >> done.mServeDiscard) ? (S32)(done.mWidth  >> done.mServeDiscard) : 1;
                     const S32 h = (S32)(done.mHeight >> done.mServeDiscard) ? (S32)(done.mHeight >> done.mServeDiscard) : 1;

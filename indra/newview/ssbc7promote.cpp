@@ -97,6 +97,9 @@ namespace
         std::atomic<U32>    mLastVerdict{(U32)SSBC7_PROMOTE_IDLE_EMPTY};
 
         std::atomic<bool>   mScanRunning{false};
+        // <SS:Nexii/> Squeeze capacity-driven promotion - fused local encodes posted by this engine that no worker has started, and those a worker is inside. The first is what keeps a pass from posting the same spare capacity twice: work sitting in the queue is not busy yet, but it is spoken for.
+        std::atomic<S32>    mLocalQueued{0};
+        std::atomic<S32>    mLocalRunning{0};
         std::atomic<U32>    mScans{0};
         std::atomic<U32>    mLocalPromoted{0};
         std::atomic<U32>    mLocalEncodeFailed{0};
@@ -191,6 +194,15 @@ namespace
             ~UpgradeMark() { if (mOn) ssBC7AdaptiveNoteUpgradeRunning(false); }
             bool mOn;
         } upgrade_mark(upgrade);
+
+        // <SS:Nexii/> Squeeze capacity-driven promotion - a fill encode moves from "queued" to "running" the moment a worker picks it up, and leaves "running" on any of the exits below, again by scope guard. Upgrades are not counted: they are posted by their own tier against its own gate.
+        struct LocalMark
+        {
+            explicit LocalMark(PromoteState* st, bool on) : mSt(st), mOn(on) { if (mOn) { --mSt->mLocalQueued; ++mSt->mLocalRunning; } }
+            ~LocalMark() { if (mOn) --mSt->mLocalRunning; }
+            PromoteState* mSt;
+            bool mOn;
+        } local_mark(st, !upgrade);
 
         if (ssBC7EncodeAbandonRequested()) { ssBC7EncodeUnclaim(id); return; }
 
@@ -346,10 +358,11 @@ namespace
     // </SS:Nexii>
 
     // Examines a bounded slice of the want list, sorts it into "encode this now for free", "this one needs network" and "this one is never going to happen", and posts the free ones. Runs wholly on a pool worker: every probe is blocking disk IO under the texture cache's header mutex.
-    void runScan(PromoteState* st)
+    // <SS:Nexii/> Squeeze capacity-driven promotion - `budget` is the number of spare workers the tick measured when it posted this scan, and is the most fused encodes the scan may post. The batch examined grows with it, because on a list that is mostly partials a fixed forty-eight would find fewer complete ones than there are cores to give them to.
+    void runScan(PromoteState* st, size_t budget)
     {
         std::vector<LLUUID> batch;
-        ssBC7EncodeTakeWanted(SSBC7_PROMOTE_SCAN_BATCH, batch);
+        ssBC7EncodeTakeWanted(llmax(SSBC7_PROMOTE_SCAN_BATCH, budget * 4), batch);
 
         size_t posted = 0;
         std::vector<U8> unused;
@@ -370,9 +383,9 @@ namespace
                 continue;
             }
 
-            if (posted >= SSBC7_PROMOTE_LOCAL_PER_PASS)
+            if (posted >= budget)
             {
-                // The per-pass ceiling is reached, so the rest of the batch goes back rather than being probed and then thrown away. Probing costs a header read each and the answer would be stale by the next pass anyway.
+                // Every spare worker has been given something, so the rest of the batch goes back rather than being probed and then thrown away. Probing costs a header read each and the answer would be stale by the next pass anyway.
                 ssBC7EncodeWant(id);
                 continue;
             }
@@ -395,6 +408,7 @@ namespace
                     PromoteState* cap = st;
                     const LLUUID  cid = id;
                     // <SS:Nexii/> Squeeze adaptive quality - the profile is read on the WORKER at the moment the encode starts, not captured here, so a fill encode that sat in the queue while the controller changed its mind is written at the profile that is current when it actually runs.
+                    ++st->mLocalQueued;   // <SS:Nexii/> Squeeze capacity-driven promotion - counted BEFORE the post so a tick that runs between the post and the worker's pickup cannot see the slot as free
                     if (ssBC7EncodeTryPost([cap, cid]() { promoteOneLocal(cap, cid, ssBC7AdaptiveQualityNow(), false); }))
                     {
                         ++posted;
@@ -402,6 +416,7 @@ namespace
                     else
                     {
                         // tryPost refuses when the shared queue is full, which means the demand path is busy - the one condition under which backfill should give way. Unwound completely and retried next pass.
+                        --st->mLocalQueued;
                         ++st->mPostRefused;
                         ssBC7EncodeUnclaim(id);
                         ssBC7EncodeWant(id);
@@ -446,6 +461,33 @@ namespace
         if (posted) record(st, SSBC7_PROMOTE_RAN_LOCAL);
         st->mScanRunning.store(false);
     }
+
+    // <SS:Nexii> Squeeze capacity-driven promotion - how many fused encodes tier (a) may post THIS pass, measured rather than configured.
+    //
+    // The number of cores with nothing to do: pool width, minus workers inside an encode at this instant (demand path and this engine alike), minus the fused encodes this engine has already posted that no worker has reached. The last term is what stops two passes a quarter second apart from filling the same idle worker twice. The scan itself briefly occupies a worker while it probes the cache, which is not subtracted because it is over in milliseconds and the encodes it posts queue behind it anyway.
+    S32 spareWorkers(PromoteState* st)
+    {
+        const S32 width = ssBC7EncodePoolWidth();
+        if (width <= 0) return 0;
+        return width - ssBC7AdaptiveBusyWorkersNow() - llmax(0, st->mLocalQueued.load());
+    }
+
+    // Whether the adaptive controller is content, which is the system-stress signal: it measures what the pool is ACHIEVING against what is waiting, and other load on the machine shows up there as falling throughput exactly as texture volume does. HEADROOM is "keeping up easily" and the full spare count is offered. STEPPED_DOWN means the controller has positively found the machine behind, and nothing is added. HOLDING is the dead band - not behind, not comfortably ahead - and gets a trickle of ONE, which keeps fresh throughput samples flowing to the controller so it can decide; refusing outright there would let a stale measurement freeze the engine for as long as the measurement stayed stale. NO_DATA, PINNED and NO_BACKEND have no verdict to offer, so the spare count alone decides.
+    S32 controllerBudget(S32 spare, ESSBC7PromoteVerdict& out_decline)
+    {
+        const SSBC7AdaptiveStats a = ssBC7AdaptiveStatsNow();
+        switch ((ESSBC7AdaptReason)a.mReason)
+        {
+            case SSBC7_ADAPT_STEPPED_DOWN:
+                out_decline = SSBC7_PROMOTE_DECLINE_NOT_KEEPING_UP;
+                return 0;
+            case SSBC7_ADAPT_HOLDING:
+                return llmin(spare, 1);
+            default:
+                return spare;
+        }
+    }
+    // </SS:Nexii>
 
     // ---- tier (b), main thread ----
 
@@ -765,15 +807,34 @@ void ssBC7PromoteTick()
     // ---- TIER (a): free work first, always ----
     if (ssBC7EncodeWantListSize() > 0)
     {
+        // <SS:Nexii> Squeeze capacity-driven promotion - while there is work waiting the pass cadence is the FOLLOW-UP interval, not the idle one: a worker that finishes should be refilled within a frame or two, and the cost of looking is an atomic read and a size. The idle interval set at the top of the tick is left in place only by the exits that found nothing to do.
+        st->mNextPassTime = now + SSBC7_PROMOTE_FOLLOWUP_SECONDS;
+
         if (st->mScanRunning.load())
         {
             record(st, SSBC7_PROMOTE_DECLINE_SCAN_RUNNING);
             return;
         }
 
+        // How much may be added is measured on every pass: a spare core and a controller that is keeping up together admit one more fused encode, and only that. No fixed number anywhere.
+        const S32 spare = spareWorkers(st);
+        if (spare <= 0)
+        {
+            record(st, SSBC7_PROMOTE_DECLINE_NO_SPARE_WORKER);
+            return;
+        }
+        ESSBC7PromoteVerdict decline = SSBC7_PROMOTE_DECLINE_NOT_KEEPING_UP;
+        const S32 budget = controllerBudget(spare, decline);
+        if (budget <= 0)
+        {
+            record(st, decline);
+            return;
+        }
+
         st->mScanRunning.store(true);
         PromoteState* cap = st;
-        if (ssBC7EncodeTryPost([cap]() { runScan(cap); }))
+        const size_t cap_budget = (size_t)budget;
+        if (ssBC7EncodeTryPost([cap, cap_budget]() { runScan(cap, cap_budget); }))
         {
             record(st, SSBC7_PROMOTE_RAN_SCAN);
         }
@@ -783,6 +844,7 @@ void ssBC7PromoteTick()
             ++st->mPostRefused;
             record(st, SSBC7_PROMOTE_DECLINE_POST_FAILED);
         }
+        // </SS:Nexii>
         return;
     }
 
@@ -898,6 +960,8 @@ SSBC7PromoteStats ssBC7PromoteStatsNow()
     // <SS:Nexii/> Squeeze adaptive quality - the third tier's activity. What is LEFT to upgrade lives in SSBC7AdaptiveStats, which reads the store's incremental histogram rather than counting anything here.
     out.mUpgradesPosted   = st->mUpgradesPosted.load();
     out.mUpgradeSkipped   = st->mUpgradeSkipped.load();
+    out.mLocalQueued      = (U32)llmax(0, st->mLocalQueued.load());    // <SS:Nexii/> Squeeze capacity-driven promotion
+    out.mLocalRunning     = (U32)llmax(0, st->mLocalRunning.load());
 
     // The two drop counts together, because the number still waiting is a FLOOR rather than a total whenever either cap has bitten, and an overlay that showed only "waiting" would say the engine had everything in hand.
     U32 cand_dropped = 0;

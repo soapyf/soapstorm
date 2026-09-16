@@ -37,7 +37,7 @@ enum ESSBC7ServeVerdict
     SSBC7_SERVE_DECLINE_EXPLICIT,   // the caller demanded a GL format at construction, latched then because once we set our own the flag can no longer tell the two apart
     SSBC7_SERVE_DECLINE_AUX,        // mNeedsAux - a bump or sculpt source whose consumer wants the raw channels
     SSBC7_SERVE_DECLINE_RAW,        // needsToSaveRawImage, or a loaded callback that wants the LLImageRaw; serving would starve it
-    SSBC7_SERVE_DECLINE_ALPHA,      // real alpha, and no pick mask is stored yet, so per-texel picking would regress to whole-quad
+    SSBC7_SERVE_DECLINE_ALPHA,      // real alpha and the record carries no pick mask, so per-texel picking would regress to whole-quad. Since 2026-09-09 every encode of an alpha texture stores one, so this now only names a record from a store that predates that or lost its mask to a checksum failure
     SSBC7_SERVE_DECLINE_GEOMETRY,   // the record's dimensions or mip count do not satisfy the upload contract
     SSBC7_SERVE_DECLINE_BUSY,       // the reader queue refused the post, or an upload is already queued; retried on the next pass, never a block
     SSBC7_SERVE_DECLINE_READ,       // the blob did not read or did not verify; the record is already dropped and J2C takes over

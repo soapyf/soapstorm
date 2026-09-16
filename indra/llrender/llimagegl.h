@@ -192,6 +192,8 @@ public:
     void setUseMipMaps(bool usemips) { mUseMipMaps = usemips; }
     void setHasMipMaps(bool hasmips) { mHasMipMaps = hasmips; }
     void updatePickMask(S32 width, S32 height, const U8* data_in);
+    // <SS:Nexii/> Squeeze - installs a pick mask that was built elsewhere, in exactly the layout updatePickMask would have produced for a width x height RGBA image: one bit per 2x2 texel cell, row major, set where alpha exceeded 32. A compressed upload cannot build its own because updatePickMask reads alpha bytes the BC7 payload does not have, so the encode worker builds it from the decoded image and the store carries it. Returns false and leaves no mask when the byte count does not match the geometry, which is what makes a wrong-sized mask fail closed to whole-quad picking rather than read past its end.
+    bool ssSetPickMask(S32 width, S32 height, const U8* bits, U32 bytes);
 // [RLVa:KB] - Checked: RLVa-2.2 (@setoverlay)
     bool getMask(const LLVector2 &tc) const;
 // [/RLVa:KB]

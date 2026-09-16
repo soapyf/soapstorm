@@ -28,7 +28,11 @@
 constexpr U32 SSBC7_PROMOTE_TICK_SECONDS      = 2;     // how often a pass may run; the frame cost on every other tick is one clock comparison
 constexpr U32 SSBC7_PROMOTE_BURST_SECONDS     = 4;     // how much unspent credit the token bucket may carry, so a genuinely idle minute does not turn into a minute-long burst the moment something becomes eligible
 constexpr size_t SSBC7_PROMOTE_SCAN_BATCH     = 48;    // want-list entries examined by one scan; each one costs a header-entry read, and the batch is what keeps that off any single long-held lock
-constexpr size_t SSBC7_PROMOTE_LOCAL_PER_PASS = 4;     // fused local encodes posted by one scan, so a pass cannot fill the shared queue and starve the demand path behind it
+// <SS:Nexii> Squeeze capacity-driven promotion - there is deliberately NO fixed number of fused encodes per pass any more. A pass posts as many as there are SPARE WORKERS: pool width, minus workers inside an encode right now, minus fused encodes this engine has queued that no worker has picked up yet. That number is measured on every pass, so a machine with cores to spare fills them and a machine under load posts nothing, and it is gated on the adaptive controller reporting that the pool is keeping up, so the moment throughput falls behind - because of other load on the box as much as because of texture volume - the engine stops adding until it recovers. The old ceiling of four per two seconds was sized for an encoder twenty times slower than the one linked now and left sixteen cores idle behind a list of two hundred textures.
+//
+// The follow-up interval is how soon a pass may run again after one that found work to do or workers still busy: fast enough that a drained pool is refilled within a frame or two of a worker finishing, slow enough that the main thread is not probing an atomic and a want list every frame. The idle interval above still applies once nothing is waiting.
+constexpr F64 SSBC7_PROMOTE_FOLLOWUP_SECONDS  = 0.25;
+// </SS:Nexii>
 constexpr size_t SSBC7_PROMOTE_NET_CANDIDATES = 256;   // partial uuids the scan is allowed to hand forward for network completion; a bound here is what stops one walk through a mall from becoming a fetch list nothing will ever get through
 // <SS:Nexii> In-flight fetches are the ONLY bound on network promotion, and the number is chosen to match what the machine can actually consume rather than to be unobtrusive. Two was set to be "never noticeable" and succeeded: at a fetch latency of a few hundred milliseconds it kept a four-thread encode pool idle almost all of the time, which is the opposite of the point - the engine exists to keep that pool busy.
 //
@@ -68,6 +72,9 @@ enum ESSBC7PromoteVerdict
     SSBC7_PROMOTE_DECLINE_NET_NO_TARGET,// nothing on the network candidate list survived targeting: no live texture, no known size, or already being fetched for the user
     // <SS:Nexii/> Squeeze adaptive quality - appended rather than inserted, because the ordinals are what index s_promote_verdict_names and reordering them would silently mislabel every counter. This is the third and last tier: with nothing left to create, the engine goes back over records that were encoded at a lower profile and re-encodes them at the best one.
     SSBC7_PROMOTE_RAN_UPGRADE,
+    // <SS:Nexii/> Squeeze capacity-driven promotion - appended for the same reason. Two ways tier (a) now declines: every worker is busy or already has queued work, or the adaptive controller says the pool is not keeping up and adding to it would only deepen the hole.
+    SSBC7_PROMOTE_DECLINE_NO_SPARE_WORKER,
+    SSBC7_PROMOTE_DECLINE_NOT_KEEPING_UP,
     SSBC7_PROMOTE_VERDICT_COUNT
 };
 
@@ -183,6 +190,9 @@ struct SSBC7PromoteStats
     // <SS:Nexii/> Squeeze adaptive quality - the third tier's own counters. The detailed readout of what is left to upgrade lives in SSBC7AdaptiveStats, which reads the store's histogram; these two are here so the promotion metrics line can say the tier ran at all.
     U32 mUpgradesPosted    = 0;   // re-encodes this engine handed to the pool this session
     U32 mUpgradeSkipped    = 0;   // candidates written off, almost always because their J2C has left this disk
+    // <SS:Nexii/> Squeeze capacity-driven promotion - fused local encodes this engine has posted that have not finished: queued behind a worker plus running on one. The overlay shows it beside the busy-core count so "why is it only doing four" has a visible answer.
+    U32 mLocalQueued       = 0;   // posted, no worker has started it yet
+    U32 mLocalRunning      = 0;   // a worker is inside it now
 };
 SSBC7PromoteStats ssBC7PromoteStatsNow();
 

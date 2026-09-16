@@ -239,7 +239,8 @@ public:
     // to ignore them, but a glass roof or window still shelters from rain.
     LLDrawable* lineSegmentIntersectWorldGeometry(const LLVector4a& start, const LLVector4a& end,
                                                   LLVector4a* intersection, bool skip_phantom = false,
-                                                  bool pick_transparent = false);
+                                                  bool pick_transparent = false,
+                                                  const LLViewerObject* skip_root = nullptr);
 
     //get the closest particle to start between start and end, returns the LLVOPartGroup and particle index
     LLVOPartGroup* lineSegmentIntersectParticle(const LLVector4a& start, const LLVector4a& end, LLVector4a* intersection,

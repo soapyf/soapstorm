@@ -30,6 +30,7 @@
 #include "ssstrata.h"
 #include "ssbc7adaptive.h"
 #include "ssbc7encodequeue.h"
+#include "ssbc7promote.h"       // <SS:Nexii/> Squeeze capacity-driven promotion - how much of the want list is actually on a core right now
 #include "ssbc7serve.h"
 #include "ssbc7store.h"
 #include "ssrocghost.h"
@@ -395,6 +396,13 @@ void SSStatsView::draw()
         if (waiting > 0)
         {
             line(llformat("  waiting   %u textures need full resolution first", (U32)waiting), true);
+
+            // <SS:Nexii/> Squeeze capacity-driven promotion - the answer to "why only a handful at a time": the engine posts one fused encode per spare core and no more, so this line beside the busy-core count above shows whether the cores or the engine are the limit.
+            const SSBC7PromoteStats promo = ssBC7PromoteStatsNow();
+            if (promo.mLocalRunning || promo.mLocalQueued)
+            {
+                line(llformat("            %u compressing now, %u queued for a free core", promo.mLocalRunning, promo.mLocalQueued), true);
+            }
 
             // <SS:Nexii> The want list holds uuids, and admission gates on an ESTIMATE of the full size - the decoded size shifted back up by the discard it was decoded at. This line checks that estimate against ground truth: gTextureList knows the real full dimensions for anything the viewer has actually seen. If the two disagree, entries that can never pass the geometry gate are sitting on a capped list evicting entries that could, and the readout above is counting work that will never happen.
             //

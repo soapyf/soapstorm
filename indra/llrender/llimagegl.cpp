@@ -2584,6 +2584,31 @@ void LLImageGL::updatePickMask(S32 width, S32 height, const U8* data_in)
     }
 }
 
+// <SS:Nexii> Squeeze - the mNeedsAlphaAndPickMask gate is deliberately NOT consulted. calcAlphaChannelOffsetAndStride latches it off for a compressed format and nothing turns it back on, so honouring it here would refuse every mask this function exists to install; getMask itself reads only mPickMask. The size check mirrors createPickMask's arithmetic exactly, so a mask built by ssBC7BuildPickMask for the same geometry always fits and anything else is rejected.
+bool LLImageGL::ssSetPickMask(S32 width, S32 height, const U8* bits, U32 bytes)
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
+    if (!bits || bytes == 0 || width <= 0 || height <= 0)
+    {
+        return false;
+    }
+
+    const U32 pick_width  = (U32)width / 2 + 1;
+    const U32 pick_height = (U32)height / 2 + 1;
+    const U32 expect      = (pick_width * pick_height + 7) / 8;
+    if (bytes != expect)
+    {
+        LL_WARNS_ONCE("Squeeze") << "stored pick mask of " << bytes << " bytes does not fit " << width << "x" << height
+                                 << " (expected " << expect << "), texture will pick as a whole quad" << LL_ENDL;
+        return false;
+    }
+
+    createPickMask(width, height);
+    memcpy(mPickMask, bits, expect);
+    return true;
+}
+// </SS:Nexii>
+
 //bool LLImageGL::getMask(const LLVector2 &tc)
 // [RLVa:KB] - Checked: RLVa-2.2 (@setoverlay)
 bool LLImageGL::getMask(const LLVector2 &tc) const

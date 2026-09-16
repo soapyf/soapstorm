@@ -49,6 +49,7 @@
 #include "lltoolmgr.h"
 #include "llviewercamera.h"
 #include "llviewerobject.h"
+#include "llviewerregion.h" // <SS:Nexii> alt-cam reach: the region water plane fallback in pickCallback
 #include "llviewerwindow.h"
 #include "llvoavatarself.h"
 #include "llmorphview.h"
@@ -147,7 +148,7 @@ bool LLToolCamera::handleMouseDown(S32 x, S32 y, MASK mask)
     return true;
 }
 
-void LLToolCamera::pickCallback(const LLPickInfo& pick_info)
+void LLToolCamera::pickCallback(const LLPickInfo& pick_in)
 {
     LLToolCamera* camera = LLToolCamera::getInstance();
     if (!camera->mClickPickPending)
@@ -156,6 +157,9 @@ void LLToolCamera::pickCallback(const LLPickInfo& pick_info)
     }
     camera->mClickPickPending = false;
 
+    // <SS:Nexii> A local copy so the alt-cam reach fallback below can fill mPosGlobal in; everything after reads pick_info exactly as before.
+    LLPickInfo pick_info = pick_in;
+
     camera->mMouseDownX = pick_info.mMousePt.mX;
     camera->mMouseDownY = pick_info.mMousePt.mY;
 
@@ -163,6 +167,40 @@ void LLToolCamera::pickCallback(const LLPickInfo& pick_info)
 
     // Potentially recenter if click outside rectangle
     LLViewerObject* hit_obj = pick_info.getObject();
+
+    // <SS:Nexii> Alt-cam reach: the stock pick raycasts 512 m and water has no ray intersection at all (LLVOWater never implements lineSegmentIntersect), so an ALT-click on the sky, on terrain past 512 m or on void water came back "invalid point" and the camera stayed put - orbiting the weather from open water was impossible. For an ALT click that hit nothing: (1) a long-range terrain/object cast along the same mouse ray out to SSAltCamMaxDistance, then (2) the region water plane along that ray (void water included - a plane at the region's water height needs no object). Non-alt clicks (mouse steering, selection) are untouched. [interaction: LLViewerWindow::cursorIntersect]
+    if (!hit_obj && pick_info.mPosGlobal.isExactlyZero() && (pick_info.mKeyMask & MASK_ALT))
+    {
+        static LLCachedControl<F32> alt_cam_reach(gSavedSettings, "SSAltCamMaxDistance", 4096.f);
+        const F32 reach = llclamp((F32)alt_cam_reach, 512.f, 65536.f);
+        const S32 mx = pick_info.mMousePt.mX;
+        const S32 my = pick_info.mMousePt.mY;
+
+        LLVector4a far_hit;
+        LLViewerObject* far_obj = gViewerWindow->cursorIntersect(mx, my, reach, nullptr, -1,
+                                                                 /*pick_transparent*/ false, /*pick_rigged*/ false,
+                                                                 /*pick_unselectable*/ true, /*pick_reflection_probe*/ false,
+                                                                 nullptr, nullptr, nullptr, &far_hit);
+        if (far_obj)
+        {
+            pick_info.mPosGlobal = gAgent.getPosGlobalFromAgent(LLVector3(far_hit.getF32ptr()));
+        }
+        else
+        {
+            const LLVector3 dir = gViewerWindow->mouseDirectionGlobal(mx, my);
+            const LLVector3d cam_global = gAgentCamera.getCameraPositionGlobal();
+            LLViewerRegion* region = gAgent.getRegion();
+            if (region && fabsf(dir.mV[VZ]) > 1e-4f)
+            {
+                const F64 water_z = (F64)region->getWaterHeight();
+                const F64 t = (water_z - cam_global.mdV[VZ]) / (F64)dir.mV[VZ]; // ray parameter where it meets the water plane
+                if (t > 1.0 && t <= (F64)reach)
+                {
+                    pick_info.mPosGlobal = cam_global + LLVector3d(dir) * t;
+                }
+            }
+        }
+    }
 
     // Check for hit the sky, or some other invalid point
     if (!hit_obj && pick_info.mPosGlobal.isExactlyZero())

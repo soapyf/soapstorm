@@ -261,13 +261,7 @@ LLFolderView::LLFolderView(const Params& p)
 // Destroys the object
 LLFolderView::~LLFolderView( void )
 {
-    mRenamerTopLostSignalConnection.disconnect();
-    if (mRenamer)
-    {
-        // instead of using closeRenamer remove it directly,
-        // since it might already be hidden
-        LLUI::getInstance()->removePopup(mRenamer);
-    }
+    cancelRenaming();
 
     // The release focus call can potentially call the
     // scrollcontainer, which can potentially be called with a partly
@@ -672,8 +666,10 @@ bool LLFolderView::startDrag()
 void LLFolderView::commitRename( const LLSD& data )
 {
     finishRenamingItem();
-    arrange( NULL, NULL );
-
+    if (mRenamer && mViewModel)
+    {
+        arrange( NULL, NULL );
+    }
 }
 
 void LLFolderView::draw()
@@ -747,7 +743,7 @@ void LLFolderView::draw()
 
 void LLFolderView::finishRenamingItem( void )
 {
-    if(!mRenamer)
+    if(!mRenamer || !mViewModel)
     {
         return;
     }
@@ -770,6 +766,27 @@ void LLFolderView::closeRenamer( void )
         // Triggers onRenamerLost() that actually closes the renamer.
         LLUI::getInstance()->removePopup(mRenamer);
     }
+}
+
+void LLFolderView::cancelRenaming( void )
+{
+    mRenamerTopLostSignalConnection.disconnect();
+
+    if (mRenamer)
+    {
+        mRenamer->setCommitOnFocusLost(false);
+        if (LLUI::instanceExists())
+        {
+            LLUI::getInstance()->removePopup(mRenamer);
+        }
+        if (gFocusMgr.childHasKeyboardFocus(mRenamer))
+        {
+            gFocusMgr.releaseFocusIfNeeded(mRenamer);
+        }
+        mRenamer->setVisible(false);
+    }
+
+    mRenameItem = NULL;
 }
 
 void LLFolderView::removeSelectedItems()
@@ -1118,6 +1135,7 @@ void LLFolderView::startRenamingSelectedItem( void )
         mRenamer->setText(item->getName());
         mRenamer->selectAll();
         mRenamer->setVisible( true );
+        mRenamer->setCommitOnFocusLost( true );
         // set focus will fail unless item is visible
         mRenamer->setFocus( true );
         if (!mRenamerTopLostSignalConnection.connected())
@@ -1713,11 +1731,7 @@ bool LLFolderView::handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop,
 
 void LLFolderView::deleteAllChildren()
 {
-    mRenamerTopLostSignalConnection.disconnect();
-    if (mRenamer)
-    {
-        LLUI::getInstance()->removePopup(mRenamer);
-    }
+    cancelRenaming();
     if (mPopupMenuHandle.get())
     {
         mPopupMenuHandle.get()->die();

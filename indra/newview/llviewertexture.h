@@ -455,7 +455,9 @@ public:
     bool ssBC7CreateInFlight()            { return mNeedsCreateTexture || mCreatePending; }
 
     // Uploads a stored BC7 mip prefix. Mirrors by hand what LLGLTexture::createGLTexture(discard, imageraw, ...) does around the raw overload, because there is no LLGLTexture wrapper for the data_hasmips form and processTextureStats divides by mTexelsPerImage.
-    bool ssBC7UploadFromStore(const U8* data_in, S32 serve_discard, S32 full_width, S32 full_height, S32 src_components, S32 mip_count, bool alpha_is_mask);
+    // <SS:Nexii/> Squeeze pick masks - `pick_mask` is the stored per-texel click mask for the FULL base level, or null for an opaque texture; installed on the LLImageGL after the compressed upload, which cannot build its own.
+    bool ssBC7UploadFromStore(const U8* data_in, S32 serve_discard, S32 full_width, S32 full_height, S32 src_components, S32 mip_count, bool alpha_is_mask,
+                              const U8* pick_mask = nullptr, U32 pick_mask_bytes = 0);
 
     void ssBC7NoteResident(S32 served_discard, U32 bc7_bytes, U32 saved_bytes);
 

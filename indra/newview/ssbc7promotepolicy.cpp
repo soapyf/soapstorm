@@ -42,7 +42,9 @@ namespace
         "session byte cap reached",
         "continuation fetches at cap",
         "no eligible network target",
-        "ran, re-encoding old records better"   // <SS:Nexii/> Squeeze adaptive quality
+        "ran, re-encoding old records better",  // <SS:Nexii/> Squeeze adaptive quality
+        "no spare worker",                      // <SS:Nexii/> Squeeze capacity-driven promotion
+        "encoder not keeping up"
     };
 }
 
