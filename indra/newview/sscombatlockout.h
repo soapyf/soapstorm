@@ -32,7 +32,7 @@ public:
     static void toggleRenderType(U32 type);
     static bool hasRenderType(U32 type);
 
-    static const U32 MAX_RENDER_TYPES = 64;     // stash size, checked against LLPipeline::NUM_RENDER_TYPES in the .cpp
+    static const U32 MAX_RENDER_TYPES = 256;     // stash size, checked against LLPipeline::NUM_RENDER_TYPES in the .cpp
 
 private:
     static void engage();
