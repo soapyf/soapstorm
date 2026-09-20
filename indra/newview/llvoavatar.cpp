@@ -133,6 +133,7 @@
 #include "fsdata.h"
 #include "fsdiscordconnect.h" // <FS:LO> tapping a place that happens on landing in world to start up discord
 #include "fslslbridge.h" // <FS:PP> Movelock position refresh
+#include "fssoundemitterblacklist.h"
 #include "lfsimfeaturehandler.h"    // <FS:CR> Opensim
 #include "lggcontactsets.h"
 #include "llcontrol.h"
@@ -8884,6 +8885,15 @@ const LLViewerJointAttachment *LLVOAvatar::attachObject(LLViewerObject *viewer_o
     // deferred because no attachments had streamed in yet, retry now that
     // one arrived. No-op unless mGroupProbeWanted is set.
     probeAttachmentGroups();
+
+    // Sound emitter blacklist: this avatar has a permanently blacklisted emitter, but
+    // the attachment arriving now carries a freshly issued UUID. Ask for its properties;
+    // if the name matches, the reply re-points the entry and silences it before it is
+    // heard. Gated on hasPermanentFor(), so it costs an empty-map test for everyone else.
+    if (FSSoundEmitterBlacklist::instance().hasPermanentFor(getID()))
+    {
+        LLSelectMgr::getInstance()->requestObjectPropertiesViaSelect(viewer_object);
+    }
 
     viewer_object->refreshBakeTexture();
 

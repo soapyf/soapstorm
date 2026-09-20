@@ -29,6 +29,8 @@
 // file include
 #define LLSELECTMGR_CPP
 #include "llselectmgr.h"
+
+#include "fssoundemitterblacklist.h"
 #include "ssobjectfacts.h"   // <SS:Nexii/> the shared object cache's harvest, below
 #include "llmaterialmgr.h"
 
@@ -6259,6 +6261,15 @@ void LLSelectMgr::processObjectProperties(LLMessageSystem* msg, void** user_data
         msg->getStringFast(_PREHASH_ObjectData, _PREHASH_Name, name, i);
         std::string desc;
         msg->getStringFast(_PREHASH_ObjectData, _PREHASH_Description, desc, i);
+
+        // Sound emitter blacklist: owner+name is how a permanent entry survives the
+        // object UUID being reissued when a worn attachment is re-rezzed. This is the
+        // only place both are known for someone else's object. Returns true when an
+        // entry just moved onto this object, which means it is emitting and unsilenced.
+        if (FSSoundEmitterBlacklist::instance().noteObjectProperties(id, owner_id, name))
+        {
+            FSSoundEmitterBlacklist::silenceObject(id);
+        }
 
         // <SS:Nexii> The shared object cache. Harvested here rather than beside the attachment-group probe above only because name and description are not parsed until this point. The WHOLE reply is kept rather than the group one consumer wanted: an ObjectProperties costs the same select whichever fields are read out of it, and a cache that stored six of them would have to be widened and re-flown for every new caller.
         //

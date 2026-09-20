@@ -3524,7 +3524,11 @@ namespace
     // Add one emitter object to the blacklist and immediately silence it. killAttachedSound()
     // fully tears down the source: stops the channel AND drops the queue, so a scripted emitter
     // that queues clips can't keep playing the next one.
-    void blacklist_one_emitter(LLViewerObject* o, const std::string& name, bool permanent)
+    // owner_id is what makes a permanent entry outlive the object UUID, which a worn
+    // attachment is reissued on every re-rez. An empty name means we do not know what
+    // the object is called yet, so ask: the reply completes the entry (see
+    // FSSoundEmitterBlacklist::noteObjectProperties).
+    void blacklist_one_emitter(LLViewerObject* o, const LLUUID& owner_id, const std::string& name, bool permanent)
     {
         if (!o)
         {
@@ -3535,16 +3539,17 @@ namespace
         {
             region_name = region->getName();
         }
-        FSSoundEmitterBlacklist::instance().addEmitter(o->getID(), name, region_name, permanent);
 
-        o->killAttachedSound();
-        for (LLViewerObject* child : o->getChildren())
+        FSSoundEmitterBlacklist& blacklist = FSSoundEmitterBlacklist::instance();
+        blacklist.addEmitter(o->getID(), owner_id, name, region_name, permanent);
+
+        if (name.empty())
         {
-            if (child)
-            {
-                child->killAttachedSound();
-            }
+            blacklist.noteProbePending(o->getID());
+            LLSelectMgr::getInstance()->requestObjectPropertiesViaSelect(o);
         }
+
+        FSSoundEmitterBlacklist::silenceObject(o->getID());
     }
 }
 
@@ -3560,11 +3565,10 @@ void blacklist_sound_emitter(bool permanent)
     if (LLVOAvatar* av = objp->asAvatar())
     {
         // Right-clicked an avatar (e.g. a teammate's worn emitter): blacklist whichever
-        // of their attachments is currently emitting sound. Worn attachments get a new
-        // UUID on re-attach/relog, so the entry re-matches only until then.
+        // of their attachments is currently emitting sound. The wearer owns the
+        // attachment, so recording their UUID plus the object's name (fetched by the
+        // probe below) survives the re-rez that changes the object's own UUID.
         std::string av_name = av->getFullname();
-        const std::string label = av_name.empty() ? std::string("Worn sound emitter")
-                                                   : (av_name + " (worn emitter)");
 
         S32 tagged = 0;
         for (const auto& ap : av->mAttachmentPoints)
@@ -3578,7 +3582,7 @@ void blacklist_sound_emitter(bool permanent)
             {
                 if (object_or_child_emits_sound(attached))
                 {
-                    blacklist_one_emitter(attached, label, permanent);
+                    blacklist_one_emitter(attached, av->getID(), std::string(), permanent);
                     ++tagged;
                 }
             }
@@ -3589,14 +3593,16 @@ void blacklist_sound_emitter(bool permanent)
     }
 
     std::string entry_name;
+    LLUUID      owner_id;
     if (LLSelectNode* nodep = select_mgr->getSelection()->getFirstRootNode())
     {
-        if (!nodep->mName.empty())
+        entry_name = nodep->mName;
+        if (nodep->mValid && nodep->mPermissions) // filled in once properties arrived
         {
-            entry_name = nodep->mName;
+            owner_id = nodep->mPermissions->getOwner();
         }
     }
-    blacklist_one_emitter(objp, entry_name, permanent);
+    blacklist_one_emitter(objp, owner_id, entry_name, permanent);
 }
 
 class LLObjectBlacklistSoundEmitter : public view_listener_t
