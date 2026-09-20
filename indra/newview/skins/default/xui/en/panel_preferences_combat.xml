@@ -61,17 +61,6 @@
      top_pad="5"
      width="333" />
     <check_box
-     control_name="ExodusMouselookIFFLineOfSight"
-     follows="left|top"
-     height="16"
-     label="Require line of sight to identify target"
-     layout="topleft"
-     left="28"
-     name="ExodusMouselookIFFLineOfSight"
-     tool_tip="Don't show the name of the avatar under your crosshair when walls, floors or terrain block the view"
-     top_pad="5"
-     width="256" />
-    <check_box
      control_name="ExodusMouselookIFFShowName"
      follows="left|top"
      height="16"

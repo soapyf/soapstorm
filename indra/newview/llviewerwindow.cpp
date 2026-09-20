@@ -3166,13 +3166,12 @@ void LLViewerWindow::draw()
 
                         if (magicVector.mdV[VX] > -0.75 && magicVector.mdV[VX] < 0.75 && magicVector.mdV[VZ] > 0.0 && magicVector.mdV[VY] > -1.5 && magicVector.mdV[VY] < 1.5) // Do not fuck with these, cheater. :(
                         {
-                            // Line of sight: don't identify targets through walls, floors or
+                            // Line of sight: never identify targets through walls, floors or
                             // terrain. Two rays (avatar center, then head height) so a target
                             // peeking over low cover still identifies. World geometry only;
-                            // avatars and attachments never block the check.
-                            static LLCachedControl<bool> renderIFFLineOfSight(gSavedSettings, "ExodusMouselookIFFLineOfSight", true);
+                            // avatars and attachments never block the check. Always enforced --
+                            // there is deliberately no setting to turn this off.
                             bool targetVisible = true;
-                            if (renderIFFLineOfSight)
                             {
                                 LLVector3 rayTarget = gAgent.getPosAgentFromGlobal(targetPosition);
                                 LLVector4a rayStart, rayEnd, rayHit;
