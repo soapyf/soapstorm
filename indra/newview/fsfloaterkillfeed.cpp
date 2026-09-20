@@ -93,6 +93,12 @@ void FSFloaterKillFeed::handleBridgeEvent(const std::string& json)
 }
 
 // static
+void FSFloaterKillFeed::clearEntries()
+{
+    sEntries.clear();
+}
+
+// static
 void FSFloaterKillFeed::onAvatarNameResolved(const LLUUID& id, const LLAvatarName& av_name)
 {
     // Names are looked up from the cache each frame by the overlay; nothing
@@ -137,6 +143,31 @@ static std::string killfeed_name(const LLUUID& id, bool allow_request = true)
     return "(resolving)";
 }
 
+// Live world position of the avatar behind a kill-feed id (self, or any rezzed avatar in the
+// object list). Used for the killer->victim distance; the combat event's source_pos is the
+// killing OBJECT (next to the victim at impact), not the killer avatar.
+static bool killfeed_avatar_pos(const LLUUID& id, LLVector3d& out)
+{
+    if (id.isNull())
+    {
+        return false;
+    }
+    if (id == gAgent.getID())
+    {
+        out = gAgent.getPositionGlobal();
+        return true;
+    }
+    // mKiller can carry the killing OBJECT's UUID (owner-less/deeded kills); a non-avatar
+    // match would re-introduce the bogus near-zero distance this function exists to avoid.
+    LLViewerObject* obj = gObjectList.findObject(id);
+    if (obj && obj->asAvatar())
+    {
+        out = obj->getPositionGlobal();
+        return true;
+    }
+    return false;
+}
+
 // static
 void FSFloaterKillFeed::addEntry(const LLSD& event)
 {
@@ -158,14 +189,15 @@ void FSFloaterKillFeed::addEntry(const LLSD& event)
     entry.mType = event.has("type") ? (S32)event["type"].asInteger() : -1000;
     entry.mDamage = event.has("damage") ? (F32)event["damage"].asReal() : -1.f;
 
+    // Distance is KILLER avatar -> VICTIM avatar, NOT the killing object -> victim. The combat
+    // event's source_pos is the projectile/weapon object (right next to the victim at impact, so it
+    // read as ~0m); use the two avatars' live world positions instead. If either avatar is not
+    // loaded (e.g. a distant killer), leave the distance unset rather than show a bogus one.
     entry.mDistance = -1.f;
-    const LLSD& spos = event["source_pos"];
-    const LLSD& tpos = event["target_pos"];
-    if (spos.isArray() && spos.size() >= 3 && tpos.isArray() && tpos.size() >= 3)
+    LLVector3d killer_pos, victim_pos;
+    if (killfeed_avatar_pos(entry.mKiller, killer_pos) && killfeed_avatar_pos(entry.mVictim, victim_pos))
     {
-        LLVector3 sv((F32)spos[0].asReal(), (F32)spos[1].asReal(), (F32)spos[2].asReal());
-        LLVector3 tv((F32)tpos[0].asReal(), (F32)tpos[1].asReal(), (F32)tpos[2].asReal());
-        entry.mDistance = (tv - sv).length();
+        entry.mDistance = (F32)(killer_pos - victim_pos).length();
     }
 
     entry.mReceivedTime = LLFrameTimer::getTotalSeconds();
@@ -316,6 +348,7 @@ void FSFloaterKillFeed::drawOverlay()
     static LLCachedControl<std::string> font_name(gSavedSettings, "FSKillFeedFontName", "SansSerif");
     static LLCachedControl<LLColor4> text_color(gSavedSettings, "FSKillFeedTextColor", LLColor4::white);
     static LLCachedControl<bool> bold_text(gSavedSettings, "FSKillFeedBoldText", false);
+    static LLCachedControl<bool> grow_up(gSavedSettings, "FSKillFeedGrowUp", false);
 
     const F64 now = LLFrameTimer::getTotalSeconds();
     const LLColor4 default_color = text_color;
@@ -328,7 +361,9 @@ void FSFloaterKillFeed::drawOverlay()
              it != sEntries.rend() && seglines.size() < (size_t)max_lines;
              ++it)
         {
-            if (now - it->mReceivedTime > (F64)hold_time)
+            // Hold (sec) of 0 means "never fade" -- keep the newest lines on screen
+            // forever (capped by Max lines / MAX_ENTRIES), so skip the age cutoff.
+            if (hold_time > 0.f && now - it->mReceivedTime > (F64)hold_time)
             {
                 break; // entries are time-ordered; everything older follows
             }
@@ -390,17 +425,37 @@ void FSFloaterKillFeed::drawOverlay()
                    (F32)view_height * llclamp((F32)screen_y, 0.f, 1.f), 0.f);
     gGL.scalef(scale, scale, 1.f);
 
-    F32 y = 0.f;
-    for (const std::vector<KFSegment>& segs : seglines)
+    // The block ALWAYS occupies max_lines rows stacking down from FSKillFeedScreenX/Y, whichever
+    // way it grows, so toggling the direction never moves the feed on screen. Reserving the full
+    // height (instead of sizing to the current line count) also keeps the newest line put as the
+    // feed fills: grow down puts it in the TOP row, grow up in the BOTTOM row with older lines
+    // stacking upward above it. seglines[0] is always the newest; the marker (left gutter, so it
+    // never shifts the text) points it out.
+    //
+    // U+2022 and not a triangle: Ubuntu, Droid, OpenDyslexic, NotoMono and ocra all lack
+    // U+25B2/25BC, and the fallback chain those font sets declare only reaches DejaVuSans on
+    // Linux -- a triangle renders as tofu for those skins on Windows and Mac. U+2022 is in every
+    // bundled font. Direction needs no glyph of its own: the marker sits in the top row growing
+    // down and the bottom row growing up.
+    const std::string newest_marker = "\xE2\x80\xA2"; // U+2022 BULLET
+    const F32 marker_gutter = font->getWidthF32(newest_marker) + 4.f;
+    const size_t n_lines = seglines.size();
+    const size_t n_rows = llmax((size_t)(U32)max_lines, n_lines); // reserved block height
+    for (size_t idx = 0; idx < n_lines; ++idx) // idx 0 = the newest line
     {
+        const F32 y = -(F32)(grow_up ? (n_rows - 1 - idx) : idx) * line_height;
+        if (idx == 0)
+        {
+            font->renderUTF8(newest_marker, 0, -marker_gutter, y, default_color,
+                             LLFontGL::LEFT, LLFontGL::TOP, font_style, LLFontGL::DROP_SHADOW_SOFT);
+        }
         F32 x = 0.f;
-        for (const KFSegment& seg : segs)
+        for (const KFSegment& seg : seglines[idx])
         {
             font->renderUTF8(seg.text, 0, x, y, seg.color,
                              LLFontGL::LEFT, LLFontGL::TOP, font_style, LLFontGL::DROP_SHADOW_SOFT);
             x += font->getWidthF32(seg.text);
         }
-        y -= line_height;
     }
 
     gGL.popMatrix();

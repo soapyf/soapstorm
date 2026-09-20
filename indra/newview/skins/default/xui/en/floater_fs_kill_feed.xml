@@ -3,7 +3,7 @@
  positioning="cascading"
  can_minimize="false"
  can_resize="false"
- height="400"
+ height="428"
  layout="topleft"
  name="floater_fs_kill_feed"
  save_rect="true"
@@ -225,6 +225,16 @@
      width="296"
      label="Bold text"
      tool_tip="Render kill feed text in bold" />
+    <check_box
+     control_name="FSKillFeedGrowUp"
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="8"
+     height="16"
+     width="296"
+     label="Grow upward (newest at bottom)"
+     tool_tip="Feed grows bottom-to-top: new kills appear at the bottom and push older lines up" />
     <slider
      control_name="FSKillFeedHoldTime"
      follows="left|top"
@@ -235,10 +245,10 @@
      width="296"
      label="Hold (sec):"
      label_width="110"
-     min_val="5"
+     min_val="0"
      max_val="120"
      increment="1"
      decimal_digits="0"
      show_text="true"
-     tool_tip="How long each kill stays on screen" />
+     tool_tip="How long each kill stays on screen (0 = never fade)" />
 </floater>
