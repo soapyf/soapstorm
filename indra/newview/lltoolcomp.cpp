@@ -873,10 +873,14 @@ bool LLToolCompGun::handleRightMouseDown(S32 x, S32 y, MASK mask)
         // separate ADS FOV (with ADS smoothing) instead of the normal zoom.
         static LLCachedControl<bool> ads_enable(gSavedSettings, "FSDoubleTapADS", true);
         static LLCachedControl<F32> ads_window(gSavedSettings, "FSADSDoubleTapTime", 0.25f);
-        // Only the second of two genuine quick taps within the window counts: the
-        // first press must have been a tap (not a hold-zoom). Stops a normal
-        // hold-then-click, or two spaced-out clicks, from firing ADS by accident.
-        if (ads_enable && mLastTapWasQuick && mLastRMBUpTimer.getElapsedTimeF32() < (F32)ads_window)
+        // With ADS set as the default zoom there is no gesture to detect and no
+        // normal hold-zoom: every right press aims down sights, and the code below
+        // that would have run the mouselook zoom is never reached.
+        static LLCachedControl<bool> ads_default(gSavedSettings, "FSADSDefaultZoom", false);
+        // Otherwise, only the second of two genuine quick taps within the window
+        // counts: the first press must have been a tap (not a hold-zoom). Stops a
+        // normal hold-then-click, or two spaced-out clicks, from firing ADS by accident.
+        if (ads_default || (ads_enable && mLastTapWasQuick && mLastRMBUpTimer.getElapsedTimeF32() < (F32)ads_window))
         {
             mLastTapWasQuick = false; // consume the gesture
 
@@ -1135,8 +1139,12 @@ F32 LLToolCompGun::getADSVignetteAmount()
         if ((ots && vig_ots) || (!ots && vig_fp))
         {
             // 0 at the base FOV, 1 at the full ADS FOV (which is the smaller value).
+            // FSADSVignetteScaleWithZoom measures against the camera's tightest FOV
+            // instead, so the darkness tracks how far the ADS zoom is actually pushed:
+            // scrolling deeper darkens, backing off lightens.
+            static LLCachedControl<bool> vig_scale(gSavedSettings, "FSADSVignetteScaleWithZoom", false);
             F32 progress = 1.f;
-            const F32 span = mBaseFOV - mADSFOV;
+            const F32 span = mBaseFOV - (vig_scale ? LLViewerCamera::getInstance()->getMinView() : mADSFOV);
             if (fabsf(span) > 0.0001f)
             {
                 const F32 currentFOV = gSavedSettings.getF32("CameraAngle");

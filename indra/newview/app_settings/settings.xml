@@ -8940,6 +8940,17 @@
       <key>Value</key>
       <integer>1</integer>
     </map>
+    <key>FSADSDefaultZoom</key>
+    <map>
+      <key>Comment</key>
+      <string>Make aim down sights the only right-click zoom: holding the right mouse button in first person or OTS goes straight to ADS instead of the normal mouselook zoom, with no double-tap</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
     <key>FSADSZoomFOV</key>
     <map>
       <key>Comment</key>
@@ -9016,6 +9027,17 @@
       <string>Boolean</string>
       <key>Value</key>
       <integer>1</integer>
+    </map>
+    <key>FSADSVignetteScaleWithZoom</key>
+    <map>
+      <key>Comment</key>
+      <string>Scale the ADS vignette with how far the ADS zoom is pushed: deeper zoom darkens the screen edges, backing the zoom off lightens them</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
     </map>
     <key>FSADSVignetteStrength</key>
     <map>
@@ -28842,17 +28864,6 @@ Change of this parameter will affect the layout of buttons in notification toast
       <map>
       <key>Comment</key>
       <string>Show the identified target's name under the mouselook crosshair (identification still runs for crosshair coloring when disabled)</string>
-      <key>Persist</key>
-      <integer>1</integer>
-      <key>Type</key>
-      <string>Boolean</string>
-      <key>Value</key>
-      <integer>1</integer>
-    </map>
-    <key>ExodusMouselookIFFLineOfSight</key>
-      <map>
-      <key>Comment</key>
-      <string>Require line of sight to show the name of the avatar under the mouselook crosshair (no identification through walls or terrain)</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>

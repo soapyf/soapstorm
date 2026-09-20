@@ -3,7 +3,7 @@
  positioning="cascading"
  can_minimize="false"
  can_resize="false"
- height="290"
+ height="340"
  layout="topleft"
  name="floater_fs_ads_options"
  save_rect="true"
@@ -22,6 +22,16 @@
      width="366">
         Aim down sights (double-tap and hold right-click)
     </text>
+    <check_box
+     control_name="FSADSDefaultZoom"
+     follows="left|top"
+     height="16"
+     label="Use ADS for all right-click zoom"
+     layout="topleft"
+     left="12"
+     top_pad="8"
+     width="366"
+     tool_tip="Hold right-click to aim down sights straight away, with no double-tap. The normal right-click zoom in first person and OTS is turned off while this is on." />
     <slider
      control_name="FSADSZoomFOV"
      follows="left|top"
@@ -142,6 +152,16 @@
      top_pad="6"
      width="360"
      tool_tip="Darken the screen edges while in ADS in over-the-shoulder." />
+    <check_box
+     control_name="FSADSVignetteScaleWithZoom"
+     follows="left|top"
+     height="16"
+     label="Vignette grows with zoom"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     width="360"
+     tool_tip="Scale the vignette with how far the ADS zoom is pushed: scroll in for a darker edge, back off for a lighter one." />
     <slider
      control_name="FSADSVignetteStrength"
      follows="left|top"
