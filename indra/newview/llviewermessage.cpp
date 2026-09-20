@@ -143,6 +143,7 @@
 #include "animationexplorer.h"      // <FS:Zi> Animation Explorer
 #include "fsareasearch.h"
 #include "fsassetblacklist.h"
+#include "fssoundemitterblacklist.h"
 #include "fscombathitmarker.h"
 #include "fscommon.h"
 #include "fsfloaterplacedetails.h"
@@ -5009,8 +5010,34 @@ void process_time_synch(LLMessageSystem *mesgsys, void **user_data)
 }
 
 // <FS> Sound blacklist
-static bool is_sound_blacklisted(const LLUUID& sound_id, const LLUUID& object_id, const LLUUID& owner_id)
+static bool is_sound_blacklisted(const LLUUID& sound_id, const LLUUID& object_id, const LLUUID& owner_id, const LLUUID& parent_id = LLUUID::null)
 {
+    // SkoomaStorm: per-emitter sound blacklist. Silences a specific noisy object
+    // (e.g. a music gauntlet) without derendering it. Matches the emitter object
+    // directly, and also the linkset root when the sound comes from a child prim.
+    // SoundTrigger carries the root on the wire (ParentID) and plays even when the
+    // emitter is not in gObjectList, so prefer that over the findObject fallback;
+    // AttachedSound/PreloadSound have no ParentID field and pass null (no-op check).
+    {
+        FSSoundEmitterBlacklist& emitters = FSSoundEmitterBlacklist::instance();
+        if (emitters.isBlacklisted(object_id))
+        {
+            return true;
+        }
+        if (emitters.isBlacklisted(parent_id))
+        {
+            return true;
+        }
+        if (LLViewerObject* obj = gObjectList.findObject(object_id))
+        {
+            LLViewerObject* root = obj->getRootEdit();
+            if (root && root->getID() != object_id && emitters.isBlacklisted(root->getID()))
+            {
+                return true;
+            }
+        }
+    }
+
     FSAssetBlacklist& blacklist = FSAssetBlacklist::instance();
 
     if (blacklist.isBlacklisted(sound_id, LLAssetType::AT_SOUND))
@@ -5068,7 +5095,8 @@ void process_sound_trigger(LLMessageSystem *msg, void **)
     // </FS:ND>
 
     // <FS> Asset blacklist
-    if (is_sound_blacklisted(sound_id, object_id, owner_id))
+    msg->getUUIDFast(_PREHASH_SoundData, _PREHASH_ParentID, parent_id);
+    if (is_sound_blacklisted(sound_id, object_id, owner_id, parent_id))
         return;
     // </FS>
 
@@ -5092,7 +5120,6 @@ void process_sound_trigger(LLMessageSystem *msg, void **)
     }
     // NaCl End
 
-    msg->getUUIDFast(_PREHASH_SoundData, _PREHASH_ParentID, parent_id);
     msg->getU64Fast(_PREHASH_SoundData, _PREHASH_Handle, region_handle);
     msg->getVector3Fast(_PREHASH_SoundData, _PREHASH_Position, pos_local);
     msg->getF32Fast(_PREHASH_SoundData, _PREHASH_Gain, gain);

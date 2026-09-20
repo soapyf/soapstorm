@@ -1707,6 +1707,13 @@
           function="Floater.Toggle"
           parameter="fs_asset_blacklist" />
       </menu_item_call>
+      <menu_item_call
+        label="Sound Emitter Blacklist"
+        name="sound_emitter_blacklist">
+        <menu_item_call.on_click
+          function="Floater.Toggle"
+          parameter="fs_sound_emitter_blacklist" />
+      </menu_item_call>
       <menu_item_separator/>
       <menu_item_call
         label="Avatar Render Settings"

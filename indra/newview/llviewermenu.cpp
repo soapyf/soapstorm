@@ -166,6 +166,8 @@
 // Firestorm includes
 #include "fsfloateravataralign.h" // <FS:Chanayane> Compass floater
 #include "fsassetblacklist.h"
+#include "fssoundemitterblacklist.h"
+#include "llviewerjointattachment.h"
 #include "fsdata.h"
 #include "fslslbridge.h"
 #include "fscommon.h"
@@ -3493,6 +3495,127 @@ class LLObjectDerender : public view_listener_t
     }
 };
 // </FS:Ansariel>
+
+// SkoomaStorm: blacklist the sounds emitted by the right-clicked object (without
+// derendering it). Keyed on the emitter object UUID; permanent persists per account.
+namespace
+{
+    // True if this object or any of its child prims currently has an active sound.
+    bool object_or_child_emits_sound(LLViewerObject* o)
+    {
+        if (!o)
+        {
+            return false;
+        }
+        if (o->isAudioSource())
+        {
+            return true;
+        }
+        for (LLViewerObject* child : o->getChildren())
+        {
+            if (child && child->isAudioSource())
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Add one emitter object to the blacklist and immediately silence it. killAttachedSound()
+    // fully tears down the source: stops the channel AND drops the queue, so a scripted emitter
+    // that queues clips can't keep playing the next one.
+    void blacklist_one_emitter(LLViewerObject* o, const std::string& name, bool permanent)
+    {
+        if (!o)
+        {
+            return;
+        }
+        std::string region_name;
+        if (LLViewerRegion* region = o->getRegion())
+        {
+            region_name = region->getName();
+        }
+        FSSoundEmitterBlacklist::instance().addEmitter(o->getID(), name, region_name, permanent);
+
+        o->killAttachedSound();
+        for (LLViewerObject* child : o->getChildren())
+        {
+            if (child)
+            {
+                child->killAttachedSound();
+            }
+        }
+    }
+}
+
+void blacklist_sound_emitter(bool permanent)
+{
+    LLSelectMgr* select_mgr = LLSelectMgr::getInstance();
+    LLViewerObject* objp = select_mgr->getSelection()->getFirstRootObject(true);
+    if (!objp)
+    {
+        return;
+    }
+
+    if (LLVOAvatar* av = objp->asAvatar())
+    {
+        // Right-clicked an avatar (e.g. a teammate's worn emitter): blacklist whichever
+        // of their attachments is currently emitting sound. Worn attachments get a new
+        // UUID on re-attach/relog, so the entry re-matches only until then.
+        std::string av_name = av->getFullname();
+        const std::string label = av_name.empty() ? std::string("Worn sound emitter")
+                                                   : (av_name + " (worn emitter)");
+
+        S32 tagged = 0;
+        for (const auto& ap : av->mAttachmentPoints)
+        {
+            LLViewerJointAttachment* attach = ap.second;
+            if (!attach)
+            {
+                continue;
+            }
+            for (LLViewerObject* attached : attach->mAttachedObjects)
+            {
+                if (object_or_child_emits_sound(attached))
+                {
+                    blacklist_one_emitter(attached, label, permanent);
+                    ++tagged;
+                }
+            }
+        }
+        LL_INFOS() << "Sound emitter blacklist: tagged " << tagged << " emitting attachment(s) on "
+                   << (av_name.empty() ? objp->getID().asString() : av_name) << LL_ENDL;
+        return;
+    }
+
+    std::string entry_name;
+    if (LLSelectNode* nodep = select_mgr->getSelection()->getFirstRootNode())
+    {
+        if (!nodep->mName.empty())
+        {
+            entry_name = nodep->mName;
+        }
+    }
+    blacklist_one_emitter(objp, entry_name, permanent);
+}
+
+class LLObjectBlacklistSoundEmitter : public view_listener_t
+{
+    bool handleEvent(const LLSD& userdata)
+    {
+        blacklist_sound_emitter(false);
+        return true;
+    }
+};
+
+class LLObjectBlacklistSoundEmitterPermanent : public view_listener_t
+{
+    bool handleEvent(const LLSD& userdata)
+    {
+        blacklist_sound_emitter(true);
+        return true;
+    }
+};
 
 // <FS:CR> FIRE-10082 - Don't enable derendering own attachments when RLVa is enabled
 bool enable_derender_object()
@@ -13464,6 +13587,8 @@ void initialize_menus()
     view_listener_t::addMenu(new LLObjectMute(), "Object.Mute");
     view_listener_t::addMenu(new LLObjectDerender(), "Object.Derender");
     view_listener_t::addMenu(new LLObjectDerenderPermanent(), "Object.DerenderPermanent"); // <FS:Ansariel> Optional derender & blacklist
+    view_listener_t::addMenu(new LLObjectBlacklistSoundEmitter(), "Object.BlacklistSoundEmitter"); // SkoomaStorm
+    view_listener_t::addMenu(new LLObjectBlacklistSoundEmitterPermanent(), "Object.BlacklistSoundEmitterPermanent"); // SkoomaStorm
     enable.add("Object.EnableDerender", boost::bind(&enable_derender_object));  // <FS:CR> FIRE-10082 - Don't enable derendering own attachments when RLVa is enabled as well
     view_listener_t::addMenu(new LLObjectTexRefresh(), "Object.TexRefresh");    // ## Zi: Texture Refresh
     view_listener_t::addMenu(new LLEditParticleSource(), "Object.EditParticles");
