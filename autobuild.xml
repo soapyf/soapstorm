@@ -7,18 +7,18 @@
     <string>autobuild</string>
     <key>installables</key>
     <map>
-      <key>SDL2</key>
+      <key>SDL3</key>
       <map>
         <key>copyright</key>
-        <string>Copyright (C) 1997-2023 Sam Lantinga</string>
+        <string>Copyright (C) 1997-2025 Sam Lantinga (slouken@libsdl.org)</string>
         <key>description</key>
         <string>Simple DirectMedia Layer is a cross-platform multimedia library designed to provide low level access to audio, keyboard, mouse, joystick, 3D hardware via OpenGL, and 2D video framebuffer.</string>
         <key>license</key>
         <string>zlib</string>
         <key>license_file</key>
-        <string>LICENSES/SDL.txt</string>
+        <string>LICENSES/SDL3.txt</string>
         <key>name</key>
-        <string>SDL2</string>
+        <string>SDL3</string>
         <key>platforms</key>
         <map>
           <key>linux64</key>
@@ -26,18 +26,18 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>0f6fbb52ffea1a55bf76a84a6688079f95674cbd</string>
+              <string>06226c54c57afd601707c0f5f7a2e0736ab1f326</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-sdl2/releases/download/v2.28.0-1dc88c1/SDL2-2.28.0-linux64-1dc88c1.tar.zst</string>
+              <string>https://github.com/secondlife/3p-sdl3/releases/download/v3.2.24-r1/SDL3-3.2.24-r1-linux64-18539840462.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
           </map>
         </map>
         <key>version</key>
-        <string>2.24.1</string>
+        <string>3.2.24-r1</string>
       </map>
       <key>gstreamer10</key>
       <map>
@@ -2170,18 +2170,18 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>2d20683554f0b00234bbb84d0ce7ac1be1ad70aa</string>
+              <string>612bfcb7cf0e6afaf7ce7f1db6feccd81137eb99</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-open-libndofdev/releases/download/v1.14-r1/open_libndofdev-0.14.8503290964-linux64-8503290964.tar.zst</string>
+              <string>https://github.com/secondlife/3p-open-libndofdev/releases/download/v1.14-r7/open_libndofdev-0.14.19022717849-linux64-19022717849.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
           </map>
         </map>
         <key>version</key>
-        <string>0.13.222872202</string>
+        <string>0.14.19022717849</string>
       </map>
       <key>openal</key>
       <map>

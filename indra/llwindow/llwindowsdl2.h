@@ -32,12 +32,10 @@
 #include "llwindow.h"
 #include "lltimer.h"
 
-#include "SDL2/SDL.h"
-#include "SDL2/SDL_endian.h"
+#include "SDL3/SDL.h"
 
 #if LL_X11
-// get X11-specific headers for use in low-level stuff like copy-and-paste support
-#include "SDL2/SDL_syswm.h"
+#include <X11/Xlib.h>
 #endif
 
 // AssertMacros.h does bad things.
@@ -204,7 +202,6 @@ protected:
     int         mReallyCapturedCount;
 
     SDL_Window* mWindow;
-    SDL_Surface* mSurface;
     SDL_GLContext mContext;
     SDL_Cursor* mSDLCursors[UI_CURSOR_COUNT];
     LLPreeditor* mPreeditor;
@@ -227,35 +224,17 @@ protected:
 
 private:
 #if LL_X11
-    void x11_set_urgent(bool urgent);
-    bool mFlashing;
-    LLTimer mFlashTimer;
 #endif //LL_X11
 
     U32 mKeyVirtualKey;
     U32 mKeyModifiers;
+
+    bool getWindowSizeInPixels(S32& width, S32& height) const;
     std::string mInputType;
 
     bool mUseLegacyCursors; // <FS:LO> Legacy cursor setting from main program
 
-public:
-#if LL_X11
-    static Display* getSDLDisplay();
-    LLWString const& getPrimaryText() const { return mPrimaryClipboard; }
-    LLWString const& getSecondaryText() const { return mSecondaryClipboard; }
-    void clearPrimaryText()  { mPrimaryClipboard.clear(); }
-    void clearSecondaryText() { mSecondaryClipboard.clear(); }
-private:
     void tryFindFullscreenSize( int &aWidth, int &aHeight );
-    void initialiseX11Clipboard();
-
-    bool getSelectionText(Atom selection, LLWString& text);
-    bool getSelectionText( Atom selection, Atom type, LLWString &text );
-
-    bool setSelectionText(Atom selection, const LLWString& text);
-#endif
-    LLWString mPrimaryClipboard;
-    LLWString mSecondaryClipboard;
 };
 
 

@@ -21,6 +21,11 @@ if (NDOF)
 
   target_link_libraries(ll::ndof INTERFACE ${NDOF_LIBRARY})
 
+  if (LINUX)
+    # open-libndofdev is built against SDL3, so it needs SDL3's symbols.
+    target_link_libraries(ll::ndof INTERFACE SDL3)
+  endif (LINUX)
+
   target_compile_definitions(ll::ndof INTERFACE LIB_NDOF=1)
 endif (NDOF)
 
