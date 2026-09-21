@@ -237,6 +237,14 @@ void FSSoundEmitterBlacklist::removeEmitters(const uuid_vec_t& ids)
 
 void FSSoundEmitterBlacklist::load()
 {
+    // init() runs per account, so start from empty rather than merging into
+    // whatever the previous session left behind. This has to happen before the
+    // early returns below: a missing or unreadable file is exactly the case that
+    // would otherwise hand the next account the previous one's entries whole.
+    mData.clear();
+    mPermIndex.clear();
+    mPendingProbe.clear();
+
     llifstream file(mFileName.c_str());
     if (!file.is_open())
     {

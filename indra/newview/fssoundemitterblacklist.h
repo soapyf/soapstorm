@@ -93,6 +93,10 @@ public:
     // right now stops, rather than only the next one being suppressed.
     static void silenceObject(const LLUUID& object_id);
 
+    // Nothing blacklisted at all. Lets the sound path skip its object lookups
+    // entirely for the common case, as FSAssetBlacklist::isBlacklisted does.
+    bool isEmpty() const { return mData.empty(); }
+
     sound_emitter_blacklist_map_t getData() const { return mData; }
 
     using changed_signal_t = boost::signals2::signal<void()>;

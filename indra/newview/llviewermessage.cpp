@@ -5020,20 +5020,26 @@ static bool is_sound_blacklisted(const LLUUID& sound_id, const LLUUID& object_id
     // AttachedSound/PreloadSound have no ParentID field and pass null (no-op check).
     {
         FSSoundEmitterBlacklist& emitters = FSSoundEmitterBlacklist::instance();
-        if (emitters.isBlacklisted(object_id))
+        // Every incoming sound reaches here, so do nothing at all when nobody has
+        // blacklisted an emitter: the findObject below is a lookup per sound that
+        // only the root fallback needs.
+        if (!emitters.isEmpty())
         {
-            return true;
-        }
-        if (emitters.isBlacklisted(parent_id))
-        {
-            return true;
-        }
-        if (LLViewerObject* obj = gObjectList.findObject(object_id))
-        {
-            LLViewerObject* root = obj->getRootEdit();
-            if (root && root->getID() != object_id && emitters.isBlacklisted(root->getID()))
+            if (emitters.isBlacklisted(object_id))
             {
                 return true;
+            }
+            if (emitters.isBlacklisted(parent_id))
+            {
+                return true;
+            }
+            if (LLViewerObject* obj = gObjectList.findObject(object_id))
+            {
+                LLViewerObject* root = obj->getRootEdit();
+                if (root && root->getID() != object_id && emitters.isBlacklisted(root->getID()))
+                {
+                    return true;
+                }
             }
         }
     }
