@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<panel
+ border="true"
+ follows="all"
+ height="480"
+ layout="topleft"
+ left="1"
+ top="1"
+ width="540"
+ label="Environment"
+ name="soapstorm_env">
+
+<tab_container
+ label="Environment"
+ layout="topleft"
+ follows="all"
+ top="5"
+ bottom="-1"
+ left="1"
+ right="-1"
+ name="soapstorm_env_tabs"
+ tab_min_width="50"
+ tab_position="top">
+
+    <panel
+     class="panel_preference"
+     filename="panel_preferences_soapstorm_atmo.xml"
+     label="Atmo Magic"
+     layout="topleft"
+     help_topic="preferences_soapstorm_tab"
+     name="soapstorm_atmo" />
+
+    <panel
+     class="panel_preference"
+     filename="panel_preferences_ss_pbr.xml"
+     label="PBR"
+     layout="topleft"
+     help_topic="preferences_soapstorm_tab"
+     name="ss_pbr" />
+
+</tab_container>
+
+</panel>

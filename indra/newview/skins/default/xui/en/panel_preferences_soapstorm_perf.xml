@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<panel
+ border="true"
+ follows="all"
+ height="480"
+ layout="topleft"
+ left="1"
+ top="1"
+ width="540"
+ label="Performance"
+ name="soapstorm_perf">
+
+<tab_container
+ label="Performance"
+ layout="topleft"
+ follows="all"
+ top="5"
+ bottom="-1"
+ left="1"
+ right="-1"
+ name="soapstorm_perf_tabs"
+ tab_min_width="50"
+ tab_position="top">
+
+    <panel
+     class="panel_preference"
+     filename="panel_preferences_ss_squeeze.xml"
+     label="Squeeze"
+     layout="topleft"
+     help_topic="preferences_soapstorm_tab"
+     name="ss_squeeze" />
+
+    <panel
+     filename="panel_preferences_ss_roc.xml"
+     label="Region Cache"
+     layout="topleft"
+     help_topic="preferences_soapstorm_tab"
+     name="ss_roc" />
+
+</tab_container>
+
+</panel>

@@ -262,6 +262,11 @@ public:
     // Over-the-shoulder camera options floater
     void onClickOTSSettings();
 
+    // Combat hitmarker preview and customization
+    void onClickTestHitSound();
+    void onClickTestKillSound();
+    void onClickCustomizeHitSymbols();
+
     // Offline login splash background picker
     void onClickBrowseSplashImage();
     // Login bar logo replacement picker
