@@ -3169,13 +3169,12 @@ void LLViewerWindow::draw()
 
                         if (magicVector.mdV[VX] > -0.75 && magicVector.mdV[VX] < 0.75 && magicVector.mdV[VZ] > 0.0 && magicVector.mdV[VY] > -1.5 && magicVector.mdV[VY] < 1.5) // Do not fuck with these, cheater. :(
                         {
-                            // Line of sight: don't identify targets through walls, floors or
+                            // Line of sight: never identify targets through walls, floors or
                             // terrain. Two rays (avatar center, then head height) so a target
                             // peeking over low cover still identifies. World geometry only;
-                            // avatars and attachments never block the check.
-                            static LLCachedControl<bool> renderIFFLineOfSight(gSavedSettings, "ExodusMouselookIFFLineOfSight", true);
+                            // avatars and attachments never block the check. Always enforced --
+                            // there is deliberately no setting to turn this off.
                             bool targetVisible = true;
-                            if (renderIFFLineOfSight)
                             {
                                 LLVector3 rayTarget = gAgent.getPosAgentFromGlobal(targetPosition);
                                 LLVector4a rayStart, rayEnd, rayHit;
@@ -7065,30 +7064,39 @@ void LLViewerWindow::initTextures(S32 location_id)
     }
 }
 
+// <FS:Zi> Fade teleport screens
+//void LLViewerWindow::setShowProgress(const bool show)
+//{
+//    if (mProgressView)
+//    {
+//        mProgressView->setVisible(show);
+//    }
+//}
 void LLViewerWindow::setShowProgress(const bool show, bool fullscreen)
 {
-    if(show)
+    if (show)
     {
-        if(fullscreen)
+        if (mProgressViewMini && !fullscreen)
+            mProgressViewMini->setVisible(true);
+
+        if (mProgressView)
         {
-            if(mProgressView)
+            if (LLAppViewer::instance()->quitRequested())
+                mProgressView->setVisible(true); // Fix pink screen when quitting the viewer
+            else if (fullscreen)
                 mProgressView->fade(true);
-        }
-        else
-        {
-            if(mProgressViewMini)
-                mProgressViewMini->setVisible(true);
         }
     }
     else
     {
-        if(mProgressView && mProgressView->getVisible())
+        if (mProgressView && mProgressView->getVisible())
             mProgressView->fade(false);
 
-        if(mProgressViewMini)
+        if (mProgressViewMini)
             mProgressViewMini->setVisible(false);
     }
 }
+// </FS:Zi>
 
 void LLViewerWindow::setStartupComplete()
 {

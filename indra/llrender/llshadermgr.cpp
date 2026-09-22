@@ -1092,6 +1092,7 @@ void LLShaderMgr::clearShaderCache()
     const std::string mask = "*";
     gDirUtilp->deleteFilesInDir(shader_cache, mask);
     LLFile::rmdir(shader_cache);
+    LLFile::mkdir(shader_cache);
     mShaderBinaryCache.clear();
 }
 

@@ -352,6 +352,13 @@ void LLGLSLShader::unload()
     mDefines.clear();
     mFeatures = LLShaderFeatures();
 
+    for (auto& variant : mGLTFVariants)
+    {
+        variant.unload();
+    }
+    mGLTFVariants.clear();
+    mRiggedVariant = nullptr;
+
     unloadInternal();
 }
 
@@ -421,7 +428,11 @@ bool LLGLSLShader::createShader()
     }
     mLightHash = 0xFFFFFFFF;
 
-    llassert_always(!mShaderFiles.empty());
+    if (LL_UNLIKELY(mShaderFiles.empty()))
+    {
+        LL_ERRS("Shader") << "ASSERT (!mShaderFiles.empty()): Shader '"
+                          << (mName.empty() ? "<unnamed>" : mName) << "' has no shader files specified" << LL_ENDL;
+    }
 
 #if LL_DARWIN
     if(!gGLManager.mIsApple)
@@ -1052,7 +1063,11 @@ void LLGLSLShader::bind()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_SHADER;
 
-    llassert_always(mProgramObject != 0);
+    if (LL_UNLIKELY(mProgramObject == 0))
+    {
+        LL_ERRS("Shader") << "ASSERT (mProgramObject != 0): Attempted to bind unlinked or failed shader '"
+                          << (mName.empty() ? "<unnamed>" : mName) << "'" << LL_ENDL;
+    }
 
     gGL.flush();
 
@@ -1076,14 +1091,28 @@ void LLGLSLShader::bind()
         mUniformsDirty = false;
     }
 
-    llassert_always(sCurBoundShaderPtr != nullptr);
-    llassert_always(sCurBoundShader == mProgramObject);
+    if (LL_UNLIKELY(sCurBoundShaderPtr == nullptr || sCurBoundShader != mProgramObject))
+    {
+        LL_ERRS("Shader") << "ASSERT (sCurBoundShader == mProgramObject): Shader '"
+                          << (mName.empty() ? "<unnamed>" : mName)
+                          << "' failed post-bind state check (bound handle: " << sCurBoundShader
+                          << ", expected: " << mProgramObject << ")" << LL_ENDL;
+    }
 }
 
 void LLGLSLShader::bind(U8 variant)
 {
-    llassert_always(mGLTFVariants.size() == LLGLSLShader::NUM_GLTF_VARIANTS);
-    llassert_always(variant < LLGLSLShader::NUM_GLTF_VARIANTS);
+    if (LL_UNLIKELY(mGLTFVariants.size() != LLGLSLShader::NUM_GLTF_VARIANTS))
+    {
+        LL_ERRS("Shader") << "ASSERT (mGLTFVariants.size() == LLGLSLShader::NUM_GLTF_VARIANTS): Shader '"
+                          << (mName.empty() ? "<unnamed>" : mName) << "' has " << mGLTFVariants.size()
+                          << " GLTF variants, expected " << LLGLSLShader::NUM_GLTF_VARIANTS << LL_ENDL;
+    }
+    if (LL_UNLIKELY(variant >= LLGLSLShader::NUM_GLTF_VARIANTS))
+    {
+        LL_ERRS("Shader") << "ASSERT (variant < LLGLSLShader::NUM_GLTF_VARIANTS): Invalid variant index " << (U32)variant
+                          << " for shader '" << (mName.empty() ? "<unnamed>" : mName) << "'" << LL_ENDL;
+    }
     mGLTFVariants[variant].bind();
 }
 
@@ -1091,7 +1120,11 @@ void LLGLSLShader::bind(bool rigged)
 {
     if (rigged)
     {
-        llassert_always(mRiggedVariant);
+        if (LL_UNLIKELY(!mRiggedVariant))
+        {
+            LL_ERRS("Shader") << "ASSERT (mRiggedVariant): Attempted to bind null rigged variant for shader '"
+                              << (mName.empty() ? "<unnamed>" : mName) << "'" << LL_ENDL;
+        }
         mRiggedVariant->bind();
     }
     else

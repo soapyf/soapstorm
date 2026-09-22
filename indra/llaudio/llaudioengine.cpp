@@ -2052,8 +2052,11 @@ static bool ss_normalize_dsf_file(const std::string& path, F32 target_lufs)
 {
     const S32 DSF_HEADER = 44;
 
+    // This runs on a General pool worker, and without a pool of its own LLAPRFile would use its global one, which APR does not make thread safe: concurrent use corrupts it until the viewer hangs at quit. Never deleted on purpose: apr_terminate() reclaims its APR memory.
+    static thread_local LLVolatileAPRPool* thread_pool = new LLVolatileAPRPool();
+
     LLAPRFile infile;
-    infile.open(path, LL_APR_RB);
+    infile.open(path, LL_APR_RB, thread_pool);
     if (!infile.getFileHandle()) return false;
     S32 size = infile.seek(APR_END, 0);
     if (size <= DSF_HEADER + 2)
@@ -2079,7 +2082,7 @@ static bool ss_normalize_dsf_file(const std::string& path, F32 target_lufs)
     llendianswizzle(samples, 2, (S32)count);
 
     LLAPRFile outfile;
-    outfile.open(path, LL_APR_WPB);
+    outfile.open(path, LL_APR_WPB, thread_pool);
     if (!outfile.getFileHandle()) return false;
     outfile.write(data.data(), size);
     LL_INFOS("AudioEngine") << "Normalized cached sound " << path << " from " << lufs << " LUFS toward " << target_lufs << LL_ENDL;

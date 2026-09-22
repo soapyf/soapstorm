@@ -85,7 +85,7 @@ add_library (llimage ${llimage_SOURCE_FILES})
 
 # <SS:Nexii> only the backend shim includes the transcoder header, so the directory is private
 if(SS_BC7F AND EXISTS "${SS_BASISU_TRANSCODER}")
-  target_include_directories(llimage PRIVATE "${SS_BASISU_DIR}")
+  target_include_directories(llimage SYSTEM PRIVATE "${SS_BASISU_DIR}")
 endif()
 # </SS:Nexii>
 target_include_directories( llimage  INTERFACE   ${CMAKE_CURRENT_SOURCE_DIR})

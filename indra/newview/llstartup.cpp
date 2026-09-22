@@ -238,7 +238,9 @@
 #include "growlmanager.h"
 
 #include "fsassetblacklist.h"
+#include "fssoundemitterblacklist.h"
 #include "fsavatarrenderpersistence.h"
+#include "fsfloaterkillfeed.h"
 #include "fscommon.h"
 #include "fscorehttputil.h"
 #include "fsdata.h"
@@ -1652,6 +1654,9 @@ bool idle_startup()
 
         // <FS:WS> Initalize Account based asset_blacklist
         FSAssetBlacklist::getInstance()->init();
+
+        // SkoomaStorm: per-emitter sound blacklist (account-based permanent list)
+        FSSoundEmitterBlacklist::getInstance()->init();
 
         // <FS:Techwolf Lupindo> load per grid data
         FSData::instance().downloadAgents();
@@ -4241,6 +4246,7 @@ void LLStartUp::postStartupState()
 
 void reset_login()
 {
+    FSFloaterKillFeed::clearEntries(); // kills held from this session, incl. a never-fade feed
     gAgentWearables.cleanup();
     gAgentCamera.cleanup();
     gAgent.cleanup();

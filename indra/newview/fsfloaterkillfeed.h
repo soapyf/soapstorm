@@ -56,6 +56,10 @@ public:
     // line count and hold time come from saved settings.
     static void drawOverlay();
 
+    // Drop every held kill. Called from reset_login() so a never-fade feed
+    // (Hold = 0) does not carry the last session's kills onto the next login.
+    static void clearEntries();
+
     // Async avatar name lookup completion (names appear on the next frame).
     static void onAvatarNameResolved(const LLUUID& id, const LLAvatarName& av_name);
 

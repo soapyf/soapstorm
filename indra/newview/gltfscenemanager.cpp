@@ -597,6 +597,13 @@ void GLTFSceneManager::render(bool opaque, bool rigged, bool unlit)
 void GLTFSceneManager::render(U8 variant)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_GLTF;
+
+    static LLCachedControl<bool> gltf_enabled(gSavedSettings, "GLTFEnabled", true);
+    if (!gltf_enabled)
+    {
+        return;
+    }
+
     // just render the whole scene by traversing the whole scenegraph
     // Assumes camera transform is already set and appropriate shader is already bound.
     // Eventually we'll want a smarter render pipe that has pre-sorted the scene graph
@@ -640,15 +647,16 @@ void GLTFSceneManager::render(Asset& asset, U8 variant)
     LL_PROFILE_ZONE_SCOPED_CATEGORY_GLTF;
 
     static LLCachedControl<bool> can_use_shaders(gSavedSettings, "RenderCanUseGLTFPBROpaqueShaders", true);
-    if (!can_use_shaders)
+    static LLCachedControl<bool> gltf_enabled(gSavedSettings, "GLTFEnabled", true);
+    if (!can_use_shaders || !gltf_enabled)
     {
-        // user should already have been notified of unsupported hardware
+        // user should already have been notified of unsupported hardware or GLTF disabled
         return;
     }
 
-    if (gGLTFPBRMetallicRoughnessProgram.mGLTFVariants.size() <= variant)
+    if (gGLTFPBRMetallicRoughnessProgram.mGLTFVariants.size() <= variant ||
+        !gGLTFPBRMetallicRoughnessProgram.mGLTFVariants[variant].isComplete())
     {
-        llassert(false); // mGLTFVariants should have been initialized
         return;
     }
 

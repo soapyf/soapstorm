@@ -574,8 +574,12 @@ LLVector3 FSCombatHitMarker::getOTSConvergenceTarget(const LLVector3& cam_origin
     // never tests avatars/attachments, and also excludes our own body so the shoulder ray
     // can't self-hit -- no step-past-self needed. skip_phantom steps past phantom prims
     // (no physics, a bullet passes through). With nothing solid under the crosshair the
-    // far point stands.
-    if (gPipeline.lineSegmentIntersectWorldGeometry(ray_start, ray_end, &hit, true /*skip_phantom*/))
+    // far point stands. Also skips the seated vehicle linkset so the crosshair aim
+    // ray can pass through the vehicle's hood/windshield to reach targets in the world.
+    const LLViewerObject* seated_root = (isAgentAvatarValid() && gAgentAvatarp->isSitting())
+        ? (const LLViewerObject*)gAgentAvatarp->getRoot() : nullptr;
+
+    if (gPipeline.lineSegmentIntersectWorldGeometry(ray_start, ray_end, &hit, true /*skip_phantom*/, false /*pick_transparent*/, seated_root))
     {
         target.set(hit.getF32ptr());
         world_hit_flag = true;
@@ -803,7 +807,8 @@ void FSCombatHitMarker::drawCrosshair(S32 view_width, S32 view_height)
     F32 offset_x = 0.f;
     F32 offset_y = 0.f;
     static LLCachedControl<bool> true_aim(gSavedSettings, "FSOTSTrueAimDot", true);
-    if (true_aim && gAgentCamera.cameraOTS() && isAgentAvatarValid() && gAgentAvatarp->mHeadp
+    const bool is_sitting = isAgentAvatarValid() && gAgentAvatarp->isSitting();
+    if (true_aim && !is_sitting && gAgentCamera.cameraOTS() && isAgentAvatarValid() && gAgentAvatarp->mHeadp
         && gAgent.getTeleportState() == LLAgent::TELEPORT_NONE) // never raycast mid-teleport
     {
         const F32 TRUE_AIM_RANGE = 256.f; // meters; past this the parallax is subpixel
@@ -838,9 +843,12 @@ void FSCombatHitMarker::drawCrosshair(S32 view_width, S32 view_height)
         // returned and the dot rests at center, which in convergence mode is
         // the target under the crosshair. Casting only as far as aim_end is
         // what keeps terrain *behind* the target from pulling the dot off it.
+        // Also skips the seated vehicle linkset so the vehicle canopy/windshield doesn't register as cover.
+        const LLViewerObject* seated_root = (isAgentAvatarValid() && gAgentAvatarp->isSitting())
+            ? (const LLViewerObject*)gAgentAvatarp->getRoot() : nullptr;
         ray_start.load3(eye.mV);
         ray_end.load3(aim_end.mV);
-        if (gPipeline.lineSegmentIntersectWorldGeometry(ray_start, ray_end, &hit, true /*skip_phantom*/))
+        if (gPipeline.lineSegmentIntersectWorldGeometry(ray_start, ray_end, &hit, true /*skip_phantom*/, false /*pick_transparent*/, seated_root))
         {
             const LLRect& world_rect = gViewerWindow->getWorldViewRectScaled();
             LLCoordGL screen(world_rect.getCenterX(), world_rect.getCenterY());

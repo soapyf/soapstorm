@@ -2298,11 +2298,14 @@ namespace basist
 
 	namespace arith_fastbits_f32
 	{
-		enum { TABLE_BITS = 8 };               // 256..1024 entries typical (8..10)
-		enum { TABLE_SIZE = 1 << TABLE_BITS };
-		enum { MANT_BITS = 23 };
-		enum { FRAC_BITS = MANT_BITS - TABLE_BITS };
-		enum { FRAC_MASK = (1u << FRAC_BITS) - 1u };
+		enum
+		{
+			TABLE_BITS = 8,               // 256..1024 entries typical (8..10)
+			TABLE_SIZE = 1 << TABLE_BITS,
+			MANT_BITS = 23,
+			FRAC_BITS = MANT_BITS - TABLE_BITS,
+			FRAC_MASK = (1u << FRAC_BITS) - 1u
+		};
 
 		extern bool g_initialized;
 		extern float g_lut_edge[TABLE_SIZE + 1]; // samples at m = 1 + i/TABLE_SIZE (for linear)

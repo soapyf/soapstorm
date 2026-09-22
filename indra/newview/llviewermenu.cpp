@@ -170,6 +170,8 @@
 // Firestorm includes
 #include "fsfloateravataralign.h" // <FS:Chanayane> Compass floater
 #include "fsassetblacklist.h"
+#include "fssoundemitterblacklist.h"
+#include "llviewerjointattachment.h"
 #include "fsdata.h"
 #include "fslslbridge.h"
 #include "fscommon.h"
@@ -3562,6 +3564,133 @@ class LLObjectDerender : public view_listener_t
 };
 // </FS:Ansariel>
 
+// SkoomaStorm: blacklist the sounds emitted by the right-clicked object (without
+// derendering it). Keyed on the emitter object UUID; permanent persists per account.
+namespace
+{
+    // True if this object or any of its child prims currently has an active sound.
+    bool object_or_child_emits_sound(LLViewerObject* o)
+    {
+        if (!o)
+        {
+            return false;
+        }
+        if (o->isAudioSource())
+        {
+            return true;
+        }
+        for (LLViewerObject* child : o->getChildren())
+        {
+            if (child && child->isAudioSource())
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Add one emitter object to the blacklist and immediately silence it. killAttachedSound()
+    // fully tears down the source: stops the channel AND drops the queue, so a scripted emitter
+    // that queues clips can't keep playing the next one.
+    // owner_id is what makes a permanent entry outlive the object UUID, which a worn
+    // attachment is reissued on every re-rez. An empty name means we do not know what
+    // the object is called yet, so ask: the reply completes the entry (see
+    // FSSoundEmitterBlacklist::noteObjectProperties).
+    void blacklist_one_emitter(LLViewerObject* o, const LLUUID& owner_id, const std::string& name, bool permanent)
+    {
+        if (!o)
+        {
+            return;
+        }
+        std::string region_name;
+        if (LLViewerRegion* region = o->getRegion())
+        {
+            region_name = region->getName();
+        }
+
+        FSSoundEmitterBlacklist& blacklist = FSSoundEmitterBlacklist::instance();
+        blacklist.addEmitter(o->getID(), owner_id, name, region_name, permanent);
+
+        if (name.empty())
+        {
+            blacklist.noteProbePending(o->getID());
+            LLSelectMgr::getInstance()->requestObjectPropertiesViaSelect(o);
+        }
+
+        FSSoundEmitterBlacklist::silenceObject(o->getID());
+    }
+}
+
+void blacklist_sound_emitter(bool permanent)
+{
+    LLSelectMgr* select_mgr = LLSelectMgr::getInstance();
+    LLViewerObject* objp = select_mgr->getSelection()->getFirstRootObject(true);
+    if (!objp)
+    {
+        return;
+    }
+
+    if (LLVOAvatar* av = objp->asAvatar())
+    {
+        // Right-clicked an avatar (e.g. a teammate's worn emitter): blacklist whichever
+        // of their attachments is currently emitting sound. The wearer owns the
+        // attachment, so recording their UUID plus the object's name (fetched by the
+        // probe below) survives the re-rez that changes the object's own UUID.
+        std::string av_name = av->getFullname();
+
+        S32 tagged = 0;
+        for (const auto& ap : av->mAttachmentPoints)
+        {
+            LLViewerJointAttachment* attach = ap.second;
+            if (!attach)
+            {
+                continue;
+            }
+            for (LLViewerObject* attached : attach->mAttachedObjects)
+            {
+                if (object_or_child_emits_sound(attached))
+                {
+                    blacklist_one_emitter(attached, av->getID(), std::string(), permanent);
+                    ++tagged;
+                }
+            }
+        }
+        LL_INFOS() << "Sound emitter blacklist: tagged " << tagged << " emitting attachment(s) on "
+                   << (av_name.empty() ? objp->getID().asString() : av_name) << LL_ENDL;
+        return;
+    }
+
+    std::string entry_name;
+    LLUUID      owner_id;
+    if (LLSelectNode* nodep = select_mgr->getSelection()->getFirstRootNode())
+    {
+        entry_name = nodep->mName;
+        if (nodep->mValid && nodep->mPermissions) // filled in once properties arrived
+        {
+            owner_id = nodep->mPermissions->getOwner();
+        }
+    }
+    blacklist_one_emitter(objp, owner_id, entry_name, permanent);
+}
+
+class LLObjectBlacklistSoundEmitter : public view_listener_t
+{
+    bool handleEvent(const LLSD& userdata)
+    {
+        blacklist_sound_emitter(false);
+        return true;
+    }
+};
+
+class LLObjectBlacklistSoundEmitterPermanent : public view_listener_t
+{
+    bool handleEvent(const LLSD& userdata)
+    {
+        blacklist_sound_emitter(true);
+        return true;
+    }
+};
+
 // <FS:CR> FIRE-10082 - Don't enable derendering own attachments when RLVa is enabled
 bool enable_derender_object()
 {
@@ -6148,7 +6277,14 @@ class LLViewMouselook : public view_listener_t
 
         if (!gAgentCamera.cameraMouselook())
         {
+            // If the user is seated on an object/vehicle that has NOT defined a custom
+            // sit camera offset (llSetCameraEyeOffset), fall back to vanilla first-person
+            // mouselook (cockpit view) to prevent awkward camera clipping and placement.
+            const bool is_sitting = isAgentAvatarValid() && gAgentAvatarp->isSitting();
+            const bool has_sit_cam = gAgentCamera.sitCameraEnabled();
+
             if (gSavedSettings.getBOOL("OTSEnabled")
+                && (!is_sitting || has_sit_cam)
                 && !(gSavedSettings.getBOOL("OTSRememberLastView")
                      && gSavedSettings.getBOOL("OTSLastViewFirstPerson")))
             {
@@ -6156,6 +6292,7 @@ class LLViewMouselook : public view_listener_t
                 return true;
             }
             gAgentCamera.changeCameraToMouselook();
+            return true;
         }
         else
         {
@@ -13601,6 +13738,8 @@ void initialize_menus()
     view_listener_t::addMenu(new LLObjectMute(), "Object.Mute");
     view_listener_t::addMenu(new LLObjectDerender(), "Object.Derender");
     view_listener_t::addMenu(new LLObjectDerenderPermanent(), "Object.DerenderPermanent"); // <FS:Ansariel> Optional derender & blacklist
+    view_listener_t::addMenu(new LLObjectBlacklistSoundEmitter(), "Object.BlacklistSoundEmitter"); // SkoomaStorm
+    view_listener_t::addMenu(new LLObjectBlacklistSoundEmitterPermanent(), "Object.BlacklistSoundEmitterPermanent"); // SkoomaStorm
     enable.add("Object.EnableDerender", boost::bind(&enable_derender_object));  // <FS:CR> FIRE-10082 - Don't enable derendering own attachments when RLVa is enabled as well
     view_listener_t::addMenu(new LLObjectTexRefresh(), "Object.TexRefresh");    // ## Zi: Texture Refresh
     view_listener_t::addMenu(new LLEditParticleSource(), "Object.EditParticles");

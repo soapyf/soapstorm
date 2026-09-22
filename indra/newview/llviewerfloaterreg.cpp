@@ -198,6 +198,7 @@
 #include "fsareasearch.h"
 #include "fsfloateraddtocontactset.h"
 #include "fsfloaterassetblacklist.h"
+#include "fsfloatersoundemitterblacklist.h"
 #include "fsfloateravatarrendersettings.h"
 #include "fsfloaterbigpreview.h"
 #include "fsfloatercontacts.h"
@@ -656,6 +657,7 @@ void LLViewerFloaterReg::registerFloaters()
     LLFloaterReg::add("flickr", "floater_flickr.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterFlickr>);
     LLFloaterReg::add("primfeed", "floater_primfeed.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterPrimfeed>);
     LLFloaterReg::add("fs_asset_blacklist", "floater_fs_asset_blacklist.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterAssetBlacklist>);
+    LLFloaterReg::add("fs_sound_emitter_blacklist", "floater_fs_sound_emitter_blacklist.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterSoundEmitterBlacklist>);
     LLFloaterReg::add("fs_avatar_render_settings", "floater_fs_avatar_render_settings.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterAvatarRenderSettings>);
     LLFloaterReg::add("fs_big_preview", "floater_fs_big_preview.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterBigPreview>);
     LLFloaterReg::add("fs_blocklist", "floater_fs_blocklist.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterBlocklist>);

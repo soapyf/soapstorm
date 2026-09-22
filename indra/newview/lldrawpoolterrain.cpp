@@ -227,6 +227,10 @@ void LLDrawPoolTerrain::renderFullShader()
     {
         // Use textures
         sShader = &gDeferredTerrainProgram;
+        if (!sShader->isComplete())
+        {
+            return;
+        }
         sShader->bind();
         renderFullShaderTextures();
     }
@@ -234,8 +238,12 @@ void LLDrawPoolTerrain::renderFullShader()
     {
         // Use materials
         U32 paint_type = use_local_materials ? gLocalTerrainMaterials.getPaintType() : compp->getPaintType();
-        paint_type = llclamp(paint_type, 0, TERRAIN_PAINT_TYPE_COUNT);
+        paint_type = llclamp(paint_type, (U32)0, (U32)(TERRAIN_PAINT_TYPE_COUNT - 1));
         sShader = &gDeferredPBRTerrainProgram[paint_type];
+        if (!sShader->isComplete())
+        {
+            return;
+        }
         sShader->bind();
         renderFullShaderPBR(use_local_materials);
     }
@@ -374,7 +382,7 @@ void LLDrawPoolTerrain::renderFullShaderPBR(bool use_local_materials)
     }
 
     U32 paint_type = use_local_materials ? gLocalTerrainMaterials.getPaintType() : compp->getPaintType();
-    paint_type = llclamp(paint_type, 0, TERRAIN_PAINT_TYPE_COUNT);
+    paint_type = llclamp(paint_type, (U32)0, (U32)(TERRAIN_PAINT_TYPE_COUNT - 1));
 
     S32 detail_basecolor[terrain_material_count];
     S32 detail_normal[terrain_material_count];

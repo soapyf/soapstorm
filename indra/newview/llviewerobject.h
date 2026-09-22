@@ -486,6 +486,11 @@ public:
     void adjustAudioGain(const F32 gain);
     F32  getSoundCutOffRadius() const { return mSoundCutOffRadius; }
     void clearAttachedSound()                               { mAudioSourcep = NULL; }
+    // SkoomaStorm: immediately and fully silence this object's sound -- stops the
+    // channel AND deletes the source so queued/chained clips don't keep playing
+    // (used when blacklisting a sound emitter). clearAttachedSound() only detaches
+    // our pointer; stop() leaves the queue intact.
+    void killAttachedSound();
 
      // Create if necessary
     LLAudioSource *getAudioSource(const LLUUID& owner_id);

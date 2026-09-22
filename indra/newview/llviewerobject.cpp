@@ -6913,6 +6913,19 @@ F32 LLViewerObject::getVObjRadius() const
     return mDrawable.notNull() ? mDrawable->getRadius() : 0.f;
 }
 
+void LLViewerObject::killAttachedSound()
+{
+    // Tearing the source down (delete) runs ~LLAudioSource, which detaches the
+    // channel via setSource(NULL) -> cleanup() -> FMOD stop (immediate silence),
+    // and removes it from the engine so any queued/chained sound can't promote and
+    // keep playing. This is what stop() / clearAttachedSound() fail to do.
+    if (gAudiop && mAudioSourcep)
+    {
+        gAudiop->cleanupAudioSource(mAudioSourcep);
+        mAudioSourcep = NULL;
+    }
+}
+
 void LLViewerObject::setAttachedSound(const LLUUID &audio_uuid, const LLUUID& owner_id, const F32 gain, const U8 flags)
 {
     if (!gAudiop)
