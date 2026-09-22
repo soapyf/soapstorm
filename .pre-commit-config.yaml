@@ -1,3 +1,4 @@
+exclude: ^(indra/recastnavigation/)
 repos:
   - repo: https://github.com/secondlife/git-hooks.git
     rev: v1.0.2
