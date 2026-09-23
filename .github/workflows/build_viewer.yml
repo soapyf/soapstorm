@@ -52,6 +52,10 @@ jobs:
         exclude:
           - os: "macos-15"
             variant: "avx"
+          - os: "ubuntu-24.04"
+            variant: "regular"
+          - os: "windows-2022"
+            variant: "regular"
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container_image }}
     outputs:
