@@ -13886,12 +13886,36 @@ bool LLVOAvatar::isUsingServerBakes() const
     // Sanity check - visual param for appearance version should match mUseServerBakes
     LLVisualParam* appearance_version_param = getVisualParam(11000);
     llassert(appearance_version_param);
-    F32 wt = appearance_version_param->getWeight();
-    F32 expect_wt = mUseServerBakes ? 1.0f : 0.0f;
-    if (!is_approx_equal(wt,expect_wt))
+    // <SS:Nexii> Null-guarded, named, and reported once per avatar rather than once per read.
+    //
+    // llassert compiles out of a release build, so the getWeight() below used to dereference
+    // whatever getVisualParam returned -- a null there was a crash, not an assert.
+    //
+    // This is a read-side detector for a write-side divergence: mUseServerBakes is only ever
+    // assigned in the constructor and in setIsUsingServerBakes, which keeps the param in step,
+    // so a mismatch means appearance processing rewrote visual param 11000 underneath it. That
+    // is worth knowing once. It is not worth knowing on every call, and isUsingServerBakes() is
+    // called per baked texture per avatar from updateTextures. An untagged LL_WARNS fired 233
+    // times in one session on a crowded sim, each one a formatted write under log-always-flush.
+    //
+    // The avatar id is in the message because LL_WARNS_ONCE dedupes on message text: that makes
+    // it once per diverging avatar, which is the granularity that tells you anything.
+    if (appearance_version_param)
     {
-        LL_WARNS() << "wt " << wt << " differs from expected " << expect_wt << LL_ENDL;
+        F32 wt = appearance_version_param->getWeight();
+        F32 expect_wt = mUseServerBakes ? 1.0f : 0.0f;
+        if (!is_approx_equal(wt, expect_wt))
+        {
+            // Weights are rounded in the message so the LL_WARNS_ONCE key stays bounded: param
+            // 11000 is group 0, so animateTweakableVisualParams can interpolate it, and a
+            // continuously varying wt would put a distinct key in the global dedupe map for
+            // every intermediate value. The reachable weights are 0 and 1 either way.
+            LL_WARNS_ONCE("Avatar") << "Avatar " << getID() << ": appearance version param weight "
+                                    << ll_round(wt) << " differs from the expected " << ll_round(expect_wt)
+                                    << " for mUseServerBakes; the flag is authoritative." << LL_ENDL;
+        }
     }
+    // </SS:Nexii>
 #endif
 
     return mUseServerBakes;
@@ -13902,6 +13926,13 @@ void LLVOAvatar::setIsUsingServerBakes(bool newval)
     mUseServerBakes = newval;
     LLVisualParam* appearance_version_param = getVisualParam(11000);
     llassert(appearance_version_param);
-    appearance_version_param->setWeight(newval ? 1.0f : 0.0f, false);
+    // <SS:Nexii> Same null guard as the read side above, and for the same reason: llassert
+    // compiles out of a release build, so a missing param 11000 was a dereference of null here
+    // too. The flag is still set either way -- it is the authoritative value.
+    if (appearance_version_param)
+    {
+        appearance_version_param->setWeight(newval ? 1.0f : 0.0f, false);
+    }
+    // </SS:Nexii>
 }
 // </FS:Ansariel> [Legacy Bake]
