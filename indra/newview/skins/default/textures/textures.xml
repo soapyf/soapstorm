@@ -15,7 +15,7 @@ with the same filename but different name
   preload="true" (optional, false by default)
     - If true, we will attempt to load the image before displaying any UI.
       If false, we will load in the background after initializing the UI.
-  use_mips="true" (currently unused)
+  use_mips="true" (optional: load with mipmaps, for images drawn much smaller than their size)
   scale.left="1"
   scale.bottom="1"
   scale.top="15"
