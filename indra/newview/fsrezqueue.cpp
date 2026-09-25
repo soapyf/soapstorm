@@ -145,7 +145,7 @@ void FSRezQueue::draw()
     const U8 style = text_bold ? LLFontGL::BOLD : LLFontGL::NORMAL;
 
     gGL.pushMatrix();
-    gGL.translatef((F32)center_x, (F32)center_y + 32.f * scale, 0.f);
+    gGL.translatef((F32)center_x, (F32)ll_round((F32)center_y + 32.f * scale), 0.f); // <SS/> whole pixels, see FSFloaterKillFeed::drawOverlay()
     gGL.scalef(text_scale, text_scale, 1.f);
     font->renderUTF8(text, 0, 0.f, 0.f, color,
                      LLFontGL::HCENTER, LLFontGL::BOTTOM, style, LLFontGL::DROP_SHADOW_SOFT);

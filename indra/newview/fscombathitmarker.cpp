@@ -466,7 +466,7 @@ void FSCombatHitMarker::draw()
         LLColor4 color = sFlashIsKill ? LLColor4(1.f, 0.2f, 0.2f, alpha) : LLColor4(1.f, 1.f, 1.f, alpha);
 
         gGL.pushMatrix();
-        gGL.translatef((F32)center_x, (F32)center_y - 32.f * scale, 0.f);
+        gGL.translatef((F32)center_x, (F32)ll_round((F32)center_y - 32.f * scale), 0.f); // <SS/> whole pixels, see FSFloaterKillFeed::drawOverlay()
         gGL.scalef(text_scale, text_scale, 1.f);
         font->renderUTF8(sText, 0, 0.f, 0.f, color,
                          LLFontGL::HCENTER, LLFontGL::TOP, style, LLFontGL::DROP_SHADOW_SOFT);
