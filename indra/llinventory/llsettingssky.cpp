@@ -1346,10 +1346,43 @@ void LLSettingsSky::calculateHeavenlyBodyPositions()  const
     mSunDirection.normalize();
     mMoonDirection.normalize();
 
+    // <SS:ShadowCache> A degenerate body rotation is answered rather than only complained about.
+    //
+    // LLVector3::normalize() calls clear() when the magnitude is below its threshold, so a
+    // degenerate quaternion leaves the direction exactly (0,0,0). getIsSunUp() then tests
+    // mV[VZ] >= 0.0f, and 0 >= 0 is true, so a zero sun direction reports the sun as UP and
+    // getLightDirection() hands the renderer a zero-length light vector. Everything downstream
+    // that assumes a unit light direction then misbehaves: the deferred N.L goes to zero, and
+    // the sun shadow cache's angle test (a dot product against the cached direction) compares
+    // against 0 and forces every cascade to refresh on every frame.
+    //
+    // Substituting z_axis_neg makes getIsSunUp()/getIsMoonUp() answer false, so getLightDirection
+    // falls through to the moon and then to its own z_axis_neg default -- the same result the
+    // function already produces when neither body is up.
+    //
+    // The warning is also rate limited. It fired 1586 times in one second on a live session --
+    // each one a formatted, location-stamped, synchronously flushed disk write, because
+    // logcontrol.xml sets log-always-flush -- and frame rate fell from 115 to 24 fps across the
+    // burst. A condition that can repeat per frame must not log per frame.
+    //
+    // Original Linden code:
+    //   if (mSunDirection.lengthSquared() < 0.01f)
+    //       LL_WARNS("SETTINGS") << "Zero length sun direction. Wailing and gnashing of teeth may follow... or not." << LL_ENDL;
+    //   if (mMoonDirection.lengthSquared() < 0.01f)
+    //       LL_WARNS("SETTINGS") << "Zero length moon direction. Wailing and gnashing of teeth may follow... or not." << LL_ENDL;
     if (mSunDirection.lengthSquared() < 0.01f)
-        LL_WARNS("SETTINGS") << "Zero length sun direction. Wailing and gnashing of teeth may follow... or not." << LL_ENDL;
+    {
+        LL_WARNS_ONCE("SETTINGS") << "Zero length sun direction from a degenerate sun rotation in sky '"
+                                  << getName() << "' (" << getAssetId() << "); treating the sun as down." << LL_ENDL;
+        mSunDirection = LLVector3::z_axis_neg;
+    }
     if (mMoonDirection.lengthSquared() < 0.01f)
-        LL_WARNS("SETTINGS") << "Zero length moon direction. Wailing and gnashing of teeth may follow... or not." << LL_ENDL;
+    {
+        LL_WARNS_ONCE("SETTINGS") << "Zero length moon direction from a degenerate moon rotation in sky '"
+                                  << getName() << "' (" << getAssetId() << "); treating the moon as down." << LL_ENDL;
+        mMoonDirection = LLVector3::z_axis_neg;
+    }
+    // </SS:ShadowCache>
 }
 
 LLVector3 LLSettingsSky::getLightDirection() const
