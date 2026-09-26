@@ -3817,6 +3817,25 @@ Are you sure you want to delete these items?
      yestext="OK"/>
   </notification>
 
+  <!-- <SS:Nexii> Atmo Magic landscape: "Convert selection" found object contents on the linkset it
+       is about to capture. A warning, never a block (owner verdict) - the original linkset goes to
+       the Trash with its contents intact, they simply stop being part of the scenery. -->
+  <notification
+   icon="alertmodal.tga"
+   name="SSAtmoLandscapeConvertContents"
+   type="alertmodal">
+This linkset holds [COUNT] item(s) of object contents in [PRIMS] of its prims.
+
+A landscape object is local to your viewer and has no simulator: it cannot run scripts and cannot hold contents, so those items will not be part of the landscape. The original linkset goes to your Trash with its contents intact.
+[WARNING]
+Convert it anyway?
+    <tag>confirm</tag>
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Cancel"
+     yestext="Convert"/>
+  </notification>
+
   <notification
    icon="alertmodal.tga"
    name="ConfirmObjectTakeLock"

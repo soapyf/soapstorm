@@ -478,6 +478,20 @@ void SSRainShadowMap::evict()
     }
 }
 
+void SSRainShadowMap::shutdownGL()
+{
+    mReadbackPending = false;
+    mClearPending = false;
+    clearCache();
+    if (mTarget.getWidth() > 0) mTarget.release();
+    if (mVoidTarget.getWidth() > 0) mVoidTarget.release();
+    if (mDebugMapTex)
+    {
+        LLImageGL::deleteTextures(1, &mDebugMapTex);
+        mDebugMapTex = 0;
+    }
+}
+
 // Per-frame budget: at most one, most deserving, tile capture per interval.
 void SSRainShadowMap::capture()
 {

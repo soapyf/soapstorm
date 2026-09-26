@@ -527,6 +527,7 @@ public:
     static LLUIColor            sHighlightChildColor;
     static LLUIColor            sHighlightInspectColor;
     static LLUIColor            sContextSilhouetteColor;
+    static LLUIColor            sSSLocalContentSilhouetteColor; // <SS:Nexii> purple silhouette colour for client-side-only local landscape objects
 
     LLCachedControl<bool>                   mHideSelectedObjects;
     LLCachedControl<bool>                   mRenderHighlightSelections;

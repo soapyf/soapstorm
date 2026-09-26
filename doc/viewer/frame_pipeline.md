@@ -15,23 +15,23 @@ All paths under `indra/newview` unless noted. See [glow_and_alpha.md](glow_and_a
 9. **`renderGeomDeferred()`** (:1219 → pipeline.cpp:4250) — G-buffer fill. Pool loop over `mPools` (set ordered by pool type). **`doOcclusion()` queries issued mid-loop at the first pool ≥ POOL_GRASS** (4320) — that's why opaque pools must sort first in the pool enum. Exits with `setColorMask(true,false)` — alpha writes OFF (4377).
 10. **`renderDeferredLighting()`** (:1241 → pipeline.cpp:9616):
     - SSAO/shadow lightmap into `deferredLight` via `gDeferredSunProgram` (9666); SSAO blur **uses `mRT->screen` as scratch** — screen is clobbered then re-cleared (9701-9767).
-    - **`SSSurfaceField::renderWetPass()`** (9761) modifies the G-buffer before any lighting reads it.
+    - **`SSSurfaceField::renderAlbedoPass()`** (pipeline.cpp:9960) then **`renderWetPass()`** (9962) — albedo, wet, normal, in that order — modify the G-buffer before any lighting reads it.
     - Bind `mRT->screen`, clear (0,0,0,0) — comment: "zeroing alpha (glow) is important" (9765).
     - `gDeferredSoftenProgram` fullscreen resolve (linear HDR out, alpha=0).
     - Local lights additive (`BT_ADD`): point/spot/multi-light batches (9807-10098); **SS lightning scene lights injected at 9992-10027**.
     - Render-type mask narrowed to alpha/fullbright/glow/water → **`renderGeomPostDeferred()`** (10139).
 11. `render_ui()` (:1254) → **`renderFinalize()` is called from INSIDE render_ui** (llviewerdisplay.cpp:1713), then HUDs, 3D UI, 2D UI → swap.
 
-### `renderGeomPostDeferred` (pipeline.cpp:4389) — forward/alpha stage
+### `renderGeomPostDeferred` (pipeline.cpp:4408) — forward/alpha stage
 
 Pool loop with depth-keyed injections:
-- `POOL_WATEREXCLUSION` → `doWaterExclusionMask()` (4447)
-- `POOL_ALPHA_POST_WATER` → `doAtmospherics()` (4453), then the **SS weather block** (4461-4471): flash → volumetric clouds → lightning → precipitation. The block restores `BT_ALPHA` + `setColorMask(true,false)` because weather shaders trample them — **any new pass inserted here must do the same**.
-- `POOL_ALPHA_PRE_WATER` → `doWaterHaze()` (4477)
+- `POOL_WATEREXCLUSION` → `doWaterExclusionMask()` (4468)
+- `POOL_ALPHA_POST_WATER` → `doAtmospherics()` (4474), then the **SS weather block** (4474-4494): flash → volumetric clouds → vortex → lightning → precipitation. The block restores `BT_ALPHA` + `setColorMask(true,false)` because weather shaders trample them — **any new pass inserted here must do the same**. The whiteout veil that used to draw here is gone; its successor, the height fog, draws in `renderFinalize` instead.
+- `POOL_ALPHA_PRE_WATER` → `doWaterHaze()` (4504)
 
-### `renderFinalize` (pipeline.cpp:9133) — post chain
+### `renderFinalize` (pipeline.cpp:9325) — post chain
 
-HDR path: `copyScreenSpaceReflections` → `generateLuminance` (256² R16F, mipped) → `generateExposure` (1×1) → `tonemap` (→ `deferredLight` when CAS on, else `mPostPingMap`) → `applyCAS` (also does gamma). Non-HDR: `gammaCorrect`. Then `generateGlow(mPostPingMap)` → `combineGlow` → DoF → FXAA or SMAA → vignette/snapshot frame → final blit to default FB (must be last stage, 9281). Everything after tonemap is **8-bit gamma space**; glow extraction operates on gamma-space color. Glow buffers are 512×glow_res, non-square (pipeline.cpp:1472).
+HDR path: `copyScreenSpaceReflections` → `generateLuminance` (256² R16F, mipped) → `generateExposure` (1×1) → `SSHeightFog::render()` (9347, before the HDR branch, on the linear HDR `screen` target — see below) → `tonemap` (→ `deferredLight` when CAS on, else `mPostPingMap`) → `applyCAS` (also does gamma). Non-HDR: `gammaCorrect`. Then `generateGlow(mPostPingMap)` → `combineGlow` → `SSScreenFXPost::renderHeat()` (9386) → DoF → `SSScreenFXPost::renderLens()` (9403) → FXAA or SMAA → vignette/snapshot frame → final blit to default FB (must be last stage, 9281). Everything after tonemap is **8-bit gamma space**; glow extraction operates on gamma-space color. Glow buffers are 512×glow_res, non-square (pipeline.cpp:1472). The height fog runs before tonemap, so unlike heat shimmer and lens drops it reads and writes screen alpha while that alpha still carries the glow mask — its blend deliberately scales alpha by transmittance rather than leaving it alone.
 
 ## Render targets (alloc: `allocateScreenBufferInternal` pipeline.cpp:919; non-per-frame: `createGLBuffers` :1455)
 
@@ -64,10 +64,10 @@ Enum order = render order (lldrawpool.h:49-80): SKY … SIMPLE/FULLBRIGHT/BUMP/M
 
 - **State leakage is the norm**: post-deferred ambient state is `setColorMask(true,false)`; `doAtmospherics`/`doWaterHaze` flip colormask AND set a custom blendFunc `(ONE, SRC_ALPHA, ZERO, SRC_ALPHA)` and restore only the blend type, not the colormask (10196, 10260).
 - `doAtmospherics`/`doWaterHaze` **flush and re-bind `mRT->screen` mid-pass** to copy depth into `mWaterDis` — don't hold bound-target assumptions across them.
-- `SSSurfaceField::renderWetPass` (sssurfacefield.cpp:919) rebinds `deferredScreen` and uses raw `glDrawBuffers` to write only attachment 1 (and optionally 2); if the restore of all four draw buffers (:1384-1386) is skipped, all later G-buffer writes silently vanish.
+- `SSSurfaceField::renderWetPass` (sssurfacefield.cpp:1552) rebinds `deferredScreen` and uses raw `glDrawBuffers` to write only attachment 1 (and optionally 2, for the normal sub-pass it also draws at :2018); if the restore of all four draw buffers (:2050) is skipped, all later G-buffer writes silently vanish. `renderAlbedoPass` (:2056) does the same thing with its own `glDrawBuffers` (:2151) and its own restore (:2176) — the same warning applies to both passes.
 - `tonemap` reuses `deferredLight` as scratch when CAS is on — its shadow/AO content is dead by then.
 - `addDeferredAttachments` silently no-ops if the target already has >1 texture (pipeline.cpp:397).
 - `setSkipRenderFlag` is honored in the deferred loop (4349) but NOT post-deferred (4503).
 - `renderDeferredLighting` toggles off RENDER_TYPE_HUD and never restores it in scope (9641).
 - `RenderResolutionDivisor/Multiplier` scale all screen RTs; shadows have independent `RenderShadowResolutionScale`.
-- SS shader programs: 15 `gSS*Program` globals (llviewershadermgr.cpp:183-200); shared-shader edits live behind the `SS_ATMO` define (see [soapstorm_layer.md](soapstorm_layer.md)). Shader binary cache is keyed on source digest, not viewer version (llviewershadermgr.cpp:567-629).
+- SS shader programs: 21 `gSS*Program` globals (llviewershadermgr.cpp:184-205); shared-shader edits live behind the `SS_ATMO` define (see [soapstorm_layer.md](soapstorm_layer.md)). Shader binary cache is keyed on source digest, not viewer version (llviewershadermgr.cpp:567-629).

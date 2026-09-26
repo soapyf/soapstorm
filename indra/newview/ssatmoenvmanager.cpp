@@ -24,6 +24,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "ssatmoenvmanager.h"
+#include "ssatmolandscape.h"    // <SS:Nexii> captureNow ahead of a save
 
 #include "ssdiscpad.h" // <SS:Nexii> auto-derive the adopted disc faces' padding
 
@@ -75,6 +76,19 @@
 // Nothing loads implicitly - v3 is opt-in end to end.
 SSAtmoEnvManager::SSAtmoEnvManager()
 {
+}
+
+// <SS:Nexii> S2: records where THIS asset was noted from - a from_parcel note stamps gAgent's CURRENT region handle
+// (the parcel's region, since applyText/noteSource fire together on the same fetch), so SSStormCells can anchor the
+// weather domain on the region that advertised the asset rather than whichever region the agent later wanders into.
+// An inventory load/create is not a parcel broadcast, so it carries no domain: handle 0, and SSStormCells falls back
+// to the agent's own region. [interaction: gAgent]
+void SSAtmoEnvManager::noteSource(const LLUUID& asset_id, bool from_parcel)
+{
+    mSourceAssetId = asset_id;
+    mFromParcel = from_parcel;
+    LLViewerRegion* region = from_parcel ? gAgent.getRegion() : nullptr;
+    mSourceRegionHandle = region ? region->getHandle() : 0;
 }
 
 // Whether the working asset differs from its load-time baseline.
@@ -1731,7 +1745,7 @@ void SSAtmoEnvManager::adoptCreated(const LLUUID& item_id, const LLUUID& asset_i
     mAssetID = asset_id;
     mBaseline = asset;
 
-    mFromParcel = false;
+    noteSource(asset_id, false); // <SS:Nexii> S2: a freshly created notecard is an inventory item, not a parcel broadcast - no domain.
     mWorking = asset;
     mHasAsset = true;
     mStatus = "Ready.";
@@ -1741,6 +1755,7 @@ void SSAtmoEnvManager::adoptCreated(const LLUUID& item_id, const LLUUID& asset_i
 void SSAtmoEnvManager::saveNotecard(const std::string& name)
 {
     if (!mHasAsset) return;
+    SSAtmoLandscapeWorld::getInstance()->captureNow();    // <SS:Nexii> the scenery's latest edits, before the asset is serialised
 
     std::string save_name = name;
     LLStringUtil::trim(save_name);
@@ -1923,6 +1938,10 @@ void SSAtmoEnvManager::onAssetLoaded(const LLUUID& asset_id, LLAssetType::EType 
     self->mAssetID = asset_id;
     self->mItemID = self->mPendingItemID;
     self->mPendingItemID.setNull();
+    // <SS:Nexii> S2: this path serves BOTH loadFromInventory and loadFromAssetId - neither is a parcel broadcast, so
+    // note it explicitly rather than leaving a PRIOR parcel-sourced note (mSourceRegionHandle etc.) stale on the
+    // manager after the working asset has moved on to this one.
+    self->noteSource(asset_id, false);
     self->finishLoad(self->applyNotecardText(text, false));
 }
 
@@ -1946,6 +1965,7 @@ bool SSAtmoEnvManager::applyExternalLLSD(const LLUUID& source_id, const LLSD& sd
 {
     mAssetID = source_id;
     mItemID.setNull();
+    noteSource(source_id, false); // <SS:Nexii> S2: a Bridge fetch is not a parcel broadcast either
     return adoptParsedAsset(sd);
 }
 
@@ -1970,6 +1990,7 @@ void SSAtmoEnvManager::unload()
     mBaseline = SSAtmoEnvAsset();
     mSourceAssetId.setNull();
     mFromParcel = false;
+    mSourceRegionHandle = 0;
     SSPrecipPresetManager::instance().clearEnvironmentPresets();
     clearPreviewPhaseOverride();
 }

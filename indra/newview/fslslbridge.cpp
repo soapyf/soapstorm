@@ -58,7 +58,7 @@
 static const std::string FS_BRIDGE_FOLDER = "#LSL Bridge";
 static const std::string FS_BRIDGE_CONTAINER_FOLDER = "Landscaping";
 static const U32 FS_BRIDGE_MAJOR_VERSION = 2;
-static const U32 FS_BRIDGE_MINOR_VERSION = 33;
+static const U32 FS_BRIDGE_MINOR_VERSION = 35;
 static const U32 FS_MAX_MINOR_VERSION = 99;
 static const std::string UPLOAD_SCRIPT_CURRENT = "EBEDD1D2-A320-43f5-88CF-DD47BBCA5DFB.lsltxt";
 static const std::string FS_STATE_ATTRIBUTE = "state=";
@@ -327,6 +327,12 @@ bool FSLSLBridge::lslToViewer(std::string_view message, const LLUUID& fromID, co
     //<FS:TS> FIRE-962: Script controls for built-in AO
     if (fromID != mBridgeUUID || !bridgeIsEnabled)
     {
+        // <SS:Nexii> a stale duplicate bridge (login re-attach race) keeps gKillFeedOn and forwards events; swallow bridge-shaped replies from non-bridge senders so they never leak into chat
+        if (tag.substr(0, 7) == "<bridge" || tag == "<clientAO ")
+        {
+            LL_WARNS("FSLSLBridge") << "Ignoring bridge message from " << fromID << ", current bridge is " << mBridgeUUID << LL_ENDL;
+            return true;
+        }
         return false;       // ignore if not from the bridge, or bridge is disabled
     }
     if (tag == "<clientAO ")
@@ -589,7 +595,7 @@ bool FSLSLBridge::canUseBridge()
     return (isBridgeValid() && sUseLSLBridge && !mCurrentURL.empty());
 }
 
-bool FSLSLBridge::viewerToLSL(std::string_view message, Callback_t aCallback)
+bool FSLSLBridge::viewerToLSL(std::string_view message, Callback_t aCallback, Callback_t aFailureCallback)
 {
     LL_DEBUGS("FSLSLBridge") << message << LL_ENDL;
 
@@ -604,8 +610,15 @@ bool FSLSLBridge::viewerToLSL(std::string_view message, Callback_t aCallback)
         pCallback = FSLSLBridgeRequest_Success;
     }
 
+    // <SS:Nexii> Without a supplied failure callback this stays byte-for-byte the old behaviour (log only); with one, the failure is still logged exactly as FSLSLBridgeRequest_Failure does and then handed on, so a caller that latched per-request state can unlatch it instead of wedging for the session. </SS:Nexii>
+    Callback_t pFailureCallback = FSLSLBridgeRequest_Failure;
+    if (aFailureCallback)
+    {
+        pFailureCallback = [aFailureCallback](const LLSD& aData) { FSLSLBridgeRequest_Failure(aData); aFailureCallback(aData); };
+    }
+
     // Calling data() should be fine here since message is a view on a null-terminated string
-    LLCoreHttpUtil::HttpCoroutineAdapter::callbackHttpPost(mCurrentURL, LLSD(message.data()), pCallback, FSLSLBridgeRequest_Failure);
+    LLCoreHttpUtil::HttpCoroutineAdapter::callbackHttpPost(mCurrentURL, LLSD(message.data()), pCallback, pFailureCallback);
 
     return true;
 }

@@ -62,6 +62,7 @@
 #include "lltrans.h"
 #include "llvoavatarself.h"
 #include "llhudrender.h"
+#include "sslocalcontentlimits.h"   // <SS:Nexii> local landscape objects may be rotated into the void
 
 const F32 RADIUS_PIXELS = 100.f;        // size in screen space
 const F32 SQ_RADIUS = RADIUS_PIXELS * RADIUS_PIXELS;
@@ -719,7 +720,7 @@ void LLManipRotate::drag( S32 x, S32 y )
                     if (object->isRootEdit() && !object->isAttachment())
                     {
                         LLVector3d new_pos_global = gAgent.getPosGlobalFromAgent(new_position);
-                        new_pos_global = LLWorld::getInstance()->clipToVisibleRegions(selectNode->mSavedPositionGlobal, new_pos_global);
+                        new_pos_global = ssClipLocalContentMove(object, selectNode->mSavedPositionGlobal, new_pos_global);    // <SS:Nexii> local content stays inside its 2048 m area, not the region
                         new_position = gAgent.getPosAgentFromGlobal(new_pos_global);
                     }
 

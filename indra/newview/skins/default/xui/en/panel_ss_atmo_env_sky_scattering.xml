@@ -402,6 +402,99 @@
      top_pad="10"
      height="14"
      width="110"
+     name="atmo_haze_thin_frac_label"
+     tool_tip="Share of the cirrus/dome height used as the haze's altitude falloff scale height - 0 keeps the stock homogeneous haze (unchanged with altitude); higher thins the air faster above the ground, so a sky build wears less of the ground's haze the higher it sits"
+     font="SansSerifSmall">
+        Haze Thins With Altitude
+    </text>
+    <slider
+     follows="left|top|right"
+     layout="topleft"
+     left="126"
+     top_delta="-2"
+     height="18"
+     right="-174"
+     name="atmo_haze_thin_frac_slider"
+     tool_tip="Share of the cirrus/dome height used as the haze's altitude falloff scale height - 0 keeps the stock homogeneous haze (unchanged with altitude); higher thins the air faster above the ground, so a sky build wears less of the ground's haze the higher it sits"
+     show_text="false"
+     min_val="0"
+     max_val="1"
+     increment="0.01"
+     initial_value="0" />
+    <spinner
+     follows="right|top"
+     layout="topleft"
+     left_pad="6"
+     top_delta="-1"
+     height="20"
+     width="70"
+     label_width="0"
+     name="atmo_haze_thin_frac_value_spinner"
+     tool_tip="Share of the cirrus/dome height used as the haze's altitude falloff scale height - 0 keeps the stock homogeneous haze (unchanged with altitude); higher thins the air faster above the ground, so a sky build wears less of the ground's haze the higher it sits"
+     min_val="0"
+     max_val="1"
+     increment="0.01"
+     decimal_digits="2" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="4"
+     top_delta="-3"
+     height="25"
+     width="25"
+     name="atmo_haze_thin_frac_prev_button"
+     tool_tip="Jump to the previous keyframe"
+     image_overlay="SkipBackward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="atmo_haze_thin_frac_keyframe_button"
+     tool_tip="Add or remove a keyframe at the current preview time"
+     label="&#9671;" />
+    <button
+     follows="right|top"
+     layout="topleft"
+     left_pad="2"
+     height="25"
+     width="25"
+     name="atmo_haze_thin_frac_next_button"
+     tool_tip="Jump to the next keyframe"
+     image_overlay="SkipForward_Off"
+     image_disabled="PushButton_Disabled"
+     image_disabled_selected="PushButton_Disabled"
+     image_selected="PushButton_Selected"
+     image_unselected="PushButton_Off"
+     hover_glow_amount="0.15"
+     label="" />
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="126"
+     top_pad="2"
+     height="14"
+     width="250"
+     name="atmo_haze_thin_scale_label"
+     tool_tip="The resulting scale height (SSHaze::invHeight): the altitude at which the haze thins to about an eighth of the ground's. 'Off' at 0"
+     font="SansSerifSmall">
+        Off
+    </text>
+
+    <text
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     height="14"
+     width="110"
      name="atmo_density_mult_label"
      tool_tip="How thick the atmosphere is, in editor units - 0.18 is stock. The dangerous one: it both extinguishes the sun sky-wide and fogs every distance. Far below 0.1 deletes the atmosphere and renders black void; above 0.5 the sun is extinct everywhere"
      font="SansSerifSmall">

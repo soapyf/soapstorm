@@ -84,6 +84,11 @@ public:
     // later job stays on the calling thread.
     void poll();
 
+    // Main thread, GL shutdown: drops pending jobs and joins the worker, which
+    // destroys its shared context through the window - so this must run while
+    // the window still exists (SSAtmoMagic::shutdownGL), not at deleteAll.
+    void shutdown();
+
     // Bytes per texel for the format/type pair - the size submit() reads.
     static S32 components(GLenum format, GLenum type);
 
@@ -105,8 +110,6 @@ private:
     // on the main thread exactly once. Inline fallback and late worker
     // completion both round-trip through here.
     void finish(const std::shared_ptr<PendingJob>& job);
-
-    void shutdown();
 
     class Worker;
 

@@ -71,6 +71,10 @@ struct SSAtmoEnvWeatherState
     F32 mGustLength = 140.f;
     F32 mGustVeer   = 0.f;
 
+    // <SS:Nexii> The altitude wind profile's resolved shear at this phase - S in [0,1] and the total surface-to-anvil veer in degrees - derived (SSWindProfile::autoShear off moisture/convection/temperature) while the cube's mShearAuto holds, else the authored curves. Consumed with mWindHeading/mWindSpeed, the CURVE-RESOLVED wind, by SSAtmoEnvApplier::windAt; the eased SSAtmoMagic wind never touches the profile (doc/atmo_magic_wind_profile.md section 3).
+    F32 mShearStrength = 0.f;
+    F32 mVeerDeg       = 0.f;
+
     F32 mLightningIntervalMinSeconds = 0.f;
     F32 mLightningIntervalMaxSeconds = 0.f;
     F32 mLightningIntensity = 0.f;

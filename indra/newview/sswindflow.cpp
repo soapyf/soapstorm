@@ -207,6 +207,18 @@ SSWindFlowMap::~SSWindFlowMap()
     mGLWorker = nullptr;
 }
 
+void SSWindFlowMap::shutdownGL()
+{
+    delete mGLWorker;               // closes the pool: joins the thread, which destroys the shared context
+    mGLWorker = nullptr;
+    mGLWorkerTried = true;          // nothing recreates it during teardown
+    mWorkerBusy = false;            // the join above guarantees it
+    mClearPending = false;
+    clear();                        // abandonBuild, tiles, releaseResources - no busy gate left to defer it
+    releaseScratch();
+    if (mProbeCapture.getWidth() > 0) mProbeCapture.release();
+}
+
 // Needs compute-capable GL (4.3).
 bool SSWindFlowMap::isSupported()
 {
@@ -462,21 +474,6 @@ void SSWindFlowMap::clear()
     mHidden.clear();
     for (S32 i = 0; i < SS_WIND_PROBES; ++i) mProbeDepth[i].clear();
     releaseResources();
-    mTrueGroundClaim = SSWorldField::Interest();
-    mTrueGroundRegion = 0;
-}
-
-// Claims the worldfield's real-geometry tile for the flowmap's region, so buildTrueGround has a
-// valid capture to read. Re-claims on a camera region change; a stale claim drops, so
-// the old region stops paying for its worldfield build.
-void SSWindFlowMap::refreshTrueGroundClaim(U64 region_handle)
-{
-    if (region_handle == mTrueGroundRegion && mTrueGroundClaim) return;
-    mTrueGroundClaim = SSWorldField::Interest();
-    mTrueGroundRegion = 0;
-    if (region_handle == 0) return;
-    mTrueGroundClaim = SSWorldField::getInstance()->claim(region_handle, SSWorldField::EChannel::SURFACE_TOP);
-    mTrueGroundRegion = region_handle;
 }
 
 // Marks everything stale - full re-solve.
@@ -570,40 +567,6 @@ F32 SSWindFlowMap::windGradientScale(F32 z_agl) const
     if (alpha <= 0.f) return 1.f;
     const F32 h = llclamp(z_agl, 0.5f, SS_WIND_GRADIENT_CEIL_M);
     return llclamp(powf(h / SS_WIND_REF_M, alpha), 0.35f, 3.f);
-}
-
-// The reference ground the wind profile measures height from: the true-ground terrain (water-
-// floored) at the camera's column when the tile has one, else the tile's representative
-// ground, else the region water plane / terrain minimum.
-F32 SSWindFlowMap::groundRefZ() const
-{
-    const Tile* tile = cameraTile();
-    if (tile && tile->mValid)
-    {
-        if (!tile->mGroundZ.empty() && tile->mRes > 0)
-        {
-            const LLVector3 cam = LLViewerCamera::getInstance()->getOrigin();
-            LLViewerRegion* regionp = LLWorld::getInstance()->getRegionFromHandle(tile->mRegionHandle);
-            if (regionp)
-            {
-                const LLVector3 origin = regionp->getOriginAgent() + tile->mOriginRegion;
-                const F32 cell = tile->mExtent / (F32)tile->mRes;
-                const S32 gx = llclamp((S32)((cam.mV[VX] - origin.mV[VX]) / cell), 0, tile->mRes - 1);
-                const S32 gy = llclamp((S32)((cam.mV[VY] - origin.mV[VY]) / cell), 0, tile->mRes - 1);
-                return tile->mGroundZ[(size_t)gy * tile->mRes + gx];
-            }
-        }
-        return tile->mGroundRef;
-    }
-
-    LLViewerRegion* regionp = gAgent.getRegion();
-    if (regionp)
-    {
-        const F32 water = regionp->getWaterHeight();
-        const F32 terrain = regionp->getLand().getMinZ();
-        return llmin(water, terrain);
-    }
-    return 0.f;
 }
 
 // Whether the flowmap is enabled and allowed to drive the wind.
@@ -898,45 +861,6 @@ bool SSWindFlowMap::captureHeights(Tile& tile)
     for (F32& h : mTop)
     {
         if (h > NO_SURFACE * 0.5f) h = llmin(h, tile.mBandTop);
-    }
-
-    // <SS:Nexii> The TRUE-GROUND reference, built only on a full build (partial rebuilds keep the old layout, exactly as the slices do). Read from the WORLD FIELD's real-geometry capture (buildTrueGround) - topmost ground surfaces of the texel cloud, tall-structure columns voided and filled from neighbours, water at the sea plane - so streets, mesh terrain and prim ground over the old Linden heightmap become the ground the boundary layer is measured from. Resampled to the flowmap's grid (which may carry a margin, so cells outside the region clamp). Falls back to the region terrain heightmap until the worldfield's tile is valid (it builds async, a beat behind this map).
-    if (!mPartial)
-    {
-        const F32 cell = tile.mExtent / (F32)tile.mRes;
-        const LLVector3 grid_origin = regionp->getOriginAgent() + tile.mOriginRegion;
-        const F32 water = regionp->getWaterHeight();
-
-        std::vector<F32> wf_ground;
-        const bool wf_ok = SSWorldField::getInstance()
-            && SSWorldField::getInstance()->buildTrueGround(regionp->getHandle(), tile.mRes, wf_ground);
-
-        const F32 wf_cell = wf_ok ? (regionp->getWidth() / (F32)tile.mRes) : 0.f;
-        const LLVector3 wf_origin = regionp->getOriginAgent();
-
-        mBuild.mGroundZ.assign((size_t)tile.mRes * tile.mRes, 0.f);
-        for (S32 gy = 0; gy < tile.mRes; ++gy)
-        {
-            for (S32 gx = 0; gx < tile.mRes; ++gx)
-            {
-                const F32 wx = grid_origin.mV[VX] + ((F32)gx + 0.5f) * cell;
-                const F32 wy = grid_origin.mV[VY] + ((F32)gy + 0.5f) * cell;
-
-                F32 ground;
-                if (wf_ok)
-                {
-                    const S32 wf_x = llclamp((S32)((wx - wf_origin.mV[VX]) / wf_cell), 0, tile.mRes - 1);
-                    const S32 wf_y = llclamp((S32)((wy - wf_origin.mV[VY]) / wf_cell), 0, tile.mRes - 1);
-                    ground = wf_ground[(size_t)wf_y * tile.mRes + wf_x];
-                }
-                else
-                {
-                    const F32 terrain = regionp->getLand().resolveHeightRegion(wx, wy);
-                    ground = llmax(terrain, water);
-                }
-                mBuild.mGroundZ[(size_t)gy * tile.mRes + gx] = ground;
-            }
-        }
     }
 
     beginProbes(tile);
@@ -1413,16 +1337,30 @@ void SSWindFlowMap::placeSlices(Tile& tile)
         tile.mSliceZ[i] = final_bounds[llmin((size_t)i, final_bounds.size() - 1)];
     }
 
-    // <SS:Nexii> The wind profile's reference ground. Prefer the TRUE-GROUND map (terrain, water-floored) sampled at the region's median - so the boundary layer is measured against the actual ground the wind blows over, not the lowest captured surface a deep gully or hollow drags down. Falls back to the lowest surface when the map is absent.
-    if (!tile.mGroundZ.empty())
+    // <SS:Nexii> The slab power law's reference ground: the region terrain heightmap sampled on a coarse 8x8 grid, each sample floored by the water plane, averaged - the quick per-tile scalar the boundary layer is measured from, so a deep gully or hollow can't drag it down the way the lowest captured surface would. The per-column TRUE-GROUND capture (worldfield buildTrueGround, tall structures voided and gap-filled) that once fed this lives in git history only; a coarse terrain average answers the same "roughly where is the ground" question with no async worldfield dependency (doc/atmo_magic_wind_profile.md). Falls back to the lowest surface when the region is gone.
     {
-        std::vector<F32> g = tile.mGroundZ;
-        std::nth_element(g.begin(), g.begin() + g.size() / 2, g.end());
-        tile.mGroundRef = g[g.size() / 2];
-    }
-    else
-    {
-        tile.mGroundRef = lo;
+        LLViewerRegion* ground_region = LLWorld::getInstance()->getRegionFromHandle(tile.mRegionHandle);
+        if (ground_region)
+        {
+            static const S32 GROUND_AVG_N = 8;
+            const F32 water = ground_region->getWaterHeight();
+            const F32 step = ground_region->getWidth() / (F32)GROUND_AVG_N;
+            F32 sum = 0.f;
+            for (S32 gy = 0; gy < GROUND_AVG_N; ++gy)
+            {
+                for (S32 gx = 0; gx < GROUND_AVG_N; ++gx)
+                {
+                    const F32 terrain = ground_region->getLand().resolveHeightRegion(
+                        ((F32)gx + 0.5f) * step, ((F32)gy + 0.5f) * step);
+                    sum += llmax(terrain, water);
+                }
+            }
+            tile.mGroundRef = sum / (F32)(GROUND_AVG_N * GROUND_AVG_N);
+        }
+        else
+        {
+            tile.mGroundRef = lo;
+        }
     }
 
     // <SS:Nexii> The shear exponent derived from the region's own surface, not a constant: a rough, tall region drags the low air and steepens the gradient, an open flat one lets the wind ride. Shared with cloud drift (windAlpha) so the solver and the cirrus band scale the same wind the same way.
@@ -2919,7 +2857,6 @@ void SSWindFlowMap::update()
     };
 
     LLViewerRegion* cam_region = LLWorld::getInstance()->getRegionFromPosAgent(cam);
-    refreshTrueGroundClaim(cam_region ? cam_region->getHandle() : 0);
     Tile* best = nullptr;
 
     if (cam_region)

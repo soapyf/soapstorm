@@ -66,6 +66,9 @@ SSAtmoEnvCloudFieldState SSAtmoEnvCloudFieldResolver::resolve(const SSAtmoEnvClo
         deriveAutoBaseline(moisture, convection, temperature_c, seasonal,
                            base_height, thickness, coverage_scale, auto_darkening);
 
+        // <SS:Nexii> Under Auto, the authored Coverage Scale is a MODIFIER rather than the sole value - it multiplies whatever moisture derived (default 1.0, so a track that never touched this curve is unchanged bit-for-bit). Without this a default track's deck coverage was hardcoded to derived*1, so the 8f generator's onset coverage-scale keys were laid around the cue and then silently never read; the sky just sat at moisture's own coverage the whole way through. Coverage is weather, same as darkening above, so this applies whether or not this field owns its geometry (auto_owns_geometry). The thickness curve is unaffected - it still needs Auto off, see 8b-1.
+        coverage_scale *= field.mCoverageScale.valueAt(phase);
+
         // The under deck keeps its authored altitude and depth - see the auto_owns_geometry note on the declaration - and takes only the weather half of Auto.
         if (!auto_owns_geometry)
         {
@@ -168,5 +171,6 @@ void SSAtmoEnvCloudFieldResolver::deriveAutoBaseline(F32 moisture, F32 convectio
 
     out_thickness   = 150.f + 350.f * m;
 
+    // The baseline coverage scale is the neutral 1.0 - moisture already derives its own coverage in resolve(). The caller then multiplies this by the authored mCoverageScale, so Auto's coverage stays a weather answer with the author's curve riding on top of it, not under it.
     out_coverage_scale = 1.f;
 }

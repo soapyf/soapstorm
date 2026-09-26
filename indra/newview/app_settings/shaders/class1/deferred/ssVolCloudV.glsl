@@ -35,11 +35,30 @@ in vec3 position;
 in vec2 texcoord0;
 in vec4 diffuse_color;
 
-out vec2 vary_texcoord0;
+// <SS:Nexii> S1 vertex-decode channel fix (doc/atmo_magic_flow_field.md section 2, opus review Q2b): widened
+// vec2 -> vec4, ZERO new interpolator slots (varyings are vec4-granular on every target; the file's live
+// component count was already well under the vec4 boundary). texcoord0 arrives per-corner EXACT (0 or 1 on each
+// axis, plus this stage's own payload*0.45 - see ssvolcloud.cpp's render()); round()/subtract happens HERE,
+// before the rasterizer ever interpolates the value, because recovering payload from an already-interpolated
+// coordinate is unsound (round() on a mid-quad value is a step function, not the corner) - the fragment stage
+// used to read this varying directly as a vec2 card/window coordinate and now reads vary_texcoord0.xy for
+// exactly that (the decoded corner - bit-identical to the old raw value at payload 0, and exact for the whole
+// payload domain because |payload * 0.45| <= 0.45 < 0.5), plus .zw for the decoded payload.
+// <SS:Nexii> SOMETHING RIDES IT NOW (fifth build report; [interaction: ssdeckflowcore.h]): .z carries an ordinary
+// puff's flow SWIRL, SSDeckFlow::swirlUnit read at the puff's air-frame cell centre and spent by the fragment
+// stage as a bounded rotation of the billow's outflow azimuth. Same value on all four corners, so the varying is
+// constant across the quad. Shafts and the sheet still write a zero payload and never read this.
+out vec4 vary_texcoord0;
 
 // <SS:Nexii> Per-puff STRUCTURE only, no longer a finished colour: r is the CPU builder's form term (facing toward the light and the exponential shade down through the deck, beam-flattened),
-// g the puff's buried depth (SSVolCloud::Puff::mBuried - sunless, so it survives a moonless overcast), a the puff's edge-fade alpha; b is spare. The colour it used to carry was (ambient + sun * form) with the sun run through a CPU replica of the beam extinction - the replica whose
-// cosecant underflows to grey at every low sun, so the deck sat flat white-grey under every authored sunset while the dome beside it burned. The light half is computed below instead.
+// g the puff's buried depth (SSVolCloud::Puff::mBuried - sunless, so it survives a moonless overcast), a the puff's edge-fade alpha; b encodes EITHER a virga shaft card's flag AND its drive
+// (phase 8e item 4, DRIVE REACHES THE FRAGMENT): 0.5 + 0.5 * SSVolCloud::Puff::mDrive for a shaft (ssvirgacore.h, doc/atmo_magic_far_clouds.md section 3 phase 6c; always > 0.5 since a
+// qualifying cell's drive is always > 0) - OR, for an ordinary puff (S2, doc/atmo_magic_flow_field.md section 2), the per-puff advected-detail PHASE: SSVolCloud::Puff::mPhase * 0.49, always
+// < 0.5 so it can never trip the shaft flag test. 0 for the sheet, which reads neither. ssVolCloudF.glsl's main() branches its whole carve on vary_color.b > 0.5 rather than shape/rim/n_map
+// logic (a shaft has no lid or floor to carve), then recovers drive from the same channel as clamp((vary_color.b - 0.5) * 2.0, 0.0, 1.0) to shape its body floor, streak amplitude and
+// evaporation mask by intensity; the puff branch recovers phase as clamp(vary_color.b, 0.0, 0.49) / 0.49 and folds it into the advected octave's cycle. The colour it used to carry was
+// (ambient + sun * form) with the sun run through a CPU replica of the beam extinction - the replica whose cosecant underflows to grey at every low sun, so the deck sat flat white-grey under
+// every authored sunset while the dome beside it burned. The light half is computed below instead.
 out vec4 vary_color;
 
 // Where this fragment sits in the world, for the noise lookup. The map is a field the whole sky is carved out of, not a picture of one puff, so it samples by position - see ssVolCloudF.glsl.
@@ -148,7 +167,16 @@ void main()
     }
     gl_Position = modelview_projection_matrix * vec4(drawn_pos, 1.0);
 
-    vary_texcoord0 = texcoord0;
+    // <SS:Nexii> S1 vertex-decode channel fix: round() is EXACT here - the attribute still carries the per-corner
+    // value untouched by interpolation, so round() lands on the true corner marker whatever payload the CPU rode
+    // alongside it (payload magnitude is bounded to 0.45 by construction, |0.45| < 0.5, so it can never push the
+    // sum across the rounding boundary into the neighbouring corner - see twin_flowchannel.cpp for the proof at
+    // the extremes). corner is (0,0)/(0,1)/(1,0)/(1,1) exactly as texcoord0 always was; payload is the exact
+    // remainder, 0 for every caller today (ssvolcloud.cpp's render() writes payload (0,0) for every quad this
+    // stage draws - S1 carries no live payload yet).
+    vec2 corner = round(texcoord0);
+    vec2 payload = (texcoord0 - corner) / 0.45;
+    vary_texcoord0 = vec4(corner, payload);
     vary_color = diffuse_color;
 
     // The DRAWN position, deliberately: the fragment shader inverts the squash per fragment to recover the true one. Interpolating the true position as a varying warped it mid-quad -

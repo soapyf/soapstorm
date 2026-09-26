@@ -184,6 +184,12 @@ void SSLightningRender::releaseGL()
     mVBQuads = 0;
 }
 
+void SSLightningRender::shutdownGL()
+{
+    releaseGL();
+    mTextureRef = nullptr;
+}
+
 // Grows the quad buffer to hold at least this many quads, with the fixed six-index pattern written once.
 bool SSLightningRender::ensureBuffer(U32 quads)
 {

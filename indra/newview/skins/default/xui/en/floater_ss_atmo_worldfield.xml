@@ -59,7 +59,7 @@
      name="worldfield_help"
      word_wrap="true"
      font="SansSerifSmall">
-        One region-anchored capture of the world's solid structure, shared by the surface, coverage, air and drainage channels. The dials below tune the capture; a change drops the cached tiles and they rebuild under the new setting.
+        The per-cell classification of the census navmesh's own rasterization, shared by the surface, coverage, air and drainage channels. There is no capture of its own: the geometry is the navmesh's span sheets. The dials below tune the classification; a change drops the cached grids and they rebuild under the new setting.
     </text>
     <check_box
      control_name="SSWorldField"
@@ -70,8 +70,8 @@
      height="16"
      width="382"
      name="field_enabled_check"
-     label="Capture the world field"
-     tool_tip="Off stops all capture; builds nothing until one of the channels that read the field is demanded" />
+     label="Classify the world field"
+     tool_tip="Off stops the classification and stops the census navmesh keeping its span sheets; every consumer falls back to its own raycasts and heuristics" />
     <check_box
      control_name="SSWorldFieldSurfaceTop"
      follows="left|top"
@@ -82,7 +82,7 @@
      width="382"
      name="field_surfacetop_check"
      label="Serve the surface field from the field"
-     tool_tip="The wet/snow/puddle field and runoff read their landing grid from the world field's SURFACE_TOP channel instead of the rain shadow capture. On when you want the field's columns behind the surface sim" />
+     tool_tip="The wet/snow/puddle field and runoff read their landing grid from the world field's SURFACE_TOP channel instead of the rain shadow capture. On when you want the field's cells behind the surface sim" />
     <check_box
      control_name="SSWorldFieldCoverage"
      follows="left|top"
@@ -99,20 +99,20 @@
       follows="left|top" layout="topleft"
       left="12" top_pad="10" height="16" width="106"
       name="T_field_cell"
-      tool_tip="Metres per column. 2m is a 128x128 column grid over a 256m region; finer resolves narrower walls and costs more capture and more flood work">
+      tool_tip="Metres per cell. 0.25 is the navmesh span sheet's own cell, so the grid costs no resampling and window- and door-scale openings resolve for the reach walk; coarser cells cut memory and classification cost quadratically but leak through thin walls">
         Cell size:
     </text>
     <slider_bar
       control_name="SSWorldFieldCell" name="SB_field_cell"
       follows="left|top" layout="topleft"
-      left_pad="4" top_delta="0" height="16" width="160" min_val="0.5" max_val="8" increment="0.25"
-      tool_tip="Metres per column. 2m is a 128x128 column grid over a 256m region; finer resolves narrower walls and costs more capture and more flood work" />
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0.25" max_val="8" increment="0.25"
+      tool_tip="Metres per cell. 0.25 is the navmesh span sheet's own cell, so the grid costs no resampling and window- and door-scale openings resolve for the reach walk; coarser cells cut memory and classification cost quadratically but leak through thin walls" />
     <spinner
       control_name="SSWorldFieldCell" name="S_field_cell"
       follows="left|top" layout="topleft"
       left_pad="4" top_delta="-2" height="20" width="62"
-      label_width="0" min_val="0.5" max_val="8" increment="0.25" decimal_digits="2"
-      tool_tip="Metres per column. 2m is a 128x128 column grid over a 256m region; finer resolves narrower walls and costs more capture and more flood work" />
+      label_width="0" min_val="0.25" max_val="8" increment="0.25" decimal_digits="2"
+      tool_tip="Metres per cell. 0.25 is the navmesh span sheet's own cell, so the grid costs no resampling and window- and door-scale openings resolve for the reach walk; coarser cells cut memory and classification cost quadratically but leak through thin walls" />
     <button
       follows="left|top" layout="topleft"
       left_pad="4" top_delta="0" height="20" width="24"
@@ -123,77 +123,52 @@
     <text
       follows="left|top" layout="topleft"
       left="12" top_pad="8" height="16" width="106"
-      name="T_field_band"
-      tool_tip="Height of one capture band in metres. Finer bands resolve more interior surfaces at the cost of more depth passes">
-        Band height:
+      name="T_field_angle"
+      tool_tip="The outdoors rule, in degrees of sky elevation. An opening hands the covered air behind it gap_height / tan(this) metres of reach, re-evaluated from the local gap height at every step - ground under a sky platform stays outdoors across the footprint, a low room goes interior a few metres past its door. The same length sets how fast enclosure saturates">
+        Sky angle:
     </text>
     <slider_bar
-      control_name="SSWorldFieldBand" name="SB_field_band"
+      control_name="SSWorldFieldOpenAngle" name="SB_field_angle"
       follows="left|top" layout="topleft"
-      left_pad="4" top_delta="0" height="16" width="160" min_val="4" max_val="64" increment="1"
-      tool_tip="Height of one capture band in metres. Finer bands resolve more interior surfaces at the cost of more depth passes" />
+      left_pad="4" top_delta="0" height="16" width="160" min_val="5" max_val="85" increment="1"
+      tool_tip="The outdoors rule, in degrees of sky elevation. An opening hands the covered air behind it gap_height / tan(this) metres of reach, re-evaluated from the local gap height at every step - ground under a sky platform stays outdoors across the footprint, a low room goes interior a few metres past its door. The same length sets how fast enclosure saturates" />
     <spinner
-      control_name="SSWorldFieldBand" name="S_field_band"
+      control_name="SSWorldFieldOpenAngle" name="S_field_angle"
       follows="left|top" layout="topleft"
       left_pad="4" top_delta="-2" height="20" width="62"
-      label_width="0" min_val="4" max_val="64" increment="1" decimal_digits="0"
-      tool_tip="Height of one capture band in metres. Finer bands resolve more interior surfaces at the cost of more depth passes" />
+      label_width="0" min_val="5" max_val="85" increment="1" decimal_digits="0"
+      tool_tip="The outdoors rule, in degrees of sky elevation. An opening hands the covered air behind it gap_height / tan(this) metres of reach, re-evaluated from the local gap height at every step - ground under a sky platform stays outdoors across the footprint, a low room goes interior a few metres past its door. The same length sets how fast enclosure saturates" />
     <button
       follows="left|top" layout="topleft"
       left_pad="4" top_delta="0" height="20" width="24"
-      name="D_field_band" label="D"
+      name="D_field_angle" label="D"
       tool_tip="Reset to the default value">
-        <button.commit_callback function="ResetControl" parameter="SSWorldFieldBand" />
+        <button.commit_callback function="ResetControl" parameter="SSWorldFieldOpenAngle" />
     </button>
     <text
       follows="left|top" layout="topleft"
       left="12" top_pad="8" height="16" width="106"
-      name="T_field_ceiling"
-      tool_tip="Altitude in metres above which the field stops capturing. A full build also stops early once the sky has been empty for a few consecutive bands; the stack caps at 24 bands whichever comes first">
-        Ceiling:
+      name="T_field_reach"
+      tool_tip="How far a query point with no air at its own height - a camera clipped into a wall or into terrain - may walk down looking for one before the field answers open air. A clipping-recovery distance, not a search: too large and a clipped camera adopts a basement&apos;s label">
+        Ground reach:
     </text>
     <slider_bar
-      control_name="SSWorldFieldCeiling" name="SB_field_ceiling"
+      control_name="SSWorldFieldGroundReach" name="SB_field_reach"
       follows="left|top" layout="topleft"
-      left_pad="4" top_delta="0" height="16" width="160" min_val="16" max_val="1024" increment="16"
-      tool_tip="Altitude in metres above which the field stops capturing. A full build also stops early once the sky has been empty for a few consecutive bands; the stack caps at 24 bands whichever comes first" />
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0.5" max_val="64" increment="0.5"
+      tool_tip="How far a query point with no air at its own height - a camera clipped into a wall or into terrain - may walk down looking for one before the field answers open air. A clipping-recovery distance, not a search: too large and a clipped camera adopts a basement&apos;s label" />
     <spinner
-      control_name="SSWorldFieldCeiling" name="S_field_ceiling"
+      control_name="SSWorldFieldGroundReach" name="S_field_reach"
       follows="left|top" layout="topleft"
       left_pad="4" top_delta="-2" height="20" width="62"
-      label_width="0" min_val="16" max_val="1024" increment="16" decimal_digits="0"
-      tool_tip="Altitude in metres above which the field stops capturing. A full build also stops early once the sky has been empty for a few consecutive bands; the stack caps at 24 bands whichever comes first" />
+      label_width="0" min_val="0.5" max_val="64" increment="0.5" decimal_digits="1"
+      tool_tip="How far a query point with no air at its own height - a camera clipped into a wall or into terrain - may walk down looking for one before the field answers open air. A clipping-recovery distance, not a search: too large and a clipped camera adopts a basement&apos;s label" />
     <button
       follows="left|top" layout="topleft"
       left_pad="4" top_delta="0" height="20" width="24"
-      name="D_field_ceiling" label="D"
+      name="D_field_reach" label="D"
       tool_tip="Reset to the default value">
-        <button.commit_callback function="ResetControl" parameter="SSWorldFieldCeiling" />
-    </button>
-    <text
-      follows="left|top" layout="topleft"
-      left="12" top_pad="8" height="16" width="106"
-      name="T_field_age"
-      tool_tip="Seconds between full recaptures; local prim updates also queue one">
-        Refresh every:
-    </text>
-    <slider_bar
-      control_name="SSWorldFieldMaxAge" name="SB_field_age"
-      follows="left|top" layout="topleft"
-      left_pad="4" top_delta="0" height="16" width="160" min_val="5" max_val="300" increment="5"
-      tool_tip="Seconds between full recaptures; local prim updates also queue one" />
-    <spinner
-      control_name="SSWorldFieldMaxAge" name="S_field_age"
-      follows="left|top" layout="topleft"
-      left_pad="4" top_delta="-2" height="20" width="62"
-      label_width="0" min_val="5" max_val="300" increment="5" decimal_digits="0"
-      tool_tip="Seconds between full recaptures; local prim updates also queue one" />
-    <button
-      follows="left|top" layout="topleft"
-      left_pad="4" top_delta="0" height="20" width="24"
-      name="D_field_age" label="D"
-      tool_tip="Reset to the default value">
-        <button.commit_callback function="ResetControl" parameter="SSWorldFieldMaxAge" />
+        <button.commit_callback function="ResetControl" parameter="SSWorldFieldGroundReach" />
     </button>
     <button
      follows="left|top"
@@ -203,8 +178,8 @@
      height="23"
      width="150"
      name="recapture_button"
-     label="Recapture now"
-     tool_tip="Drop every cached world field tile and capture them again at the current settings" />
+     label="Reclassify now"
+     tool_tip="Drop every cached world field grid; each region reclassifies from the navmesh's current span sheets at the current settings" />
 
     </panel>
     </scroll_container>

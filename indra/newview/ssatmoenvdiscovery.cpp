@@ -26,6 +26,7 @@
 #include "ssatmoenvdiscovery.h"
 
 #include "fslslbridge.h"
+#include "llagent.h"
 #include "llcorehttputil.h"
 #include "llfilesystem.h"
 #include "llfloater.h"
@@ -41,6 +42,13 @@ namespace
 {
     const char* CONFIG_TAG = "atmo:";
     const char* FETCH_COMMAND = "FetchNotecard|";
+    const F32 BRIDGE_RETRY_SECONDS = 5.f;
+
+    // <SS:Nexii> A fetch that goes out and never comes back (stale Bridge URL after a region crossing, coroutine dropped) leaves no callback to unlatch mPendingAssetId, so idle() expires it after this long and lets the normal retry path have another go.
+    const F32 FETCH_TIMEOUT_SECONDS = 30.f;
+
+    // <SS:Nexii> The Bridge answers 404 on a cold-notecard read timeout, which usually succeeds on the next try; a card that is genuinely gone would otherwise re-ask every BRIDGE_RETRY_SECONDS for the whole session, so give up after this many consecutive failures for the same id.
+    const S32 FETCH_MAX_ATTEMPTS = 3;
 
     // Wraps fetched text in notecard format and caches it under the asset id, so later visits skip the Bridge.
     void cacheNotecardBody(const LLUUID& asset_id, const std::string& plain_body)
@@ -80,18 +88,48 @@ namespace
     }
 }
 
-// Watches parcel changes from construction on.
+// Watches both parcel channels from construction on: the LLParcelObserver list fires on land selection (About Land description edits), gAgent's parcel-changed signal on agent parcel arrivals (login, teleport, border crossings) - processParcelProperties never notifies the observer list for those.
 SSAtmoEnvDiscoveryManager::SSAtmoEnvDiscoveryManager()
 {
     LLViewerParcelMgr::getInstance()->addObserver(this);
+    mAgentParcelChangedConnection = gAgent.addParcelChangedCallback([this]() { changed(); });
 }
 
 // Stops watching; guarded because the parcel manager may already be gone at shutdown.
 SSAtmoEnvDiscoveryManager::~SSAtmoEnvDiscoveryManager()
 {
+    mAgentParcelChangedConnection.disconnect();
     if (LLViewerParcelMgr::instanceExists())
     {
         LLViewerParcelMgr::getInstance()->removeObserver(this);
+    }
+}
+
+// First frame: check the parcel that arrived during login, before this singleton existed; afterwards expire a fetch that never came back and retry a fetch the missing LSL Bridge deferred.
+void SSAtmoEnvDiscoveryManager::idle()
+{
+    if (!mInitialCheckDone)
+    {
+        mInitialCheckDone = true;
+        changed();
+        return;
+    }
+
+    // <SS:Nexii> Belt and braces for the request that produces no callback at all: without this the pending latch is permanent and changed()'s `asset_id == mPendingAssetId` early-return holds this parcel's environment off for the session.
+    if (mPendingAssetId.notNull() && mPendingTimer.getElapsedTimeF32() > FETCH_TIMEOUT_SECONDS)
+    {
+        const LLUUID stalled = mPendingAssetId;
+        LL_WARNS("AtmoMagicEnv") << "Atmo v3 fetch for " << stalled << " never returned within "
+                                 << (S32)FETCH_TIMEOUT_SECONDS << "s; treating it as failed" << LL_ENDL;
+        onFetchFailure(stalled, mPendingForce, mPendingSerial);
+    }
+
+    if (mDeferredAssetId.notNull() && mRetryTimer.getElapsedTimeF32() > BRIDGE_RETRY_SECONDS)
+    {
+        mRetryTimer.reset();
+        const LLUUID asset_id = mDeferredAssetId;
+        mDeferredAssetId.setNull();
+        requestFetch(asset_id, mDeferredForce);
     }
 }
 
@@ -156,6 +194,13 @@ void SSAtmoEnvDiscoveryManager::changed()
 
     const bool editing = editorIsOpen();
 
+    // A fetch parked for the Bridge is only worth retrying while the parcel still advertises that same id.
+    if (mDeferredAssetId.notNull() && mDeferredAssetId != asset_id)
+    {
+        mDeferredAssetId.setNull();
+        mDeferredForce = false;
+    }
+
     if (asset_id.isNull())
     {
         if (!editing && mgr->hasAsset() && mgr->cameFromParcel())
@@ -174,7 +219,11 @@ void SSAtmoEnvDiscoveryManager::changed()
 
     // Still advertised, but the user declined it: keep the environment off
     // rather than resurrecting it on every parcel property update.
-    if (asset_id == mDeclinedAssetId) return;
+    if (asset_id == mDeclinedAssetId)
+    {
+        mDeferredAssetId.setNull();
+        return;
+    }
     // A different id than the declined one - the decline no longer applies.
     mDeclinedAssetId.setNull();
 
@@ -186,7 +235,7 @@ void SSAtmoEnvDiscoveryManager::changed()
     // The parcel still advertises the environment that was applied from it, but
     // none is live anymore: it was unloaded by hand (the environment floater).
     // Record the decline instead of falling through to a refetch - the cached
-    // notecard would re-apply it silently, and the wind and rain beds the user
+    // notecard would re-apply it silently, and the wind and rain ambiences the user
     // just unloaded would come straight back.
     if (asset_id == mAppliedAssetId && !mgr->hasAsset())
     {
@@ -217,29 +266,86 @@ void SSAtmoEnvDiscoveryManager::requestFetch(const LLUUID& asset_id, bool force)
     const std::string cached = readCachedNotecardBody(asset_id);
     if (!cached.empty())
     {
-        applyText(asset_id, cached, force);
-        return;
+        mDeferredAssetId.setNull();
+        // <SS:Nexii> An editor-open refusal stops here; a REJECTED cached body is poison (e.g. an old
+        // Bridge's "ok" ack cached before validation) - drop it and fetch afresh so it can self-heal.
+        if ((!force && editorIsOpen()) || applyText(asset_id, cached, force))
+        {
+            return;
+        }
+        LL_WARNS("AtmoMagicEnv") << "Cached Atmo v3 body for " << asset_id
+                                 << " is invalid; discarding it and re-fetching" << LL_ENDL;
+        LLFileSystem::removeFile(asset_id, LLAssetType::AT_NOTECARD);
     }
 
     if (!FSLSLBridge::instanceExists() || !FSLSLBridge::instance().canUseBridge())
     {
-        LL_INFOS("AtmoMagicEnv") << "No SL Bridge available - cannot fetch parcel-referenced "
-                                   "Atmo v3 notecard " << asset_id << LL_ENDL;
+        // Not up yet is the normal login case (the parcel arrives seconds before the Bridge attaches): park the fetch for idle() to retry instead of giving up.
+        if (mDeferredAssetId != asset_id)
+        {
+            LL_INFOS("AtmoMagicEnv") << "No SL Bridge available yet - deferring fetch of parcel-referenced "
+                                       "Atmo v3 notecard " << asset_id << LL_ENDL;
+        }
+        mDeferredAssetId = asset_id;
+        mDeferredForce = force;
+        mRetryTimer.reset();
         return;
     }
 
+    mDeferredAssetId.setNull();
     mPendingAssetId = asset_id;
+    mPendingForce = force;
+    mPendingTimer.reset();
+    const U32 serial = ++mPendingSerial;
 
+    // <SS:Nexii> Both callbacks run out of an HTTP coroutine that can outlive this singleton at shutdown, so neither captures `this` - they re-look the singleton up behind instanceExists(), the same guard the destructor uses for the parcel manager. The failure callback is the fix for the wedge: without one, any non-2xx (the Bridge's 404 on a cold-notecard read timeout) left mPendingAssetId latched and changed() refused to ever ask again.
     FSLSLBridge::instance().viewerToLSL(
         std::string(FETCH_COMMAND) + asset_id.asString(),
-        [this, asset_id, force](const LLSD& data) { onFetchResult(asset_id, data, force); });
+        [asset_id, force, serial](const LLSD& data)
+        {
+            if (SSAtmoEnvDiscoveryManager::instanceExists()) SSAtmoEnvDiscoveryManager::getInstance()->onFetchResult(asset_id, data, force, serial);
+        },
+        [asset_id, force, serial](const LLSD&)
+        {
+            if (SSAtmoEnvDiscoveryManager::instanceExists()) SSAtmoEnvDiscoveryManager::getInstance()->onFetchFailure(asset_id, force, serial);
+        });
 }
 
-// Bridge reply: cache and apply the fetched notecard text, ignoring stale replies.
-void SSAtmoEnvDiscoveryManager::onFetchResult(const LLUUID& asset_id, const LLSD& data, bool force)
+// A fetch that failed or stalled: unlatch the pending id so changed() can ask again, then park a retry on the same deferred/timer mechanism the Bridge-not-up case uses - capped, so a card that 404s forever stops asking.
+void SSAtmoEnvDiscoveryManager::onFetchFailure(const LLUUID& asset_id, bool force, U32 serial)
 {
-    if (asset_id != mPendingAssetId) return;
+    if (asset_id != mPendingAssetId || serial != mPendingSerial) return;    // an expired fetch answering late must not unlatch, or count against, the retry that replaced it
     mPendingAssetId.setNull();
+    mPendingForce = false;
+
+    if (mFailedAssetId != asset_id)
+    {
+        mFailedAssetId = asset_id;
+        mFailedAttempts = 0;
+    }
+    ++mFailedAttempts;
+
+    if (mFailedAttempts >= FETCH_MAX_ATTEMPTS)
+    {
+        LL_WARNS("AtmoMagicEnv") << "Atmo v3 fetch for " << asset_id << " failed " << mFailedAttempts
+                                 << " times; giving up until the parcel changes" << LL_ENDL;
+        return;
+    }
+
+    LL_WARNS("AtmoMagicEnv") << "Atmo v3 fetch for " << asset_id << " failed (attempt " << mFailedAttempts
+                             << " of " << FETCH_MAX_ATTEMPTS << "); retrying in "
+                             << (S32)BRIDGE_RETRY_SECONDS << "s" << LL_ENDL;
+    mDeferredAssetId = asset_id;
+    mDeferredForce = force;
+    mRetryTimer.reset();
+}
+
+// Bridge reply: apply the fetched notecard text and cache it only once it applied; ignores stale replies.
+void SSAtmoEnvDiscoveryManager::onFetchResult(const LLUUID& asset_id, const LLSD& data, bool force, U32 serial)
+{
+    if (asset_id != mPendingAssetId || serial != mPendingSerial) return;
+    mPendingAssetId.setNull();
+    mPendingForce = false;
 
     if (!data.has(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_CONTENT))
     {
@@ -261,9 +367,17 @@ void SSAtmoEnvDiscoveryManager::onFetchResult(const LLUUID& asset_id, const LLSD
         text = content.asString();
     }
 
-    cacheNotecardBody(asset_id, text);
-
-    applyText(asset_id, text, force);
+    // <SS:Nexii> Cache only what actually applied - a Bridge ack or error reply must never poison the fetch cache.
+    if (applyText(asset_id, text, force))
+    {
+        cacheNotecardBody(asset_id, text);
+        // <SS:Nexii> A fetch that landed clears the failure budget, so a later transient 404 for this same id gets a fresh set of retries.
+        if (mFailedAssetId == asset_id)
+        {
+            mFailedAssetId.setNull();
+            mFailedAttempts = 0;
+        }
+    }
 }
 
 // The editor owns the environment while visible - discovery must not stomp an edit in progress.
