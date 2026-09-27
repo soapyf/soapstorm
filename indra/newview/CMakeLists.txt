@@ -143,6 +143,7 @@ set(viewer_SOURCE_FILES
     fsanimgraphctrl.cpp
     fsanimtimelinectrl.cpp
     fsfloatervatsmocap.cpp
+    fsfloatervatstools.cpp
     fsvatsfirewall.cpp
     fsvatsudp.cpp
     fsfloaterposestand.cpp
@@ -1094,6 +1095,7 @@ set(viewer_HEADER_FILES
     fsanimgraphctrl.h
     fsanimtimelinectrl.h
     fsfloatervatsmocap.h
+    fsfloatervatstools.h
     fsvatsfirewall.h
     fsvatsudp.h
     fsfloaterposestand.h

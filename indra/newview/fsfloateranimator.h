@@ -58,6 +58,13 @@ public:
     void showFrame(double frame);            // pause and show a frame (the playhead follows a take)
     void mergeTake(const std::string& label, const std::function<void(vats::Clip&)>& change);
 
+    // For VATs Tools (6f, 6g), which edit the open clip through the same undo history.
+    bool ensureSkeleton() { return loadSkeleton(); }
+    const vats::Skeleton& skeleton() const { return mSkeleton; }
+    const vats::Rig* rig() const { return mRig.get(); }
+    vats::Pose shownPose() const;  // the pose the avatar shows now, in VATs' terms
+    void replaceClip(vats::Clip clip, const std::string& name) { setClip(std::move(clip), name); refresh(); }
+
 private:
     // Files
     void onOpenFile();

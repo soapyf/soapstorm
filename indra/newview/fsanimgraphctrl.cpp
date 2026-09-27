@@ -230,6 +230,9 @@ void FSAnimGraphCtrl::draw()
 
     // The clip's range, a grid and the ruler.
     gl_rect_2d(S32(xOf(0)), ph, S32(xOf(clip->end_frame)), 0, LLColor4(1.f, 1.f, 1.f, 0.04f));
+    if (bands)  // pins, light blue (VATs TG-100)
+        for (const auto& [f0, f1] : bands())
+            gl_rect_2d(S32(xOf(f0)), ph, std::max(S32(xOf(f1)), S32(xOf(f0)) + 2), 0, LLColor4(0.43f, 0.75f, 1.f, 0.12f));
     gl_rect_2d(0, h, w, ph, LLColor4(0.f, 0.f, 0.f, 0.35f));
     const double ft = std::max(1.0, niceStep(mT1 - mT0, w, 60));
     for (double f = std::ceil(mT0 / ft) * ft; f <= mT1; f += ft)

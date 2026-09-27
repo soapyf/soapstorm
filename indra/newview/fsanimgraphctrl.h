@@ -31,6 +31,7 @@
 
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "vats/curve_ops.h"
@@ -48,6 +49,7 @@ public:
     std::function<double()> currentFrame;
     std::function<void(double)> onScrub;
     std::function<void()> changed;  // an edit was committed
+    std::function<std::vector<std::pair<double, double>>()> bands;  // pins on the shown joints: [from, to] frames
 
     void frameAll();
     void frameSelected();

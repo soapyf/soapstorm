@@ -28,6 +28,7 @@
 #include "lluictrl.h"
 
 #include <functional>
+#include <utility>
 #include <vector>
 
 class FSAnimTimelineCtrl : public LLUICtrl
@@ -40,6 +41,7 @@ public:
     std::function<double()> currentFrame;
     std::function<std::vector<double>()> keyFrames;  // frames holding a key on the shown joints
     std::function<void(double)> onScrub;             // the user clicked or dragged to this frame
+    std::function<std::vector<std::pair<double, double>>()> bands;  // pins on the shown joints: [from, to] frames
 
     void draw() override;
     bool handleMouseDown(S32 x, S32 y, MASK mask) override;

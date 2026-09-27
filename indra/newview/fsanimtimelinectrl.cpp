@@ -72,6 +72,11 @@ void FSAnimTimelineCtrl::draw()
                              LLFontGL::TOP);
     }
 
+    // Pins as light-blue bands under the keys (VATs TG-100).
+    if (bands)
+        for (const auto& [f0, f1] : bands())
+            gl_rect_2d(xOf(f0), h - 10, std::max(xOf(f1), xOf(f0) + 2), 2, LLColor4(0.43f, 0.75f, 1.f, 0.28f));
+
     // Keys as diamonds along the middle.
     const S32 mid = (h - 12) / 2;
     if (keyFrames)

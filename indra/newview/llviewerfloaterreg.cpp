@@ -174,6 +174,7 @@
 // <FS:Ansariel> [FS communication UI]
 #include "fsfloaterposer.h" // <FS:AR> [FIRE-30873]: Poser
 #include "fsfloatervatsmocap.h"
+#include "fsfloatervatstools.h"
 #include "fsfloateranimator.h" // Viewport Avatar Toolset
 #include "llpanelblockedlist.h"
 #include "llpanelprofileclassifieds.h"
@@ -681,6 +682,7 @@ void LLViewerFloaterReg::registerFloaters()
     LLFloaterReg::add("fs_poser", "floater_fs_poser.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterPoser>); // <FS:AR> [FIRE-30873]: Poser
     LLFloaterReg::add("fs_animator", "floater_fs_animator.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterAnimator>); // Viewport Avatar Toolset
     LLFloaterReg::add("fs_vats_mocap", "floater_fs_vats_mocap.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterVATsMocap>); // VATs motion capture
+    LLFloaterReg::add("fs_vats_tools", "floater_fs_vats_tools.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterVATsTools>); // VATs tools
     LLFloaterReg::add("fs_protectedfolders", "floater_fs_protectedfolders.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterProtectedFolders>);
     LLFloaterReg::add("fs_radar", "floater_fs_radar.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterRadar>);
     LLFloaterReg::add("fs_splash_screen_settings", "floater_fs_splash_screen_settings.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterSplashScreenSettings>);

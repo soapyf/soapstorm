@@ -116,6 +116,23 @@ bool FSFloaterAnimator::postBuild()
         return std::vector<double>(frames.begin(), frames.end());
     };
 
+    // Pins show as bands on both, for the selected joints (every joint's when none is selected).
+    auto pin_bands = [this]
+    {
+        std::vector<std::pair<double, double>> out;
+        if (!mHaveClip)
+            return out;
+        const std::vector<int> nodes = selectedNodes();
+        for (const vats::Pin& p : mClip.pins)
+        {
+            const int n = mSkeleton.find(p.joint);
+            if (nodes.empty() || std::find(nodes.begin(), nodes.end(), n) != nodes.end())
+                out.emplace_back(p.from, p.to < 0 ? mClip.end_frame : p.to);
+        }
+        return out;
+    };
+    mTimeline->bands = pin_bands;
+
     // The graph editor (6e) takes the place of its border too; its edits go through the same History.
     LLView* graph_area = getChild<LLView>("graph_area");
     FSAnimGraphCtrl::Params gp;
@@ -135,6 +152,7 @@ bool FSFloaterAnimator::postBuild()
     mGraph->currentFrame = [] { return VATsClipMotion::sPlayback.frame; };
     mGraph->onScrub = [this](double f) { onScrub(f); };
     mGraph->changed = [this] { edited(); };
+    mGraph->bands = pin_bands;
     button("graph_frame_all_btn", [this] { mGraph->frameAll(); });
     button("graph_frame_sel_btn", [this] { mGraph->frameSelected(); });
     button("graph_delete_btn", [this] { mGraph->deleteSelected(); });
@@ -373,6 +391,26 @@ bool FSFloaterAnimator::keyFromAvatar(vats::Clip& clip, int node, int frame) con
         vats::key_offset(clip, n.name, frame, vats::Vec3{ p.mV[VX] - rest.x, p.mV[VY] - rest.y, p.mV[VZ] - rest.z });
     }
     return true;
+}
+
+vats::Pose FSFloaterAnimator::shownPose() const
+{
+    vats::Pose pose(mSkeleton.size());
+    for (int i = 0; i < mSkeleton.volume_start(); ++i)
+    {
+        const vats::Node& n = mSkeleton[i];
+        LLJoint* joint = isAgentAvatarValid() ? gAgentAvatarp->getJoint(n.name) : nullptr;
+        if (!joint)
+            continue;
+        const LLQuaternion r = joint->getRotation();
+        vats::Quat shown;
+        shown.w = r.mQ[VW], shown.x = r.mQ[VX], shown.y = r.mQ[VY], shown.z = r.mQ[VZ];
+        pose.rot[i] = (n.rest.conj() * shown).normalized();
+        const LLVector3 p = joint->getPosition();
+        const vats::Vec3 rest = i == 0 ? vats::Vec3{} : n.pos;
+        pose.offset[i] = vats::Vec3{ p.mV[VX] - rest.x, p.mV[VY] - rest.y, p.mV[VZ] - rest.z };
+    }
+    return pose;
 }
 
 void FSFloaterAnimator::onSetKey()
