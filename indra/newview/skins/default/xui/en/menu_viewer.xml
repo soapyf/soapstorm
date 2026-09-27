@@ -3991,6 +3991,7 @@
      name="Develop"
      tear_off="true"
      visible="false">
+        <menu_item_check label="VATs UI test (ImGui demo)" name="VATs UI test"><menu_item_check.on_check function="CheckControl" parameter="VATsImGuiTest" /><menu_item_check.on_click function="ToggleControl" parameter="VATsImGuiTest" /></menu_item_check>
         <menu
          create_jump_keys="true"
          label="Consoles"

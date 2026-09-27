@@ -137,6 +137,7 @@ add_subdirectory(${LIBS_OPEN_PREFIX}llaudio)
 add_subdirectory(${LIBS_OPEN_PREFIX}llappearance)
 add_subdirectory(${LIBS_OPEN_PREFIX}llcharacter)
 add_subdirectory(${LIBS_OPEN_PREFIX}libvats)  # Viewport Avatar Toolset core (indra/libvats/VATS_VERSION)
+add_subdirectory(${LIBS_OPEN_PREFIX}imgui)  # Dear ImGui for the in-viewer VATs editor UI
 add_subdirectory(${LIBS_OPEN_PREFIX}llcommon)
 add_subdirectory(${LIBS_OPEN_PREFIX}llcorehttp)
 add_subdirectory(${LIBS_OPEN_PREFIX}llimage)

@@ -104,6 +104,7 @@
 // [/RLVa:KB]
 #include "llpresetsmanager.h"
 #include "fsdata.h"
+#include "fsvatsimgui.h" // VATs ImGui UI
 
 // <FS:PP> Render chat range spheres in 3D world
 #include "lfsimfeaturehandler.h"
@@ -224,6 +225,7 @@ void display_startup()
 
     LLGLState::checkStates();
 
+    FSVATsImGui::render(); // VATs ImGui UI, over the login screen
     if (gViewerWindow && gViewerWindow->getWindow())
     gViewerWindow->getWindow()->swapBuffers();
 
@@ -1798,6 +1800,7 @@ void swap()
     LLPerfStats::RecordSceneTime T ( LLPerfStats::StatType_t::RENDER_SWAP ); // render time capture - Swap buffer time - can signify excessive data transfer to/from GPU
     LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("Swap");
     LL_PROFILE_GPU_ZONE("swap");
+    FSVATsImGui::render(); // VATs ImGui UI, over the viewer's UI
     if (gDisplaySwapBuffers)
     {
         gViewerWindow->getWindow()->swapBuffers();
