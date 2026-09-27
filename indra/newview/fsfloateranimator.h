@@ -1,7 +1,7 @@
 /**
  * @file fsfloateranimator.h
- * @brief Viewport Avatar Toolset in the viewer: open a .vat or .anim and play it on your avatar
- *        (VATs spec 09, stage 6b).
+ * @brief Viewport Avatar Toolset in the viewer: open, play, key-edit, save and upload an animation on your
+ *        own avatar (VATs spec 09, stages 6b-6d).
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Copyright (c) 2026 Viewport Avatar Toolset contributors
@@ -30,10 +30,12 @@
 #include <memory>
 
 #include "vats/clip.h"
+#include "vats/history.h"
 #include "vats/rig.h"
 #include "vats/skeleton.h"
 
-class LLSliderCtrl;
+class FSAnimTimelineCtrl;
+class LLScrollListCtrl;
 
 class FSFloaterAnimator : public LLFloater
 {
@@ -46,14 +48,36 @@ public:
     void draw() override;
 
 private:
+    // Files
     void onOpenFile();
     void onFileChosen(const std::vector<std::string>& files);
+    void onNew(bool from_pose);
+    void onSave(bool as_anim);
+    void onSaveChosen(const std::vector<std::string>& files, bool as_anim);
+    // Playback
     void onPlayPause();
     void onStop();
-    void onScrub();
     void onLoop();
+    void onScrub(double frame);
+    // Editing (6d)
+    void onSetKey();
+    void onDeleteKey();
+    void onKeyPosed();
+    void onUndo();
+    void onRedo();
+    void onLastFrame();
+    // Upload (6c)
+    void onUpload();
+    void onUploadConfirmed(const LLSD& notification, const LLSD& response);
 
     bool loadSkeleton();
+    void setClip(vats::Clip clip, const std::string& name);  // a newly opened or created clip
+    bool rebind();   // points the preview at the clip's animated joints; false when it cannot play
+    void edited();   // after any change to the clip: rebind, refresh the preview and the controls
+    template <class F> void edit(const std::string& label, F&& change);
+    std::vector<int> selectedNodes() const;
+    bool keyFromAvatar(vats::Clip& clip, int node, int frame) const;  // key what the avatar shows
+    int currentFrame() const;
     void start();  // (re)starts the preview from the current frame
     void stop();   // removes the preview motion from the avatar
     void refresh();
@@ -62,10 +86,15 @@ private:
     vats::Skeleton mSkeleton;
     std::unique_ptr<vats::Rig> mRig;
     vats::Clip mClip;
+    vats::History mHistory;
+    std::string mName;  // file stem, the default for saving and uploading
     bool mHaveClip = false;
+    bool mPlayable = false;  // the clip exports and every joint it animates exists on the avatar
     LLUUID mMotionID;
     bool mMotionIsKeyframe = false;  // "Preview as uploaded": the viewer's own LLKeyframeMotion
-    LLSliderCtrl* mScrub = nullptr;
+    FSAnimTimelineCtrl* mTimeline = nullptr;
+    LLScrollListCtrl* mJointList = nullptr;
+    std::string mUploadBytes;  // the .anim the pending upload confirmation will send
 };
 
 #endif // FS_FLOATERANIMATOR_H
