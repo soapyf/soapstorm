@@ -64,6 +64,11 @@ public:
     const vats::Rig* rig() const { return mRig.get(); }
     vats::Pose shownPose() const;  // the pose the avatar shows now, in VATs' terms
     void replaceClip(vats::Clip clip, const std::string& name) { setClip(std::move(clip), name); refresh(); }
+    const std::string& name() const { return mName; }
+    unsigned edits() const { return mEdits; }  // changes on every edit, undo and redo
+    bool previewing() const { return mMotionID.notNull() && !mMotionIsKeyframe; }  // the live preview is on
+    // Joints a VATs Tools preview (dynamics, ragdoll) moves beyond the clip's own: name, moved by position.
+    void setPreviewJoints(std::vector<std::pair<std::string, bool>> joints);
 
 private:
     // Files
@@ -106,6 +111,8 @@ private:
     std::string mName;  // file stem, the default for saving and uploading
     bool mHaveClip = false;
     unsigned mGeneration = 0;
+    unsigned mEdits = 0;
+    std::vector<std::pair<std::string, bool>> mPreviewJoints;
     bool mPlayable = false;  // the clip exports and every joint it animates exists on the avatar
     LLUUID mMotionID;
     bool mMotionIsKeyframe = false;  // "Preview as uploaded": the viewer's own LLKeyframeMotion

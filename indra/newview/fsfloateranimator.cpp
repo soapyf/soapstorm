@@ -52,6 +52,7 @@
 #include "vats/edit.h"
 #include "vats/project.h"
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <iterator>
@@ -327,6 +328,14 @@ bool FSFloaterAnimator::rebind()
         setStatus("Not played: your avatar has no joint named " + missing);
         return false;
     }
+    for (const auto& [name, position] : mPreviewJoints)
+    {
+        auto it = std::find_if(joints.begin(), joints.end(), [&](const VATsClipMotion::Joint& j) { return j.name == name; });
+        if (it != joints.end())
+            it->position = it->position || position;
+        else if (isAgentAvatarValid() && gAgentAvatarp->getJoint(name))
+            joints.push_back({ name, -1, position });
+    }
     VATsClipMotion::Playback& pb = VATsClipMotion::sPlayback;
     pb.skeleton = &mSkeleton;
     pb.rig = mRig.get();
@@ -344,8 +353,25 @@ template <class F> void FSFloaterAnimator::edit(const std::string& label, F&& ch
         edited();
 }
 
+void FSFloaterAnimator::setPreviewJoints(std::vector<std::pair<std::string, bool>> joints)
+{
+    if (joints == mPreviewJoints)
+        return;
+    mPreviewJoints = std::move(joints);
+    if (!mHaveClip)
+        return;
+    VATsClipMotion::Playback& pb = VATsClipMotion::sPlayback;
+    const bool playing = pb.playing && previewing();
+    if (rebind())
+    {
+        pb.playing = playing;
+        start();
+    }
+}
+
 void FSFloaterAnimator::edited()
 {
+    ++mEdits;
     // The joints an edit animates can change, so the preview binds again from the frame shown.
     VATsClipMotion::Playback& pb = VATsClipMotion::sPlayback;
     const bool playing = pb.playing && mMotionID.notNull() && !mMotionIsKeyframe;

@@ -28,6 +28,8 @@
 #include "lljointstate.h"
 
 #include "vats/clip.h"
+
+#include <functional>
 #include "vats/rig.h"
 #include "vats/skeleton.h"
 
@@ -55,6 +57,8 @@ public:
         bool resync = true;  // playing restarts from `frame`
         bool finished = false;  // a non-looping clip reached its end and holds the last frame
         double frame = 0;    // the frame shown; while paused, the frame to hold
+        // VATs Tools' dynamics and ragdoll previews (stage 6g) adjust each evaluated frame.
+        std::function<void(vats::Evaluation&, double frame)> post;
     };
     static Playback sPlayback, sLive;
 

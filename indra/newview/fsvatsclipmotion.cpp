@@ -125,7 +125,9 @@ bool VATsClipMotion::onUpdate(F32 time, U8* joint_mask)
 
     // The same values VATs' .anim exporter writes: rest x pose rotation; the pelvis position as an
     // offset, other joints as rest position plus offset, clamped to the format's 5 m.
-    const vats::Evaluation e = vats::evaluate(*pb.rig, clip, frame, nullptr);
+    vats::Evaluation e = vats::evaluate(*pb.rig, clip, frame, nullptr);
+    if (pb.post)
+        pb.post(e, frame);
     for (Bound& b : mBound)
     {
         const vats::Node& node = (*pb.skeleton)[b.node];

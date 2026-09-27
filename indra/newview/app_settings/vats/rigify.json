@@ -1,0 +1,101 @@
+{
+	"name": "Blender Rigify (DEF bones)",
+	"hint": "DEF-",
+	"mirror": [
+		[
+			"Left",
+			"Right"
+		],
+		[
+			".L",
+			".R"
+		]
+	],
+	"bones": {
+		"mPelvis": [
+			"DEF-spine"
+		],
+		"mTorso": [
+			"DEF-spine.001"
+		],
+		"mChest": [
+			"DEF-spine.003"
+		],
+		"mNeck": [
+			"DEF-spine.004"
+		],
+		"mHead": [
+			"DEF-spine.006",
+			"DEF-spine.005"
+		],
+		"mCollarLeft": [
+			"DEF-shoulder.L"
+		],
+		"mShoulderLeft": [
+			"DEF-upper_arm.L"
+		],
+		"mElbowLeft": [
+			"DEF-forearm.L"
+		],
+		"mWristLeft": [
+			"DEF-hand.L"
+		],
+		"mHipLeft": [
+			"DEF-thigh.L"
+		],
+		"mKneeLeft": [
+			"DEF-shin.L"
+		],
+		"mAnkleLeft": [
+			"DEF-foot.L"
+		],
+		"mFootLeft": [
+			"DEF-toe.L"
+		],
+		"mHandThumb1Left": [
+			"DEF-thumb.01.L"
+		],
+		"mHandThumb2Left": [
+			"DEF-thumb.02.L"
+		],
+		"mHandThumb3Left": [
+			"DEF-thumb.03.L"
+		],
+		"mHandIndex1Left": [
+			"DEF-f_index.01.L"
+		],
+		"mHandIndex2Left": [
+			"DEF-f_index.02.L"
+		],
+		"mHandIndex3Left": [
+			"DEF-f_index.03.L"
+		],
+		"mHandMiddle1Left": [
+			"DEF-f_middle.01.L"
+		],
+		"mHandMiddle2Left": [
+			"DEF-f_middle.02.L"
+		],
+		"mHandMiddle3Left": [
+			"DEF-f_middle.03.L"
+		],
+		"mHandRing1Left": [
+			"DEF-f_ring.01.L"
+		],
+		"mHandRing2Left": [
+			"DEF-f_ring.02.L"
+		],
+		"mHandRing3Left": [
+			"DEF-f_ring.03.L"
+		],
+		"mHandPinky1Left": [
+			"DEF-f_pinky.01.L"
+		],
+		"mHandPinky2Left": [
+			"DEF-f_pinky.02.L"
+		],
+		"mHandPinky3Left": [
+			"DEF-f_pinky.03.L"
+		]
+	}
+}
