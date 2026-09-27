@@ -22,7 +22,7 @@ constexpr const char* kHextonFields[] = {"format", "version", "fps", "end_frame"
                                          "priority", "ease_in", "ease_out", "hand_pose", "emote", "mirror_export",
                                          "export", "curves", "props", "anchors"};
 constexpr const char* kVATsFields[] = {"euler_order", "joint_priority", "constraints", "orphans", "ik_solve",
-                                        "meta", "dynamics", "ragdoll", "actors", "active"};
+                                        "meta", "dynamics", "ragdoll", "actors", "active", "audio"};
 
 Json list(std::initializer_list<Json> items) {
     Json r = Json::array();
@@ -245,6 +245,31 @@ struct Loader {
         return true;
     }
 
+    // Spec 08 AU: {path, offset, volume, bpm, beat_offset, beats: [seconds], snap}; unknown fields kept.
+    bool audio(const Json& e, Clip& clip) {
+        if (!expect(e, Json::Type::Object, "audio")) return false;
+        static constexpr const char* known_keys[] = {"path", "offset", "volume", "bpm", "beat_offset", "beats", "snap"};
+        AudioTrack a;
+        if (!get(e, "path", a.path) || !get(e, "offset", a.offset) || !get(e, "volume", a.volume) ||
+            !get(e, "bpm", a.bpm) || !get(e, "beat_offset", a.beat_offset) || !get(e, "snap", a.snap))
+            return fail("audio." + err);
+        if (!std::isfinite(a.offset) || !std::isfinite(a.volume) || !std::isfinite(a.bpm) || !std::isfinite(a.beat_offset))
+            return fail("audio: a number is not finite");
+        a.volume = std::clamp(a.volume, 0.0, 2.0), a.bpm = std::clamp(a.bpm, 0.0, 999.0);
+        if (const Json* b = e.find("beats")) {
+            if (!expect(*b, Json::Type::Array, "audio.beats")) return false;
+            for (const Json& x : b->arr) {
+                if (!expect(x, Json::Type::Number, "audio.beats") || !std::isfinite(x.num)) return fail("audio.beats: not a number");
+                a.beats.push_back(x.num);
+            }
+            std::sort(a.beats.begin(), a.beats.end());
+        }
+        for (auto& [k, x] : e.obj)
+            if (std::find(std::begin(known_keys), std::end(known_keys), k) == std::end(known_keys)) a.extra.obj.emplace_back(k, x);
+        clip.audio = std::move(a);
+        return true;
+    }
+
     bool joint_priority(const Json& v, Clip& clip) {
         if (!expect(v, Json::Type::Object, "joint_priority")) return false;
         for (auto& [joint, pr] : v.obj) {
@@ -320,6 +345,7 @@ bool read_clip(Loader& L, const Json& doc, Clip& c, bool vats, bool read_only) {
         if (const Json* v = doc.find("orphans"); ok && v) ok = L.orphans(*v, c);
         if (const Json* v = doc.find("dynamics"); ok && v) ok = L.dynamics(*v, c);
         if (const Json* v = doc.find("ragdoll"); ok && v) ok = L.ragdoll(*v, c);
+        if (const Json* v = doc.find("audio"); ok && v) ok = L.audio(*v, c);
     }
     return ok;
 }
@@ -524,6 +550,21 @@ static void write_clip(Json& j, const Clip& c) {
         for (auto& [k, x] : r.extra.obj)
             if (!e.find(k)) e.obj.emplace_back(k, x);
         j.set("ragdoll", std::move(e));
+    }
+    if (c.audio) {
+        const AudioTrack& a = *c.audio;
+        Json e = Json::object();
+        e.set("path", a.path);
+        e.set("offset", a.offset);
+        e.set("volume", a.volume);
+        e.set("bpm", a.bpm);
+        e.set("beat_offset", a.beat_offset);
+        Json& beats = e.set("beats", Json::array());
+        for (double t : a.beats) beats.push(t);
+        e.set("snap", a.snap);
+        for (auto& [k, x] : a.extra.obj)
+            if (!e.find(k)) e.obj.emplace_back(k, x);
+        j.set("audio", std::move(e));
     }
     if (c.ik_solve == IkSolve::Literal) j.set("ik_solve", "literal");
 }

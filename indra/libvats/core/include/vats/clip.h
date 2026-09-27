@@ -73,6 +73,22 @@ struct DynChain {
     bool operator==(const DynChain&) const = default;
 };
 
+// The project's audio track (spec 08 AU): played with the animation, never written into the .anim.
+// `offset` is in timeline seconds (frame / fps); beats are in the audio's own seconds, so they travel with
+// the music when it is slid along the timeline.
+struct AudioTrack {
+    std::string path;          // as stored: relative to the project (like props) or absolute
+    double offset = 0;         // where the audio's start sits on the timeline; later = positive
+    double volume = 1;         // 0..2
+    double bpm = 0;            // beat grid, 0 = none
+    double beat_offset = 0;    // audio time of the grid's first beat
+    std::vector<double> beats; // tapped beat markers (audio time), sorted
+    bool snap = false;         // scrubbing and range picks snap to beats
+    Json extra = Json::object();  // unknown fields, written back (IO-43)
+
+    bool operator==(const AudioTrack&) const = default;
+};
+
 // Ragdoll settings (spec 08 RD): which joints fall limp over which frames. The solver lives in ragdoll.h.
 struct Ragdoll {
     bool whole_body = true;
@@ -113,6 +129,7 @@ struct Clip {
     std::vector<Prop> props;  // meshes placed in the scene; paths absolute while in memory
     std::vector<DynChain> dynamics;  // spec 08 DY-1
     std::optional<Ragdoll> ragdoll;  // spec 08 RD
+    std::optional<AudioTrack> audio;  // spec 08 AU
     // Export choices live on the clip so undo covers them (UI-28); saved as the project's "export"
     // and "mirror_export" keys.
     bool mirror_export = false;

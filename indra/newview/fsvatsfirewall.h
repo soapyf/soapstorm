@@ -27,15 +27,11 @@ std::string subnet_of(const std::string& ipv4, int prefix);
 // Interfaces whose addresses a phone on the home network cannot reach.
 bool is_virtual_interface(const std::string& name);
 
-// Viewer copy only: X11's headers (in the viewer's precompiled header) define None as a macro.
-#pragma push_macro("None")
-#undef None
-enum class Firewall { Unknown, None, Ufw, Firewalld };
-#pragma pop_macro("None")
+enum class Firewall { Unknown, Off, Ufw, Firewalld };  // not "None": X11 defines None as a macro (the viewer copies this file)
 // Runs a shell command and returns its exit status, with stdout in out (-1 when it cannot run).
 using CommandRunner = std::function<int(const std::string& command, std::string& out)>;
 CommandRunner system_runner();
-// Linux: ufw or firewalld when either is filtering; None when neither is; Unknown on other systems.
+// Linux: ufw or firewalld when either is filtering; Off when neither is; Unknown on other systems.
 // VATS_FAKE_FIREWALL=ufw|firewalld|none overrides it (for screenshots and tests, changes nothing).
 Firewall detect_firewall(const CommandRunner& run, const std::string& ufw_conf = "/etc/ufw/ufw.conf");
 const char* firewall_name(Firewall f);

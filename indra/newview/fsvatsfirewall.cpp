@@ -19,8 +19,6 @@
 #include <sys/wait.h>
 #endif
 
-
-#undef None  // X11; this file means vats::Firewall::None
 namespace vats {
 
 bool is_virtual_interface(const std::string& name) {
@@ -87,7 +85,7 @@ CommandRunner system_runner() {
 Firewall detect_firewall(const CommandRunner& run, const std::string& ufw_conf) {
     if (const char* fake = std::getenv("VATS_FAKE_FIREWALL")) {
         const std::string f = fake;
-        return f == "ufw" ? Firewall::Ufw : f == "firewalld" ? Firewall::Firewalld : Firewall::None;
+        return f == "ufw" ? Firewall::Ufw : f == "firewalld" ? Firewall::Firewalld : Firewall::Off;
     }
 #if defined(__linux__)
     std::string out;
@@ -101,7 +99,7 @@ Firewall detect_firewall(const CommandRunner& run, const std::string& ufw_conf) 
         if (enabled) return Firewall::Ufw;
     }
     if (run("firewall-cmd --state", out) == 0 && out.rfind("running", 0) == 0) return Firewall::Firewalld;
-    return Firewall::None;
+    return Firewall::Off;
 #else
     (void)run, (void)ufw_conf;
     return Firewall::Unknown;
@@ -112,7 +110,7 @@ const char* firewall_name(Firewall f) {
     switch (f) {
         case Firewall::Ufw: return "ufw";
         case Firewall::Firewalld: return "firewalld";
-        case Firewall::None: return "none";
+        case Firewall::Off: return "none";
         default: return "unknown";
     }
 }

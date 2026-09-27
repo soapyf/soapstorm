@@ -49,7 +49,7 @@
 #include <sstream>
 
 
-#undef None  // X11; this file means vats::Firewall::None
+
 namespace
 {
     double now_s() { return F64(LLTimer::getTotalSeconds()); }
@@ -581,7 +581,7 @@ void FSFloaterVATsMocap::refresh()
         row("fw_row", 0, "Firewall: open (a device on your network got through)");
     else if (!mDetected)
         row("fw_row", 2, "Firewall: checking...");
-    else if (mFirewall == vats::Firewall::None)
+    else if (mFirewall == vats::Firewall::Off)
         row("fw_row", 0, "Firewall: none found, nothing to change");
     else if (mFirewall == vats::Firewall::Unknown)
 #if LL_WINDOWS
