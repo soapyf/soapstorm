@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- Viewport Avatar Toolset: play a .vat project or .anim on your own avatar (VATs spec 09, stage 6b). -->
+<floater
+	height="176"
+	width="360"
+	layout="topleft"
+	legacy_header_height="18"
+	name="floater_fs_animator"
+	save_rect="true"
+	single_instance="true"
+	title="VATs Animator">
+	<floater.string name="play">Play</floater.string>
+	<floater.string name="pause">Pause</floater.string>
+	<button
+		follows="left|top"
+		height="23"
+		label="Open..."
+		layout="topleft"
+		left="8"
+		name="open_btn"
+		tool_tip="Open a VATs project (.vat) or an SL animation (.anim)"
+		top="24"
+		width="80" />
+	<text
+		follows="left|top|right"
+		height="16"
+		layout="topleft"
+		left_pad="8"
+		name="file_text"
+		top_delta="4"
+		use_ellipses="true"
+		width="256">No animation open</text>
+	<button
+		follows="left|top"
+		height="23"
+		label="Play"
+		layout="topleft"
+		left="8"
+		name="play_btn"
+		top="54"
+		width="80" />
+	<button
+		follows="left|top"
+		height="23"
+		label="Stop"
+		layout="topleft"
+		left_pad="6"
+		name="stop_btn"
+		tool_tip="Stop the preview and give the avatar back to its own animations"
+		width="80" />
+	<check_box
+		follows="left|top"
+		height="16"
+		label="Loop"
+		layout="topleft"
+		left_pad="10"
+		name="loop_check"
+		top_delta="4"
+		width="60" />
+	<text
+		follows="left|top"
+		height="16"
+		layout="topleft"
+		left_pad="4"
+		name="priority_text"
+		width="80">Priority [PRIORITY]</text>
+	<slider
+		decimal_digits="0"
+		follows="left|top|right"
+		height="16"
+		increment="1"
+		initial_value="0"
+		layout="topleft"
+		left="8"
+		max_val="1"
+		min_val="0"
+		name="scrub"
+		show_text="false"
+		tool_tip="Drag to scrub; the preview pauses on the frame you pick"
+		top="86"
+		width="270" />
+	<text
+		follows="top|right"
+		height="16"
+		layout="topleft"
+		left_pad="6"
+		name="frame_text"
+		width="70">Frame [FRAME]</text>
+	<check_box
+		follows="left|top"
+		height="16"
+		label="Preview as uploaded"
+		layout="topleft"
+		left="8"
+		name="as_uploaded_check"
+		tool_tip="Play the exact .anim an upload would send, through the viewer's own animation decoder (no scrubbing)"
+		top="110"
+		width="200" />
+	<text
+		follows="left|top|right"
+		height="36"
+		layout="topleft"
+		left="8"
+		name="status_text"
+		top="132"
+		word_wrap="true"
+		width="344">Plays on your own avatar only; nobody else sees it until you upload and play it.</text>
+</floater>

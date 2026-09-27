@@ -12,6 +12,10 @@
 #include <utility>
 #include <vector>
 
+// X11's Xlib.h does "#define Bool int"; the SL viewer's precompiled header includes it before this file.
+#pragma push_macro("Bool")
+#undef Bool
+
 namespace vats {
 
 struct Json {
@@ -65,3 +69,5 @@ bool parse_json(std::string_view text, Json& out, std::string& err, size_t* offs
 std::string write_json(const Json& v);
 
 }  // namespace vats
+
+#pragma pop_macro("Bool")

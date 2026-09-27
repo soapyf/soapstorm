@@ -139,6 +139,7 @@ set(viewer_SOURCE_FILES
     fsfloaterpartialinventory.cpp
     fsfloaterplacedetails.cpp
     fsfloaterposer.cpp
+    fsfloateranimator.cpp  # Viewport Avatar Toolset
     fsfloaterposestand.cpp
     fsfloaterprotectedfolders.cpp
     fsfloaterradar.cpp
@@ -207,6 +208,7 @@ set(viewer_SOURCE_FILES
     fsposeranimator.cpp
     fsposestate.cpp
     fsposingmotion.cpp
+    fsvatsclipmotion.cpp  # Viewport Avatar Toolset
     fsprimfeedauth.cpp
     fsradar.cpp
     fsradarentry.cpp
@@ -1083,6 +1085,7 @@ set(viewer_HEADER_FILES
     fsfloaterpartialinventory.h
     fsfloaterplacedetails.h
     fsfloaterposer.h
+    fsfloateranimator.h
     fsfloaterposestand.h
     fsfloaterprotectedfolders.h
     fsfloaterradar.h
@@ -1146,6 +1149,7 @@ set(viewer_HEADER_FILES
     fsposeranimator.h
 	fsposestate.h
     fsposingmotion.h
+    fsvatsclipmotion.h
     fsprimfeedauth.h
     fsradar.h
     fsradarentry.h
