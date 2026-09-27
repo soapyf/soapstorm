@@ -231,6 +231,7 @@ void FSFloaterAnimator::setClip(vats::Clip clip, const std::string& name)
     mClip = std::move(clip);
     mName = name;
     mHaveClip = true;
+    ++mGeneration;
     mHistory.clear();
     VATsClipMotion::Playback& pb = VATsClipMotion::sPlayback;
     pb.frame = 0;
@@ -475,6 +476,19 @@ void FSFloaterAnimator::onPlayPause()
         pb.frame = 0;  // Play after the end starts over
     pb.playing = !pb.playing;
     pb.resync = pb.playing;
+    refresh();
+}
+
+void FSFloaterAnimator::mergeTake(const std::string& label, const std::function<void(vats::Clip&)>& change)
+{
+    edit(label, change);
+}
+
+void FSFloaterAnimator::showFrame(double frame)
+{
+    VATsClipMotion::Playback& pb = VATsClipMotion::sPlayback;
+    pb.playing = false;
+    pb.frame = std::max(frame, 0.0);
     refresh();
 }
 

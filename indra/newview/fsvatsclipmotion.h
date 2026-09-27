@@ -33,7 +33,9 @@
 
 // Evaluates a vats::Clip each frame (FK, IK and pins) and writes the result into joint states, with
 // exactly the rotations and positions VATs' .anim exporter would write, so the preview matches the
-// uploaded file. Only the local avatar plays one, so the floater and the motion share one Playback.
+// uploaded file. Only the local avatar plays these, so each use shares one static Playback with its
+// floater: sPlayback for the Animator's preview, sLive for motion capture driving the avatar live
+// (a clip holding one frame, replaced every frame by the capture floater).
 class VATsClipMotion : public LLMotion
 {
 public:
@@ -54,10 +56,11 @@ public:
         bool finished = false;  // a non-looping clip reached its end and holds the last frame
         double frame = 0;    // the frame shown; while paused, the frame to hold
     };
-    static Playback sPlayback;
+    static Playback sPlayback, sLive;
 
-    VATsClipMotion(const LLUUID& id);
-    static LLMotion* create(const LLUUID& id) { return new VATsClipMotion(id); }
+    VATsClipMotion(const LLUUID& id, Playback* playback);
+    static LLMotion* create(const LLUUID& id) { return new VATsClipMotion(id, &sPlayback); }
+    static LLMotion* createLive(const LLUUID& id) { return new VATsClipMotion(id, &sLive); }
 
     bool getLoop() override;
     F32 getDuration() override;
@@ -78,6 +81,7 @@ private:
         LLPointer<LLJointState> state;
         bool position;
     };
+    Playback* mPb;
     std::vector<Bound> mBound;
     F64 mPlayStart = 0.0;  // wall-clock seconds at which frame 0 would have been shown
     bool mWarnedNonFinite = false;

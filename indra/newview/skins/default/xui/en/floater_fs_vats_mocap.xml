@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- Viewport Avatar Toolset motion capture in the viewer: VMC, Rokoko and iFacialMocap live on your avatar,
+     recorded into the VATs Animator's clip (VATs spec 09, stage 6h; the app's Tools > Motion Capture). -->
+<floater
+	height="560"
+	width="440"
+	min_height="560"
+	min_width="440"
+	can_resize="true"
+	layout="topleft"
+	legacy_header_height="18"
+	name="floater_fs_vats_mocap"
+	save_rect="true"
+	single_instance="true"
+	title="VATs Motion Capture">
+	<floater.string name="listen">Listen</floater.string>
+	<floater.string name="stop_listening">Stop Listening</floater.string>
+	<floater.string name="record">Record</floater.string>
+	<floater.string name="cancel">Cancel</floater.string>
+	<floater.string name="stop">Stop</floater.string>
+	<tab_container follows="all" height="500" layout="topleft" left="4" name="tabs" tab_position="top" top="20" width="432">
+		<panel follows="all" height="480" label="Connect" layout="topleft" name="connect_panel">
+			<text follows="left|top|right" height="44" layout="topleft" left="8" name="intro_text" text_color="LtGray_50"
+				top="6" width="412" word_wrap="true">...</text>
+			<text font="SansSerifBold" follows="left|top" height="16" layout="topleft" left="8" name="setup_heading" top_pad="4" width="200">Setup</text>
+			<text follows="left|top" height="16" layout="topleft" left="8" name="addr_label" text_color="LtGray_50" top_pad="2" width="200">Your computer:</text>
+			<text font="SansSerifLarge" follows="left|top" height="20" layout="topleft" left="8" name="addr_text" top_pad="0" width="300">...</text>
+			<button follows="left|top" height="20" label="Copy" layout="topleft" left_pad="4" name="copy_addr_btn"
+				tool_tip="Enter this address in the sending app, on the same Wi-Fi" top_delta="0" width="60" />
+			<text follows="left|top|right" height="16" layout="topleft" left="8" name="listen_row" top_pad="4" width="412" word_wrap="true">...</text>
+			<text follows="left|top|right" height="30" layout="topleft" left="8" name="lan_row" top_pad="2" width="412" word_wrap="true">...</text>
+			<button follows="left|top" height="20" label="Allow Other Devices and Listen Again" layout="topleft" left="20" name="lan_fix_btn"
+				top_pad="0" width="260" />
+			<text follows="left|top|right" height="30" layout="topleft" left="8" name="fw_row" top_pad="2" width="412" word_wrap="true">...</text>
+			<button follows="left|top" height="22" label="Allow on My Home Network" layout="topleft" left="20" name="fw_allow_btn"
+				top_pad="0" width="200" />
+			<button follows="left|top" height="20" label="Copy Command" layout="topleft" left_pad="6" name="copy_cmd_btn"
+				tool_tip="Or type it yourself: copies the firewall command" top_delta="1" width="110" />
+			<text follows="left|top|right" height="30" layout="topleft" left="8" name="fw_message" top_pad="2" width="412" word_wrap="true" />
+			<text follows="left|top|right" height="30" layout="topleft" left="8" name="phone_row" top_pad="0" width="412" word_wrap="true">...</text>
+			<text follows="left|top|right" height="16" layout="topleft" left="8" name="recv_row" top_pad="2" width="412" word_wrap="true">...</text>
+			<text font="SansSerifBold" follows="left|top" height="16" layout="topleft" left="8" name="conn_heading" top_pad="6" width="200">Connection</text>
+			<combo_box follows="left|top" height="22" label="Source" layout="topleft" left="8" name="source_combo" top_pad="2" width="200">
+				<combo_box.item label="VMC protocol" name="vmc" value="0" />
+				<combo_box.item label="Rokoko Studio Live" name="rokoko" value="1" />
+				<combo_box.item label="iFacialMocap (iPhone)" name="ifacialmocap" value="2" />
+			</combo_box>
+			<spinner decimal_digits="0" follows="left|top" height="20" increment="1" label="Port" label_width="36" layout="topleft"
+				left_pad="8" max_val="65535" min_val="1" name="port_spin" top_delta="1" width="100" />
+			<check_box follows="left|top" height="16" label="Allow Other Devices" layout="topleft" left="8" name="lan_check" top_pad="6"
+				tool_tip="Listen on every network interface, for a phone or headset on your network. Off: only apps on this computer can send."
+				width="180" />
+			<button follows="left|top" height="22" label="Listen" layout="topleft" left="8" name="listen_btn" top_pad="4" width="110" />
+			<text follows="left|top|right" height="16" layout="topleft" left_pad="8" name="conn_text" top_delta="3" width="290">Not listening</text>
+			<line_editor follows="left|top" height="20" label="192.168.1.20" layout="topleft" left="8" max_length_bytes="63" name="phone_edit"
+				tool_tip="The address the iFacialMocap app shows" top_pad="8" width="160" />
+			<button follows="left|top" height="20" label="Connect to iPhone" layout="topleft" left_pad="6" name="connect_btn"
+				tool_tip="iFacialMocap starts sending to this computer once it receives this request." width="140" />
+			<text follows="left|top|right" height="30" layout="topleft" left="8" name="error_text" text_color="Orange" top_pad="4"
+				width="412" word_wrap="true" />
+			<text font="SansSerifBold" follows="left|top" height="16" layout="topleft" left="8" name="live_heading" top_pad="0" width="200">Live</text>
+			<check_box follows="left|top" height="16" initial_value="true" label="Drive the Avatar" layout="topleft" left="8" name="drive_check"
+				tool_tip="Shows the incoming motion on your avatar while listening. The animation is not changed until you record. Nobody else sees it."
+				top_pad="2" width="200" />
+			<text follows="left|top|right" height="16" layout="topleft" left="8" name="rest_text" top_pad="4" width="412">...</text>
+			<button follows="left|top" height="22" label="Capture Rest Pose Now" layout="topleft" left="8" name="rest_capture_btn"
+				tool_tip="Stand in a T-pose and press this if the arms or legs come in twisted." top_pad="2" width="170" />
+			<button follows="left|top" height="22" label="Reset to T-Pose" layout="topleft" left_pad="6" name="rest_reset_btn" width="130" />
+		</panel>
+		<panel follows="all" height="480" label="Face" layout="topleft" name="face_panel">
+			<check_box follows="left|top" height="16" initial_value="true" label="Use Face Tracking" layout="topleft" left="8" name="face_check"
+				tool_tip="Turns blendshapes from the sender into Bento face-bone motion (jaw, lips, eyelids, brows, cheeks, tongue). Needs a mesh head rigged to the Bento face bones."
+				top="8" width="200" />
+			<text follows="left|top|right" height="16" layout="topleft" left="8" name="shapes_text" top_pad="6" width="412">Shapes: none received</text>
+			<combo_box follows="left|top" height="22" label="Preset" layout="topleft" left="8" name="preset_combo" top_pad="6" width="200" />
+			<slider can_edit_text="true" decimal_digits="2" follows="left|top|right" height="20" increment="0.05" initial_value="1"
+				label="Strength" label_width="100" layout="topleft" left="8" max_val="2" min_val="0" name="strength_slider" top_pad="8" width="400" />
+			<slider can_edit_text="true" decimal_digits="2" follows="left|top|right" height="20" increment="0.05" initial_value="1"
+				label="Eye Strength" label_width="100" layout="topleft" left="8" max_val="2" min_val="0" name="eye_slider" top_pad="4"
+				tool_tip="How far the eyes follow the tracked gaze. The eyelids follow the eyes up and down." width="400" />
+			<slider can_edit_text="true" decimal_digits="0" follows="left|top|right" height="20" increment="1" initial_value="25"
+				label="Eye Limit Side" label_width="100" layout="topleft" left="8" max_val="45" min_val="5" name="eye_yaw_slider" top_pad="4"
+				tool_tip="The farthest the eyes turn left or right, in degrees." width="400" />
+			<slider can_edit_text="true" decimal_digits="0" follows="left|top|right" height="20" increment="1" initial_value="20"
+				label="Eye Limit Up/Down" label_width="100" layout="topleft" left="8" max_val="45" min_val="5" name="eye_pitch_slider" top_pad="4"
+				tool_tip="The farthest the eyes turn up or down, in degrees." width="400" />
+			<text font="SansSerifBold" follows="left|top" height="16" layout="topleft" left="8" name="shape_heading" top_pad="10" width="200">Shape Strengths</text>
+			<combo_box follows="left|top" height="22" label="Shape" layout="topleft" left="8" name="shape_combo" top_pad="2" width="200" />
+			<slider can_edit_text="true" decimal_digits="2" follows="left|top|right" height="20" increment="0.05" initial_value="1"
+				label="Strength" label_width="100" layout="topleft" left="8" max_val="2" min_val="0" name="shape_slider" top_pad="4" width="400" />
+			<button follows="left|top" height="22" label="Capture Neutral Face" layout="topleft" left="8" name="neutral_btn"
+				tool_tip="Relax your face and press this: your resting expression becomes the rest pose." top_pad="12" width="160" />
+			<button follows="left|top" height="22" label="Clear" layout="topleft" left_pad="6" name="neutral_clear_btn" width="70" />
+			<check_box follows="left|top" height="16" initial_value="true" label="Head from iPhone" layout="topleft" left="8" name="head_check"
+				tool_tip="Keys the head's turn from iFacialMocap's head tracking." top_pad="8" width="200" />
+		</panel>
+		<panel follows="all" height="480" label="Record" layout="topleft" name="record_panel">
+			<text follows="left|top|right" height="30" layout="topleft" left="8" name="target_text" top="6" width="412" word_wrap="true">...</text>
+			<spinner decimal_digits="0" follows="left|top" height="20" increment="1" label="Start at frame" label_width="100" layout="topleft"
+				left="8" max_val="100000" min_val="0" name="from_spin" top_pad="4" width="170" />
+			<button follows="left|top" height="20" label="Current" layout="topleft" left_pad="4" name="current_btn" width="70" />
+			<check_box follows="left|top" height="16" label="Stop at frame" layout="topleft" left="8" name="punch_check" top_pad="6" width="110" />
+			<spinner decimal_digits="0" follows="left|top" height="20" increment="1" label="" label_width="0" layout="topleft"
+				left_pad="2" max_val="100000" min_val="0" name="to_spin" top_delta="-2" width="70" />
+			<slider can_edit_text="true" decimal_digits="0" follows="left|top|right" height="20" increment="1" initial_value="3"
+				label="Countdown (s)" label_width="100" layout="topleft" left="8" max_val="5" min_val="0" name="countdown_slider" top_pad="6" width="400" />
+			<check_box follows="left|top" height="16" label="Selected Body Parts Only" layout="topleft" left="8" name="selected_check"
+				tool_tip="Records only the parts of the joints selected in the VATs Animator (for example the arms over an existing walk); every other track is left as it is."
+				top_pad="6" width="220" />
+			<check_box follows="left|top" height="16" label="Face Only" layout="topleft" left="8" name="face_only_check"
+				tool_tip="Records only the face bones (and the head from an iPhone), over the animation already there." top_pad="4" width="220" />
+			<button follows="left|top" height="24" label="Record" layout="topleft" left="8" name="record_btn" top_pad="8" width="110" />
+			<text font="SansSerifLarge" follows="left|top|right" height="22" layout="topleft" left_pad="8" name="record_text" top_delta="1" width="290" />
+			<text font="SansSerifBold" follows="left|top" height="16" layout="topleft" left="8" name="clean_heading" top_pad="10" width="200">Clean-up</text>
+			<slider can_edit_text="true" decimal_digits="0" follows="left|top|right" height="20" increment="1" initial_value="0"
+				label="Smoothing" label_width="100" layout="topleft" left="8" max_val="5" min_val="0" name="smooth_slider" top_pad="2"
+				tool_tip="Averages each rotation with its neighbours to calm tracker jitter (frames; 0 = off)." width="400" />
+			<check_box follows="left|top" height="16" initial_value="true" label="Reduce keys" layout="topleft" left="8" name="reduce_check" top_pad="6" width="110" />
+			<spinner decimal_digits="2" follows="left|top" height="20" increment="0.05" initial_value="0.5" label="deg" label_width="28" layout="topleft"
+				left_pad="2" max_val="5" min_val="0.05" name="deg_spin" top_delta="-2" width="100" />
+			<spinner decimal_digits="1" follows="left|top" height="20" increment="0.1" initial_value="2" label="mm" label_width="24" layout="topleft"
+				left_pad="6" max_val="20" min_val="0.1" name="mm_spin" width="96" />
+			<slider can_edit_text="true" decimal_digits="0" follows="left|top|right" height="20" increment="1" initial_value="4"
+				label="Edge blend" label_width="100" layout="topleft" left="8" max_val="15" min_val="0" name="blend_slider" top_pad="6"
+				tool_tip="Eases the start and end of a punched-in take from the animation around it, so the edges do not jump (frames; 0 = off)." width="400" />
+			<check_box follows="left|top" height="16" label="Clean Up Foot Sliding" layout="topleft" left="8" name="feet_check"
+				tool_tip="Holds planted feet still with leg IK where the take had them on the ground." top_pad="6" width="220" />
+			<text font="SansSerifBold" follows="left|top" height="16" layout="topleft" left="8" name="report_heading" top_pad="10" width="200">Last take</text>
+			<text follows="left|top|right|bottom" height="100" layout="topleft" left="8" name="report_text" top_pad="2" width="412" word_wrap="true" />
+		</panel>
+	</tab_container>
+	<text follows="left|bottom|right" height="32" layout="topleft" left="8" name="status_text" top="524" width="424" word_wrap="true">Drives your own avatar only; nobody else sees it until you record, upload and play the animation.</text>
+</floater>

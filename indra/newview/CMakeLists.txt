@@ -141,6 +141,9 @@ set(viewer_SOURCE_FILES
     fsfloaterposer.cpp
     fsfloateranimator.cpp  # Viewport Avatar Toolset
     fsanimtimelinectrl.cpp
+    fsfloatervatsmocap.cpp
+    fsvatsfirewall.cpp
+    fsvatsudp.cpp
     fsfloaterposestand.cpp
     fsfloaterprotectedfolders.cpp
     fsfloaterradar.cpp
@@ -1088,6 +1091,9 @@ set(viewer_HEADER_FILES
     fsfloaterposer.h
     fsfloateranimator.h
     fsanimtimelinectrl.h
+    fsfloatervatsmocap.h
+    fsvatsfirewall.h
+    fsvatsudp.h
     fsfloaterposestand.h
     fsfloaterprotectedfolders.h
     fsfloaterradar.h

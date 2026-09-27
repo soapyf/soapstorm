@@ -27,6 +27,7 @@
 
 #include "llfloater.h"
 
+#include <functional>
 #include <memory>
 
 #include "vats/clip.h"
@@ -46,6 +47,15 @@ public:
     bool postBuild() override;
     void onClose(bool app_quitting) override;
     void draw() override;
+
+    // For motion capture (6h), which records into the open clip.
+    bool hasClip() const { return mHaveClip; }
+    const vats::Clip& clip() const { return mClip; }
+    unsigned generation() const { return mGeneration; }  // changes whenever another clip is opened or created
+    int currentFrame() const;
+    std::vector<int> selectedNodes() const;  // node indices in the VATs skeleton
+    void showFrame(double frame);            // pause and show a frame (the playhead follows a take)
+    void mergeTake(const std::string& label, const std::function<void(vats::Clip&)>& change);
 
 private:
     // Files
@@ -75,9 +85,7 @@ private:
     bool rebind();   // points the preview at the clip's animated joints; false when it cannot play
     void edited();   // after any change to the clip: rebind, refresh the preview and the controls
     template <class F> void edit(const std::string& label, F&& change);
-    std::vector<int> selectedNodes() const;
     bool keyFromAvatar(vats::Clip& clip, int node, int frame) const;  // key what the avatar shows
-    int currentFrame() const;
     void start();  // (re)starts the preview from the current frame
     void stop();   // removes the preview motion from the avatar
     void refresh();
@@ -89,6 +97,7 @@ private:
     vats::History mHistory;
     std::string mName;  // file stem, the default for saving and uploading
     bool mHaveClip = false;
+    unsigned mGeneration = 0;
     bool mPlayable = false;  // the clip exports and every joint it animates exists on the avatar
     LLUUID mMotionID;
     bool mMotionIsKeyframe = false;  // "Preview as uploaded": the viewer's own LLKeyframeMotion

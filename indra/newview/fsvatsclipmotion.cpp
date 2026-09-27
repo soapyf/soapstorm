@@ -32,18 +32,19 @@
 #include <cmath>
 
 VATsClipMotion::Playback VATsClipMotion::sPlayback;
+VATsClipMotion::Playback VATsClipMotion::sLive;
 
 namespace
 {
     constexpr double MAX_OFFSET = 5.0;  // the .anim position range, clamped the same way the exporter does
 
-    double fps() { return std::clamp(VATsClipMotion::sPlayback.clip->fps, 1, 120); }
-    double last_frame() { return std::max(VATsClipMotion::sPlayback.clip->end_frame, 1); }
+    double fps(const VATsClipMotion::Playback& pb) { return std::clamp(pb.clip->fps, 1, 120); }
+    double last_frame(const VATsClipMotion::Playback& pb) { return std::max(pb.clip->end_frame, 1); }
 }
 
-VATsClipMotion::VATsClipMotion(const LLUUID& id) : LLMotion(id)
+VATsClipMotion::VATsClipMotion(const LLUUID& id, Playback* playback) : LLMotion(id), mPb(playback)
 {
-    mName = "vats_clip_preview";
+    mName = playback == &sLive ? "vats_live_capture" : "vats_clip_preview";
 }
 
 bool VATsClipMotion::getLoop() { return true; }  // never stopped by the controller; see getDuration
@@ -53,26 +54,26 @@ bool VATsClipMotion::getLoop() { return true; }  // never stopped by the control
 // the preview almost at once and handed the avatar back to the AO.
 F32 VATsClipMotion::getDuration() { return 0.f; }
 
-F32 VATsClipMotion::getEaseInDuration() { return sPlayback.clip ? F32(sPlayback.clip->ease_in) : 0.f; }
+F32 VATsClipMotion::getEaseInDuration() { return mPb->clip && mPb != &sLive ? F32(mPb->clip->ease_in) : 0.f; }
 
 F32 VATsClipMotion::getEaseOutDuration() { return 0.f; }  // the floater's Stop ends the preview
 
 LLJoint::JointPriority VATsClipMotion::getPriority()
 {
     // The viewer lowers 7 and up (additive) to 6 on import (llkeyframemotion.cpp), so do the same.
-    S32 p = sPlayback.clip ? sPlayback.clip->priority : 0;
+    S32 p = mPb->clip ? mPb->clip->priority : 0;
     return LLJoint::JointPriority(llclamp(p, 0, (S32)LLJoint::ADDITIVE_PRIORITY - 1));
 }
 
 LLMotion::LLMotionInitStatus VATsClipMotion::onInitialize(LLCharacter* character)
 {
-    if (!character || !sPlayback.clip || !sPlayback.skeleton)
+    if (!character || !mPb->clip || !mPb->skeleton)
         return STATUS_FAILURE;
 
     mBound.clear();
-    for (const Joint& j : sPlayback.joints)
+    for (const Joint& j : mPb->joints)
     {
-        S32 node = sPlayback.skeleton->find(j.name);
+        S32 node = mPb->skeleton->find(j.name);
         LLJoint* joint = character->getJoint(j.name);
         if (node < 0 || !joint)
             continue;  // the floater refuses clips with unknown joints before it gets here
@@ -85,14 +86,14 @@ LLMotion::LLMotionInitStatus VATsClipMotion::onInitialize(LLCharacter* character
         addJointState(state);
         mBound.push_back({ node, state, j.position });
     }
-    LL_INFOS("VATsAnimator") << "preview bound " << mBound.size() << " of " << sPlayback.joints.size() << " joints"
+    LL_INFOS("VATsAnimator") << mName << " bound " << mBound.size() << " of " << mPb->joints.size() << " joints"
                               << LL_ENDL;
     return STATUS_SUCCESS;
 }
 
 bool VATsClipMotion::onUpdate(F32 time, U8* joint_mask)
 {
-    Playback& pb = sPlayback;
+    Playback& pb = *mPb;
     if (!pb.clip || !pb.rig)
         return false;
 
@@ -105,20 +106,20 @@ bool VATsClipMotion::onUpdate(F32 time, U8* joint_mask)
         const F64 now = LLTimer::getTotalSeconds();
         if (pb.resync)
         {
-            mPlayStart = now - pb.frame / fps();
+            mPlayStart = now - pb.frame / fps(pb);
             pb.resync = false;
             pb.finished = false;
         }
-        frame = (now - mPlayStart) * fps();
+        frame = (now - mPlayStart) * fps(pb);
         if (clip.loop && clip.loop_out > clip.loop_in && frame > clip.loop_out)
             frame = clip.loop_in + std::fmod(frame - clip.loop_in, double(clip.loop_out - clip.loop_in));
-        if (!clip.loop && frame >= last_frame())
+        if (!clip.loop && frame >= last_frame(pb))
         {
-            frame = last_frame();  // hold the last frame, like an editor; Play restarts
+            frame = last_frame(pb);  // hold the last frame, like an editor; Play restarts
             pb.playing = false;
             pb.finished = true;
         }
-        frame = std::clamp(frame, 0.0, last_frame());
+        frame = std::clamp(frame, 0.0, last_frame(pb));
         pb.frame = frame;
     }
 

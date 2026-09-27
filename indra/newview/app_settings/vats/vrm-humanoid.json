@@ -1,0 +1,102 @@
+{
+	"name": "VRM / Unity Humanoid",
+	"mirror": [
+		[
+			"Left",
+			"Right"
+		],
+		[
+			"left",
+			"right"
+		]
+	],
+	"bones": {
+		"mPelvis": [
+			"hips"
+		],
+		"mTorso": [
+			"spine"
+		],
+		"mChest": [
+			"upperChest",
+			"chest"
+		],
+		"mNeck": [
+			"neck"
+		],
+		"mHead": [
+			"head"
+		],
+		"mCollarLeft": [
+			"leftShoulder"
+		],
+		"mShoulderLeft": [
+			"leftUpperArm"
+		],
+		"mElbowLeft": [
+			"leftLowerArm"
+		],
+		"mWristLeft": [
+			"leftHand"
+		],
+		"mHipLeft": [
+			"leftUpperLeg"
+		],
+		"mKneeLeft": [
+			"leftLowerLeg"
+		],
+		"mAnkleLeft": [
+			"leftFoot"
+		],
+		"mFootLeft": [
+			"leftToes"
+		],
+		"mHandThumb1Left": [
+			"leftThumbMetacarpal",
+			"leftThumbProximal"
+		],
+		"mHandThumb2Left": [
+			"leftThumbIntermediate",
+			"leftThumbProximal"
+		],
+		"mHandThumb3Left": [
+			"leftThumbDistal"
+		],
+		"mHandIndex1Left": [
+			"leftIndexProximal"
+		],
+		"mHandIndex2Left": [
+			"leftIndexIntermediate"
+		],
+		"mHandIndex3Left": [
+			"leftIndexDistal"
+		],
+		"mHandMiddle1Left": [
+			"leftMiddleProximal"
+		],
+		"mHandMiddle2Left": [
+			"leftMiddleIntermediate"
+		],
+		"mHandMiddle3Left": [
+			"leftMiddleDistal"
+		],
+		"mHandRing1Left": [
+			"leftRingProximal"
+		],
+		"mHandRing2Left": [
+			"leftRingIntermediate"
+		],
+		"mHandRing3Left": [
+			"leftRingDistal"
+		],
+		"mHandPinky1Left": [
+			"leftLittleProximal"
+		],
+		"mHandPinky2Left": [
+			"leftLittleIntermediate"
+		],
+		"mHandPinky3Left": [
+			"leftLittleDistal"
+		]
+	}
+}
