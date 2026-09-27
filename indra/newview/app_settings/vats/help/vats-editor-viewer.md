@@ -11,9 +11,10 @@ projects and the other help pages apply as written, apart from the differences b
 
 ### Opening and closing
 
-Choose **Avatar → VATs Editor**. The editor's menus and panels fill the world view below the viewer's
-own menu and navigation bars, which keep working; the middle shows the world. Choose **Avatar → VATs
-Editor** again, or the editor's **File → Close Editor** (**Ctrl+Q**), to close it. With unsaved changes it
+Choose **Avatar → VATs Editor**. The editor's menus and panels fill the viewer's window; the middle shows
+the world. Once you are logged in, most of the viewer's own UI is hidden (see below). The camera frames your
+avatar from the front, as **Frame All** does; after that it stays where you put it. Close the editor with
+**File → Close Editor** (**Ctrl+Q**) or **Viewer → Close Editor**. With unsaved changes it
 asks **Save changes?** first; **Cancel** keeps it open. Quitting or logging out closes it without asking
 and keeps the unsaved work as an autosave.
 
@@ -22,6 +23,29 @@ your work and closes, with the notification "The region kept standing you up, so
 work is saved and reopens next time." The next time you open the editor it reopens that work as it was:
 the same project, every actor, its file and its unsaved changes, without the **Recover unsaved work**
 window.
+
+### The viewer's UI while the editor is open
+
+The viewer's toolbars, navigation and status bars (with its menu bar), chiclets and windows are hidden, as
+with the viewer's own hide-UI, and come back as they were when the editor closes. These stay, drawn over the
+editor:
+
+| Kept | Why |
+|---|---|
+| Questions that need an answer (the upload price, disconnect, quit) | you have to answer them |
+| Notifications and toasts: script dialogs, teleport, friendship and permission offers, group notices | they need an answer or bring news |
+| Conversations (nearby chat and IMs), also when torn off | chat |
+| The Notifications window and the IM well | to read what came in |
+
+Any other window that opens while the editor is open (for example a map a script opens) stays hidden until
+you close the editor or choose **Viewer → Show Firestorm UI**.
+
+- **Chat pane.** The editor's **Chat** pane holds the viewer's own Conversations window: nearby chat and
+  your IMs, with its usual tabs and chat box. It moves and resizes with the pane, and hides when the pane is
+  closed or another tab of its dock is in front. **Viewer → Chat** shows or hides it.
+- **Viewer menu.** **Chat**; **Notifications** opens or closes the viewer's Notifications window (the menu
+  and a button in the status bar show how many are unread); **Show Firestorm UI** shows all of the viewer's
+  UI over the editor until you choose it again; **Close Editor**.
 
 ### Your avatar while the editor is open
 
@@ -36,7 +60,7 @@ The avatar belongs to the editor until you close it:
 - **No movement reaches it.** Keys go to the editor, and movement from anywhere else (the movement
   buttons, a joystick, a walk to a spot) is dropped until you close the editor.
 - **It stays where it was, on your screen.** Your avatar is drawn exactly where it was when the editor
-  opened, even if the region pushes it, and the camera stops following it, as after an **Alt**+click.
+  opened, even if the region pushes it, and the camera doesn't follow it, as after an **Alt**+click.
   Other residents may see it move. If the region moves a flying avatar more than 0.5 m, the viewer's
   autopilot flies it back, as it would to walk you to a spot.
 - **Stand Up is refused** while the editor has sat the avatar down: the **Stand** button, **Stand Up**
@@ -49,6 +73,10 @@ The avatar belongs to the editor until you close it:
   skeleton** does: bones that stopped animations left out of place go back, and your mesh body's own joint
   offsets stay. Turn this off with **Edit → Preferences... → Reset joint positions when the editor
   opens**.
+- **Your mesh keeps its shape.** Bone positions the editor sets (the hip, and bones your animation or the
+  face tracking moves) are added to your avatar's own bone positions, including your mesh head's or body's
+  joint offsets, so a mesh face isn't pulled to the default face. For a mesh head with its own face joint
+  positions, turn off **Move face bones** in [[Face tracking]]. Closing the editor puts every bone back.
 - **Only the editor's pose shows.** Every other animation on your avatar is stopped on your screen: your AO,
   animations from the region and from scripts, stands and walks, look-at, eye and head motion, breathing
   and expressions. Animations that start while the editor is open are stopped as they arrive. Nothing
@@ -56,7 +84,7 @@ The avatar belongs to the editor until you close it:
 - **Closing gives everything back.** The built-in motions and every animation the region still plays on
   you start again, including the ones it started while the editor was open, and the avatar stands up if
   the editor sat it down and it is still sitting on the ground. The avatar is drawn where it really is
-  again.
+  again, Stand Up and walking work again, and world clicks are the viewer's.
 
 Other residents see your avatar sitting on the ground with its normal animations; the editor's pose is
 yours only until you upload the animation and play it.
@@ -65,9 +93,8 @@ yours only until you upload the animation and play it.
 
 | Input | Goes to |
 |---|---|
-| A click on an editor panel, menu or popup | the editor |
-| A click on a viewer window (chat, inventory, the toolbars) | the viewer, as usual |
-| A click on a notification toast, even over an editor panel | the toast |
+| A click, the wheel or typing in a viewer window that shows (the Chat pane, a notification, a question), even over an editor panel | the viewer, as usual |
+| A click on an editor panel, menu or popup where no viewer window covers it | the editor |
 | A click on the world | the editor: a bone selects it, a gizmo or IK handle drags, empty space clears the selection. Objects, click-to-walk and pie menus are off |
 | **Alt**+drag, **Ctrl+Alt**+drag, **Ctrl+Alt+Shift**+drag | the viewer's camera |
 | The mouse wheel over the world | the viewer's camera zoom |
@@ -80,17 +107,17 @@ here, so use **Alt+H**, which works in every preset (the **Edit** menu still sho
 editor's keys also win over the viewer's own menu shortcuts, for example **Alt+H** (Teleport History),
 **Alt+R** (Region Details) and **Shift+Alt+R** (Refresh Attachments), until you close the editor.
 
-To chat, click the chat bar first; the keys then go there until you click the world or an editor panel.
-The status bar says the same: "Clicks and keys: the editor   Camera: Alt+drag, wheel, Alt+arrows   Chat:
-click the chat bar".
+To chat, click the chat box in the **Chat** pane first; the keys then go there until you click the world or
+an editor panel. The status bar says the same: "Clicks and keys: the editor   Camera: Alt+drag, wheel,
+Alt+arrows   Chat: click the Chat pane".
 
 ### The world as the view
 
 The editor has no 3D view of its own: the world is its view, and the viewer's camera is the camera. Bones
 are drawn as coloured lines over your avatar, with attachment-point dots, [[IK]] handles, the gizmo, the
-axis marker and the view cube. These are drawn with the world, under the viewer's own windows; the
-editor's panels stay on top of the viewer's windows. Viewer menus, the viewer's questions and notification
-toasts come in front of the panels. A viewer window over a bone takes the click, not the bone.
+axis marker and the view cube. These and the editor's panels are drawn with the world, under the viewer's
+windows that show: notifications, questions and the Chat pane are always in front. A viewer window over a
+bone or a panel takes the click, not the editor.
 
 - **Other actors** of a couple or group project (see [[Couples and groups]]) are drawn as skeletons at
   their place around your avatar, tinted with their colour. Click one of their bones to edit that actor;
@@ -164,7 +191,13 @@ World clicks go to the editor while it is open. Close the editor to touch, sit o
 
 ### My keys don't reach chat
 
-Keys go to the editor unless a viewer text field has the focus. Click the chat bar, then type.
+Keys go to the editor unless a viewer text field has the focus. Click the chat box in the **Chat** pane,
+then type.
+
+### A viewer window I need is hidden
+
+Choose **Viewer → Show Firestorm UI**: all of the viewer's UI shows over the editor until you choose it
+again.
 
 ## See also
 

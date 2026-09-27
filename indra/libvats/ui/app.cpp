@@ -1066,7 +1066,7 @@ std::string App::key_hint(const char* id) const {
 
 std::string App::nav_hint() const {
     if (host_.world_view())
-        return "Clicks and keys: the editor   Camera: Alt+drag, wheel, Alt+arrows   Chat: click the chat bar";
+        return "Clicks and keys: the editor   Camera: Alt+drag, wheel, Alt+arrows   Chat: click the Chat pane";
     switch (settings_.preset) {
         case Preset::Blender:
             return settings_.emulate_3_button ? "Middle or Alt+left: orbit   Shift: pan   Ctrl: zoom   Wheel: zoom"
@@ -1274,6 +1274,18 @@ void App::draw_menus() {
         ImGui::MenuItem("Motion Capture...", nullptr, &show_mocap_);
         ImGui::EndMenu();
     }
+    if (ui::Host::HostUi* h = host_.host_ui()) {  // the viewer's own UI beside the editor (spec 09 U4b)
+        const int n = h->unread_notices();
+        const std::string count = n > 0 ? " (" + std::to_string(n) + ")" : "";
+        if (ImGui::BeginMenu(("Viewer" + count + "###host_menu").c_str())) {
+            ImGui::MenuItem(h->pane_title(), nullptr, &show_host_pane_);
+            if (ImGui::MenuItem(("Notifications" + count).c_str())) h->toggle_notices();
+            if (ImGui::MenuItem(h->reveal_label(), nullptr, h->revealed())) h->reveal(!h->revealed());
+            ImGui::Separator();
+            menu_item("quit");
+            ImGui::EndMenu();
+        }
+    }
     if (ImGui::BeginMenu("Help")) {
         for (const char* id : {"help_contents", "help", "welcome", "about"}) menu_item(id);
         ImGui::EndMenu();
@@ -1412,6 +1424,7 @@ void App::draw_dockspace() {
             ImGui::DockBuilderDockWindow("Inventory", left);
             ImGui::DockBuilderDockWindow("Properties", right);
             ImGui::DockBuilderDockWindow("Graph", bottom);
+            if (ui::Host::HostUi* h = host_.host_ui()) ImGui::DockBuilderDockWindow(h->pane_title(), bottom);
             ImGui::DockBuilderDockWindow("Timeline", timeline);
             if (!world) ImGui::DockBuilderDockWindow("Viewport", main);
             ImGui::DockBuilderFinish(dock);
@@ -1490,6 +1503,7 @@ bool App::frame() {
         ImGui::SetWindowFocus(std::exchange(pending_tab_, "").c_str());
     { VATS_PROFILE("panel graph"); draw_graph_panel(); }
     { VATS_PROFILE("viewport"); draw_viewport(); }
+    draw_host_pane();
     draw_hand_poser();
     { VATS_PROFILE("status bar"); draw_status_bar(); }
     draw_message_popup();

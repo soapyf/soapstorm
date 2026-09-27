@@ -714,6 +714,10 @@ void App::draw_status_bar() {
                 ImGui::SameLine(0, 24);
                 hint((std::to_string(n) + " selected: keys, copy/paste and the graph apply to all of them").c_str());
             }
+            if (ui::Host::HostUi* h = host_.host_ui(); h && h->unread_notices() > 0) {  // spec 09 U4b: the unread badge
+                ImGui::SameLine(0, 24);
+                if (ImGui::SmallButton(("Notifications (" + std::to_string(h->unread_notices()) + ")").c_str())) h->toggle_notices();
+            }
             const std::string hint = graph_.hovered() ? graph_nav_hint() : nav_hint();
             ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize(hint.c_str()).x - 16);
             ImGui::TextDisabled("%s", hint.c_str());
@@ -721,6 +725,25 @@ void App::draw_status_bar() {
         }
     }
     ImGui::End();
+}
+
+// The host's pane (the viewer's conversations): an empty dockable window whose inner rectangle the host fills.
+void App::draw_host_pane() {
+    ui::Host::HostUi* h = host_.host_ui();
+    if (!h) return;
+    bool shown = false;
+    ImVec2 lo, hi;
+    if (show_host_pane_) {
+        ImGui::SetNextWindowSize(window_size(30, 18), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin(h->pane_title(), &show_host_pane_, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+            lo = ImGui::GetCursorScreenPos();
+            const ImVec2 avail = ImGui::GetContentRegionAvail();
+            hi = ImVec2(lo.x + avail.x, lo.y + avail.y);
+            shown = avail.x > 1 && avail.y > 1;
+        }
+        ImGui::End();
+    }
+    h->place_pane(shown && show_host_pane_, lo, hi);
 }
 
 }  // namespace vats

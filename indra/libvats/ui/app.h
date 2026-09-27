@@ -255,6 +255,8 @@ private:
         f(g);
     }
     void draw_status_bar();
+    void draw_host_pane();  // Host::host_ui's pane (spec 09 U4b)
+    bool show_host_pane_ = true;
     void draw_viewport();
     void draw_bone_lines(ImDrawList* dl) const;  // the world view's bones: the host draws no scene (spec 09 U3)
     // The world view's other actors, ghosts and collision volumes as lines (spec 09 U4).

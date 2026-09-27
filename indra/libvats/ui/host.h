@@ -109,6 +109,24 @@ public:
     // The program the UI runs inside, for Welcome and About; "" = the standalone app (SDL).
     virtual std::string host_name() const { return ""; }
 
+    // --- The host's own UI beside the editor (the viewer, spec 09 U4b) ----------------------------
+    // The app has none (null): the editor then shows none of it (no pane, no Viewer menu, no badge).
+    class HostUi {
+    public:
+        virtual ~HostUi() = default;
+        // A dockable pane the host fills with a window of its own (the viewer's conversations, "Chat"): every
+        // frame the editor says whether the pane shows and its inner rectangle, in display coordinates.
+        virtual const char* pane_title() const = 0;
+        virtual void place_pane(bool shown, ImVec2 min, ImVec2 max) = 0;
+        virtual int unread_notices() const = 0;  // the host's notifications not yet seen
+        virtual void toggle_notices() = 0;       // shows or hides the host's notification window
+        // The host's full UI, shown over the editor until turned off again ("Show Firestorm UI").
+        virtual const char* reveal_label() const = 0;
+        virtual bool revealed() const = 0;
+        virtual void reveal(bool on) = 0;
+    };
+    virtual HostUi* host_ui() { return nullptr; }
+
     // --- Upload (the viewer) ---------------------------------------------------------------------
     // True when the host can upload an animation straight to the grid.
     virtual bool can_upload() const { return false; }
