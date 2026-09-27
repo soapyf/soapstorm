@@ -40,6 +40,7 @@ In every preset:
 
 The default. Camera moves need **Alt**; **Q**, **W**, **E** and **R** pick the Select, Move, Rotate
 and Scale tools; **S** sets a key. **Alt+V** also plays and **Alt+.** and **Alt+,** also step frames.
+**Alt+W** or **Alt+H** resets the hip position.
 
 ### Blender
 
@@ -47,7 +48,8 @@ and Scale tools; **S** sets a key. **Alt+V** also plays and **Alt+.** and **Alt+
   (Alt + left-drag = middle-drag)** in [[Preferences]]; **Alt + left drag** then orbits, with
   **Shift** to pan and **Ctrl** to zoom.
 - **I** sets a key, **Alt+I** deletes it; **W**, **G**, **R** and **S** pick the Select, Move, Rotate and
-  Scale tools; **A** selects all; the number pad sets views.
+  Scale tools; **A** selects all; the number pad sets views; **Alt+G** or **Alt+H** resets the hip
+  position.
 
 With the pointer over the viewport and a bone, IK control or static prop selected, **G** starts a
 modal move and **R** a modal rotation that follow the mouse without a button held:

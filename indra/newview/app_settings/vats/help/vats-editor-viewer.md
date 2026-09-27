@@ -13,8 +13,15 @@ projects and the other help pages apply as written, apart from the differences b
 
 Choose **Avatar → VATs Editor**. The editor's menus and panels fill the world view below the viewer's
 own menu and navigation bars, which keep working; the middle shows the world. Choose **Avatar → VATs
-Editor** again to close it. With unsaved changes it asks **Save changes?** first; **Cancel** keeps it
-open. Quitting or logging out closes it without asking and keeps the unsaved work as an autosave.
+Editor** again, or the editor's **File → Close Editor** (**Ctrl+Q**), to close it. With unsaved changes it
+asks **Save changes?** first; **Cancel** keeps it open. Quitting or logging out closes it without asking
+and keeps the unsaved work as an autosave.
+
+If the region stands your avatar up a second time while the editor is open (see below), the editor saves
+your work and closes, with the notification "The region kept standing you up, so the editor closed. Your
+work is saved and reopens next time." The next time you open the editor it reopens that work as it was:
+the same project, every actor, its file and its unsaved changes, without the **Recover unsaved work**
+window.
 
 ### Your avatar while the editor is open
 
@@ -23,13 +30,33 @@ The avatar belongs to the editor until you close it:
 - **It sits down on the ground** as it opens, the same as **Avatar → Sit Down**, so it can't walk and
   isn't bumped around. It doesn't sit when it is already sitting on something, when you are flying, while
   you edit your appearance, or when RLVa forbids sitting.
+- **Flying, it stays in the air.** The viewer's **Sit Down** is off while flying, and a sit in the air
+  brings the avatar down to the ground, so the editor doesn't sit it: the avatar keeps flying and hovers
+  where it is.
+- **No movement reaches it.** Keys go to the editor, and movement from anywhere else (the movement
+  buttons, a joystick, a walk to a spot) is dropped until you close the editor.
+- **It stays where it was, on your screen.** Your avatar is drawn exactly where it was when the editor
+  opened, even if the region pushes it, and the camera stops following it, as after an **Alt**+click.
+  Other residents may see it move. If the region moves a flying avatar more than 0.5 m, the viewer's
+  autopilot flies it back, as it would to walk you to a spot.
+- **Stand Up is refused** while the editor has sat the avatar down: the **Stand** button, **Stand Up**
+  in the menus and pie menus, and the other ways the viewer offers show "Close the editor to stand up"
+  instead. This includes RLVa's forced stand-up.
+- **The region can still stand it up**, for example from a script. The editor sits it down again once;
+  the second time it closes (see [[VATs Editor (viewer)#Opening and closing]]). A teleport doesn't count:
+  the avatar sits down again where it lands.
+- **Joint positions are reset** as the editor opens, on your screen only, as the viewer's **Reset
+  skeleton** does: bones that stopped animations left out of place go back, and your mesh body's own joint
+  offsets stay. Turn this off with **Edit → Preferences... → Reset joint positions when the editor
+  opens**.
 - **Only the editor's pose shows.** Every other animation on your avatar is stopped on your screen: your AO,
   animations from the region and from scripts, stands and walks, look-at, eye and head motion, breathing
   and expressions. Animations that start while the editor is open are stopped as they arrive. Nothing
   about this is sent to the region.
 - **Closing gives everything back.** The built-in motions and every animation the region still plays on
   you start again, including the ones it started while the editor was open, and the avatar stands up if
-  the editor sat it down and it is still sitting on the ground.
+  the editor sat it down and it is still sitting on the ground. The avatar is drawn where it really is
+  again.
 
 Other residents see your avatar sitting on the ground with its normal animations; the editor's pose is
 yours only until you upload the animation and play it.
@@ -39,13 +66,19 @@ yours only until you upload the animation and play it.
 | Input | Goes to |
 |---|---|
 | A click on an editor panel, menu or popup | the editor |
-| A click on a viewer window (chat, inventory, notifications, the toolbars) | the viewer, as usual |
+| A click on a viewer window (chat, inventory, the toolbars) | the viewer, as usual |
+| A click on a notification toast, even over an editor panel | the toast |
 | A click on the world | the editor: a bone selects it, a gizmo or IK handle drags, empty space clears the selection. Objects, click-to-walk and pie menus are off |
 | **Alt**+drag, **Ctrl+Alt**+drag, **Ctrl+Alt+Shift**+drag | the viewer's camera |
 | The mouse wheel over the world | the viewer's camera zoom |
 | The viewer's camera keys: **Alt** (or **Ctrl+Alt**, **Ctrl+Alt+Shift**) with the arrows, **Page Up**, **Page Down**, **A**, **D**, **W**, **S**, **E** or **C** | the viewer's camera |
-| Any other key | the editor's shortcuts (see [[Keyboard shortcuts]]); an editor shortcut that is also a camera key, such as **Alt+W** (**Reset Hip Position**), works from the **Edit** menu only |
+| Any other key | the editor's shortcuts (see [[Keyboard shortcuts]]) |
 | Typing while a viewer text field has the focus | that field |
+
+**Reset Hip Position** is the only editor shortcut that is also a camera key: **Alt+W** moves the camera
+here, so use **Alt+H**, which works in every preset (the **Edit** menu still shows **Alt+W**). The
+editor's keys also win over the viewer's own menu shortcuts, for example **Alt+H** (Teleport History),
+**Alt+R** (Region Details) and **Shift+Alt+R** (Refresh Attachments), until you close the editor.
 
 To chat, click the chat bar first; the keys then go there until you click the world or an editor panel.
 The status bar says the same: "Clicks and keys: the editor   Camera: Alt+drag, wheel, Alt+arrows   Chat:
@@ -56,7 +89,8 @@ click the chat bar".
 The editor has no 3D view of its own: the world is its view, and the viewer's camera is the camera. Bones
 are drawn as coloured lines over your avatar, with attachment-point dots, [[IK]] handles, the gizmo, the
 axis marker and the view cube. These are drawn with the world, under the viewer's own windows; the
-editor's panels stay on top of everything. A viewer window over a bone takes the click, not the bone.
+editor's panels stay on top of the viewer's windows. Viewer menus, the viewer's questions and notification
+toasts come in front of the panels. A viewer window over a bone takes the click, not the bone.
 
 - **Other actors** of a couple or group project (see [[Couples and groups]]) are drawn as skeletons at
   their place around your avatar, tinted with their colour. Click one of their bones to edit that actor;
@@ -112,7 +146,17 @@ The editor's pose is shown on your screen only. Upload the animation and play it
 ### My avatar didn't sit down
 
 It doesn't sit while you fly, while it already sits, while you edit your appearance, or when RLVa forbids
-sitting. Land and reopen the editor. It still shows only the editor's pose, but can be moved.
+sitting. Flying, it hovers where it was instead. It still shows only the editor's pose.
+
+### Stand doesn't work
+
+While the editor has sat your avatar down, Stand Up is refused and a notification says "Close the editor
+to stand up". Close the editor; the avatar stands up.
+
+### The editor closed by itself
+
+The region stood your avatar up twice while the editor was open. Your work is saved; open the editor
+again to get it back as it was.
 
 ### Clicking an object does nothing
 

@@ -64,6 +64,11 @@ public:
     bool frame();
     void quit_unattended();  // the system asked the program to stop: no prompt, unsaved work kept as an autosave
     void request_quit();
+    // A host closing the editor on its own (the viewer, spec 09 U4b): the document (every actor, the path and
+    // whether it is unsaved) goes to a quicksave that the next init reopens as it was, with no prompt. False
+    // when there is nowhere to write it; the editor then stays open.
+    bool quit_to_quicksave();
+    bool viewer_reset_joints() const { return settings_.viewer_reset_joints; }  // the viewer's Preferences toggle
     void open_path(const std::string& path);  // command line and drag-and-drop
     // Command-line helpers for scripted checks: apply a built-in pose ("builtin:<slug>" or its slug) at
     // frame 0 (hand poses on both hands), and frame the selection.
@@ -159,6 +164,10 @@ private:
     static bool write_text(const std::string& path, const std::string& text, bool backup, std::string& why);  // now, regardless of the clock; false when nothing was written
     void find_recoverable();
     void draw_recovery();
+    std::string quicksave_base() const;  // "" when there is no preference folder
+    void reopen_quicksave();
+    // Loads an autosave or quicksave as the document, as it was: its original path and unsaved state.
+    bool open_recovered(const std::string& file, const std::string& original, bool dirty, std::string& err);
     std::string session_id_;
     std::uint64_t autosave_due_ = 0;  // ms (ticks_ns() / 1e6) of the next autosave; 0 = the clock has not started
     struct Recoverable {

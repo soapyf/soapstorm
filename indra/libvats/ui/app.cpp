@@ -136,6 +136,7 @@ bool App::init(float display_scale, std::string& err) {
     find_recoverable();
     build_actions();
     guarded("the library", [&] { load_library(); });
+    reopen_quicksave();
     last_tick_ = host_.ticks_ns();
     return true;
 }
@@ -542,7 +543,8 @@ void App::build_actions() {
     if (host_.can_upload()) add("upload", {"Upload Animation...", 0, 0, false, [this] { upload_now(); }, {}});
     add("export_bvh", {"Export BVH (Animated Bones)...", 0, 0, false, [this] { export_now(true, false); }, {}});
     add("export_bvh_all", {"Export BVH (All Bento Bones)...", 0, 0, false, [this] { export_now(true, true); }, {}});
-    add("quit", {"Quit", ctrl | ImGuiKey_Q, 0, false, [this] { request_quit(); }, {}});
+    // In the viewer the editor closes and the viewer stays.
+    add("quit", {host_.world_view() ? "Close Editor" : "Quit", ctrl | ImGuiKey_Q, 0, false, [this] { request_quit(); }, {}});
 
     add("undo", {"Undo", ctrl | ImGuiKey_Z, 0, false,
                  [this] {
@@ -630,7 +632,7 @@ void App::build_actions() {
                            });
                        },
                        need_selection});
-    add("reset_hip", {"Reset Hip Position", alt | ImGuiKey_W, 0, false,
+    add("reset_hip", {"Reset Hip Position", alt | ImGuiKey_W, alt | ImGuiKey_H, false,  // Alt+H: in the viewer Alt+W is its camera
                       [this] {
                           if (!doc_.clip().has_channels("mPelvis", kPosChannels)) {
                               status("The hip has no position keys");
@@ -984,7 +986,7 @@ void App::apply_preset() {
         {"key", {ImGuiKey_I, 0}},
         {"key_all", {shift | ImGuiKey_I, 0}},
         {"delete_key", {alt | ImGuiKey_I, ImGuiKey_Delete}},
-        {"reset_hip", {alt | ImGuiKey_G, 0}},
+        {"reset_hip", {alt | ImGuiKey_G, alt | ImGuiKey_H}},
         {"flip_pose", {ctrl | shift | ImGuiKey_V, 0}},
         {"next_key", {ImGuiKey_UpArrow, 0}},
         {"prev_key", {ImGuiKey_DownArrow, 0}},
@@ -1571,6 +1573,55 @@ void App::clear_autosave() {
     const std::string base = autosave_base();
     std::remove((base + ".vat").c_str());
     std::remove((base + ".path").c_str());
+}
+
+std::string App::quicksave_base() const {
+    const std::string& root = host_.paths().user;
+    return root.empty() ? root : root + "quicksave";
+}
+
+bool App::quit_to_quicksave() {
+    const std::string base = quicksave_base();
+    const std::string text = save_project(doc_.project);
+    const std::string state = (doc_.dirty ? "1" : "0") + doc_.path;  // unsaved flag, then the path ("" = Untitled)
+    if (base.empty() || !write_file(base + ".vat", text.data(), text.size()) ||
+        !write_file(base + ".path", state.data(), state.size()))
+        return false;
+    quit_ = true;
+    return true;
+}
+
+// The host closed the editor on its own last time: the same document comes back, no Recover prompt.
+void App::reopen_quicksave() {
+    const std::string base = quicksave_base();
+    std::string state, err;
+    if (headless_ || base.empty() || !read_file(base + ".path", state) || state.empty()) return;
+    if (!open_recovered(base + ".vat", state.substr(1), state[0] == '1', err))
+        return message("Could not reopen the work saved when the editor closed", err + "\n\nThe file is " + base + ".vat");
+    std::remove((base + ".vat").c_str());
+    std::remove((base + ".path").c_str());
+    status("Reopened " + (doc_.path.empty() ? std::string("Untitled") : file_name(doc_.path)) + " as it was when the editor closed");
+}
+
+bool App::open_recovered(const std::string& file, const std::string& original, bool dirty, std::string& err) {
+    std::string text;
+    Project p;
+    std::ifstream f(file, std::ios::binary);
+    text.assign(std::istreambuf_iterator<char>(f), {});
+    bool loaded = false;
+    try {
+        loaded = load_project(text, p, err, file);
+    } catch (const std::exception& e) {
+        err = e.what();
+    }
+    if (!loaded) return false;
+    new_document();
+    doc_.project = std::move(p);
+    clip_replaced();  // history and body follow the recovered active actor
+    doc_.path = original;
+    doc_.dirty = dirty;
+    update_title();
+    return true;
 }
 
 // Autosaves left by a session that ended without cleaning up. A running instance rewrites its file every two

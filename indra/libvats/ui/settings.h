@@ -40,6 +40,7 @@ struct Settings {
     bool show_welcome = true;
     bool migration_offered = false;  // IO-54: the reference-app import is offered once
     bool bvh_reduce = false;  // IO-35: key reduction after a BVH import
+    bool viewer_reset_joints = true;  // in the viewer: a local skeleton reset as the editor opens (spec 09 U4b)
     std::string body = "sl-default";
     std::string mesh_body;  // id of a library mesh body shown instead of the Linden mesh ("" = none)
     std::array<CameraView, 4> cameras;

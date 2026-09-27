@@ -165,6 +165,14 @@ void App::draw_preferences() {
         status(msg);
     }
 
+    if (host_.world_view()) {  // settings only the viewer uses (spec 09 U4b)
+        ImGui::SeparatorText("In the viewer");
+        row("Opening the editor");
+        if (ImGui::Checkbox("Reset joint positions when the editor opens", &settings_.viewer_reset_joints)) save_settings();
+        ImGui::SetItemTooltip("Resets your avatar's skeleton on your screen only, as the viewer's Reset Skeleton does: joint "
+                              "positions left by animations that stopped go back. Your mesh body's own joint offsets stay.");
+    }
+
     ImGui::Separator();
     ImGui::TextUnformatted("Hotkeys for this preset");
     ImGui::BeginChild("##keys", ImVec2(0, 0), ImGuiChildFlags_Borders);
@@ -681,25 +689,10 @@ void App::draw_recovery() {
         ImGui::TextDisabled("autosaved %s ago", m < 120 ? (std::to_string(m) + " min").c_str() : (std::to_string(m / 60) + " h").c_str());
         if (!r.original.empty()) ImGui::SetItemTooltip("%s", r.original.c_str());
         if (ImGui::Button("Recover")) {
-            std::string text, err;
-            Project p;
-            std::ifstream f(r.file, std::ios::binary);
-            text.assign(std::istreambuf_iterator<char>(f), {});
-            bool loaded = false;
-            try {
-                loaded = load_project(text, p, err, r.file);
-            } catch (const std::exception& e) {
-                err = e.what();
-            }
-            if (!loaded) {
+            std::string err;
+            if (!open_recovered(r.file, r.original, true, err)) {  // unsaved: it still has to be saved
                 message("Could not recover", err);
             } else {
-                new_document();
-                doc_.project = std::move(p);
-                clip_replaced();  // history and body follow the recovered active actor
-                doc_.path = r.original;
-                doc_.dirty = true;  // it still has to be saved
-                update_title();
                 status("Recovered " + name + ": save it to keep it");
                 // The old autosave goes only once this session's own copy exists, so a second crash
                 // before the next save still leaves something to recover.

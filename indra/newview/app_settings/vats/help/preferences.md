@@ -24,6 +24,7 @@ or its **×**, to close it.
 | **BVH import → Reduce keys after import** | on, off | off | Drops keys that linear playback reproduces within 0.05 degrees and 0.5 mm. Off keeps a key on every frame. See [[BVH]]. |
 | **Start screen → Show Now** | button | | Closes Preferences and opens the Welcome window. |
 | **Project files → Open .vat Files with VATs** | button | | Registers `.vat` and `.hxanim` files with this copy of VATs; **Remove** undoes it. See [[Installation#Opening project files by double-click]]. |
+| **In the viewer → Opening the editor → Reset joint positions when the editor opens** | on, off | on | Shown only in the [[VATs Editor (viewer)|viewer]]. Resets your avatar's skeleton on your screen as the editor opens, as the viewer's **Reset skeleton** does: joint positions left by stopped animations go back; your mesh body's own joint offsets stay. Saved as `viewer_reset_joints`. |
 
 **Interface size** offers 75%, 100%, 125%, 150%, 175%, 200% and 250%.
 

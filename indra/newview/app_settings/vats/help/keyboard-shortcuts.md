@@ -30,6 +30,9 @@ Every command is also in the menus, including the many that have no key.
 | Export SL .anim... | Ctrl+E | Ctrl+E | Ctrl+E | Ctrl+E |
 | Quit | Ctrl+Q | Ctrl+Q | Ctrl+Q | Ctrl+Q |
 
+> **Note:** In the [[VATs Editor (viewer)|viewer]], **Quit** is **Close Editor**: it closes the editor and
+> leaves the viewer running.
+
 ### Editing
 
 **Mark a Beat Here** works only while an [[Audio track]] is loaded.
@@ -43,13 +46,16 @@ Every command is also in the menus, including the many that have no key.
 | Delete Key | Delete, Backspace | Alt+I, Delete | Delete, Backspace | Delete, Backspace |
 | Delete Keys on All Bones at Frame | Shift+Delete | Shift+Delete | Shift+Delete | Shift+Delete |
 | Reset Selected Bone | Alt+R | Alt+R | Alt+R | Alt+R |
-| Reset Hip Position | Alt+W | Alt+G | Alt+W | Alt+W |
+| Reset Hip Position | Alt+W, Alt+H | Alt+G, Alt+H | Alt+W, Alt+H | Alt+W, Alt+H |
 | Reset Whole Pose | Shift+Alt+R | Shift+Alt+R | Shift+Alt+R | Shift+Alt+R |
 | Copy Pose | Ctrl+C | Ctrl+C | Ctrl+C | Ctrl+C |
 | Paste Pose | Ctrl+V | Ctrl+V | Ctrl+V | Ctrl+V |
 | Mirror Bone to Other Side | M | M | M | M |
 | Flip Pose | – | Ctrl+Shift+V | – | – |
 | Mark a Beat Here | B | B | B | B |
+
+> **Note:** In the [[VATs Editor (viewer)|viewer]], **Alt+W** moves the viewer's camera; use **Alt+H** for
+> **Reset Hip Position** there.
 
 ### Playback
 
