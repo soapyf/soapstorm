@@ -2771,6 +2771,7 @@ endif (WINDOWS)
 target_link_libraries(${VIEWER_BINARY_NAME}
         llaudio
         llcharacter
+        vats::core
         llimage
         llinventory
         llmessage
