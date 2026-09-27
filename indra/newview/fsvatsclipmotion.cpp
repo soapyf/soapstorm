@@ -26,6 +26,7 @@
 #include "fsvatsclipmotion.h"
 
 #include "llcharacter.h"
+#include "lltimer.h"
 
 #include <algorithm>
 #include <cmath>
@@ -45,13 +46,16 @@ VATsClipMotion::VATsClipMotion(const LLUUID& id) : LLMotion(id)
     mName = "vats_clip_preview";
 }
 
-bool VATsClipMotion::getLoop() { return sPlayback.clip && sPlayback.clip->loop; }
+bool VATsClipMotion::getLoop() { return true; }  // never stopped by the controller; see getDuration
 
-F32 VATsClipMotion::getDuration() { return sPlayback.clip ? F32(last_frame() / fps()) : 0.f; }
+// Zero: the preview keeps its own time and decides when to stop. With a duration the motion controller
+// schedules its own stop at (duration - ease out) after activation (llmotioncontroller.cpp), which ended
+// the preview almost at once and handed the avatar back to the AO.
+F32 VATsClipMotion::getDuration() { return 0.f; }
 
 F32 VATsClipMotion::getEaseInDuration() { return sPlayback.clip ? F32(sPlayback.clip->ease_in) : 0.f; }
 
-F32 VATsClipMotion::getEaseOutDuration() { return sPlayback.clip ? F32(sPlayback.clip->ease_out) : 0.f; }
+F32 VATsClipMotion::getEaseOutDuration() { return 0.f; }  // the floater's Stop ends the preview
 
 LLJoint::JointPriority VATsClipMotion::getPriority()
 {
@@ -81,6 +85,8 @@ LLMotion::LLMotionInitStatus VATsClipMotion::onInitialize(LLCharacter* character
         addJointState(state);
         mBound.push_back({ node, state, j.position });
     }
+    LL_INFOS("VATsAnimator") << "preview bound " << mBound.size() << " of " << sPlayback.joints.size() << " joints"
+                              << LL_ENDL;
     return STATUS_SUCCESS;
 }
 
@@ -94,14 +100,24 @@ bool VATsClipMotion::onUpdate(F32 time, U8* joint_mask)
     double frame = pb.frame;
     if (pb.playing)
     {
+        // The preview's own clock, not the motion time: it does not depend on how or when the controller
+        // activated the motion.
+        const F64 now = LLTimer::getTotalSeconds();
         if (pb.resync)
         {
-            mTimeShift = pb.frame / fps() - time;
+            mPlayStart = now - pb.frame / fps();
             pb.resync = false;
+            pb.finished = false;
         }
-        frame = (time + mTimeShift) * fps();
+        frame = (now - mPlayStart) * fps();
         if (clip.loop && clip.loop_out > clip.loop_in && frame > clip.loop_out)
             frame = clip.loop_in + std::fmod(frame - clip.loop_in, double(clip.loop_out - clip.loop_in));
+        if (!clip.loop && frame >= last_frame())
+        {
+            frame = last_frame();  // hold the last frame, like an editor; Play restarts
+            pb.playing = false;
+            pb.finished = true;
+        }
         frame = std::clamp(frame, 0.0, last_frame());
         pb.frame = frame;
     }
@@ -113,15 +129,25 @@ bool VATsClipMotion::onUpdate(F32 time, U8* joint_mask)
     {
         const vats::Node& node = (*pb.skeleton)[b.node];
         const vats::Quat q = (node.rest * e.pose.rot[b.node]).normalized();
+        vats::Vec3 p = e.pose.offset[b.node] + (b.node == 0 ? vats::Vec3{} : node.pos);
+        // Never hand the avatar a non-finite value: it would spread to the head, the camera and the
+        // agent updates sent to the region.
+        if (!std::isfinite(q.x) || !std::isfinite(q.y) || !std::isfinite(q.z) || !std::isfinite(q.w) ||
+            !std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z))
+        {
+            if (!mWarnedNonFinite)
+                LL_WARNS("VATsAnimator") << "non-finite value for " << node.name << " at frame " << frame
+                                          << "; the joint is left as it was" << LL_ENDL;
+            mWarnedNonFinite = true;
+            continue;
+        }
         b.state->setRotation(LLQuaternion(F32(q.x), F32(q.y), F32(q.z), F32(q.w)));
         if (b.position)
         {
-            vats::Vec3 p = e.pose.offset[b.node] + (b.node == 0 ? vats::Vec3{} : node.pos);
             b.state->setPosition(LLVector3(F32(std::clamp(p.x, -MAX_OFFSET, MAX_OFFSET)),
                                            F32(std::clamp(p.y, -MAX_OFFSET, MAX_OFFSET)),
                                            F32(std::clamp(p.z, -MAX_OFFSET, MAX_OFFSET))));
         }
     }
-    // Non-looping clips stop at their end while playing; a paused preview holds its frame.
-    return !pb.playing || clip.loop || frame < last_frame();
+    return true;  // the floater's Stop removes the motion
 }

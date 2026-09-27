@@ -51,6 +51,7 @@ public:
         std::vector<Joint> joints;  // the joints the exported .anim animates
         bool playing = true;
         bool resync = true;  // playing restarts from `frame`
+        bool finished = false;  // a non-looping clip reached its end and holds the last frame
         double frame = 0;    // the frame shown; while paused, the frame to hold
     };
     static Playback sPlayback;
@@ -78,7 +79,8 @@ private:
         bool position;
     };
     std::vector<Bound> mBound;
-    F64 mTimeShift = 0.0;  // seconds added to the motion's time so playing resumes at the held frame
+    F64 mPlayStart = 0.0;  // wall-clock seconds at which frame 0 would have been shown
+    bool mWarnedNonFinite = false;
 };
 
 #endif // FS_VATSCLIPMOTION_H

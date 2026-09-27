@@ -67,7 +67,12 @@ void FSFloaterAnimator::onClose(bool app_quitting)
 
 void FSFloaterAnimator::draw()
 {
-    const VATsClipMotion::Playback& pb = VATsClipMotion::sPlayback;
+    VATsClipMotion::Playback& pb = VATsClipMotion::sPlayback;
+    if (pb.finished)  // a non-looping clip reached its end: show it and offer Play again
+    {
+        pb.finished = false;
+        refresh();
+    }
     if (mHaveClip && mMotionID.notNull() && !mMotionIsKeyframe && pb.playing)
     {
         mScrub->setValue(F32(pb.frame));
@@ -206,6 +211,9 @@ void FSFloaterAnimator::start()
         gAgentAvatarp->registerMotion(mMotionID, VATsClipMotion::create);
         gAgentAvatarp->startMotion(mMotionID);
     }
+    LL_INFOS("VATsAnimator") << "preview started: " << mClip.end_frame << " frames at " << mClip.fps << " fps, priority "
+                              << mClip.priority << ", " << VATsClipMotion::sPlayback.joints.size() << " joints, "
+                              << (mMotionIsKeyframe ? "as uploaded" : "live") << LL_ENDL;
     refresh();
 }
 
@@ -237,6 +245,8 @@ void FSFloaterAnimator::onPlayPause()
     }
     if (mMotionIsKeyframe)
         return;  // the viewer's keyframe motion only plays
+    if (!pb.playing && !mClip.loop && pb.frame >= std::max(mClip.end_frame, 1))
+        pb.frame = 0;  // Play after the end starts over
     pb.playing = !pb.playing;
     pb.resync = pb.playing;
     refresh();
