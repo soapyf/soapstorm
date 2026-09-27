@@ -246,11 +246,11 @@ bool FSFloaterVATsMocap::loadData()
         return false;
     }
     mRig = std::make_unique<vats::Rig>(mSkel);
-    const std::string dir = gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "vats", "");
+    const std::string dir = gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "vats", "retarget", "");
     if (!vats::parse_rig_table(read_file(dir + "vrm-humanoid.json"), mTable, err))
-        mDataError = "app_settings/vats/vrm-humanoid.json: " + (err.empty() ? std::string("missing") : err);
+        mDataError = "app_settings/vats/retarget/vrm-humanoid.json: " + (err.empty() ? std::string("missing") : err);
     else if (!vats::parse_face_table(read_file(dir + "face-arkit.json"), mFace, err))
-        mDataError = "app_settings/vats/face-arkit.json: " + (err.empty() ? std::string("missing") : err);
+        mDataError = "app_settings/vats/retarget/face-arkit.json: " + (err.empty() ? std::string("missing") : err);
 
     LLComboBox* presets = getChild<LLComboBox>("preset_combo");
     for (const auto& [name, gains] : mFace.presets)

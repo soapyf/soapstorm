@@ -1,7 +1,5 @@
 // Viewport Avatar Toolset - letting a phone or headset reach motion capture: this computer's network
 // addresses, whether a firewall is on, and the one rule that lets the home network in.
-// COPY of Viewport Avatar Toolset's app/firewall.h (the app's file is the source; keep the logic identical and
-// re-copy it from there when it changes). Used by the viewer's motion capture (VATs spec 09, stage 6h).
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 //
 // Plain C++ and POSIX with no UI, so the viewer's motion capture (spec 09 stage 6h) can use it as is.

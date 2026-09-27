@@ -31,8 +31,8 @@
 #include <future>
 #include <memory>
 
-#include "fsvatsfirewall.h"
-#include "fsvatsudp.h"
+#include "firewall.h"  // VATs' editor UI (indra/libvats/ui)
+#include "udp.h"
 #include "vats/mocap.h"
 #include "vats/rig.h"
 #include "vats/skeleton.h"

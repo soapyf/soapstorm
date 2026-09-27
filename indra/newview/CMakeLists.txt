@@ -144,8 +144,6 @@ set(viewer_SOURCE_FILES
     fsanimtimelinectrl.cpp
     fsfloatervatsmocap.cpp
     fsfloatervatstools.cpp
-    fsvatsfirewall.cpp
-    fsvatsudp.cpp
     fsfloaterposestand.cpp
     fsfloaterprotectedfolders.cpp
     fsfloaterradar.cpp
@@ -216,6 +214,7 @@ set(viewer_SOURCE_FILES
     fsposingmotion.cpp
     fsvatsclipmotion.cpp  # Viewport Avatar Toolset
     fsvatsimgui.cpp
+    fsvatshost.cpp
     fsprimfeedauth.cpp
     fsradar.cpp
     fsradarentry.cpp
@@ -1097,8 +1096,6 @@ set(viewer_HEADER_FILES
     fsanimtimelinectrl.h
     fsfloatervatsmocap.h
     fsfloatervatstools.h
-    fsvatsfirewall.h
-    fsvatsudp.h
     fsfloaterposestand.h
     fsfloaterprotectedfolders.h
     fsfloaterradar.h
@@ -1164,6 +1161,7 @@ set(viewer_HEADER_FILES
     fsposingmotion.h
     fsvatsclipmotion.h
     fsvatsimgui.h
+    fsvatshost.h
     fsprimfeedauth.h
     fsradar.h
     fsradarentry.h
@@ -2790,6 +2788,7 @@ target_link_libraries(${VIEWER_BINARY_NAME}
         llaudio
         llcharacter
         vats::core
+        vats::ui
         imgui
         llimage
         llinventory

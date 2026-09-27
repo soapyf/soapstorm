@@ -33,6 +33,7 @@
 
 VATsClipMotion::Playback VATsClipMotion::sPlayback;
 VATsClipMotion::Playback VATsClipMotion::sLive;
+VATsClipMotion::Playback VATsClipMotion::sEditor;
 
 namespace
 {
@@ -44,7 +45,7 @@ namespace
 
 VATsClipMotion::VATsClipMotion(const LLUUID& id, Playback* playback) : LLMotion(id), mPb(playback)
 {
-    mName = playback == &sLive ? "vats_live_capture" : "vats_clip_preview";
+    mName = playback == &sLive ? "vats_live_capture" : playback == &sEditor ? "vats_editor" : "vats_clip_preview";
 }
 
 bool VATsClipMotion::getLoop() { return true; }  // never stopped by the controller; see getDuration
@@ -54,7 +55,7 @@ bool VATsClipMotion::getLoop() { return true; }  // never stopped by the control
 // the preview almost at once and handed the avatar back to the AO.
 F32 VATsClipMotion::getDuration() { return 0.f; }
 
-F32 VATsClipMotion::getEaseInDuration() { return mPb->clip && mPb != &sLive ? F32(mPb->clip->ease_in) : 0.f; }
+F32 VATsClipMotion::getEaseInDuration() { return mPb->clip && mPb != &sLive && !mPb->pose ? F32(mPb->clip->ease_in) : 0.f; }
 
 F32 VATsClipMotion::getEaseOutDuration() { return 0.f; }  // the floater's Stop ends the preview
 
@@ -94,12 +95,12 @@ LLMotion::LLMotionInitStatus VATsClipMotion::onInitialize(LLCharacter* character
 bool VATsClipMotion::onUpdate(F32 time, U8* joint_mask)
 {
     Playback& pb = *mPb;
-    if (!pb.clip || !pb.rig)
+    if (!pb.clip || (!pb.rig && !pb.pose))
         return false;
 
     const vats::Clip& clip = *pb.clip;
     double frame = pb.frame;
-    if (pb.playing)
+    if (pb.playing && !pb.pose)
     {
         // The preview's own clock, not the motion time: it does not depend on how or when the controller
         // activated the motion.
@@ -125,14 +126,21 @@ bool VATsClipMotion::onUpdate(F32 time, U8* joint_mask)
 
     // The same values VATs' .anim exporter writes: rest x pose rotation; the pelvis position as an
     // offset, other joints as rest position plus offset, clamped to the format's 5 m.
-    vats::Evaluation e = vats::evaluate(*pb.rig, clip, frame, nullptr);
-    if (pb.post)
-        pb.post(e, frame);
+    vats::Evaluation e;
+    if (!pb.pose)
+    {
+        e = vats::evaluate(*pb.rig, clip, frame, nullptr);
+        if (pb.post)
+            pb.post(e, frame);
+    }
+    const vats::Pose& pose = pb.pose ? *pb.pose : e.pose;
     for (Bound& b : mBound)
     {
+        if (b.node >= (S32)pose.rot.size())
+            continue;
         const vats::Node& node = (*pb.skeleton)[b.node];
-        const vats::Quat q = (node.rest * e.pose.rot[b.node]).normalized();
-        vats::Vec3 p = e.pose.offset[b.node] + (b.node == 0 ? vats::Vec3{} : node.pos);
+        const vats::Quat q = (node.rest * pose.rot[b.node]).normalized();
+        vats::Vec3 p = pose.offset[b.node] + (b.node == 0 ? vats::Vec3{} : node.pos);
         // Never hand the avatar a non-finite value: it would spread to the head, the camera and the
         // agent updates sent to the region.
         if (!std::isfinite(q.x) || !std::isfinite(q.y) || !std::isfinite(q.z) || !std::isfinite(q.w) ||

@@ -24,15 +24,18 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fsvatsimgui.h"
+#include "fsvatshost.h"
 
 #include "llclipboard.h"
 #include "lldir.h"
+#include "llfloater.h"
 #include "llfocusmgr.h"
 #include "llgl.h"
 #include "llglslshader.h"
 #include "llrender.h"
 #include "lltimer.h"
 #include "llviewercontrol.h"
+#include "llviewermenu.h"
 #include "llviewerwindow.h"
 
 #include "imgui.h"
@@ -45,7 +48,14 @@ namespace
 {
     ImGuiContext* sCtx = nullptr;
     bool sGLReady = false;              // ImGui_ImplOpenGL3_Init done for the current GL context
-    std::map<std::string, std::function<void()>> sClients;
+    struct Client
+    {
+        std::function<void()> draw, before;
+    };
+    std::map<std::string, Client> sClients;
+    ImVec2 sOrigin;                     // the world view's top-left in the window, scaled UI units
+    bool sEditorKeys = false;           // the last click went to ImGui: its shortcuts get the keys
+    bool sOverViewerUI = false;         // the pointer is over a viewer floater or menu
     std::string sIniPath;
     std::string sClipboard;             // backing store for ImGui's GetClipboardText
     LLTimer sFrameTimer;
@@ -56,7 +66,8 @@ namespace
     ImVec2 toImGui(LLCoordGL pos)
     {
         const LLVector2& scale = gViewerWindow->getDisplayScale();
-        return ImVec2((F32)pos.mX / scale.mV[VX], (F32)(gViewerWindow->getWindowHeightRaw() - pos.mY) / scale.mV[VY]);
+        return ImVec2((F32)pos.mX / scale.mV[VX] - sOrigin.x,
+                      (F32)(gViewerWindow->getWindowHeightRaw() - pos.mY) / scale.mV[VY] - sOrigin.y);
     }
 
     void setMods(ImGuiIO& io, MASK mask)
@@ -289,9 +300,35 @@ namespace
     }
 }
 
-void FSVATsImGui::setClient(const std::string& name, std::function<void()> draw)
+namespace
 {
-    sClients[name] = std::move(draw);
+    // A floater, the floater snapshot view or an open menu under the point (scaled window coordinates).
+    bool viewerUIAt(S32 x, S32 y)
+    {
+        if (gMenuHolder && gMenuHolder->hasVisibleMenu())
+        {
+            return true;
+        }
+        if (!gFloaterView || !gFloaterView->getVisible())
+        {
+            return false;
+        }
+        S32 lx, ly;
+        gFloaterView->screenPointToLocal(x, y, &lx, &ly);
+        return gFloaterView->childFromPoint(lx, ly) != nullptr;
+    }
+
+    // Keys go to ImGui while a widget of it holds the keyboard, or after a click it took until LLUI
+    // takes keyboard focus or a click goes to the viewer (see the header).
+    bool imguiGetsKeys()
+    {
+        return sCtx && (ImGui::GetIO().WantCaptureKeyboard || (sEditorKeys && !gFocusMgr.getKeyboardFocus()));
+    }
+}
+
+void FSVATsImGui::setClient(const std::string& name, std::function<void()> draw, std::function<void()> before)
+{
+    sClients[name] = { std::move(draw), std::move(before) };
 }
 
 void FSVATsImGui::removeClient(const std::string& name)
@@ -334,6 +371,8 @@ void FSVATsImGui::render()
             removeClient("test");
         }
     }
+    static LLCachedControl<bool> editor(gSavedSettings, "VATsEditor", false);
+    FSVATsEditor::update(editor);
     if (sClients.empty())
     {
         if (sCtx)
@@ -358,8 +397,20 @@ void FSVATsImGui::render()
         }
     }
 
+    for (auto& client : sClients)
+    {
+        if (client.second.before)
+        {
+            client.second.before();
+        }
+    }
+    // ImGui covers the world view only, so the viewer's menu, navigation bar and toolbars stay usable and
+    // markers projected with LLViewerCamera line up (the camera projects onto this rectangle).
     ImGuiIO& io = ImGui::GetIO();
-    io.DisplaySize = ImVec2((F32)gViewerWindow->getWindowWidthScaled(), (F32)gViewerWindow->getWindowHeightScaled());
+    const LLRect world = gViewerWindow->getWorldViewRectScaled();
+    const F32 window_h = (F32)gViewerWindow->getWindowHeightScaled();
+    sOrigin = ImVec2((F32)world.mLeft, window_h - (F32)world.mTop);
+    io.DisplaySize = ImVec2((F32)llmax(world.getWidth(), 1), (F32)llmax(world.getHeight(), 1));
     const LLVector2& scale = gViewerWindow->getDisplayScale();
     io.DisplayFramebufferScale = ImVec2(scale.mV[VX], scale.mV[VY]);
     io.DeltaTime = llmax((F32)sFrameTimer.getElapsedTimeAndResetF32(), 1e-4f);
@@ -368,9 +419,14 @@ void FSVATsImGui::render()
     ImGui::NewFrame();
     for (auto& client : sClients)
     {
-        client.second();
+        client.second.draw();
     }
     ImGui::Render();
+    // Drawn into the whole window, offset to the world view: the backend's viewport and scissor are
+    // window-sized, its projection starts at DisplayPos.
+    ImDrawData* draw_data = ImGui::GetDrawData();
+    draw_data->DisplayPos = ImVec2(-sOrigin.x, -sOrigin.y);
+    draw_data->DisplaySize = ImVec2((F32)gViewerWindow->getWindowWidthScaled(), window_h);
 
     // LLRender batches immediate-mode vertices: flush them now or they land on top of ImGui.
     gGL.flush();
@@ -379,7 +435,7 @@ void FSVATsImGui::render()
     {
         before.read();
     }
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    ImGui_ImplOpenGL3_RenderDrawData(draw_data);
     if (sGLChecksLeft > 0)
     {
         --sGLChecksLeft;
@@ -424,9 +480,12 @@ bool FSVATsImGui::mouseButton(LLCoordGL pos, MASK mask, EMouseClickType click, b
     const U32 bit = 1u << button;
     if (down)
     {
+        // A click ImGui takes gives it the keys (and takes LLUI's keyboard focus); any other gives them back.
+        sEditorKeys = io.WantCaptureMouse;
         if (io.WantCaptureMouse)
         {
             sCapturedButtons |= bit;
+            gFocusMgr.setKeyboardFocus(nullptr);
             return true;
         }
         return false;
@@ -442,6 +501,8 @@ void FSVATsImGui::mouseMove(LLCoordGL pos, MASK mask)
     {
         ImVec2 p = toImGui(pos);
         ImGui::GetIO().AddMousePosEvent(p.x, p.y);
+        const LLVector2& scale = gViewerWindow->getDisplayScale();
+        sOverViewerUI = viewerUIAt(ll_round((F32)pos.mX / scale.mV[VX]), ll_round((F32)pos.mY / scale.mV[VY]));
     }
 }
 
@@ -466,9 +527,8 @@ bool FSVATsImGui::scrollWheel(S32 clicks, bool horizontal)
 
 bool FSVATsImGui::keyDown(KEY key, MASK mask)
 {
-    // Keys go to ImGui only while one of its widgets holds the keyboard (a text field, an active
-    // slider...); otherwise they stay the viewer's, so movement and camera keys keep working.
-    if (!sCtx || !ImGui::GetIO().WantCaptureKeyboard)
+    // Otherwise the keys stay the viewer's, so movement and camera keys keep working.
+    if (!imguiGetsKeys())
     {
         return false;
     }
@@ -499,7 +559,7 @@ void FSVATsImGui::keyUp(KEY key, MASK mask)
 
 bool FSVATsImGui::unicodeChar(llwchar uni_char, MASK mask)
 {
-    if (!sCtx || !ImGui::GetIO().WantCaptureKeyboard)
+    if (!imguiGetsKeys())
     {
         return false;
     }
@@ -518,10 +578,16 @@ void FSVATsImGui::focusLost()
     {
         ImGui::GetIO().AddFocusEvent(false);
         sCapturedButtons = 0;
+        sEditorKeys = false;
     }
 }
 
 bool FSVATsImGui::capturesMouse()
 {
     return sCtx && ImGui::GetIO().WantCaptureMouse;
+}
+
+bool FSVATsImGui::pointerOverViewerUI()
+{
+    return sOverViewerUI;
 }

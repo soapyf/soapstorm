@@ -37,7 +37,8 @@
 // exactly the rotations and positions VATs' .anim exporter would write, so the preview matches the
 // uploaded file. Only the local avatar plays these, so each use shares one static Playback with its
 // floater: sPlayback for the Animator's preview, sLive for motion capture driving the avatar live
-// (a clip holding one frame, replaced every frame by the capture floater).
+// (a clip holding one frame, replaced every frame by the capture floater), and sEditor for the shared
+// VATs editor (spec 09 U3), which evaluates its pose itself and hands it over through Playback::pose.
 class VATsClipMotion : public LLMotion
 {
 public:
@@ -59,12 +60,15 @@ public:
         double frame = 0;    // the frame shown; while paused, the frame to hold
         // VATs Tools' dynamics and ragdoll previews (stage 6g) adjust each evaluated frame.
         std::function<void(vats::Evaluation&, double frame)> post;
+        // When set, shown as is every update: no clock, no evaluation, no ease-in (the shared editor).
+        const vats::Pose* pose = nullptr;
     };
-    static Playback sPlayback, sLive;
+    static Playback sPlayback, sLive, sEditor;
 
     VATsClipMotion(const LLUUID& id, Playback* playback);
     static LLMotion* create(const LLUUID& id) { return new VATsClipMotion(id, &sPlayback); }
     static LLMotion* createLive(const LLUUID& id) { return new VATsClipMotion(id, &sLive); }
+    static LLMotion* createEditor(const LLUUID& id) { return new VATsClipMotion(id, &sEditor); }
 
     bool getLoop() override;
     F32 getDuration() override;

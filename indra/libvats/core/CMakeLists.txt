@@ -29,6 +29,7 @@ add_library(vats_core STATIC
     src/loop_tools.cpp
     src/onion.cpp
     src/mocap.cpp
+    src/wiki.cpp
     src/retarget.cpp
     src/rig.cpp
     src/shape.cpp

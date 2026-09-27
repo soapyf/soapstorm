@@ -1,2 +1,3 @@
-Viewport Avatar Toolset core, vendored by tools/sync-to-viewer.sh
-commit cfc2b3aa063cfa14a398a7c05624aa937d7e83eb
+Viewport Avatar Toolset core and editor UI, vendored by tools/sync-to-viewer.sh
+commit 10f72d9f24d1d6014ff29604b416d4aff7b9e8aa
+version 0.1.0

@@ -34,14 +34,22 @@
 // registered (the editor, or the "VATsImGuiTest" debug setting's demo), so with nothing open every
 // hook below returns after one null check and no GL objects exist.
 //
-// Coordinates: ImGui works in the viewer's scaled UI units (DisplaySize = window size / UI scale,
-// top-left origin), with DisplayFramebufferScale = the viewer's display scale, so it scales with
-// the UI Size setting and HiDPI like LLUI does and renders at full window resolution.
+// Coordinates: ImGui covers the world view (the window less the viewer's menu, navigation and
+// toolbar strips) in the viewer's scaled UI units, top-left origin, with DisplayFramebufferScale =
+// the viewer's display scale, so it scales with the UI Size setting and HiDPI like LLUI does,
+// renders at full window resolution and matches LLViewerCamera's projection (spec 09 U3).
+//
+// Keys (spec 09 U3): ImGui gets the keyboard while one of its widgets holds it (a text field, a
+// modal), and also after a click that ImGui took (a VATs panel, or a bone or gizmo in the world)
+// until a click goes to the viewer or LLUI takes keyboard focus. So the editor's shortcuts work
+// once you click into it, and clicking the world gives the keys back (WASD walks).
 namespace FSVATsImGui
 {
     // Clients: each draws its ImGui windows inside the frame (between NewFrame and Render).
     // Registering the first creates the context; removing the last destroys it.
-    void setClient(const std::string& name, std::function<void()> draw);
+    // before (optional) runs outside the frame, just before NewFrame (fonts, camera sync). Neither may
+    // add or remove clients; do that before render() (FSVATsEditor::update runs there).
+    void setClient(const std::string& name, std::function<void()> draw, std::function<void()> before = {});
     void removeClient(const std::string& name);
     bool isOpen();
 
@@ -62,6 +70,8 @@ namespace FSVATsImGui
     void focusLost();
     // True while the pointer is over an ImGui window (or ImGui owns a drag): the viewer skips hover.
     bool capturesMouse();
+    // True while the pointer is over a viewer floater or menu (not ImGui's, not the world).
+    bool pointerOverViewerUI();
 }
 
 #endif // FS_VATSIMGUI_H

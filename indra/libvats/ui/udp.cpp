@@ -1,10 +1,6 @@
 // Viewport Avatar Toolset - a non-blocking UDP receiver.
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
-// COPY of Viewport Avatar Toolset's app/udp.cpp (the app's file is the source; keep the logic identical and
-// re-copy it from there when it changes). Used by the viewer's motion capture (VATs spec 09, stage 6h).
-#include "llviewerprecompiledheaders.h"
-
-#include "fsvatsudp.h"
+#include "udp.h"
 
 #include <cerrno>
 #include <cstring>
