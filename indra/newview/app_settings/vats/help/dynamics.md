@@ -71,8 +71,6 @@ its start.
 - Bake last: bake after the body motion is final, since the bake follows the animation it was baked from.
   Re-bake after changing the body.
 
-> **Note:** Dynamics is not yet available in the [[VATs Animator (viewer)|VATs Animator]].
-
 ## Troubleshooting
 
 ### Add Chain from Selected Bone is disabled

@@ -1274,6 +1274,7 @@ bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK m
         }
     }
 
+    if (FSVATsImGui::worldClick(pos, mask, clicktype, down)) return true; // VATs ImGui UI: world clicks go to the editor
     // Do not allow tool manager to handle mouseclicks if we have disconnected
     if(!gDisconnected && LLToolMgr::getInstance()->getCurrentTool()->handleAnyMouseClick( x, y, mask, clicktype, down ) )
     {
@@ -4294,6 +4295,7 @@ void LLViewerWindow::updateUI()
                 }
             }
 
+            if (!handled) handled = FSVATsImGui::worldHover(mask); // VATs ImGui UI: no world hover under the editor
             if (!handled)
             {
                 LLTool *tool = LLToolMgr::getInstance()->getCurrentTool();

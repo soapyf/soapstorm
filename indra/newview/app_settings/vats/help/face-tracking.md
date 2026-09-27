@@ -54,6 +54,7 @@ over the animation already there. See [[Motion capture#Recording a take]].
 | **Eye Limit** Side | 5–45° | 25° | the farthest the eyes turn left or right |
 | **Eye Limit** Up/Down | 5–45° | 20° | the farthest the eyes turn up or down |
 | **Shape Strengths** | 0–2 per shape | 1 | scales one shape, for example `jawOpen` |
+| **Move face bones** | on or off | on | moves face bones as well as turning them; see [[Face tracking#A mesh head is pulled out of shape]] |
 
 The presets: **Natural** is strength 1; **Subtle** is 0.6; **Expressive** is 1.35, with `jawOpen` held at
 1.1. After strengths are applied, each shape weight is limited to 0–1.5.
@@ -99,6 +100,13 @@ shows, the same Wi-Fi on both devices and the firewall line of the setup checkli
 
 The resting face records as an expression. Press **Capture Neutral Face** with a relaxed face.
 
+### A mesh head is pulled out of shape
+
+The smiles, brows, cheeks and most lip shapes move face bones, and those moves are made for the Second
+Life default head. A mesh head with its own face joint positions, such as a furry or stylised head, is
+pulled towards the default head's face. Untick **Move face bones**: the jaw, eyes, eyelids and the other
+turning shapes still work, and the head keeps its shape. The smiles, brows and lip shapes are then lost.
+
 ### The window shows "data/retarget/face-arkit.json is missing"
 
 The face table was not found in VATs' data folder. Reinstall VATs (see [[Installation]]).
@@ -106,7 +114,7 @@ The face table was not found in VATs' data folder. Reinstall VATs (see [[Install
 ## See also
 
 - [[Motion capture]]
-- [[VATs Animator (viewer)#Motion capture]]
+- [[VATs Editor (viewer)]]
 - [ARKit blend shape locations](https://developer.apple.com/documentation/arkit/arfaceanchor/blendshapelocation)
 
 Category: Motion

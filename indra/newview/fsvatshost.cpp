@@ -37,6 +37,7 @@
 #include "llagent.h"
 #include "llagentbenefits.h"
 #include "llagentcamera.h"
+#include "llanimationstates.h"
 #include "llappviewer.h"
 #include "llaudioengine.h"
 #include "lldir.h"
@@ -45,6 +46,8 @@
 #include "llfloaterperms.h"
 #include "llnotificationsutil.h"
 #include "llstartup.h"
+#include "lluicolortable.h"
+#include "llversioninfo.h"
 #include "lltimer.h"
 #include "llviewerassetupload.h"
 #include "llviewercamera.h"
@@ -60,6 +63,7 @@
 #include <deque>
 #include <fstream>
 #include <memory>
+#include <set>
 
 namespace
 {
@@ -71,8 +75,12 @@ namespace
     bool sameJoints(const std::vector<VATsClipMotion::Joint>& a, const std::vector<VATsClipMotion::Joint>& b)
     {
         return std::equal(a.begin(), a.end(), b.begin(), b.end(), [](const auto& x, const auto& y)
-                          { return x.name == y.name && x.priority == y.priority && x.position == y.position; });
+                          { return x.name == y.name && x.position == y.position; });
     }
+
+    ImVec4 toImGui(const LLColor4& c) { return ImVec4(c.mV[VRED], c.mV[VGREEN], c.mV[VBLUE], 1.f); }
+    // A skin colour as seen over `under` (floater colours are partly transparent).
+    LLColor4 over(const LLColor4& c, const LLColor4& under) { return lerp(under, c, c.mV[VALPHA]); }
 
     // Samples as a 16-bit PCM WAV, the format the audio engine's decoded-sound cache holds (stage 6g).
     std::string wavBytes(const float* pcm, size_t frames, int channels_in, int rate)
@@ -189,8 +197,11 @@ namespace
         vats::CommandRunner command_runner() override { return vats::system_runner(); }
 
         bool world_view() const override { return true; }
-        bool pointer_on_world() const override { return !FSVATsImGui::pointerOverViewerUI(); }
+        bool pointer_on_world() const override { return FSVATsImGui::pointerOnWorld(); }
         const vats::Shape* body_shape() const override { return mHaveShape ? &mShape : nullptr; }
+
+        bool skin_colours(vats::HostColours& out) const override;
+        std::string host_name() const override { return LLVersionInfo::instance().getChannel(); }
 
         bool can_upload() const override { return true; }
         void upload_anim(const std::vector<std::uint8_t>& bytes, const std::string& name,
@@ -202,6 +213,8 @@ namespace
 
     private:
         LLJoint* avatarJoint(int node);
+        void isolate();      // the avatar belongs to the editor: sit it down once, stop every other motion
+        void restore();      // everything back as it was: motions still wanted, and stand up if we sat
         void updateShape();
         void stopMotion();
         void drawQuestion();
@@ -231,6 +244,12 @@ namespace
         const LLVOAvatarSelf* mCacheFor = nullptr;
         vats::Shape mShape;
         bool mHaveShape = false;
+
+        // Isolation (spec 09 U4): the motions stopped on this avatar while the editor is open, and whether the
+        // editor sat the avatar down.
+        const LLVOAvatarSelf* mIsolatedOn = nullptr;
+        std::set<LLUUID> mStopped;
+        bool mWeSat = false;
 
         struct Question
         {
@@ -270,8 +289,10 @@ namespace
     }
 
     // The editor evaluates the pose (clip, IK, pins and its live previews); the avatar shows it through
-    // VATsClipMotion. Bound are the joints the clip keys and any other joint the pose moves, so everything
-    // else (AO, stands, face) keeps playing; the set is rebound whenever it changes.
+    // VATsClipMotion. Every joint of the avatar is bound, so the pose is the only one shown: rotations for all
+    // bones, positions for the pelvis and every joint the pose moves or the clip keys. Collision volumes and
+    // attachment points are bound when the clip keys them or the pose moves them. The set is rebound whenever
+    // it changes.
     void ViewerHost::drive_avatar(const vats::Skeleton& skel, const vats::Pose& pose, const vats::Clip& clip, double)
     {
         mSkel = &skel;
@@ -287,20 +308,17 @@ namespace
             const bool keyed = track != clip.curves.end() && !track->second.empty();
             const bool moved = pose.offset[i].length() > 1e-6;
             const bool turned = 1.0 - std::fabs(pose.rot[i].w) > 1e-9;
-            if ((!keyed && !moved && !turned) || !avatarJoint(i))
+            const bool bone = i < skel.joint_count() && !n.attachment;
+            if ((!bone && !keyed && !moved && !turned) || !avatarJoint(i))
                 continue;
-            const auto priority = clip.joint_priority.find(n.name);
-            drives_pos[i] = moved || (keyed && clip.has_channels(n.name, vats::kPosChannels));
-            joints.push_back({ n.name, priority == clip.joint_priority.end() ? -1 : priority->second, drives_pos[i] });
+            drives_pos[i] = i == 0 || moved || (keyed && clip.has_channels(n.name, vats::kPosChannels));
+            joints.push_back({ n.name, drives_pos[i] });
         }
         VATsClipMotion::Playback& pb = VATsClipMotion::sEditor;
         pb.skeleton = &skel;
-        pb.rig = nullptr;
-        pb.clip = &clip;
         pb.pose = &mPose;
-        pb.playing = false;
         const bool active = mMotionID.notNull() && mMotionOn == gAgentAvatarp.get() && gAgentAvatarp->isMotionActive(mMotionID);
-        if (sameJoints(joints, mJoints) && (active || joints.empty()))
+        if (sameJoints(joints, mJoints) && active)
             return;
         stopMotion();
         mJoints = joints;
@@ -312,8 +330,9 @@ namespace
         transaction.generate();
         mMotionID = transaction.makeAssetID(gAgent.getSecureSessionID());
         mMotionOn = gAgentAvatarp.get();
-        gAgentAvatarp->registerMotion(mMotionID, VATsClipMotion::createEditor);
-        gAgentAvatarp->startMotion(mMotionID);
+        // Straight to the motion controller: LLVOAvatar::startMotion would offer the id to the AO first.
+        gAgentAvatarp->registerMotion(mMotionID, VATsClipMotion::create);
+        gAgentAvatarp->getMotionController().startMotion(mMotionID, 0.f);
         LL_INFOS("VATsEditor") << "driving " << pb.joints.size() << " joints of the avatar" << LL_ENDL;
     }
 
@@ -321,7 +340,7 @@ namespace
     {
         if (mMotionID.notNull() && isAgentAvatarValid() && mMotionOn == gAgentAvatarp.get())
         {
-            gAgentAvatarp->stopMotion(mMotionID, true);
+            gAgentAvatarp->getMotionController().stopMotionLocally(mMotionID, true);
             gAgentAvatarp->removeMotion(mMotionID);
         }
         mMotionID.setNull();
@@ -356,8 +375,98 @@ namespace
         mHaveShape = true;
     }
 
+    // Spec 09 U4: while the editor is open the avatar is at its whims. Once, it sits down on the ground (the
+    // viewer's own Sit Down: AgentUpdate's sit-on-ground flag), so it cannot be walked or bumped; then every frame
+    // every other motion on it is stopped locally (AO, server and scripted animations, stands, walks, look-at, eye
+    // and head motion, breathing, expressions), straight on the motion controller, so nothing is sent to the
+    // region. What the region starts meanwhile is stopped the same way when it arrives.
+    void ViewerHost::isolate()
+    {
+        if (!isAgentAvatarValid() || LLStartUp::getStartupState() < STATE_STARTED)
+            return;
+        LLVOAvatarSelf* avatar = gAgentAvatarp.get();
+        if (mIsolatedOn != avatar)
+        {
+            mIsolatedOn = avatar;
+            mStopped.clear();
+            mWeSat = false;
+            // Not while flying (the viewer's Sit Down is disabled then) or already seated; RLVa may refuse.
+            if (!avatar->isSitting() && !gAgent.getFlying() && !avatar->isEditingAppearance())
+            {
+                gAgent.sitDown();
+                mWeSat = true;
+                LL_INFOS("VATsEditor") << "sitting the avatar down on the ground while the editor is open" << LL_ENDL;
+            }
+        }
+        LLMotionController& controller = avatar->getMotionController();
+        std::vector<LLUUID> others;
+        for (LLMotion* motion : controller.getActiveMotions())
+            if (motion && motion->getID() != mMotionID)
+                others.push_back(motion->getID());
+        for (const LLUUID& id : others)
+        {
+            controller.stopMotionLocally(id, true);
+            mStopped.insert(id);
+        }
+    }
+
+    // Everything back as it was: every motion stopped here that is still wanted starts again locally (the
+    // default ones, and each animation the region still signals, the ones it started meanwhile included), and
+    // the avatar stands up if the editor sat it down and it still sits on the ground.
+    void ViewerHost::restore()
+    {
+        if (!mIsolatedOn || !isAgentAvatarValid() || mIsolatedOn != gAgentAvatarp.get())
+        {
+            mIsolatedOn = nullptr;
+            mStopped.clear();
+            return;
+        }
+        LLVOAvatarSelf* avatar = gAgentAvatarp.get();
+        std::set<LLUUID> wanted{ ANIM_AGENT_HEAD_ROT, ANIM_AGENT_EYE, ANIM_AGENT_BODY_NOISE, ANIM_AGENT_BREATHE_ROT,
+                                 ANIM_AGENT_PHYSICS_MOTION, ANIM_AGENT_HAND_MOTION, ANIM_AGENT_PELVIS_FIX };
+        for (const auto& signaled : avatar->mSignaledAnimations)
+        {
+            wanted.insert(signaled.first);
+            wanted.insert(avatar->remapMotionID(signaled.first));
+        }
+        S32 restarted = 0;
+        for (const LLUUID& id : mStopped)
+            if (wanted.count(id) && avatar->getMotionController().startMotion(id, 0.f))
+                ++restarted;
+        const bool leaving = LLApp::isExiting() || LLAppViewer::instance()->quitRequested() || LLAppViewer::instance()->logoutRequestSent();
+        if (mWeSat && !leaving && avatar->isSitting() && !avatar->getParent())
+            gAgent.standUp();  // the viewer's own Stand Up
+        LL_INFOS("VATsEditor") << "avatar handed back: " << restarted << " of " << mStopped.size()
+                                << " stopped motions restarted" << (mWeSat ? ", standing up" : "") << LL_ENDL;
+        mIsolatedOn = nullptr;
+        mStopped.clear();
+        mWeSat = false;
+    }
+
+    // The viewer's skin as the editor's colours, read from LLUIColorTable (the colours the skin and its theme
+    // set up). Skins draw most widgets from images, so frames are the panel colour moved toward the text.
+    bool ViewerHost::skin_colours(vats::HostColours& out) const
+    {
+        const LLUIColorTable& table = LLUIColorTable::instance();
+        LLColor4 panel = table.getColor("FloaterFocusBackgroundColor", LLColor4(0.16f, 0.16f, 0.16f, 1.f)).get();
+        panel.mV[VALPHA] = 1.f;
+        const LLColor4 text = over(table.getColor("LabelTextColor", LLColor4::white).get(), panel);
+        const LLColor4 bar = over(table.getColor("MenuBarBgColor", LLColor4::black).get(), panel);
+        out.panel = toImGui(panel);
+        out.bg = toImGui(bar);
+        out.frame = toImGui(lerp(panel, text, 0.10f));
+        out.frame_hi = toImGui(lerp(panel, text, 0.18f));
+        out.frame_active = toImGui(lerp(panel, text, 0.26f));
+        out.text = toImGui(text);
+        out.text_dim = toImGui(over(table.getColor("LabelDisabledColor", LLColor4::grey).get(), panel));
+        out.border = toImGui(over(table.getColor("FloaterFocusBorderColor", LLColor4::grey).get(), panel));
+        out.accent = toImGui(over(table.getColor("EmphasisColor", LLColor4::orange).get(), panel));
+        return true;
+    }
+
     void ViewerHost::beforeFrame()
     {
+        isolate();
         LLViewerCamera* cam = LLViewerCamera::getInstance();
         if (isAgentAvatarValid() && gAgentAvatarp->getRootJoint())
         {
@@ -475,22 +584,23 @@ namespace
         args["PRICE"] = LLAgentBenefitsMgr::current().getAnimationUploadCost();
         LLNotificationsUtil::add("UploadCostConfirmation", args, LLSD(), [this](const LLSD& n, const LLSD& r)
         {
+            // Taken out first: done may hand over the next upload (the UI uploads several one after another).
+            const std::string bytes = std::exchange(mUploadBytes, std::string()), name = mUploadName;
+            auto done = std::exchange(mUploadDone, nullptr);
             const bool confirmed = LLNotificationsUtil::getSelectedOption(n, r) == 0;
             if (confirmed)
             {
                 LLResourceUploadInfo::ptr_t info(std::make_shared<LLNewBufferedResourceUploadInfo>(
-                    mUploadBytes, LLUUID::null, mUploadName, std::string(), 0, LLFolderType::FT_NONE,
+                    bytes, LLUUID::null, name, std::string(), 0, LLFolderType::FT_NONE,
                     LLInventoryType::IT_ANIMATION, LLAssetType::AT_ANIMATION, LLFloaterPerms::getNextOwnerPerms("Uploads"),
                     LLFloaterPerms::getGroupPerms("Uploads"), LLFloaterPerms::getEveryonePerms("Uploads"),
                     LLAgentBenefitsMgr::current().getAnimationUploadCost(), LLUUID::null, true, nullptr, nullptr));
                 upload_new_resource(info);
-                LL_INFOS("VATsEditor") << "uploading " << mUploadName << ", " << mUploadBytes.size() << " bytes" << LL_ENDL;
+                LL_INFOS("VATsEditor") << "uploading " << name << ", " << bytes.size() << " bytes" << LL_ENDL;
             }
-            if (mUploadDone)  // null once the editor has closed
-                mUploadDone(confirmed ? "Uploading " + mUploadName + "; it appears in your inventory when the upload finishes"
-                                      : "Upload cancelled");
-            mUploadDone = nullptr;
-            mUploadBytes.clear();
+            if (done)  // null once the editor has closed
+                done(confirmed ? "Uploading " + name + "; it appears in your inventory when the upload finishes"
+                               : "Upload of " + name + " cancelled");
         });
     }
 
@@ -578,6 +688,7 @@ namespace
     void ViewerHost::close()
     {
         stopMotion();
+        restore();
         stopSound();
         VATsClipMotion::sEditor = VATsClipMotion::Playback();
         mSkel = nullptr;
@@ -677,4 +788,9 @@ void FSVATsEditor::update(bool want_open)
     {
         sClosing = false;
     }
+}
+
+bool FSVATsEditor::ownsWorld()
+{
+    return sOpen;
 }

@@ -66,7 +66,8 @@ rigged collide as solid boxes, sized to their bounds.
   dead drop.
 - Use **Blend out** to get back up: the body eases from where it landed back into the animation.
 
-> **Note:** The ragdoll is not yet available in the [[VATs Animator (viewer)|VATs Animator]].
+> **Note:** In the viewer the ragdoll previews on your avatar and lands on the ground only; in-world
+> objects are not in its way.
 
 ## Troubleshooting
 

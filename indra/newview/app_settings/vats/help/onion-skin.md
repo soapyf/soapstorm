@@ -49,7 +49,8 @@ The pose doesn't change around this frame. Raise **Every** to spread the ghosts 
 
 ## App and viewer
 
-> **Note:** Onion skin is not yet available in the VATs Animator in the viewer.
+> **Note:** In the viewer the ghosts are bone lines over the world, blue before the current frame and orange
+> after, whatever **Bones only** says. See [[VATs Editor (viewer)#The world as the view]].
 
 ## See also
 

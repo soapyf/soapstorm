@@ -67,13 +67,13 @@ The target is further away than the limb can reach. The limb straightens and poi
 
 ## App and viewer
 
-> **Note:** The viewer has no IK gizmo: pose the limb with the Firestorm Poser, then key the IK target
-> and pole from the avatar. See [[VATs Animator (viewer)#Rig tools]].
+> **Note:** In the viewer the IK handles and poles are drawn on your avatar in the world and drag the same
+> way. See [[VATs Editor (viewer)#The world as the view]].
 
 ## See also
 
 - [[Hold and bind]]
 - [[Posing]]
-- [[VATs Animator (viewer)]]
+- [[VATs Editor (viewer)]]
 
 Category: Animating

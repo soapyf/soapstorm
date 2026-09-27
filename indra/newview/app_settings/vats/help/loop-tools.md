@@ -53,10 +53,6 @@ The hips have no position keys, or they end where they start. The walk already s
 
 The current frame is outside the loop, or on its first or last frame. Scrub to a frame inside the loop.
 
-## App and viewer
-
-> **Note:** The loop tools are not yet available in the VATs Animator in the viewer. Loop points and looping playback are.
-
 ## See also
 
 - [[Keys and timeline]]

@@ -30,17 +30,22 @@
 #include "lldir.h"
 #include "llfloater.h"
 #include "llfocusmgr.h"
+#include "llframetimer.h"
 #include "llgl.h"
 #include "llglslshader.h"
+#include "llmodaldialog.h"
 #include "llrender.h"
 #include "lltimer.h"
 #include "llviewercontrol.h"
 #include "llviewermenu.h"
 #include "llviewerwindow.h"
+#include "llwindow.h"
 
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
+#include "imgui_internal.h"  // the hovered window, for routing presses
 
+#include <cctype>
 #include <cfloat>
 #include <map>
 
@@ -54,8 +59,11 @@ namespace
     };
     std::map<std::string, Client> sClients;
     ImVec2 sOrigin;                     // the world view's top-left in the window, scaled UI units
-    bool sEditorKeys = false;           // the last click went to ImGui: its shortcuts get the keys
-    bool sOverViewerUI = false;         // the pointer is over a viewer floater or menu
+    U32 sWorldHoverFrame = 0;           // the last frame the viewer's hover reached the world (worldHover)
+    bool sBuilt = false;                // this frame's ImGui frame is built (buildFrame)
+    bool sWorldDrawn = false;           // and its world layer drawn (renderWorld)
+    bool sPanelsDrawn = false;          // and its panels drawn (under LLUI while a viewer popup is open)
+    ImDrawList* sWorldList = nullptr;   // the world layer: ImGui's background draw list
     std::string sIniPath;
     std::string sClipboard;             // backing store for ImGui's GetClipboardText
     LLTimer sFrameTimer;
@@ -302,27 +310,99 @@ namespace
 
 namespace
 {
-    // A floater, the floater snapshot view or an open menu under the point (scaled window coordinates).
-    bool viewerUIAt(S32 x, S32 y)
+    // The viewer's camera keys with Alt (key_bindings.xml, every mode): the arrows, Page Up/Down, and A, D, W, S,
+    // E, C. Other Alt keys (the editor's Alt+R...) stay the editor's.
+    bool isAltCameraKey(KEY key, MASK mask)
     {
-        if (gMenuHolder && gMenuHolder->hasVisibleMenu())
-        {
-            return true;
-        }
-        if (!gFloaterView || !gFloaterView->getVisible())
+        if (!(mask & MASK_ALT))
         {
             return false;
         }
-        S32 lx, ly;
-        gFloaterView->screenPointToLocal(x, y, &lx, &ly);
-        return gFloaterView->childFromPoint(lx, ly) != nullptr;
+        switch (key)
+        {
+            case KEY_LEFT: case KEY_RIGHT: case KEY_UP: case KEY_DOWN: case KEY_PAGE_UP: case KEY_PAGE_DOWN:
+            case KEY_PAD_LEFT: case KEY_PAD_RIGHT: case KEY_PAD_UP: case KEY_PAD_DOWN: case KEY_PAD_PGUP: case KEY_PAD_PGDN:
+            case 'A': case 'D': case 'W': case 'S': case 'E': case 'C':
+                return true;
+            default:
+                return false;
+        }
     }
 
-    // Keys go to ImGui while a widget of it holds the keyboard, or after a click it took until LLUI
-    // takes keyboard focus or a click goes to the viewer (see the header).
-    bool imguiGetsKeys()
+    // Keys (see the header): an ImGui text field first; then LLUI's keyboard focus (the chat bar, a floater);
+    // Alt camera keys are the viewer's; the rest go to ImGui while a VATs window holds the keyboard, and all
+    // of them while the editor is open.
+    bool imguiGetsKeys(KEY key, MASK mask)
     {
-        return sCtx && (ImGui::GetIO().WantCaptureKeyboard || (sEditorKeys && !gFocusMgr.getKeyboardFocus()));
+        if (!sCtx)
+        {
+            return false;
+        }
+        const ImGuiIO& io = ImGui::GetIO();
+        if (io.WantTextInput)
+        {
+            return true;
+        }
+        if (gFocusMgr.getKeyboardFocus() || isAltCameraKey(key, mask))
+        {
+            return false;
+        }
+        return io.WantCaptureKeyboard || FSVATsEditor::ownsWorld();
+    }
+
+    // A viewer menu or modal dialog is open: it goes over the editor's panels and gets the clicks.
+    bool viewerPopupOpen()
+    {
+        return (gMenuHolder && gMenuHolder->hasVisibleMenu()) || LLModalDialog::activeCount() > 0;
+    }
+
+    // A press ImGui's own windows take: over a window, or anywhere while a popup is open (clicking away closes
+    // it). Presses over the world come through worldClick instead, after LLUI had its chance.
+    bool panelsTakePress()
+    {
+        const ImGuiContext& g = *ImGui::GetCurrentContext();
+        return !viewerPopupOpen() && (g.HoveredWindow != nullptr || g.OpenPopupStack.Size > 0);
+    }
+
+    // Draws one layer of the frame built this frame: the world layer (the background list: bones, gizmos,
+    // markers) or the rest (the panels).
+    void drawLayer(bool world)
+    {
+        const ImDrawData* all = ImGui::GetDrawData();
+        if (!all || !all->Valid)
+        {
+            return;
+        }
+        ImDrawData part = *all;
+        part.CmdLists.resize(0);
+        part.TotalVtxCount = part.TotalIdxCount = 0;
+        for (ImDrawList* list : all->CmdLists)
+        {
+            if ((list == sWorldList) == world)
+            {
+                part.CmdLists.push_back(list);
+                part.TotalVtxCount += list->VtxBuffer.Size;
+                part.TotalIdxCount += list->IdxBuffer.Size;
+            }
+        }
+        part.CmdListsCount = part.CmdLists.Size;
+        if (!part.CmdListsCount)
+        {
+            return;
+        }
+        // LLRender batches immediate-mode vertices: flush them now or they land on top of ImGui.
+        gGL.flush();
+        GLSnapshot before;
+        if (sGLChecksLeft > 0)
+        {
+            before.read();
+        }
+        ImGui_ImplOpenGL3_RenderDrawData(&part);
+        if (sGLChecksLeft > 0)
+        {
+            --sGLChecksLeft;
+            checkGLState(before);
+        }
     }
 }
 
@@ -351,11 +431,12 @@ void FSVATsImGui::destroyGL()
     }
 }
 
-void FSVATsImGui::render()
+// Builds this frame's ImGui frame (clients, input, layout); false when nothing is open.
+static bool buildFrame()
 {
     if (!gViewerWindow)
     {
-        return;
+        return false;
     }
     static LLCachedControl<bool> test(gSavedSettings, "VATsImGuiTest", false);
     static bool test_on = false;
@@ -364,11 +445,11 @@ void FSVATsImGui::render()
         test_on = test;
         if (test_on)
         {
-            setClient("test", drawTest);
+            FSVATsImGui::setClient("test", drawTest);
         }
         else
         {
-            removeClient("test");
+            FSVATsImGui::removeClient("test");
         }
     }
     static LLCachedControl<bool> editor(gSavedSettings, "VATsEditor", false);
@@ -379,7 +460,7 @@ void FSVATsImGui::render()
         {
             destroy();
         }
-        return;
+        return false;
     }
     if (!sCtx)
     {
@@ -393,7 +474,7 @@ void FSVATsImGui::render()
         if (!sGLReady)
         {
             LL_WARNS("VATsImGui") << "ImGui OpenGL3 backend failed to initialise" << LL_ENDL;
-            return;
+            return false;
         }
     }
 
@@ -421,27 +502,50 @@ void FSVATsImGui::render()
     {
         client.second.draw();
     }
+    sWorldList = ImGui::GetBackgroundDrawList();
     ImGui::Render();
     // Drawn into the whole window, offset to the world view: the backend's viewport and scissor are
     // window-sized, its projection starts at DisplayPos.
     ImDrawData* draw_data = ImGui::GetDrawData();
     draw_data->DisplayPos = ImVec2(-sOrigin.x, -sOrigin.y);
     draw_data->DisplaySize = ImVec2((F32)gViewerWindow->getWindowWidthScaled(), window_h);
+    sBuilt = true;
+    sWorldDrawn = sPanelsDrawn = false;
+    return true;
+}
 
-    // LLRender batches immediate-mode vertices: flush them now or they land on top of ImGui.
-    gGL.flush();
-    GLSnapshot before;
-    if (sGLChecksLeft > 0)
+void FSVATsImGui::renderWorld()
+{
+    if (!sBuilt && !buildFrame())
     {
-        before.read();
+        return;
     }
-    ImGui_ImplOpenGL3_RenderDrawData(draw_data);
-    if (sGLChecksLeft > 0)
+    drawLayer(true);
+    sWorldDrawn = true;
+    if (viewerPopupOpen())
     {
-        --sGLChecksLeft;
-        checkGLState(before);
+        drawLayer(false);  // the viewer's menu or modal dialog goes over the panels
+        sPanelsDrawn = true;
     }
+}
 
+void FSVATsImGui::render()
+{
+    if (!sBuilt && !buildFrame())
+    {
+        return;
+    }
+    if (!sWorldDrawn)
+    {
+        drawLayer(true);  // no world pass this frame (the login screen)
+    }
+    if (!sPanelsDrawn)
+    {
+        drawLayer(false);
+    }
+    sBuilt = sWorldDrawn = sPanelsDrawn = false;
+
+    ImGuiIO& io = ImGui::GetIO();
     if (io.WantCaptureMouse)
     {
         gViewerWindow->setCursor(toCursor(ImGui::GetMouseCursor()));
@@ -454,45 +558,90 @@ void FSVATsImGui::render()
     sHadTextInput = io.WantTextInput;
 }
 
+namespace
+{
+    int toImGuiButton(EMouseClickType click)
+    {
+        switch (click)
+        {
+            case CLICK_LEFT: case CLICK_DOUBLELEFT: return ImGuiMouseButton_Left;
+            case CLICK_RIGHT: return ImGuiMouseButton_Right;
+            case CLICK_MIDDLE: return ImGuiMouseButton_Middle;
+            case CLICK_BUTTON4: return 3;
+            case CLICK_BUTTON5: return 4;
+            default: return -1;
+        }
+    }
+
+    // ImGui takes this press: it gets the button, its release will come back to it, and LLUI loses the keys.
+    void takePress(LLCoordGL pos, MASK mask, int button)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        setMods(io, mask);
+        const ImVec2 p = toImGui(pos);
+        io.AddMousePosEvent(p.x, p.y);
+        io.AddMouseButtonEvent(button, true);
+        sCapturedButtons |= 1u << button;
+        gFocusMgr.setKeyboardFocus(nullptr);
+    }
+}
+
 bool FSVATsImGui::mouseButton(LLCoordGL pos, MASK mask, EMouseClickType click, bool down)
 {
-    if (!sCtx)
+    const int button = sCtx ? toImGuiButton(click) : -1;
+    if (button < 0)
     {
         return false;
     }
-    int button;
-    switch (click)
-    {
-        case CLICK_LEFT: case CLICK_DOUBLELEFT: button = ImGuiMouseButton_Left; break;
-        case CLICK_RIGHT: button = ImGuiMouseButton_Right; break;
-        case CLICK_MIDDLE: button = ImGuiMouseButton_Middle; break;
-        case CLICK_BUTTON4: button = 3; break;
-        case CLICK_BUTTON5: button = 4; break;
-        default: return false;
-    }
-    ImGuiIO& io = ImGui::GetIO();
-    setMods(io, mask);
-    ImVec2 p = toImGui(pos);
-    io.AddMousePosEvent(p.x, p.y);
-    // ImGui always sees the button, so it knows a press over the world is not its own (and drops its
-    // focus); the viewer loses it only when ImGui was under the pointer at the press.
-    io.AddMouseButtonEvent(button, down);
-    const U32 bit = 1u << button;
     if (down)
     {
-        // A click ImGui takes gives it the keys (and takes LLUI's keyboard focus); any other gives them back.
-        sEditorKeys = io.WantCaptureMouse;
-        if (io.WantCaptureMouse)
+        if (panelsTakePress())
         {
-            sCapturedButtons |= bit;
-            gFocusMgr.setKeyboardFocus(nullptr);
+            takePress(pos, mask, button);
             return true;
         }
+        // Not ImGui's: LLUI or the world (worldClick) has it. A VATs window stops holding the keyboard.
+        ImGui::FocusWindow(nullptr);
         return false;
     }
+    // Releases always reach ImGui, so it is never left with a button held; the viewer loses only those
+    // whose press ImGui took.
+    ImGuiIO& io = ImGui::GetIO();
+    setMods(io, mask);
+    const ImVec2 p = toImGui(pos);
+    io.AddMousePosEvent(p.x, p.y);
+    io.AddMouseButtonEvent(button, false);
+    const U32 bit = 1u << button;
     const bool captured = (sCapturedButtons & bit) != 0;
     sCapturedButtons &= ~bit;
+    if (captured)
+    {
+        gViewerWindow->getWindow()->releaseMouse();  // a world press was captured by handleAnyMouseClick
+    }
     return captured;
+}
+
+bool FSVATsImGui::worldClick(LLCoordGL pos, MASK mask, EMouseClickType click, bool down)
+{
+    // Alt presses are the viewer's camera (Alt-cam, Ctrl+Alt orbit, Ctrl+Alt+Shift pan).
+    const int button = sCtx && down && !(mask & MASK_ALT) && FSVATsEditor::ownsWorld() ? toImGuiButton(click) : -1;
+    if (button < 0)
+    {
+        return false;
+    }
+    takePress(pos, mask, button);
+    return true;
+}
+
+bool FSVATsImGui::worldHover(MASK mask)
+{
+    sWorldHoverFrame = LLFrameTimer::getFrameCount();
+    if (!sCtx || (mask & MASK_ALT) || !FSVATsEditor::ownsWorld())
+    {
+        return false;
+    }
+    gViewerWindow->setCursor(UI_CURSOR_ARROW);  // no hand over touchable objects; ImGui sets its own at render
+    return true;
 }
 
 void FSVATsImGui::mouseMove(LLCoordGL pos, MASK mask)
@@ -501,8 +650,6 @@ void FSVATsImGui::mouseMove(LLCoordGL pos, MASK mask)
     {
         ImVec2 p = toImGui(pos);
         ImGui::GetIO().AddMousePosEvent(p.x, p.y);
-        const LLVector2& scale = gViewerWindow->getDisplayScale();
-        sOverViewerUI = viewerUIAt(ll_round((F32)pos.mX / scale.mV[VX]), ll_round((F32)pos.mY / scale.mV[VY]));
     }
 }
 
@@ -527,8 +674,7 @@ bool FSVATsImGui::scrollWheel(S32 clicks, bool horizontal)
 
 bool FSVATsImGui::keyDown(KEY key, MASK mask)
 {
-    // Otherwise the keys stay the viewer's, so movement and camera keys keep working.
-    if (!imguiGetsKeys())
+    if (!imguiGetsKeys(key, mask))
     {
         return false;
     }
@@ -559,7 +705,7 @@ void FSVATsImGui::keyUp(KEY key, MASK mask)
 
 bool FSVATsImGui::unicodeChar(llwchar uni_char, MASK mask)
 {
-    if (!imguiGetsKeys())
+    if (!imguiGetsKeys(uni_char < 128 ? (KEY)toupper((int)uni_char) : 0, mask))
     {
         return false;
     }
@@ -578,16 +724,16 @@ void FSVATsImGui::focusLost()
     {
         ImGui::GetIO().AddFocusEvent(false);
         sCapturedButtons = 0;
-        sEditorKeys = false;
     }
 }
 
 bool FSVATsImGui::capturesMouse()
 {
-    return sCtx && ImGui::GetIO().WantCaptureMouse;
+    // Not ImGui's world capture (a bone under the pointer): LLUI windows over the world keep their hover.
+    return sCtx && (panelsTakePress() || sCapturedButtons != 0);
 }
 
-bool FSVATsImGui::pointerOverViewerUI()
+bool FSVATsImGui::pointerOnWorld()
 {
-    return sOverViewerUI;
+    return sWorldHoverFrame == LLFrameTimer::getFrameCount();
 }

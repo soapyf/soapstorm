@@ -636,9 +636,6 @@
         </menu_item_check>
 <!-- /FS:AR FIRE-30873 -->
         <menu_item_check label="VATs Editor" name="VATs Editor"><menu_item_check.on_check function="CheckControl" parameter="VATsEditor" /><menu_item_check.on_click function="ToggleControl" parameter="VATsEditor" /></menu_item_check>
-        <menu_item_check label="VATs Animator" name="VATs Animator"><menu_item_check.on_check function="Floater.Visible" parameter="fs_animator" /><menu_item_check.on_click function="Floater.Toggle" parameter="fs_animator" /></menu_item_check>
-        <menu_item_check label="VATs Motion Capture" name="VATs Motion Capture"><menu_item_check.on_check function="Floater.Visible" parameter="fs_vats_mocap" /><menu_item_check.on_click function="Floater.Toggle" parameter="fs_vats_mocap" /></menu_item_check>
-        <menu_item_check label="VATs Tools" name="VATs Tools"><menu_item_check.on_check function="Floater.Visible" parameter="fs_vats_tools" /><menu_item_check.on_click function="Floater.Toggle" parameter="fs_vats_tools" /></menu_item_check>
 
         <menu_item_separator/>
 

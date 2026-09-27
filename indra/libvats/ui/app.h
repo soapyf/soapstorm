@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <map>
 #include <memory>
@@ -129,7 +130,9 @@ private:
     void import_file(const std::string& path);
     int anim_bytes(AnimExportResult& r, std::vector<std::uint8_t>& bytes);
     bool export_anim(const std::string& path);
-    void upload_now();  // the viewer's direct upload (Host::can_upload)
+    void upload_now();  // the viewer's direct upload (Host::can_upload): every file Export would write
+    void upload_next();  // the next queued upload, after the previous one's confirmation
+    std::deque<std::pair<std::string, std::vector<std::uint8_t>>> upload_queue_;  // name, bytes
     bool export_bvh(const std::string& path, bool all_bones);
     // Runs then() now, or after the user has dealt with unsaved changes.
     void guard_unsaved(std::function<void()> then);
@@ -174,6 +177,8 @@ private:
     void build_actions();
     void apply_preset();          // rebinds every action for settings_.preset
     void apply_look();            // theme and interface size
+    HostColours host_colours_{};  // the host's skin as last applied (Host::skin_colours)
+    bool has_host_colours_ = false;
     const CameraView* project_camera(int slot) const;
     void store_project_camera(int slot, const CameraView& v);
     // --body shows a body for this run only: the file keeps the body chosen in the app (session_body_).
@@ -243,6 +248,8 @@ private:
     void draw_status_bar();
     void draw_viewport();
     void draw_bone_lines(ImDrawList* dl) const;  // the world view's bones: the host draws no scene (spec 09 U3)
+    // The world view's other actors, ghosts and collision volumes as lines (spec 09 U4).
+    void draw_world_extras(ImDrawList* dl);
     ImGuiID dockspace_id_ = 0;
     void draw_message_popup();
 

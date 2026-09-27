@@ -11,10 +11,16 @@
 
 namespace vats {
 
+// A host's own colour roles (the viewer's skin, spec 09 U4). Given to apply_theme, they replace the theme's.
+struct HostColours {
+    ImVec4 bg, panel, frame, frame_hi, frame_active, text, text_dim, border, accent;
+};
+
 void load_fonts(const char* assets_dir);
 ImFont* bold_font();  // Inter SemiBold (help pages), the regular font when missing
-// Styles ImGui with a theme at a UI scale (display scale x interface size).
-void apply_theme(int theme, float scale);
+// Styles ImGui with a theme at a UI scale (display scale x interface size); host colours, when given, replace
+// the theme's colours.
+void apply_theme(int theme, float scale, const HostColours* host = nullptr);
 int theme_count();
 const char* theme_name(int theme);
 int find_theme(const std::string& name);  // 0 when unknown

@@ -175,7 +175,7 @@ void key_face(Clip& clip, const FaceTable& table, const VmcState& s, const FaceS
     }
     for (auto& [bone, b] : bones) {
         key_euler(clip, bone, frame, b.rot);
-        if (b.pos_used) key_offset(clip, bone, frame, b.pos);
+        if (b.pos_used && settings.positions) key_offset(clip, bone, frame, b.pos);
     }
     if (settings.head && s.has_face_head) key_euler(clip, "mHead", frame, quat_to_euler(s.face_head));
 }

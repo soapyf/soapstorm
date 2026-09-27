@@ -95,7 +95,7 @@ Json mocap_settings(const MocapUi& ui) {
     j.set("source", ui.source), j.set("port", ui.port), j.set("allow_other_devices", lan), j.set("phone_ip", ui.phone_ip);
     j.set("drive", ui.drive), j.set("face", ui.face_on), j.set("face_preset", ui.face_preset);
     j.set("face_gain", f.gain), j.set("eye_gain", f.eye_gain), j.set("eye_yaw_max", f.eye_yaw_max);
-    j.set("eye_pitch_max", f.eye_pitch_max), j.set("head", f.head), j.set("shape_gains", map(f.gains));
+    j.set("eye_pitch_max", f.eye_pitch_max), j.set("head", f.head), j.set("positions", f.positions), j.set("shape_gains", map(f.gains));
     j.set("neutral_face", map(f.neutral)), j.set("countdown", double(ui.countdown));
     j.set("smooth", c.smooth), j.set("reduce", c.reduce), j.set("reduce_deg", c.rot_deg), j.set("reduce_m", c.pos_m);
     j.set("edge_blend", c.blend), j.set("foot_lock", c.lock_feet);
@@ -124,7 +124,7 @@ void load_mocap_settings(MocapUi& ui, const Json& j) {
     if (auto* x = j.find("phone_ip"); x && x->is_string() && x->str.size() < 64) ui.phone_ip = x->str;
     flag("drive", ui.drive), flag("face", ui.face_on), num("face_preset", ui.face_preset, 0, 64);
     num("face_gain", f.gain, 0, 2), num("eye_gain", f.eye_gain, 0, 2), num("eye_yaw_max", f.eye_yaw_max, 5, 45);
-    num("eye_pitch_max", f.eye_pitch_max, 5, 45), flag("head", f.head), map("shape_gains", f.gains);
+    num("eye_pitch_max", f.eye_pitch_max, 5, 45), flag("head", f.head), flag("positions", f.positions), map("shape_gains", f.gains);
     map("neutral_face", f.neutral), num("countdown", ui.countdown, 0, 5);
     num("smooth", c.smooth, 0, 5), flag("reduce", c.reduce), num("reduce_deg", c.rot_deg, 0.05, 5);
     num("reduce_m", c.pos_m, 0.0001, 0.02), num("edge_blend", c.blend, 0, 15), flag("foot_lock", c.lock_feet);
@@ -571,6 +571,11 @@ void App::draw_mocap_panel() {
     ImGui::SetNextItemWidth(half);
     if (ImGui::SliderFloat("##eyepitch", &pitch, 5, 45, "Up/Down %.0f°")) ui.face_settings.eye_pitch_max = pitch;
     ImGui::SetItemTooltip("The farthest the eyes turn up or down, in degrees.");
+    label("");
+    ImGui::Checkbox("Move face bones", &ui.face_settings.positions);
+    ImGui::SetItemTooltip("Moves face bones as well as turning them: smiles, brows, cheeks and lip shapes. The moves are "
+                          "made for the Second Life default head. Untick it for a mesh head with its own face shape "
+                          "(a furry or stylised head), which moving bones would pull out of shape.");
     if (ImGui::TreeNode("Shape Strengths")) {
         for (auto& [shape, motions] : ui.face.shapes) {
             float g = float(ui.face_settings.gains.count(shape) ? ui.face_settings.gains[shape] : 1.0);

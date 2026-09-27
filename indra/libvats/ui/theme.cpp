@@ -38,7 +38,23 @@ const ThemeDef kThemes[] = {
       IM_COL32(255, 255, 255, 30), IM_COL32(255, 255, 255, 56), IM_COL32(176, 177, 181, 255)}},
 };
 
-int g_theme = 0;
+ThemeDef g_host;                          // the host's colours as a theme (apply_theme)
+const ThemeDef* g_cur = &kThemes[0];      // the theme in use
+
+Rgb8 rgb8(const ImVec4& c) { return {int(c.x * 255 + 0.5f), int(c.y * 255 + 0.5f), int(c.z * 255 + 0.5f)}; }
+ImU32 with_alpha(Rgb8 c, int a) { return IM_COL32(c.r, c.g, c.b, a); }
+Rgb8 scaled(Rgb8 c, float k) { return {int(c.r * k), int(c.g * k), int(c.b * k)}; }
+
+// The host's colour roles as a theme; the timeline's colours follow from them.
+const ThemeDef& host_theme(const HostColours& h) {
+    g_host = ThemeDef{"Host",          rgb8(h.bg),   rgb8(h.panel),    rgb8(h.frame), rgb8(h.frame_hi), rgb8(h.frame_active),
+                      rgb8(h.text),    rgb8(h.text_dim), rgb8(h.border), rgb8(h.accent), SceneColours{}, {}};
+    const Rgb8 bg = scaled(g_host.panel, 0.82f), graph = scaled(g_host.panel, 0.74f);
+    g_host.timeline = {with_alpha(bg, 255),          with_alpha(graph, 255),         with_alpha(bg, 230),
+                       with_alpha(g_host.text, 12),  with_alpha(g_host.text, 26),    with_alpha(g_host.text, 46),
+                       with_alpha(g_host.text_dim, 255)};
+    return g_host;
+}
 
 ImVec4 v4(Rgb8 c, int a = 255) { return ImVec4(c.r / 255.f, c.g / 255.f, c.b / 255.f, a / 255.f); }
 
@@ -51,9 +67,9 @@ int find_theme(const std::string& name) {
         if (name == kThemes[i].name) return i;
     return 0;
 }
-const SceneColours& scene_colours() { return kThemes[g_theme].scene; }
-const TimelineColours& timeline_colours() { return kThemes[g_theme].timeline; }
-ImU32 accent_colour() { return ImGui::ColorConvertFloat4ToU32(v4(kThemes[g_theme].accent)); }
+const SceneColours& scene_colours() { return g_cur->scene; }
+const TimelineColours& timeline_colours() { return g_cur->timeline; }
+ImU32 accent_colour() { return ImGui::ColorConvertFloat4ToU32(v4(g_cur->accent)); }
 
 static ImFont* g_bold = nullptr;
 
@@ -68,9 +84,9 @@ void load_fonts(const char* assets_dir) {
 
 ImFont* bold_font() { return g_bold ? g_bold : ImGui::GetIO().Fonts->Fonts[0]; }
 
-void apply_theme(int theme, float scale) {
-    g_theme = theme >= 0 && theme < theme_count() ? theme : 0;
-    const ThemeDef& t = kThemes[g_theme];
+void apply_theme(int theme, float scale, const HostColours* host) {
+    g_cur = host ? &host_theme(*host) : &kThemes[theme >= 0 && theme < theme_count() ? theme : 0];
+    const ThemeDef& t = *g_cur;
     ImGuiStyle& s = ImGui::GetStyle();
     s = ImGuiStyle();
     s.WindowPadding = ImVec2(10, 10);

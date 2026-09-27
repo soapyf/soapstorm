@@ -24,6 +24,7 @@
 #include "scene.h"
 #include "vats/project.h"
 #include "vats/skeleton.h"
+#include "theme.h"
 #include "view_math.h"
 
 namespace vats::ui {
@@ -101,11 +102,19 @@ public:
     // evaluation uses instead of the UI's own body; null = the UI's own.
     virtual const Shape* body_shape() const { return nullptr; }
 
+    // --- Look (the viewer) -----------------------------------------------------------------------
+    // The host's own colours (the viewer's skin), asked every frame: true replaces the colour theme with them,
+    // and the UI restyles whenever they change.
+    virtual bool skin_colours(HostColours& out) const { (void)out; return false; }
+    // The program the UI runs inside, for Welcome and About; "" = the standalone app (SDL).
+    virtual std::string host_name() const { return ""; }
+
     // --- Upload (the viewer) ---------------------------------------------------------------------
     // True when the host can upload an animation straight to the grid.
     virtual bool can_upload() const { return false; }
     // Uploads exported .anim bytes under a name, after the host's own cost confirmation. done gets a status
-    // line (sent, cancelled, or why not), on the UI thread.
+    // line (sent, cancelled, or why not), on the UI thread, and the host takes the next upload from inside it
+    // (the UI uploads several animations one after another).
     virtual void upload_anim(const std::vector<std::uint8_t>& bytes, const std::string& name,
                              std::function<void(const std::string&)> done) {
         (void)bytes, (void)name;

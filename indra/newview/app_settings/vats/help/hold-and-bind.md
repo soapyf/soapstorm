@@ -82,11 +82,6 @@ The target is out of the arm's reach, so the arm straightens and the hand falls 
 
 That is intended: the move is keyed as an offset from the pin. To end the pin, use **Release from Here** or **Delete Pin**.
 
-## App and viewer
-
-> **Note:** In the viewer, the pins are in **Avatar → VATs Tools → Rig**; pin bands can't be dragged
-> there yet. See [[VATs Animator (viewer)#Rig tools]].
-
 ## See also
 
 - [[IK]]

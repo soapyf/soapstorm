@@ -4,7 +4,7 @@ Motion capture records live body and face motion from a tracking app or suit int
 receives the VMC protocol, Rokoko Studio Live and iFacialMocap over UDP on your local network, shows the
 motion on the avatar while it arrives, and records takes as keys.
 
-> Related articles: [[Face tracking]], [[Retargeting]], [[Keys and timeline]], [[VATs Animator (viewer)]]
+> Related articles: [[Face tracking]], [[Retargeting]], [[Keys and timeline]], [[VATs Editor (viewer)]]
 
 ## Usage
 
@@ -132,7 +132,7 @@ The document or the edited actor changed while recording. Record again without s
 
 - [[Face tracking]]
 - [[Retargeting]] for recorded files (BVH, glTF, FBX) instead of live streams
-- [[VATs Animator (viewer)#Motion capture]]
+- [[VATs Editor (viewer)]]
 - [VMC protocol specification](https://protocol.vmc.info/english)
 
 Category: Motion

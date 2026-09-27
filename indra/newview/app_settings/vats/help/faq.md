@@ -28,11 +28,11 @@ available. See [[Installation]].
 No. VATs makes no internet connections. [[Motion capture]] listens for data from capture apps on your
 own computer or local network.
 
-### What is the difference between VATs and the VATs Animator?
+### What is the difference between VATs and the VATs Editor?
 
-Viewport Avatar Toolset is the standalone app. The VATs Animator is the same core inside the SoapStorm
+Viewport Avatar Toolset is the standalone app. The VATs Editor is the same editor inside the SoapStorm
 viewer, animating your own avatar in-world. They read and write the same `.vat` projects. See
-[[VATs]] and [[VATs Animator (viewer)]].
+[[VATs]] and [[VATs Editor (viewer)]].
 
 ## Coming from other programs
 

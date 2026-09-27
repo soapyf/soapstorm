@@ -217,6 +217,7 @@ void display_startup()
 
     if (gViewerWindow)
     gViewerWindow->setup2DRender();
+    FSVATsImGui::renderWorld(); // VATs ImGui UI: bones under the login screen's windows
     if (gViewerWindow)
     gViewerWindow->draw();
     gGL.flush();
@@ -2036,6 +2037,7 @@ void render_ui_2d()
     }
 
 
+    if (!gSnapshot) FSVATsImGui::renderWorld(); // VATs ImGui UI: bones and gizmos with the world, under the viewer's UI
     if (LLPipeline::RenderUIBuffer)
     {
         if (LLView::sIsRectDirty)

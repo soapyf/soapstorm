@@ -79,7 +79,8 @@ That is how Second Life works: animations carry no sound. Upload the sound separ
 
 ## App and viewer
 
-> **Note:** The audio track is not yet available in the VATs Animator in the viewer.
+> **Note:** In the viewer the audio plays through the viewer's sound, heard by you only, at a volume up to
+> 100 %; scrubbing plays no snippets.
 
 ## See also
 

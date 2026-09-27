@@ -7,8 +7,6 @@ instead.
 
 > Related articles: [[Anim format]], [[Export to Second Life]], [[Retargeting]], [[Skeleton]]
 
-> **Note:** BVH export is not yet available in the [[VATs Animator (viewer)]].
-
 ## Usage
 
 ### Import

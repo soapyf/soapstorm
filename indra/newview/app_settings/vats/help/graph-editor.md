@@ -144,16 +144,10 @@ No bone is selected, or the selected bones have no keys. Select a keyed bone, or
 
 In every preset except Industry, the middle button is used for panning. Drag the keys with the left button instead.
 
-## App and viewer
-
-> **Note:** The viewer's graph has key selection, dragging keys and handles, double-click to add a key,
-> **Delete**, **Frame All**, **Frame Selected** and the tangent buttons. The rest of this page is not yet
-> available there; see [[VATs Animator (viewer)#Editing curves]].
-
 ## See also
 
 - [[Keys and timeline]]
 - [[Keyboard shortcuts]]
-- [[VATs Animator (viewer)]]
+- [[VATs Editor (viewer)]]
 
 Category: Animating

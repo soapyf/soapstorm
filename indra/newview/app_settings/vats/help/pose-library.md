@@ -81,8 +81,7 @@ Deleting asks first: "Delete "*name*" from the Inventory? This cannot be undone.
 
 ## App and viewer
 
-> **Note:** The viewer has the starter poses in **Avatar → VATs Tools → Rig**, but not your saved poses
-> and clips yet. See [[VATs Animator (viewer)#Rig tools]].
+> **Note:** In the viewer the **Inventory** shows plain icons instead of pose and prop thumbnails.
 
 ## See also
 

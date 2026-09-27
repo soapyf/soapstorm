@@ -67,7 +67,7 @@ topic. Second Life names are given as Second Life uses them.
 - **Retargeting**: Transferring motion from another skeleton, such as a BVH, glTF or FBX rig, onto the SL
   skeleton. See [[Retargeting]].
 - **Scrub**: To drag the playhead through the timeline to see the animation at each frame.
-- **SoapStorm**: The Second Life viewer that includes the [[VATs Animator (viewer)|VATs Animator]].
+- **SoapStorm**: The Second Life viewer that includes the [[VATs Editor (viewer)|VATs Editor]].
 - **.vat**: VATs' project file. See [[Project file format]].
 - **Take**: One recording of motion capture, kept as one undo step. See [[Motion capture]].
 - **T-pose**: A standing pose with the arms straight out to the sides. Motion-capture senders use it as

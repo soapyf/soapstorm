@@ -168,7 +168,10 @@ bool App::apply_builtin_pose(const std::string& slug) {
     return false;
 }
 
-void App::apply_look() { apply_theme(find_theme(settings_.theme), display_scale_ * settings_.interface_size); }
+void App::apply_look() {
+    has_host_colours_ = host_.skin_colours(host_colours_);
+    apply_theme(find_theme(settings_.theme), display_scale_ * settings_.interface_size, has_host_colours_ ? &host_colours_ : nullptr);
+}
 
 const CameraView* App::project_camera(int slot) const {
     static CameraView v;
@@ -1056,7 +1059,8 @@ std::string App::key_hint(const char* id) const {
 }
 
 std::string App::nav_hint() const {
-    if (host_.world_view()) return "Camera: the viewer's own controls   Click the world to give the keys back to the viewer";
+    if (host_.world_view())
+        return "Clicks and keys: the editor   Camera: Alt+drag, wheel, Alt+arrows   Chat: click the chat bar";
     switch (settings_.preset) {
         case Preset::Blender:
             return settings_.emulate_3_button ? "Middle or Alt+left: orbit   Shift: pan   Ctrl: zoom   Wheel: zoom"
@@ -1410,6 +1414,12 @@ void App::draw_dockspace() {
 }
 
 bool App::frame() {
+    {
+        // The viewer's skin (Host::skin_colours): restyle when it changes.
+        HostColours now{};
+        const bool has = host_.skin_colours(now);
+        if (has != has_host_colours_ || (has && std::memcmp(&now, &host_colours_, sizeof now) != 0)) apply_look();
+    }
     {
         std::vector<std::pair<Dialog, std::string>> results;
         {

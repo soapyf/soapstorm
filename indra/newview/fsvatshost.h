@@ -34,6 +34,8 @@ namespace FSVATsEditor
     // Once a frame from FSVATsImGui::render, before the ImGui frame: opens or closes the editor to match
     // the setting, and closes it (autosaving, no prompt) when the viewer quits.
     void update(bool want_open);
+    // True while the editor is open: the world's clicks and the keys are the editor's (FSVATsImGui).
+    bool ownsWorld();
 }
 
 #endif // FS_VATSHOST_H

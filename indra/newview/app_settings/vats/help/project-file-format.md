@@ -2,7 +2,7 @@
 
 A VATs project (`.vat`) is a UTF-8 JSON file that holds everything about an animation: its curves,
 timing, props, pins, simulations, audio and actors. The app and the
-[[VATs Animator (viewer)|VATs Animator]] read and write the same format. This page is a reference for
+[[VATs Editor (viewer)|VATs Editor]] read and write the same format. This page is a reference for
 people who read or generate project files with their own tools.
 
 > Related articles: [[Projects and files]], [[Anim format]], [[BVH]]
@@ -162,10 +162,6 @@ this way; a name with a prefix of its own avoids clashes with later VATs fields.
 
 The app writes a project to a temporary file and renames it over the old one, so a failed save never
 leaves half a file. The previous version is kept as `<name>.vat.bak`.
-
-> **Note:** The [[VATs Animator (viewer)|VATs Animator]] writes the file directly, without the
-> temporary file or the `.bak` copy, and saves only the animation it shows: no actors, `meta` or unknown
-> top-level fields.
 
 ### Hexton projects
 

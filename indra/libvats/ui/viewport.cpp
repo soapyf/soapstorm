@@ -761,6 +761,73 @@ void App::draw_bone_lines(ImDrawList* dl) const {
     }
 }
 
+// The world view's other actors, onion ghosts and collision volumes (spec 09 U4): the host draws no scene, so
+// they are lines over the world like the bones. Other actors are skeletons at their place around the active
+// actor (your avatar); ghosts are bone lines, cool before the frame and warm after, as the viewer's 6g layer drew
+// them; volumes are three rings each.
+void App::draw_world_extras(ImDrawList* dl) {
+    auto line = [&](const Vec3& a, const Vec3& b, ImU32 c, float w) {
+        double ax, ay, bx, by;
+        if (projector_.to_screen(a, ax, ay) && projector_.to_screen(b, bx, by))
+            dl->AddLine(ImVec2(float(ax), float(ay)), ImVec2(float(bx), float(by)), c, w);
+    };
+    const Shape* sh = shape();
+
+    // Other actors (GR-1): kept in other_skeletons_ for pick_actor.
+    other_skeletons_.clear();
+    const Project& p = doc_.project;
+    for (int i = 0; p.actors.size() > 1 && i < int(p.actors.size()); ++i) {
+        if (i == p.active || p.actors[i].hidden) continue;
+        Evaluation e = evaluate_actor(i, frame_);
+        const Xform rel = actor_rel(i);
+        for (Xform& g : e.globals) g = rel * g;
+        other_skeletons_.push_back({std::move(e.globals), p.actors[i].colour});
+    }
+    for (const auto& [g, colour] : other_skeletons_)
+        for (int i = 0; i < skel_.joint_count(); ++i) {
+            if (!node_visible(i) || skel_[i].end.length() < 1e-5) continue;
+            Rgb c = mix(kCategoryColour[int(skel_[i].category)], {colour[0], colour[1], colour[2]}, 0.5f);
+            const ImU32 col = IM_COL32(int(c.r * 200), int(c.g * 200), int(c.b * 200), 220);
+            line(g[i].pos, g[i].apply(skel_[i].end), IM_COL32(10, 12, 14, 130), 3.5f);
+            line(g[i].pos, g[i].apply(skel_[i].end), col, 1.8f);
+        }
+
+    // Onion skin (08 ON): nothing is evaluated while it is off or playing.
+    const OnionView v = onion_view();
+    if (v.on && !playing_ && rig_)
+        for (const OnionGhost& g : onion_ghosts(*rig_, doc_.clip(), frame_, sh, v.s)) {
+            const int a = int(255 * (0.25f + 0.6f * g.at.weight));
+            const ImU32 c = g.at.offset < 0 ? IM_COL32(102, 178, 255, a) : IM_COL32(255, 158, 77, a);
+            for (int i = 1; i < skel_.volume_start(); ++i) {
+                const int parent = skel_[i].parent;
+                if (parent >= 0 && !skel_[i].attachment && skel_[i].category != Category::Face && node_visible(i))
+                    line(g.globals[parent].pos, g.globals[i].pos, c, 1.5f);
+            }
+        }
+
+    // Collision volumes (VP-10): an ellipse in each of the volume's three planes.
+    for (const CollisionVolume& cv : skel_.volumes()) {
+        if (!node_visible(cv.node)) continue;
+        const Vec3 axes = sh ? cv.scale.mul(sh->scale[cv.joint]) : cv.scale;
+        const bool sel = std::find(selection_.begin(), selection_.end(), cv.node) != selection_.end();
+        const Rgb c = cv.node == primary() ? kSelected : sel ? mix(kSelected, kVolume, 0.45f)
+                      : cv.node == hover_bone_ ? mix(kVolume, {1, 1, 1}, 0.5f) : kVolume;
+        const ImU32 col = IM_COL32(int(c.r * 255), int(c.g * 255), int(c.b * 255), sel || cv.node == hover_bone_ ? 220 : 140);
+        const Xform& g = globals_[cv.node];
+        constexpr int kSegments = 24;
+        for (int plane = 0; plane < 3; ++plane)
+            for (int k = 0; k < kSegments; ++k) {
+                auto at = [&](int n) {
+                    const double t = 2 * kPi * n / kSegments;
+                    Vec3 u;
+                    u[plane] = std::cos(t), u[(plane + 1) % 3] = std::sin(t);
+                    return g.apply(u.mul(axes));
+                };
+                line(at(k), at(k + 1), col, 1.2f);
+            }
+    }
+}
+
 void App::draw_viewport() {
     const bool world = host_.world_view();
     ImVec2 origin, size;
@@ -813,7 +880,7 @@ void App::draw_viewport() {
     if (scene) dl->AddImage(scene, origin, ImVec2(origin.x + size.x, origin.y + size.y), ImVec2(0, 1), ImVec2(1, 0));
 
     dl->PushClipRect(origin, ImVec2(origin.x + size.x, origin.y + size.y), true);
-    if (world) draw_bone_lines(dl);
+    if (world) draw_world_extras(dl), draw_bone_lines(dl);
     // Attachment points get a dot so they can be seen and clicked (their glyphs are only 4 cm).
     for (int i = skel_.joint_count(); i < skel_.volume_start(); ++i) {
         if (!node_visible(i) && i != hover_bone_) continue;  // a hidden point shows while a drop targets it

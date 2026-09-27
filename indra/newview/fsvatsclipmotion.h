@@ -1,6 +1,6 @@
 /**
  * @file fsvatsclipmotion.h
- * @brief Plays a Viewport Avatar Toolset clip on the local avatar (VATs spec 09, stage 6b).
+ * @brief Shows the VATs editor's pose on the local avatar (VATs spec 09, stages 6b, U3, U4).
  *
  * $LicenseInfo:firstyear=2026&license=viewerlgpl$
  * Copyright (c) 2026 Viewport Avatar Toolset contributors
@@ -27,54 +27,42 @@
 #include "llmotion.h"
 #include "lljointstate.h"
 
-#include "vats/clip.h"
-
-#include <functional>
-#include "vats/rig.h"
 #include "vats/skeleton.h"
 
-// Evaluates a vats::Clip each frame (FK, IK and pins) and writes the result into joint states, with
-// exactly the rotations and positions VATs' .anim exporter would write, so the preview matches the
-// uploaded file. Only the local avatar plays these, so each use shares one static Playback with its
-// floater: sPlayback for the Animator's preview, sLive for motion capture driving the avatar live
-// (a clip holding one frame, replaced every frame by the capture floater), and sEditor for the shared
-// VATs editor (spec 09 U3), which evaluates its pose itself and hands it over through Playback::pose.
+#include <string>
+#include <vector>
+
+// Shows the pose the VATs editor evaluated (clip, IK, pins and its live previews), handed over every frame
+// through sEditor, with exactly the rotations and positions VATs' .anim exporter writes. Only the local avatar
+// plays it; nobody else sees it. The editor binds every joint of the avatar, each at the top priority, so its
+// pose is the only one shown (FSVATsEditor also stops the avatar's other motions while it is open). Binding
+// every joint at the top priority is the approach of Black Dragon's poser (BDPosingMotion, Black Dragon Viewer
+// by NiranV Dean, LGPL-2.1).
 class VATsClipMotion : public LLMotion
 {
 public:
     struct Joint
     {
-        std::string name;  // viewer joint name, as in the exported .anim
-        S32 priority = 0;
-        bool position = false;
+        std::string name;       // viewer joint name
+        bool position = false;  // the pose sets its position too
     };
     struct Playback
     {
         const vats::Skeleton* skeleton = nullptr;
-        const vats::Rig* rig = nullptr;
-        const vats::Clip* clip = nullptr;
-        std::vector<Joint> joints;  // the joints the exported .anim animates
-        bool playing = true;
-        bool resync = true;  // playing restarts from `frame`
-        bool finished = false;  // a non-looping clip reached its end and holds the last frame
-        double frame = 0;    // the frame shown; while paused, the frame to hold
-        // VATs Tools' dynamics and ragdoll previews (stage 6g) adjust each evaluated frame.
-        std::function<void(vats::Evaluation&, double frame)> post;
-        // When set, shown as is every update: no clock, no evaluation, no ease-in (the shared editor).
-        const vats::Pose* pose = nullptr;
+        const vats::Pose* pose = nullptr;  // shown as is every update
+        std::vector<Joint> joints;          // bound when the motion initialises
     };
-    static Playback sPlayback, sLive, sEditor;
+    static Playback sEditor;
 
-    VATsClipMotion(const LLUUID& id, Playback* playback);
-    static LLMotion* create(const LLUUID& id) { return new VATsClipMotion(id, &sPlayback); }
-    static LLMotion* createLive(const LLUUID& id) { return new VATsClipMotion(id, &sLive); }
-    static LLMotion* createEditor(const LLUUID& id) { return new VATsClipMotion(id, &sEditor); }
+    explicit VATsClipMotion(const LLUUID& id);
+    static LLMotion* create(const LLUUID& id) { return new VATsClipMotion(id); }
 
-    bool getLoop() override;
-    F32 getDuration() override;
-    F32 getEaseInDuration() override;
-    F32 getEaseOutDuration() override;
-    LLJoint::JointPriority getPriority() override;
+    bool getLoop() override { return true; }
+    // Zero: the editor decides when to stop. With a duration the motion controller schedules its own stop.
+    F32 getDuration() override { return 0.f; }
+    F32 getEaseInDuration() override { return 0.f; }
+    F32 getEaseOutDuration() override { return 0.f; }
+    LLJoint::JointPriority getPriority() override { return LLJoint::ADDITIVE_PRIORITY; }
     LLMotionBlendType getBlendType() override { return NORMAL_BLEND; }
     F32 getMinPixelArea() override { return 0.f; }
     LLMotionInitStatus onInitialize(LLCharacter* character) override;
@@ -89,9 +77,7 @@ private:
         LLPointer<LLJointState> state;
         bool position;
     };
-    Playback* mPb;
     std::vector<Bound> mBound;
-    F64 mPlayStart = 0.0;  // wall-clock seconds at which frame 0 would have been shown
     bool mWarnedNonFinite = false;
 };
 

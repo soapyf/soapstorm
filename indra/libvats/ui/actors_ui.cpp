@@ -195,6 +195,23 @@ int App::pick_actor(ImVec2 m) const {
     projector_.ray(camera_, m.x, m.y, o, d);
     int hit = -1;
     double best = 1e30;
+    if (host_.world_view()) {  // the world view: other actors are skeletons (draw_world_extras); a bone near the pointer
+        const Project& p = doc_.project;
+        size_t k = 0;
+        for (int i = 0; i < int(p.actors.size()) && k < other_skeletons_.size(); ++i) {
+            if (i == p.active || p.actors[i].hidden) continue;
+            const auto& g = other_skeletons_[k++].first;
+            for (int b = 0; b < skel_.joint_count(); ++b) {
+                double hx, hy, tx, ty;
+                if (!node_visible(b) || !projector_.to_screen(g[b].pos, hx, hy) || !projector_.to_screen(g[b].apply(skel_[b].end), tx, ty))
+                    continue;
+                const double abx = tx - hx, aby = ty - hy, apx = m.x - hx, apy = m.y - hy;
+                const double t = std::clamp((apx * abx + apy * aby) / std::max(abx * abx + aby * aby, 1e-9), 0.0, 1.0);
+                if (double d = std::hypot(apx - abx * t, apy - aby * t); d < 10 && d < best) best = d, hit = i;
+            }
+        }
+        return hit;
+    }
     for (int i = 0; i < int(actor_pick_pos_.size()); ++i)
         if (actor_pick_idx_[i])
             if (double t = ray_triangles(o, d, actor_pick_pos_[i], *actor_pick_idx_[i]); t < best) best = t, hit = i;

@@ -13,13 +13,13 @@ VATs comes in two forms that share the same core code and the same project files
 
 | | App | Viewer |
 |---|---|---|
-| Name | Viewport Avatar Toolset | VATs Animator |
+| Name | Viewport Avatar Toolset | VATs Editor |
 | Runs | on its own, on Linux and Windows | inside the SoapStorm viewer, from the **Avatar** menu |
 | Avatar | the Linden avatar or a mesh body from your library | your own avatar, as you wear it, playing the clip live |
-| Output | `.vat` projects, `.anim` and `.bvh` files; upload with any viewer | `.vat` projects and `.anim` files; the **Upload** button uploads directly |
+| Output | `.vat` projects, `.anim` and `.bvh` files; upload with any viewer | the same files; **File → Upload Animation...** uploads directly |
 
 Features are kept the same in both wherever the viewer allows it. Where a feature differs, its page
-says so in a note. See [[VATs Animator (viewer)]] for the viewer's own controls.
+says so in a note. See [[VATs Editor (viewer)]] for what differs in the viewer.
 
 ## Getting started
 
@@ -71,7 +71,7 @@ says so in a note. See [[VATs Animator (viewer)]] for the viewer's own controls.
 
 ## Viewer
 
-- [[VATs Animator (viewer)]]: VATs inside SoapStorm.
+- [[VATs Editor (viewer)]]: VATs inside SoapStorm.
 
 ## Reference
 

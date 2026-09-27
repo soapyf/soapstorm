@@ -108,7 +108,10 @@ void App::draw_preferences() {
     }
     row("Colour theme");
     int theme = find_theme(settings_.theme);
-    if (ImGui::BeginCombo("##theme", theme_name(theme))) {
+    if (has_host_colours_) {
+        ImGui::TextDisabled("The viewer's skin");  // Host::skin_colours
+        ImGui::SetItemTooltip("Inside the viewer the editor takes its colours from the viewer's skin");
+    } else if (ImGui::BeginCombo("##theme", theme_name(theme))) {
         for (int i = 0; i < theme_count(); ++i)
             if (ImGui::Selectable(theme_name(i), i == theme)) {
                 settings_.theme = theme_name(i);
@@ -229,7 +232,10 @@ void App::draw_welcome() {
     ImGui::BeginChild("##news", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 2));
     markdown(text);
     ImGui::EndChild();
-    ImGui::TextDisabled("Built with SDL, Dear ImGui and the LGPL Second Life viewer's skeleton data.");
+    if (const std::string host = host_.host_name(); host.empty())
+        ImGui::TextDisabled("Built with SDL, Dear ImGui and the LGPL Second Life viewer's skeleton data.");
+    else
+        ImGui::TextDisabled("Running inside %s, with Dear ImGui and the LGPL Second Life viewer's skeleton data.", host.c_str());
     if (ImGui::Checkbox("Show this at startup", &settings_.show_welcome)) save_settings();
     ImGui::SameLine(ImGui::GetWindowWidth() - 90);
     if (ImGui::Button("Close", ImVec2(80, 0))) show_welcome_ = false;
@@ -385,28 +391,62 @@ void App::draw_export_section() {
     hint("Attachment points and moved bones only survive in .anim.");
 }
 
-// The viewer (spec 09 section 4): the bytes Export would write, under the export name, uploaded by the host
-// after its own cost confirmation. Only the active actor and the export's own side go up.
+// The viewer (spec 09 section 4): every file Export would write (each actor, and the mirrored copy when "both"
+// is on), under the export names, uploaded one after another; the host confirms the price of each.
 void App::upload_now() {
-    AnimExportResult r;
-    std::vector<std::uint8_t> bytes;
-    if (!anim_bytes(r, bytes)) return;
-    const std::vector<std::string> problems = validate_anim(r.file, skel_, true);  // 60 s, 250000 bytes and the rest
-    if (!problems.empty()) {
-        std::string t;
-        for (auto& e : problems) t += "- " + e + "\n";
-        return message("Cannot upload", t);
-    }
+    if (!upload_queue_.empty()) return status("An upload is already waiting for its confirmation");
     const Json& ex = doc_.clip().export_settings;
     ExportNaming naming{json_str(ex, "name"), json_int(ex, "number", 1), json_str(ex, "side"),
                         json_str(ex, "pattern", "[NAME]_[#]_[SIDE]"), ""};
-    if (multi_actor()) naming.actor = doc_.project.actors[doc_.project.active].name;
     std::string stem = doc_.path.empty() ? "" : doc_.path.substr(doc_.path.find_last_of('/') + 1);
     stem = stem.substr(0, stem.rfind('.'));
-    std::string name = export_file_name(naming, stem, doc_.clip().mirror_export, "anim");
-    name = name.substr(0, name.rfind('.'));
-    status("Upload " + name + ": waiting for the confirmation");
-    host_.upload_anim(bytes, name, [this](const std::string& s) { status(s); });
+    const bool mirrored = doc_.clip().mirror_export;
+    std::vector<bool> variants{mirrored};
+    if (json_bool(ex, "both")) variants.push_back(!mirrored);
+    Project& pr = doc_.project;
+    const int home = pr.active, actors = multi_actor() ? int(pr.actors.size()) : 1;
+    std::deque<std::pair<std::string, std::vector<std::uint8_t>>> queue;
+    std::string problems;
+    for (int a = 0; a < actors && problems.empty(); ++a) {
+        if (actors > 1) {
+            set_active_actor(pr, a);
+            naming.actor = pr.actors[a].name;
+        }
+        for (bool m : variants) {
+            std::string name = export_file_name(naming, stem, m, "anim");
+            name = name.substr(0, name.rfind('.'));
+            const bool saved = doc_.clip().mirror_export;
+            doc_.clip().mirror_export = m;  // anim_bytes reads it
+            AnimExportResult r;
+            std::vector<std::uint8_t> bytes;
+            const int made = anim_bytes(r, bytes);
+            doc_.clip().mirror_export = saved;
+            if (!made) {
+                problems = "-";  // anim_bytes already said why
+                break;
+            }
+            for (auto& e : validate_anim(r.file, skel_, true)) problems += "- " + name + ": " + e + "\n";  // 60 s, 250000 bytes
+            queue.emplace_back(name, std::move(bytes));
+        }
+    }
+    if (actors > 1) set_active_actor(pr, home);
+    if (problems == "-") return;
+    if (!problems.empty()) return message("Cannot upload", problems);
+    upload_queue_ = std::move(queue);
+    upload_next();
+}
+
+void App::upload_next() {
+    if (upload_queue_.empty()) return;
+    const std::string name = upload_queue_.front().first;
+    const size_t left = upload_queue_.size();
+    status("Upload " + name + ": waiting for the confirmation" + (left > 1 ? " (" + std::to_string(left - 1) + " more after it)" : ""));
+    std::vector<std::uint8_t> bytes = std::move(upload_queue_.front().second);
+    host_.upload_anim(bytes, name, [this](const std::string& s) {
+        status(s);
+        if (!upload_queue_.empty()) upload_queue_.pop_front();
+        upload_next();  // cancelling one still asks about the rest
+    });
 }
 
 void App::export_now(bool bvh, bool all_bones) {
@@ -599,7 +639,10 @@ void App::draw_about() {
         ImGui::Separator();
         ImGui::BulletText("Skeleton, attachment points and avatar meshes: Second Life viewer data,");
         ImGui::TextDisabled("    (C) Linden Research, Inc., LGPL-2.1");
-        ImGui::BulletText("Dear ImGui (MIT), SDL 3 (zlib), Inter font (SIL OFL 1.1)");
+        if (const std::string host = host_.host_name(); host.empty())
+            ImGui::BulletText("Dear ImGui (MIT), SDL 3 (zlib), Inter font (SIL OFL 1.1)");
+        else
+            ImGui::BulletText("Dear ImGui (MIT), Inter font (SIL OFL 1.1); running inside %s (LGPL-2.1)", host.c_str());
         ImGui::BulletText("Starter props: see app/assets/props/CREDITS.md");
     }
     ImGui::End();

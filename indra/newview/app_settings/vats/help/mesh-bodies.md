@@ -7,7 +7,7 @@ shares or uploads them.
 
 > Related articles: [[Props]], [[Export to Second Life]], [[IK]], [[Hold and bind]], [[Skeleton]]
 
-> **Note:** The [[VATs Animator (viewer)]] does not import devkits. There, the mesh body you wear is
+> **Note:** The [[VATs Editor (viewer)]] does not import devkits. There, the mesh body you wear is
 > the body, and its joint positions come from your avatar.
 
 ## Usage

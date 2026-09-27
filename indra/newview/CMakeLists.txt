@@ -139,11 +139,6 @@ set(viewer_SOURCE_FILES
     fsfloaterpartialinventory.cpp
     fsfloaterplacedetails.cpp
     fsfloaterposer.cpp
-    fsfloateranimator.cpp  # Viewport Avatar Toolset
-    fsanimgraphctrl.cpp
-    fsanimtimelinectrl.cpp
-    fsfloatervatsmocap.cpp
-    fsfloatervatstools.cpp
     fsfloaterposestand.cpp
     fsfloaterprotectedfolders.cpp
     fsfloaterradar.cpp
@@ -1091,11 +1086,6 @@ set(viewer_HEADER_FILES
     fsfloaterpartialinventory.h
     fsfloaterplacedetails.h
     fsfloaterposer.h
-    fsfloateranimator.h
-    fsanimgraphctrl.h
-    fsanimtimelinectrl.h
-    fsfloatervatsmocap.h
-    fsfloatervatstools.h
     fsfloaterposestand.h
     fsfloaterprotectedfolders.h
     fsfloaterradar.h

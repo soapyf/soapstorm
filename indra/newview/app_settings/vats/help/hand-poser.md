@@ -39,11 +39,6 @@ The finger is in IK at this frame, and the IK overrides the dots. The status bar
 
 **Properties → Animation → Hand pose** is different from the hand poser: it picks one of Second Life's built-in hand shapes (Relaxed, Fist, Point and so on), which the viewer applies on top of the animation. It does not move the finger bones in VATs.
 
-## App and viewer
-
-> **Note:** The hand poser is not yet available in the viewer; the starter hand shapes are. See
-> [[VATs Animator (viewer)#Rig tools]].
-
 ## See also
 
 - [[Pose library]]

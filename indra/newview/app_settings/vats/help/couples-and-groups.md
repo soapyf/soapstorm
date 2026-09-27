@@ -7,7 +7,8 @@ exports a file per actor plus a note with the sit-target values.
 
 > Related articles: [[Hold and bind]], [[Export to Second Life]], [[Props]], [[Mesh bodies]], [[Keys and timeline]]
 
-> **Note:** Couples and groups are not yet available in the [[VATs Animator (viewer)]].
+> **Note:** In the viewer your own avatar shows the actor you edit, and the other actors are skeletons
+> around it, seen only by you. See [[VATs Editor (viewer)#The world as the view]].
 
 ## Usage
 

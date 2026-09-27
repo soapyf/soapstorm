@@ -53,10 +53,6 @@ Mirroring only touches bones that are animated on at least one side. Key the bon
 
 Keys beyond the last frame have no place in the reversed timeline, so VATs cuts the curves at the last frame before reversing. Set **Last frame** to cover every key before you reverse.
 
-## App and viewer
-
-> **Note:** The mirror, flip and reverse commands are not yet available in the VATs Animator in the viewer; mirrored starter hand poses are (**Avatar → VATs Tools → Rig**, **Mirrored**).
-
 ## See also
 
 - [[Posing]]

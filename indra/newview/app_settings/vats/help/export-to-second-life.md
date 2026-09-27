@@ -3,7 +3,7 @@
 VATs writes Second Life animations as `.anim` files, the viewer's own binary format, and as BVH for
 other tools. An `.anim` keeps everything VATs can animate: attachment points, moved bones, per-bone
 priorities and constraints. You upload the file from any Second Life viewer, or from inside the viewer
-with the [[VATs Animator (viewer)]].
+with the [[VATs Editor (viewer)]].
 
 > Related articles: [[Animation priority]], [[Anim format]], [[BVH]], [[Couples and groups]], [[Mesh bodies]]
 
@@ -70,8 +70,8 @@ per-bone priorities or constraints; see [[BVH#Export]].
 ### Upload
 
 In a standard Second Life viewer, choose **Build → Upload → Animation**, pick the `.anim` file, and
-confirm the fee. In SoapStorm, the [[VATs Animator (viewer)]] uploads the open animation with its
-**Upload** button.
+confirm the fee. In SoapStorm, the [[VATs Editor (viewer)]] uploads directly with **File → Upload Animation...**:
+every file Export would write, each with the viewer's price confirmation.
 
 > **Warning:** Uploading costs L$ and cannot be undone. Test on the Aditi beta grid, where uploads are
 > free, or preview the animation in the viewer first.

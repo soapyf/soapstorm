@@ -60,10 +60,6 @@ Nothing was selected when you ran it, so the whole animation was edited. Undo (*
 
 Inserting on every bone extends the animation. Check the seconds under **Last frame** in **Properties → Animation**; Second Life refuses animations over 60 seconds.
 
-## App and viewer
-
-> **Note:** Time editing is not yet available in the VATs Animator in the viewer; **Last frame** can be changed there.
-
 ## See also
 
 - [[Keys and timeline]]
