@@ -206,6 +206,7 @@ static bool load_fbx(const std::vector<std::uint8_t>& bytes, const std::string& 
     rep.skins_as_static = s->skin_clusters.count && !model.rigged;
 
     double rig_scale = unit;
+    std::vector<bool> bound;
     if (model.rigged) {
         std::vector<Xform> rest = skel.global_pose(Pose(skel.size()));
         rest.push_back({});  // mRoot
@@ -230,7 +231,7 @@ static bool load_fbx(const std::vector<std::uint8_t>& bytes, const std::string& 
                 }
         }
         model.binds = rest;
-        std::vector<bool> bound(count, false);
+        bound.assign(count, false);
         for (auto& [c, n] : target) {
             if (n < 0 || n == root || bound[n]) continue;  // ponytail: first bind of a joint wins, as in load_dae
             ufbx_matrix b = ufbx_matrix_mul(&up, &c->bind_to_world);
@@ -373,6 +374,7 @@ static bool load_fbx(const std::vector<std::uint8_t>& bytes, const std::string& 
         model.weights.insert(model.weights.end(), b.weights.begin(), b.weights.end());
         model.groups.push_back(g);
     }
+    settle_rig(model, skel, bound, rep);
     rep.triangles = model.triangle_count();
     if (!rep.triangles) return err = "no triangles in the FBX file", false;
     double inf = std::numeric_limits<double>::infinity();

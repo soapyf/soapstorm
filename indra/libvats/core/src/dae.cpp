@@ -833,6 +833,7 @@ bool Loader::run(std::string_view text, std::string& err) {
     rep.skins_as_static = !skins.empty() && !model.rigged;
     rep.scale = unit;
 
+    std::vector<bool> bound;
     if (model.rigged) {
         std::vector<Xform> rest = skel.global_pose(Pose(skel.size()));
         rest.push_back({});  // mRoot
@@ -840,7 +841,7 @@ bool Loader::run(std::string_view text, std::string& err) {
         measure_rig_scale(rest);
         rep.scale = rig_scale;
         model.binds = rest;
-        std::vector<bool> bound(rest.size(), false);
+        bound.assign(rest.size(), false);
         for (auto& in : instances) {
             if (!in.skin) continue;
             const Skin& k = skins[in.skin];
@@ -873,6 +874,7 @@ bool Loader::run(std::string_view text, std::string& err) {
         model.weights.insert(model.weights.end(), b.weights.begin(), b.weights.end());
         model.groups.push_back(grp);
     }
+    settle_rig(model, skel, bound, rep);
     rep.triangles = model.triangle_count();
     if (!rep.triangles) {
         err = "no triangles in the scene";
@@ -953,21 +955,170 @@ void skin_prop(const DaeModel& model, const Skeleton& skel, const std::vector<Xf
         Mat m;
         for (auto& row : m.m)
             for (double& e : row) e = 0;
+        double total = 0;
+        int main_joint = -1;
         for (int k = 0; k < 4; ++k) {
             int j = model.joints[v * 4 + k];
             double w = model.weights[v * 4 + k];
-            if (w == 0 || j < 0 || j >= count) continue;
+            if (!(w > 0) || j < 0 || j >= count) continue;
+            if (main_joint < 0) main_joint = j;  // influences are stored largest first
+            total += w;
             for (int r = 0; r < 3; ++r)
                 for (int c = 0; c < 4; ++c) m.m[r][c] += w * mats[j].m[r][c];
         }
         const float* p = &model.positions[v * 3];
         const float* n = &model.normals[v * 3];
-        Vec3 po = m.point({p[0], p[1], p[2]}), no = m.dir({n[0], n[1], n[2]}).normalized();
+        if (total < 1e-6) continue;  // no usable weight: stays where it was bound, never at the origin
+        const Vec3 bind_p{p[0], p[1], p[2]};
+        Vec3 po = m.point(bind_p), no = m.dir({n[0], n[1], n[2]}).normalized();
+        // Never fling a vertex: a non-finite result, or one far further from its main joint than it was bound
+        // (a broken bind, say), follows that joint rigidly instead.
+        const Vec3 jn = mats[main_joint].point(model.binds[main_joint].pos);
+        const double bound_d = (bind_p - model.binds[main_joint].pos).length();
+        if (!std::isfinite(po.x) || !std::isfinite(po.y) || !std::isfinite(po.z) || !std::isfinite(no.x) ||
+            (po - jn).length() > 2 * bound_d + 0.25) {
+            po = mats[main_joint].point(bind_p);
+            no = mats[main_joint].dir({n[0], n[1], n[2]}).normalized();
+            if (!std::isfinite(po.x) || !std::isfinite(po.y) || !std::isfinite(po.z)) continue;
+        }
         for (int i = 0; i < 3; ++i) {
             positions[v * 3 + i] = static_cast<float>(po[i]);
             normals[v * 3 + i] = static_cast<float>(no[i]);
         }
     }
+}
+
+namespace {
+
+Quat quarter_turn(int k) { return Quat::axis_angle({0, 0, 1}, k * kPi / 2); }
+
+void turn_binds(DaeModel& model, int k) {
+    const Quat q = quarter_turn(k);
+    for (size_t j = 0; j < model.binds.size(); ++j)
+        if (j < model.bound.size() && model.bound[j])
+            model.binds[j] = {(q * model.binds[j].rot).normalized(), q.rotate(model.binds[j].pos)};
+    model.turn_binds = (model.turn_binds + k) % 4;
+}
+
+void turn_vertices(DaeModel& model, int k) {
+    const Quat q = quarter_turn(k);
+    const size_t nv = model.positions.size() / 3;
+    for (size_t v = 0; v < nv; ++v) {
+        float* p = &model.positions[v * 3];
+        float* m = &model.normals[v * 3];
+        Vec3 a = q.rotate({p[0], p[1], p[2]}), b = q.rotate({m[0], m[1], m[2]});
+        for (int i = 0; i < 3; ++i) p[i] = float(a[i]), m[i] = float(b[i]);
+    }
+    model.turn_vertices = (model.turn_vertices + k) % 4;
+    // Keep the box in step with the vertices (it places static props).
+    if (nv) {
+        Vec3 lo{1e30, 1e30, 1e30}, hi{-1e30, -1e30, -1e30};
+        for (size_t v = 0; v < nv; ++v)
+            for (int i = 0; i < 3; ++i) lo[i] = std::min(lo[i], double(model.positions[v * 3 + i])),
+                                        hi[i] = std::max(hi[i], double(model.positions[v * 3 + i]));
+        model.bounds_min = lo, model.bounds_max = hi;
+    }
+}
+
+}  // namespace
+
+void apply_rig_turn(DaeModel& model, int turn_b, int turn_v) {
+    if (!model.rigged || model.turn_decided) return;
+    if (int k = ((turn_b - model.turn_binds) % 4 + 4) % 4) turn_binds(model, k);
+    if (int k = ((turn_v - model.turn_vertices) % 4 + 4) % 4) turn_vertices(model, k);
+}
+
+void settle_rig(DaeModel& model, const Skeleton& skel, const std::vector<bool>& bound, DaeReport& rep) {
+    const int root = dae_root(skel), count = dae_index_count(skel);
+    if (!model.rigged || model.binds.size() != static_cast<size_t>(count) || bound.size() != static_cast<size_t>(count))
+        return;
+    model.bound = bound;
+    std::vector<Xform> rest = skel.global_pose(Pose(skel.size()));
+    rest.push_back({});  // mRoot
+    for (auto& v : skel.volumes()) rest.push_back(rest[v.joint] * Xform{v.rot, v.pos});
+    auto turn = [](int k) { return Quat::axis_angle({0, 0, 1}, k * kPi / 2); };
+    auto sq = [](const Vec3& d) { return d.dot(d); };
+    // A quarter turn is only judged when the evidence reaches well off the vertical axis (arms, shoulders),
+    // and only a clear win moves the file.
+    auto best_turn = [&](auto&& cost, double spread) {
+        if (spread < 0.2) return 0;
+        int best = 0;
+        double lo = cost(0);
+        for (int k = 1; k < 4; ++k)
+            if (double c = cost(k); c < lo * 0.25) lo = c, best = k;
+        return best;
+    };
+    auto off_axis = [](const Vec3& p) { return std::hypot(p.x, p.y); };
+    // 1a. Binds: bound joints against the SL rest joints.
+    double bind_spread = 0;
+    for (int j = 0; j < root; ++j)
+        if (bound[j] && !skel[j].attachment) bind_spread = std::max(bind_spread, off_axis(rest[j].pos));
+    const int kb = best_turn([&](int k) {
+        double c = 0;
+        for (int j = 0; j < root; ++j)
+            if (bound[j] && !skel[j].attachment) c += sq(turn(k).rotate(model.binds[j].pos) - rest[j].pos);
+        return c;
+    }, bind_spread);
+    model.turn_decided = bind_spread >= 0.2;
+    if (kb) {
+        turn_binds(model, kb);
+        add_unique(rep.warnings, "the rig was turned " + std::to_string(kb * 90) + " degrees about Z to face SL's +X");
+    }
+    // 1a'. Mixed files: Blender's COLLADA exporter writes stored SL bind data for some joints and Blender's
+    // own bone positions (its axes) for others, often the face. A joint whose bind is far from its SL rest
+    // but lands on it under a quarter turn takes that turn on its own.
+    int mixed = 0;
+    for (int j = 0; j < count; ++j) {
+        if (!bound[j] || j == root) continue;
+        // Only the horizontal part: a turn about Z cannot change height, and a devkit's head may sit
+        // well above or below SL's.
+        auto flat = [&](const Vec3& a) { const Vec3 d = a - rest[j].pos; return d.x * d.x + d.y * d.y; };
+        const Vec3 b = model.binds[j].pos;
+        const double here = flat(b);
+        if (here < 0.01 * 0.01) continue;  // already within a centimetre
+        int best = 0;
+        double lo = here;
+        for (int k = 1; k < 4; ++k)
+            if (double c = flat(turn(k).rotate(b)); c < lo * 0.25) lo = c, best = k;
+        if (best) {
+            model.binds[j] = {(turn(best) * model.binds[j].rot).normalized(), turn(best).rotate(b)};
+            ++mixed;
+        }
+    }
+    if (mixed)
+        add_unique(rep.warnings, std::to_string(mixed) + " joints were bound in other axes than the rest of the rig and were turned to match");
+    // 1b. Vertices: each bound joint's own vertices (its heaviest weight) sit around its bind.
+    std::vector<Vec3> sum(count);
+    std::vector<int> n(count, 0);
+    const size_t nv = model.positions.size() / 3;
+    for (size_t v = 0; v < nv && v * 4 < model.joints.size(); ++v) {
+        int j = model.joints[v * 4];
+        if (j < 0 || j >= count || !bound[j] || model.weights[v * 4] < 0.5f) continue;
+        sum[j] += Vec3{model.positions[v * 3], model.positions[v * 3 + 1], model.positions[v * 3 + 2]};
+        ++n[j];
+    }
+    double vert_spread = 0;
+    for (int j = 0; j < count; ++j)
+        if (n[j]) vert_spread = std::max(vert_spread, off_axis(model.binds[j].pos));
+    const int kv = best_turn([&](int k) {
+        double c = 0;
+        for (int j = 0; j < count; ++j)
+            if (n[j]) c += n[j] * sq(turn(k).rotate(sum[j] * (1.0 / n[j])) - model.binds[j].pos);
+        return c;
+    }, vert_spread);
+    model.turn_decided = model.turn_decided && vert_spread >= 0.2;
+    if (kv) {
+        turn_vertices(model, kv);
+        add_unique(rep.warnings, "the mesh was turned " + std::to_string(kv * 90) +
+                                     " degrees about Z to line up with its skeleton");
+    }
+    // 2. Bone-orientation binds: any bound joint far (> 5 degrees) from its SL rest rotation.
+    bool oriented = false;
+    for (int j = 0; j < count && !oriented; ++j)
+        if (bound[j] && j != root) oriented = std::fabs((rest[j].rot.conj() * model.binds[j].rot).w) < std::cos(2.5 * kDegToRad);
+    if (oriented)
+        for (int j = 0; j < count; ++j)
+            if (bound[j]) model.binds[j].rot = rest[j].rot;
 }
 
 bool shape_from_binds(const Skeleton& skel, const std::vector<const DaeModel*>& parts, const Shape* base, Shape& out,
@@ -979,8 +1130,26 @@ bool shape_from_binds(const Skeleton& skel, const std::vector<const DaeModel*>& 
     bool any = false;
     for (const DaeModel* m : parts)
         if (m && m->rigged && m->binds.size() >= static_cast<size_t>(n))
-            for (int j = 0; j < skel.joint_count(); ++j)
-                if (!target[j] && (m->binds[j].pos - rest[j].pos).length() > tol_m) target[j] = &m->binds[j].pos, any = true;
+        {
+            // Every joint the file bound is pinned to its bind, even one that matches SL's rest, so a moved
+            // parent does not carry it off; without the bound flags, only joints that differ are moved.
+            auto bound = [&](int i) { return i < int(m->bound.size()) && m->bound[i]; };
+            for (int j = 0; j < skel.joint_count(); ++j) {
+                if (target[j]) continue;
+                const bool moved = (m->binds[j].pos - rest[j].pos).length() > tol_m;
+                if (moved || bound(j)) target[j] = &m->binds[j].pos;
+                any |= moved;
+            }
+            // Collision volumes too: fitted mesh is weighted to them, so they must sit where the body bound them.
+            const auto& vols = skel.volumes();
+            for (size_t v = 0; v < vols.size(); ++v) {
+                const int node = vols[v].node, b = dae_volume(skel, int(v));
+                if (node < 0 || node >= n || static_cast<size_t>(b) >= m->binds.size() || target[node]) continue;
+                const bool moved = (m->binds[b].pos - rest[node].pos).length() > tol_m;
+                if (moved || bound(b)) target[node] = &m->binds[b].pos;
+                any |= moved;
+            }
+        }
     if (!any) return false;
     // Parents come first, so each joint's parent frame is final when the joint is placed.
     std::vector<Xform> g(n);

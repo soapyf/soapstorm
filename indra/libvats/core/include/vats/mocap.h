@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "vats/clip.h"
+#include "vats/facecap.h"
 #include "vats/retarget.h"
 
 namespace vats {
@@ -44,6 +45,13 @@ struct VmcState {
     std::map<std::string, Xform> bones;  // Unity humanoid bone name -> local transform
     Xform root;                          // /VMC/Ext/Root/Pos
     int loaded = -1;                     // /VMC/Ext/OK: 1 = a model is loaded, -1 = never said
+    // Face (MC-5): blendshape weights 0..1 as the sender names them. VMC sends them as /Blend/Val
+    // and latches them with /Blend/Apply; iFacialMocap sends whole frames.
+    std::map<std::string, float> blend, blend_pending;
+    Quat face_head;  // iFacialMocap's head rotation (VMC senders send the head as a bone)
+    bool has_face_head = false;
+    Quat eye_left, eye_right;  // iFacialMocap's eye rotations (VMC senders send LeftEye/RightEye bones)
+    bool has_eyes = false;
 };
 
 // Applies one message; false when it is not a VMC message this handles.
@@ -106,10 +114,13 @@ struct MocapCleanup {
 std::vector<std::string> merge_recording(Clip& clip, const Skeleton& skel, const RigTable& table, const VmcState& rest,
                                          const std::vector<VmcState>& frames, int from,
                                          const std::vector<std::string>& only_tracks, const MocapCleanup& cleanup,
-                                         const Shape* shape = nullptr);
+                                         const Shape* shape = nullptr, const FaceTable* face = nullptr,
+                                         const FaceSettings& face_settings = {});
 
 // One live frame retargeted: the tracks to show (each a single key at frame 0), for previews.
+// With face, the face bones (and iFacialMocap's head) come from now's blendshapes too; a sender with
+// no body bones gives a face-only pose.
 Clip live_pose(const Skeleton& skel, const RigTable& table, const VmcState& rest, const VmcState& now,
-               const Shape* shape = nullptr);
+               const Shape* shape = nullptr, const FaceTable* face = nullptr, const FaceSettings& face_settings = {});
 
 }  // namespace vats

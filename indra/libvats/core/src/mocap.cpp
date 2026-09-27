@@ -211,6 +211,18 @@ bool apply_vmc(const OscMessage& m, VmcState& s) {
         s.root = x;
         return true;
     }
+    if (m.address == "/VMC/Ext/Blend/Val") {
+        if (m.args.size() < 2 || m.args[0].type != 's') return false;
+        const double v = m.args[1].num;
+        // Untrusted network: at most a few hundred names (ARKit has 52, VRM presets fewer).
+        if (!std::isfinite(v) || (s.blend_pending.size() >= 256 && !s.blend_pending.count(m.args[0].str))) return false;
+        s.blend_pending[m.args[0].str] = float(std::clamp(v, 0.0, 1.0));
+        return true;
+    }
+    if (m.address == "/VMC/Ext/Blend/Apply") {
+        s.blend = s.blend_pending;
+        return true;
+    }
     if (m.address == "/VMC/Ext/OK") {
         if (m.args.empty()) return false;
         const double v = m.args[0].num;
@@ -454,13 +466,18 @@ void smooth_source(SourceAnim& src, int radius) {
 }  // namespace
 
 Clip live_pose(const Skeleton& skel, const RigTable& table, const VmcState& rest, const VmcState& now,
-               const Shape* shape) {
-    SourceAnim src = vmc_source(rest, {now}, 30);
-    BoneMap map;
-    apply_rig_table(table, src, map);
-    RetargetOptions opt;
-    opt.shape = shape;
-    return retarget(skel, src, map, opt).clip;
+               const Shape* shape, const FaceTable* face, const FaceSettings& face_settings) {
+    Clip out;
+    if (!now.bones.empty()) {
+        SourceAnim src = vmc_source(rest, {now}, 30);
+        BoneMap map;
+        apply_rig_table(table, src, map);
+        RetargetOptions opt;
+        opt.shape = shape;
+        out = retarget(skel, src, map, opt).clip;
+    }
+    if (face && (!now.blend.empty() || now.has_face_head)) key_face(out, *face, now, face_settings, 0);
+    return out;
 }
 
 namespace {
@@ -518,19 +535,45 @@ void blend_edges(Clip& clip, const Clip& before, const std::vector<std::string>&
 std::vector<std::string> merge_recording(Clip& clip, const Skeleton& skel, const RigTable& table, const VmcState& rest,
                                          const std::vector<VmcState>& frames, int from,
                                          const std::vector<std::string>& only_tracks, const MocapCleanup& cleanup,
-                                         const Shape* shape) {
+                                         const Shape* shape, const FaceTable* face, const FaceSettings& face_settings) {
     std::vector<std::string> report;
     if (frames.empty()) return {"nothing was recorded"};
     const int fps = std::max(clip.fps, 1);
-    SourceAnim src = vmc_source(rest, frames, fps);
-    smooth_source(src, cleanup.smooth);
-    BoneMap map;
-    apply_rig_table(table, src, map);
-    if (!map.count("mPelvis")) return {"the sender's bones do not match the humanoid table (no hips)"};
-    RetargetOptions opt;
-    opt.fps = fps;
-    opt.shape = shape;
-    RetargetResult res = retarget(skel, src, map, opt);
+    bool has_face = false;
+    for (const VmcState& f : frames) has_face |= !f.blend.empty() || f.has_face_head;
+    has_face &= face != nullptr;
+    RetargetResult res;
+    if (!frames.front().bones.empty()) {
+        SourceAnim src = vmc_source(rest, frames, fps);
+        smooth_source(src, cleanup.smooth);
+        BoneMap map;
+        apply_rig_table(table, src, map);
+        if (!map.count("mPelvis") && !has_face) return {"the sender's bones do not match the humanoid table (no hips)"};
+        if (map.count("mPelvis")) {
+            RetargetOptions opt;
+            opt.fps = fps;
+            opt.shape = shape;
+            res = retarget(skel, src, map, opt);
+        }
+    } else if (!has_face) {
+        return {"the sender sent no body or face"};
+    }
+    // Face (MC-5): one key per frame on every table bone, then the same reduction as the body.
+    if (has_face) {
+        // Smoothing averages each shape's weight with its neighbours, as it does the body's rotations.
+        const int r = std::max(cleanup.smooth, 0), n = int(frames.size());
+        for (int i = 0; i < n; ++i) {
+            VmcState f = frames[i];
+            if (r > 0) {
+                std::map<std::string, float> sum;
+                const int a = std::max(0, i - r), b = std::min(n - 1, i + r);
+                for (int k = a; k <= b; ++k)
+                    for (auto& [name, v] : frames[k].blend) sum[name] += v / float(b - a + 1);
+                f.blend = std::move(sum);
+            }
+            key_face(res.clip, *face, f, face_settings, double(i));
+        }
+    }
     if (cleanup.reduce) reduce_clip_keys(res.clip, cleanup.rot_deg, cleanup.pos_m);
 
     const int last = from + int(frames.size()) - 1;
