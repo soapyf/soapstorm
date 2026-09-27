@@ -28,6 +28,7 @@
 
 #include "fsvatsclipmotion.h"
 #include "llagent.h"
+#include "llbutton.h"
 #include "llcheckboxctrl.h"
 #include "lldatapacker.h"
 #include "lldir.h"
@@ -285,7 +286,7 @@ void FSFloaterAnimator::refresh()
 {
     const VATsClipMotion::Playback& pb = VATsClipMotion::sPlayback;
     const bool playing = mMotionID.notNull() && (mMotionIsKeyframe || pb.playing);
-    getChild<LLUICtrl>("play_btn")->setValue(playing ? getString("pause") : getString("play"));
+    getChild<LLButton>("play_btn")->setLabel(playing ? getString("pause") : getString("play"));
     getChildView("play_btn")->setEnabled(mHaveClip);
     getChildView("stop_btn")->setEnabled(mMotionID.notNull());
     getChildView("loop_check")->setEnabled(mHaveClip);
