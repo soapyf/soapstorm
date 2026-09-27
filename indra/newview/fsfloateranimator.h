@@ -35,6 +35,7 @@
 #include "vats/rig.h"
 #include "vats/skeleton.h"
 
+class FSAnimGraphCtrl;
 class FSAnimTimelineCtrl;
 class LLScrollListCtrl;
 
@@ -102,6 +103,7 @@ private:
     LLUUID mMotionID;
     bool mMotionIsKeyframe = false;  // "Preview as uploaded": the viewer's own LLKeyframeMotion
     FSAnimTimelineCtrl* mTimeline = nullptr;
+    FSAnimGraphCtrl* mGraph = nullptr;  // 6e
     LLScrollListCtrl* mJointList = nullptr;
     std::string mUploadBytes;  // the .anim the pending upload confirmation will send
 };

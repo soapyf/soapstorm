@@ -26,6 +26,7 @@
 
 #include "fsfloateranimator.h"
 
+#include "fsanimgraphctrl.h"
 #include "fsanimtimelinectrl.h"
 #include "fsjointpose.h"
 #include "fsposingmotion.h"
@@ -55,6 +56,7 @@
 #include <fstream>
 #include <iterator>
 #include <set>
+#include <tuple>
 
 FSFloaterAnimator::FSFloaterAnimator(const LLSD& key) : LLFloater(key) {}
 
@@ -113,6 +115,44 @@ bool FSFloaterAnimator::postBuild()
             add(mSkeleton[n].name);
         return std::vector<double>(frames.begin(), frames.end());
     };
+
+    // The graph editor (6e) takes the place of its border too; its edits go through the same History.
+    LLView* graph_area = getChild<LLView>("graph_area");
+    FSAnimGraphCtrl::Params gp;
+    gp.name("graph");
+    gp.rect(graph_area->getRect());
+    gp.follows.flags(FOLLOWS_ALL);
+    mGraph = LLUICtrlFactory::create<FSAnimGraphCtrl>(gp);
+    addChild(mGraph);
+    mGraph->history = &mHistory;
+    mGraph->tracks = [this]
+    {
+        std::vector<std::string> names;
+        for (int n : selectedNodes())
+            names.push_back(mSkeleton[n].name);
+        return names;
+    };
+    mGraph->currentFrame = [] { return VATsClipMotion::sPlayback.frame; };
+    mGraph->onScrub = [this](double f) { onScrub(f); };
+    mGraph->changed = [this] { edited(); };
+    button("graph_frame_all_btn", [this] { mGraph->frameAll(); });
+    button("graph_frame_sel_btn", [this] { mGraph->frameSelected(); });
+    button("graph_delete_btn", [this] { mGraph->deleteSelected(); });
+    const std::tuple<const char*, const char*, vats::Tangent> tangents[] = {
+        { "tangent_auto_btn", "Auto", vats::Tangent::Auto },
+        { "tangent_spline_btn", "Spline", vats::Tangent::Spline },
+        { "tangent_plateau_btn", "Plateau", vats::Tangent::Plateau },
+        { "tangent_linear_btn", "Linear", vats::Tangent::Linear },
+        { "tangent_flat_btn", "Flat", vats::Tangent::Flat },
+        { "tangent_stepped_btn", "Stepped", vats::Tangent::Stepped },
+        { "tangent_break_btn", "Break", vats::Tangent::Break },
+        { "tangent_unify_btn", "Unify", vats::Tangent::Unify } };
+    for (const auto& [ctrl, label, t] : tangents)
+    {
+        const std::string name = label;
+        const vats::Tangent tangent = t;
+        button(ctrl, [this, name, tangent] { mGraph->applyTangent(tangent, name); });
+    }
 
     refresh();
     return true;
@@ -233,6 +273,8 @@ void FSFloaterAnimator::setClip(vats::Clip clip, const std::string& name)
     mHaveClip = true;
     ++mGeneration;
     mHistory.clear();
+    mGraph->clip = &mClip;
+    mGraph->clipReplaced(true);
     VATsClipMotion::Playback& pb = VATsClipMotion::sPlayback;
     pb.frame = 0;
     pb.playing = false;
@@ -395,6 +437,7 @@ void FSFloaterAnimator::onUndo()
         return;
     const std::string label = mHistory.undo_label();
     mClip = mHistory.undo();
+    mGraph->clipReplaced(false);
     edited();
     setStatus("Undid " + label);
 }
@@ -405,6 +448,7 @@ void FSFloaterAnimator::onRedo()
         return;
     const std::string label = mHistory.redo_label();
     mClip = mHistory.redo();
+    mGraph->clipReplaced(false);
     edited();
     setStatus("Redid " + label);
 }

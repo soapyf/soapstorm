@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
-<!-- Viewport Avatar Toolset in the viewer: open, play, key-edit, save and upload (VATs spec 09, stages 6b-6d). -->
+<!-- Viewport Avatar Toolset in the viewer: open, play, key-edit, graph-edit, save and upload (VATs spec 09, stages 6b-6e). -->
 <floater
-	height="486"
+	height="736"
 	width="520"
-	min_height="486"
+	min_height="640"
 	min_width="520"
 	can_resize="true"
 	layout="topleft"
@@ -39,7 +39,7 @@
 		width="84">Frame [FRAME]</text>
 	<view_border bevel_style="none" follows="left|top|right" height="44" layout="topleft" left="8" name="timeline_area"
 		top="102" width="504" />
-	<scroll_list draw_heading="false" follows="left|top|bottom" height="226" layout="topleft" left="8"
+	<scroll_list draw_heading="false" follows="left|top" height="226" layout="topleft" left="8"
 		multi_select="true" name="joint_list" top="154" width="220"
 		tool_tip="Joints: select to see their keys on the timeline and to key them" />
 	<button follows="left|top" height="23" label="Set Key" layout="topleft" left_pad="8" name="set_key_btn"
@@ -57,7 +57,33 @@
 	<check_box follows="left|top" height="16" label="Preview as uploaded" layout="topleft" left="236" name="as_uploaded_check"
 		tool_tip="Play the exact .anim an upload would send, through the viewer's own animation decoder (no scrubbing)"
 		top_pad="8" width="200" />
-	<text follows="left|bottom" height="16" layout="topleft" left="8" name="name_label" top="390" width="80">Name</text>
+	<button follows="left|top" height="20" label="Frame All" layout="topleft" left="8" name="graph_frame_all_btn"
+		tool_tip="Fit every shown curve in the graph" top="386" width="84" />
+	<button follows="left|top" height="20" label="Frame Selected" layout="topleft" left_pad="3" name="graph_frame_sel_btn"
+		tool_tip="Fit the selected keys in the graph" width="104" />
+	<button follows="left|top" height="20" label="Delete Keys" layout="topleft" left_pad="3" name="graph_delete_btn"
+		tool_tip="Delete the selected keys (Delete)" width="90" />
+	<text follows="left|top|right" height="16" layout="topleft" left_pad="8" name="graph_help" top_delta="3" width="212"
+		tool_tip="Click a key to select it, Shift-click to add, drag to move (Shift locks the axis), drag on empty graph to box select, double-click a curve to add a key, middle-drag to pan, wheel to zoom (Shift values, Ctrl time), Escape cancels a drag. Undo covers every edit.">Graph: hover for the controls</text>
+	<button follows="left|top" height="20" label="Auto" layout="topleft" left="8" top="410" name="tangent_auto_btn"
+		tool_tip="Smooth, flat at peaks and valleys" width="60" />
+	<button follows="left|top" height="20" label="Spline" layout="topleft" left_pad="3" name="tangent_spline_btn"
+		tool_tip="Smooth through the neighbours; can overshoot" width="60" />
+	<button follows="left|top" height="20" label="Plateau" layout="topleft" left_pad="3" name="tangent_plateau_btn"
+		tool_tip="Smooth without ever overshooting" width="60" />
+	<button follows="left|top" height="20" label="Linear" layout="topleft" left_pad="3" name="tangent_linear_btn"
+		tool_tip="Straight towards the neighbouring keys" width="60" />
+	<button follows="left|top" height="20" label="Flat" layout="topleft" left_pad="3" name="tangent_flat_btn"
+		tool_tip="Level handles" width="60" />
+	<button follows="left|top" height="20" label="Stepped" layout="topleft" left_pad="3" name="tangent_stepped_btn"
+		tool_tip="Hold the value until the next key" width="60" />
+	<button follows="left|top" height="20" label="Break" layout="topleft" left_pad="3" name="tangent_break_btn"
+		tool_tip="Move each handle on its own" width="60" />
+	<button follows="left|top" height="20" label="Unify" layout="topleft" left_pad="3" name="tangent_unify_btn"
+		tool_tip="Line both handles up again" width="60" />
+	<view_border bevel_style="none" follows="all" height="196" layout="topleft" left="8" name="graph_area"
+		top="434" width="504" />
+	<text follows="left|bottom" height="16" layout="topleft" left="8" name="name_label" top="640" width="80">Name</text>
 	<line_editor follows="left|bottom|right" height="20" layout="topleft" left_pad="4" max_length_bytes="63"
 		name="name_edit" top_delta="-2" width="420" />
 	<text follows="left|bottom" height="16" layout="topleft" left="8" name="desc_label" top_pad="6" width="80">Description</text>
