@@ -43,6 +43,10 @@
 #include "lldir.h"
 #include "lldirpicker.h"
 #include "llfile.h"
+#include "llchiclet.h"
+#include "llfloater.h"
+#include "llfloaterreg.h"
+#include "llmodaldialog.h"
 #include "llfloaterperms.h"
 #include "llnotificationsutil.h"
 #include "llstartup.h"
@@ -53,6 +57,8 @@
 #include "llviewercamera.h"
 #include "llviewercontrol.h"
 #include "llviewermenufile.h"
+#include "llrootview.h"
+#include "llviewerwindow.h"
 #include "llvoavatarself.h"
 #include "llweb.h"
 
@@ -63,6 +69,7 @@
 #include <deque>
 #include <fstream>
 #include <memory>
+#include <map>
 #include <set>
 
 namespace
@@ -75,7 +82,39 @@ namespace
     bool sameJoints(const std::vector<VATsClipMotion::Joint>& a, const std::vector<VATsClipMotion::Joint>& b)
     {
         return std::equal(a.begin(), a.end(), b.begin(), b.end(), [](const auto& x, const auto& y)
-                          { return x.name == y.name && x.position == y.position; });
+                          { return x.name == y.name && x.position == y.position && x.base == y.base; });
+    }
+
+    constexpr const char* AUTOPILOT = "VATsEditor";  // the behaviour name of the editor's return autopilot
+    constexpr F32 RETURN_DISTANCE = 0.5f;              // metres the region may move a flying avatar before it is flown back
+    constexpr U32 MOVEMENT = AGENT_CONTROL_AT_POS | AGENT_CONTROL_AT_NEG | AGENT_CONTROL_LEFT_POS | AGENT_CONTROL_LEFT_NEG |
+                             AGENT_CONTROL_UP_POS | AGENT_CONTROL_UP_NEG | AGENT_CONTROL_FAST_AT | AGENT_CONTROL_FAST_LEFT |
+                             AGENT_CONTROL_FAST_UP | AGENT_CONTROL_NUDGE_AT_POS | AGENT_CONTROL_NUDGE_AT_NEG |
+                             AGENT_CONTROL_NUDGE_LEFT_POS | AGENT_CONTROL_NUDGE_LEFT_NEG | AGENT_CONTROL_NUDGE_UP_POS |
+                             AGENT_CONTROL_NUDGE_UP_NEG | AGENT_CONTROL_TURN_LEFT | AGENT_CONTROL_TURN_RIGHT;
+
+    void tip(const std::string& text, const char* kind = "SystemMessageTip")
+    {
+        LLNotificationsUtil::add(kind, LLSD().with("MESSAGE", text));
+    }
+
+    // What of the viewer's own UI stays over the editor while its UI is hidden (spec 09 U4b), in one place. Kept:
+    // what needs an answer or brings people's words; the rest (toolbars, bars, every other floater) is hidden.
+    bool shownOverEditor(LLFloater* floater)
+    {
+        // Modal dialogs: the alerts that need an answer (the upload price, disconnect, quit) and every toast
+        // (notifications, script dialogs, teleport, friendship and permission offers, group notices).
+        if (dynamic_cast<const LLModalDialog*>(floater))
+            return true;
+        static const std::set<std::string> names = {
+            "fs_im_container",           // Conversations: nearby chat and IMs (the editor's Chat pane)
+            "fs_nearby_chat",            // nearby chat, torn off
+            "fs_impanel",                // an IM, torn off
+            "script_floater",            // script dialogs shown as a floater
+            "notification_well_window",  // Notifications (Viewer > Notifications)
+            "im_well_window",            // the IM well
+        };
+        return names.count(floater->getInstanceName()) > 0;
     }
 
     ImVec4 toImGui(const LLColor4& c) { return ImVec4(c.mV[VRED], c.mV[VGREEN], c.mV[VBLUE], 1.f); }
@@ -111,7 +150,7 @@ namespace
 
     // The viewer as vats::ui::Host (spec 09 §0b table, §0d). Lives for the session; the editor (App) comes
     // and goes, and close() drops everything that points into it.
-    class ViewerHost final : public vats::ui::Host
+    class ViewerHost final : public vats::ui::Host, public vats::ui::Host::HostUi
     {
     public:
         ViewerHost()
@@ -204,16 +243,33 @@ namespace
         std::string host_name() const override { return LLVersionInfo::instance().getChannel(); }
 
         bool can_upload() const override { return true; }
+
+        // The viewer's own UI beside the editor (spec 09 U4b): hidden but for shownOverEditor, conversations in
+        // the Chat pane.
+        vats::ui::Host::HostUi* host_ui() override { return this; }
+        const char* pane_title() const override { return "Chat"; }
+        void place_pane(bool shown, ImVec2 min, ImVec2 max) override;
+        int unread_notices() const override;
+        void toggle_notices() override { LLFloaterReg::toggleInstanceOrBringToFront("notification_well_window"); }
+        const char* reveal_label() const override { return "Show Firestorm UI"; }
+        bool revealed() const override { return mRevealed; }
+        void reveal(bool on) override;
         void upload_anim(const std::vector<std::uint8_t>& bytes, const std::string& name,
                          std::function<void(const std::string&)> done) override;
 
-        void beforeFrame();  // outside the ImGui frame: the world's frame, the worn body, the camera
+        void beforeFrame(bool reset_joints);  // outside the ImGui frame: the world's frame, the worn body, the camera
         void afterFrame();   // inside it, after the UI's frame: questions, camera edits
         void close();        // the editor is going: stop driving the avatar and the sound, drop its callbacks
+        U32 filterControls(U32 flags);
+        void hideChrome();   // the viewer's UI hidden but for shownOverEditor
+        void showChrome();   // and back exactly as it was
+        void releasePane();  // the conversations floater back where it was
+        bool regionKeepsStanding() const { return mRegionKeepsStanding; }
 
     private:
         LLJoint* avatarJoint(int node);
-        void isolate();      // the avatar belongs to the editor: sit it down once, stop every other motion
+        void isolate(bool reset_joints);  // the avatar belongs to the editor: sit it down once, stop every other motion
+        void watchRegion(LLVOAvatarSelf* avatar);  // what the region does meanwhile: stands, teleports, drift
         void restore();      // everything back as it was: motions still wanted, and stand up if we sat
         void updateShape();
         void stopMotion();
@@ -238,6 +294,9 @@ namespace
         vats::Pose mPose;               // what VATsClipMotion::sEditor shows
         std::vector<VATsClipMotion::Joint> mJoints;
         std::vector<bool> mDrivesPos;    // by node
+        // Each position-driven joint's own position before the editor drove it (the worn avatar's: sliders and
+        // mesh joint offsets). The editor's offsets are added to it, and it is put back when the editor lets go.
+        std::map<std::string, LLVector3> mBase;
         LLUUID mMotionID;
         const LLVOAvatarSelf* mMotionOn = nullptr;
         std::vector<LLJoint*> mJointCache;
@@ -250,6 +309,27 @@ namespace
         const LLVOAvatarSelf* mIsolatedOn = nullptr;
         std::set<LLUUID> mStopped;
         bool mWeSat = false;
+        // U4b: the region standing up an avatar the editor sat (re-sit once, then close), flying, the camera.
+        bool mSatSeen = false;           // the sit the editor asked for has arrived
+        int mRegionStands = 0;
+        bool mRegionKeepsStanding = false;
+        F64 mResitAt = -1;               // when to sit down again (seconds, LLTimer), -1 = not due
+        const LLViewerRegion* mRegion = nullptr;
+        bool mFlew = false;              // flying as the editor opened: it hovers instead of sitting
+        bool mFrameOnOpen = false;       // frame the avatar from the front on the next frame (once per open)
+        F64 mReturnAt = 0;               // the earliest time for the next return autopilot
+        F64 mToldAt = 0;                 // the earliest time for the next "Close the editor to stand up"
+        // The viewer's UI while the editor is open (U4b).
+        bool mChromeHidden = false;      // hidden by the editor
+        bool mUiWasVisible = true;       // the viewer's UI was showing before (its own Show UI toggle)
+        bool mRevealed = false;          // Show Firestorm UI is on
+        std::vector<LLHandle<LLFloater>> mHiddenFloaters;  // floaters hidden since, shown again on close
+        struct Pane
+        {
+            LLHandle<LLFloater> floater;
+            LLRect rect;
+            bool visible = false, drag = true, close = true, resize = true, minimize = true, minimized = false, docked = false;
+        } mPane;                         // the conversations floater as it was before it filled the Chat pane
 
         struct Question
         {
@@ -312,7 +392,18 @@ namespace
             if ((!bone && !keyed && !moved && !turned) || !avatarJoint(i))
                 continue;
             drives_pos[i] = i == 0 || moved || (keyed && clip.has_channels(n.name, vats::kPosChannels));
-            joints.push_back({ n.name, drives_pos[i] });
+            if (drives_pos[i])
+            {
+                // The worn position: a mesh's joint offset when one is active (attachments can rez after the
+                // editor opens), else the joint's position before the editor first drove it.
+                LLVector3 mesh_pos;
+                LLUUID mesh_id;
+                if (avatarJoint(i)->hasAttachmentPosOverride(mesh_pos, mesh_id))
+                    mBase[n.name] = mesh_pos;
+                else if (!mBase.count(n.name))
+                    mBase[n.name] = avatarJoint(i)->getPosition();
+            }
+            joints.push_back({ n.name, drives_pos[i], drives_pos[i] ? mBase[n.name] : LLVector3::zero });
         }
         VATsClipMotion::Playback& pb = VATsClipMotion::sEditor;
         pb.skeleton = &skel;
@@ -342,6 +433,11 @@ namespace
         {
             gAgentAvatarp->getMotionController().stopMotionLocally(mMotionID, true);
             gAgentAvatarp->removeMotion(mMotionID);
+            // A stopped motion leaves its positions behind: the joints it moved go back to their own.
+            for (const VATsClipMotion::Joint& j : mJoints)
+                if (j.position)
+                    if (LLJoint* joint = gAgentAvatarp->getJoint(j.name))
+                        joint->setPosition(j.base);
         }
         mMotionID.setNull();
         mMotionOn = nullptr;
@@ -367,10 +463,8 @@ namespace
             mShape.scale[i] = toVATs(joint->getScale());
             if (i == 0)
                 continue;
-            Vec3 offset = toVATs(joint->getPosition()) - skel[i].pos;
-            if (i < (int)mDrivesPos.size() && mDrivesPos[i] && i < (int)mPose.offset.size())
-                offset = offset - mPose.offset[i];
-            mShape.offset[i] = offset;
+            const auto base = mBase.find(skel[i].name);  // a joint the editor drives: its own position
+            mShape.offset[i] = toVATs(base != mBase.end() ? base->second : joint->getPosition()) - skel[i].pos;
         }
         mHaveShape = true;
     }
@@ -379,35 +473,161 @@ namespace
     // viewer's own Sit Down: AgentUpdate's sit-on-ground flag), so it cannot be walked or bumped; then every frame
     // every other motion on it is stopped locally (AO, server and scripted animations, stands, walks, look-at, eye
     // and head motion, breathing, expressions), straight on the motion controller, so nothing is sent to the
-    // region. What the region starts meanwhile is stopped the same way when it arrives.
-    void ViewerHost::isolate()
+    // region. What the region starts meanwhile is stopped the same way when it arrives. U4b: flying, it stays in
+    // the air instead (no movement input reaches it, see filterControls); it is drawn pinned where it was
+    // (VATsClipMotion's pin); the camera stops following it; optionally the skeleton is reset locally.
+    void ViewerHost::isolate(bool reset_joints)
     {
         if (!isAgentAvatarValid() || LLStartUp::getStartupState() < STATE_STARTED)
             return;
         LLVOAvatarSelf* avatar = gAgentAvatarp.get();
-        if (mIsolatedOn != avatar)
+        const bool first = mIsolatedOn != avatar;
+        if (first)
         {
             mIsolatedOn = avatar;
             mStopped.clear();
-            mWeSat = false;
+            mWeSat = mSatSeen = mRegionKeepsStanding = false;
+            mRegionStands = 0;
+            mResitAt = -1;
+            mRegion = gAgent.getRegion();
+            mFlew = gAgent.getFlying();
+            VATsClipMotion::sEditor.pinned = false;
+            mFrameOnOpen = true;  // beforeFrame frames the avatar; the camera then stays put (no longer following it)
+            if (!mRevealed)
+                hideChrome();
             // Not while flying (the viewer's Sit Down is disabled then) or already seated; RLVa may refuse.
-            if (!avatar->isSitting() && !gAgent.getFlying() && !avatar->isEditingAppearance())
+            if (!avatar->isSitting() && !mFlew && !avatar->isEditingAppearance())
             {
                 gAgent.sitDown();
                 mWeSat = true;
                 LL_INFOS("VATsEditor") << "sitting the avatar down on the ground while the editor is open" << LL_ENDL;
             }
+            else if (mFlew)
+            {
+                LL_INFOS("VATsEditor") << "flying: the avatar stays in the air, hovering, while the editor is open" << LL_ENDL;
+            }
         }
         LLMotionController& controller = avatar->getMotionController();
         std::vector<LLUUID> others;
         for (LLMotion* motion : controller.getActiveMotions())
-            if (motion && motion->getID() != mMotionID)
+            // The ground sit stays: the viewer takes its motion as the sign the avatar sits (without it,
+            // LLVOAvatar::updateCharacter gets the avatar off the ground locally). The editor's pose covers it.
+            if (motion && motion->getID() != mMotionID && motion->getID() != ANIM_AGENT_SIT_GROUND_CONSTRAINED)
                 others.push_back(motion->getID());
         for (const LLUUID& id : others)
         {
             controller.stopMotionLocally(id, true);
             mStopped.insert(id);
         }
+        if (first && reset_joints)
+        {
+            // As the viewer's Reset Skeleton does on your own avatar (LLVOAvatar::resetSkeleton(false)), locally:
+            // joint positions left by stopped animations go; mesh joint offsets are cleared and put back.
+            stopMotion();  // restarted by the next drive_avatar
+            avatar->resetSkeleton(false);
+            mCacheFor = nullptr;
+            mBase.clear();  // taken again from the reset skeleton
+            LL_INFOS("VATsEditor") << "skeleton reset locally as the editor opens" << LL_ENDL;
+        }
+        VATsClipMotion::sEditor.pin = !avatar->getParent();  // seated on an object, it goes where the object goes
+        if (mChromeHidden && gFloaterView)
+        {
+            // A floater that opens meanwhile (a script's map, a new window) stays hidden unless allowed.
+            const LLView::child_list_t children = *gFloaterView->getChildList();
+            for (LLView* view : children)
+            {
+                LLFloater* floater = dynamic_cast<LLFloater*>(view);
+                if (floater && floater->getVisible() && !shownOverEditor(floater) && floater != mPane.floater.get())
+                {
+                    floater->setVisible(false);
+                    mHiddenFloaters.push_back(floater->getHandle());
+                }
+            }
+        }
+        watchRegion(avatar);
+    }
+
+    // Spec 09 U4b. The region can still move the avatar: a script or the region stands it up, a teleport takes it
+    // elsewhere, a push moves it while flying. Only standard viewer actions answer: Sit Down again (once; a second
+    // stand closes the editor), and the viewer's autopilot to fly back. Nothing else is sent.
+    void ViewerHost::watchRegion(LLVOAvatarSelf* avatar)
+    {
+        VATsClipMotion::Playback& pb = VATsClipMotion::sEditor;
+        const F64 now = LLTimer::getTotalSeconds();
+        if (gAgent.getAutoPilot() && gAgent.getAutoPilotBehaviorName() != AUTOPILOT)
+            gAgent.stopAutoPilot(true);  // a walk the viewer's UI started (the minimap's double-click...)
+        // A teleport or region crossing: a new place, so a new pin and a sit there that doesn't count as a stand.
+        if (gAgent.getTeleportState() != LLAgent::TELEPORT_NONE || gAgent.getRegion() != mRegion)
+        {
+            mRegion = gAgent.getRegion();
+            pb.pinned = false;
+            mSatSeen = false;
+            if (mWeSat)
+                mResitAt = now + 2.0;
+            return;
+        }
+        if (mWeSat)
+        {
+            if (avatar->isSitting())
+            {
+                mSatSeen = true;
+                mResitAt = -1;
+            }
+            else if (mSatSeen)
+            {
+                mSatSeen = false;
+                ++mRegionStands;
+                LL_INFOS("VATsEditor") << "the region stood the avatar up while the editor is open (" << mRegionStands
+                                        << (mRegionStands == 1 ? "st time: sitting down again)" : "nd time: closing the editor)") << LL_ENDL;
+                if (mRegionStands >= 2)
+                    mRegionKeepsStanding = true;
+                else
+                    mResitAt = now + 1.0;
+            }
+            if (mResitAt >= 0 && now >= mResitAt)
+            {
+                mResitAt = -1;
+                if (!avatar->isSitting() && !gAgent.getFlying() && !avatar->isEditingAppearance())
+                {
+                    gAgent.sitDown();
+                    LL_INFOS("VATsEditor") << "sitting the avatar down on the ground again" << LL_ENDL;
+                }
+                else
+                {
+                    LL_INFOS("VATsEditor") << "not sitting down again: seated, flying or editing appearance" << LL_ENDL;
+                }
+            }
+        }
+        else if (mFlew && gAgent.getFlying() && pb.pin && pb.pinned && !gAgent.getAutoPilot() && now >= mReturnAt)
+        {
+            const F32 drift = (pb.root_at_update - pb.pin_pos).length();
+            if (drift > RETURN_DISTANCE)
+            {
+                mReturnAt = now + 5.0;  // one try at a time; a failed one gives up after the autopilot's own timeout
+                LL_INFOS("VATsEditor") << "the region moved the flying avatar " << drift << " m; flying it back with the viewer's autopilot" << LL_ENDL;
+                gAgent.startAutoPilotGlobal(gAgent.getPosGlobalFromAgent(pb.pin_pos), AUTOPILOT, &pb.pin_rot, nullptr, nullptr, 0.25f);
+            }
+        }
+    }
+
+    U32 ViewerHost::filterControls(U32 flags)
+    {
+        if (!mIsolatedOn || !isAgentAvatarValid() || mIsolatedOn != gAgentAvatarp.get())
+            return flags;
+        if (!(gAgent.getAutoPilot() && gAgent.getAutoPilotBehaviorName() == AUTOPILOT))
+            flags &= ~MOVEMENT;
+        if ((flags & AGENT_CONTROL_STAND_UP) && mWeSat)
+        {
+            flags &= ~AGENT_CONTROL_STAND_UP;
+            const F64 now = LLTimer::getTotalSeconds();
+            if (gAgentAvatarp->isSitting() && now >= mToldAt)
+            {
+                mToldAt = now + 3.0;
+                tip("Close the editor to stand up");
+                LL_INFOS("VATsEditor") << "Stand Up refused while the editor is open" << LL_ENDL;
+            }
+        }
+        return flags;
     }
 
     // Everything back as it was: every motion stopped here that is still wanted starts again locally (the
@@ -433,14 +653,19 @@ namespace
         for (const LLUUID& id : mStopped)
             if (wanted.count(id) && avatar->getMotionController().startMotion(id, 0.f))
                 ++restarted;
+        if (gAgent.getAutoPilot() && gAgent.getAutoPilotBehaviorName() == AUTOPILOT)
+            gAgent.stopAutoPilot();
         const bool leaving = LLApp::isExiting() || LLAppViewer::instance()->quitRequested() || LLAppViewer::instance()->logoutRequestSent();
-        if (mWeSat && !leaving && avatar->isSitting() && !avatar->getParent())
-            gAgent.standUp();  // the viewer's own Stand Up
+        // Sitting on the ground as the region has it (its ground-sit animation), whatever the local flag says.
+        const bool on_ground = avatar->isSitting() || avatar->mSignaledAnimations.count(ANIM_AGENT_SIT_GROUND_CONSTRAINED);
+        const bool stand = mWeSat && !leaving && on_ground && !avatar->getParent();
         LL_INFOS("VATsEditor") << "avatar handed back: " << restarted << " of " << mStopped.size()
-                                << " stopped motions restarted" << (mWeSat ? ", standing up" : "") << LL_ENDL;
-        mIsolatedOn = nullptr;
+                                << " stopped motions restarted" << (stand ? ", standing up" : "") << LL_ENDL;
+        mIsolatedOn = nullptr;  // first: filterControls lets the Stand Up through
         mStopped.clear();
-        mWeSat = false;
+        mWeSat = mRegionKeepsStanding = false;
+        if (stand)
+            gAgent.standUp();  // the viewer's own Stand Up
     }
 
     // The viewer's skin as the editor's colours, read from LLUIColorTable (the colours the skin and its theme
@@ -464,15 +689,21 @@ namespace
         return true;
     }
 
-    void ViewerHost::beforeFrame()
+    void ViewerHost::beforeFrame(bool reset_joints)
     {
-        isolate();
+        isolate(reset_joints);
         LLViewerCamera* cam = LLViewerCamera::getInstance();
         if (isAgentAvatarValid() && gAgentAvatarp->getRootJoint())
         {
             LLJoint* root = gAgentAvatarp->getRootJoint();
             mPos = root->getWorldPosition();
             mRot = root->getWorldRotation();
+            const VATsClipMotion::Playback& pb = VATsClipMotion::sEditor;
+            if (pb.pin && pb.pinned)  // drawn where the avatar is drawn (the pin), with any later root offset
+            {
+                mPos = pb.pin_pos + (mPos - pb.root_at_update);
+                mRot = pb.pin_rot;
+            }
         }
         else
         {
@@ -501,6 +732,15 @@ namespace
         mCamera.yaw = std::atan2(-at.y, -at.x);
         mCamera.target = eye + at * mCamera.distance;
         mSynced = mCamera;
+        if (std::exchange(mFrameOnOpen, false))
+        {
+            // As Frame All does, from the front; pushCamera moves the viewer's camera there, unfollowed, as after an
+            // Alt+click, so a push on the region doesn't move the view.
+            mCamera.target = Vec3{ 0, 0, 1.0 };
+            mCamera.distance = vats::Camera::kDefaultDistance;
+            mCamera.yaw = 0;
+            mCamera.pitch = 0.1;
+        }
         mViewProj = vats::perspective(cam->getView(), cam->getAspect(), 0.05, 1024.0) * vats::look_at(eye, eye + at, up);
 
         if (mPlayAt >= 0 && LLTimer::getTotalSeconds() >= mPlayAt)
@@ -604,6 +844,129 @@ namespace
         });
     }
 
+    // --- The viewer's UI beside the editor (spec 09 U4b) -------------------------------------------------
+
+    // The viewer's own hide-UI (its Show UI toggle: toolbars, navigation and status bars, chiclets, floaters),
+    // then the allowed floaters shown again.
+    void ViewerHost::hideChrome()
+    {
+        if (mChromeHidden || !gFloaterView || !gViewerWindow)
+            return;
+        std::vector<LLHandle<LLFloater>> keep;
+        for (LLView* view : *gFloaterView->getChildList())
+            if (LLFloater* floater = dynamic_cast<LLFloater*>(view); floater && floater->getVisible() && shownOverEditor(floater))
+                keep.push_back(floater->getHandle());
+        mUiWasVisible = gViewerWindow->getUIVisibility();
+        if (mUiWasVisible)
+            gViewerWindow->setUIVisibility(false);
+        for (const LLHandle<LLFloater>& handle : keep)
+            if (LLFloater* floater = handle.get())
+                floater->setVisible(true);
+        mChromeHidden = true;
+        LL_INFOS("VATsEditor") << "viewer UI hidden but for chat, IMs, notifications and alerts" << LL_ENDL;
+    }
+
+    void ViewerHost::showChrome()
+    {
+        if (!mChromeHidden)
+            return;
+        releasePane();
+        if (mUiWasVisible && gViewerWindow)
+            gViewerWindow->setUIVisibility(true);  // shows what its hide hid
+        for (const LLHandle<LLFloater>& handle : mHiddenFloaters)
+            if (LLFloater* floater = handle.get())
+                floater->setVisible(true);
+        mHiddenFloaters.clear();
+        mChromeHidden = false;
+        LL_INFOS("VATsEditor") << "viewer UI shown again" << LL_ENDL;
+    }
+
+    void ViewerHost::reveal(bool on)
+    {
+        mRevealed = on;
+        if (on)
+            showChrome();
+        else if (mIsolatedOn)
+            hideChrome();
+    }
+
+    // The conversations floater fills the Chat pane: moved and sized to it every frame, not draggable, closable or
+    // resizable while there, hidden while the pane is (closed, or another tab of its dock).
+    void ViewerHost::place_pane(bool shown, ImVec2 min, ImVec2 max)
+    {
+        if (!mChromeHidden || !gFloaterView)
+            return;  // the viewer's full UI is showing: the floater is where the user put it
+        LLFloater* chat = mPane.floater.get();
+        if (!shown)
+        {
+            if (chat && chat->getVisible())
+                chat->setVisible(false);
+            return;
+        }
+        if (!chat)
+        {
+            chat = LLFloaterReg::getInstance("fs_im_container");
+            if (!chat)
+                return;
+            mPane.floater = chat->getHandle();
+            mPane.rect = chat->getRect();
+            mPane.visible = chat->getVisible();
+            mPane.drag = chat->getCanDrag();
+            mPane.close = chat->isCloseable();
+            mPane.resize = chat->isResizable();
+            mPane.minimize = chat->isMinimizeable();
+            mPane.minimized = chat->isMinimized();
+            mPane.docked = chat->isDocked();
+            if (mPane.docked)
+                chat->setDocked(false);
+            if (mPane.minimized)
+                chat->setMinimized(false);
+            chat->setCanDrag(false);
+            chat->setCanClose(false);
+            chat->setCanResize(false);
+            chat->setCanMinimize(false);
+        }
+        const LLRect world = gViewerWindow->getWorldViewRectScaled();
+        const LLRect screen(world.mLeft + ll_round(min.x), world.mTop - ll_round(min.y), world.mLeft + ll_round(max.x),
+                            world.mTop - ll_round(max.y));
+        LLRect local;
+        gFloaterView->screenRectToLocal(screen, &local);
+        if (chat->getRect() != local)
+            chat->setShape(local);
+        if (!chat->getVisible())
+            chat->setVisible(true);
+    }
+
+    void ViewerHost::releasePane()
+    {
+        LLFloater* chat = mPane.floater.get();
+        if (chat)
+        {
+            chat->setCanDrag(mPane.drag);
+            chat->setCanClose(mPane.close);
+            chat->setCanResize(mPane.resize);
+            chat->setCanMinimize(mPane.minimize);
+            chat->setShape(mPane.rect);
+            chat->setVisible(mPane.visible);
+            if (mPane.minimized)
+                chat->setMinimized(true);
+            if (mPane.docked)
+                chat->setDocked(true);
+        }
+        mPane = Pane();
+    }
+
+    int ViewerHost::unread_notices() const
+    {
+        // The notification well's counter (the chiclet bar hides with the viewer's UI but keeps counting).
+        static LLHandle<LLView> chiclet;
+        if (!chiclet.get() && gViewerWindow)
+            if (LLNotificationChiclet* found = gViewerWindow->getRootView()->findChild<LLNotificationChiclet>("notification_well", true))
+                chiclet = found->getHandle();
+        LLNotificationChiclet* well = dynamic_cast<LLNotificationChiclet*>(chiclet.get());
+        return well ? well->getCounter() : 0;
+    }
+
     // --- Audio -------------------------------------------------------------------------------------------
 
     bool ViewerHost::audio_start(int rate, int channels, float gain)
@@ -687,7 +1050,10 @@ namespace
 
     void ViewerHost::close()
     {
+        showChrome();
+        mRevealed = false;
         stopMotion();
+        mBase.clear();
         restore();
         stopSound();
         VATsClipMotion::sEditor = VATsClipMotion::Playback();
@@ -730,7 +1096,7 @@ namespace
             LL_INFOS("VATsEditor") << "editor open, user data in " << sHost->paths().user << LL_ENDL;
         }
         if (sApp)
-            sHost->beforeFrame();
+            sHost->beforeFrame(sApp->viewer_reset_joints());
     }
 
     void editorDraw()
@@ -776,6 +1142,17 @@ void FSVATsEditor::update(bool want_open)
         sApp->quit_unattended();
         return closeNow();
     }
+    // The region stood the avatar up twice (spec 09 U4b): the work goes to a quicksave the next open reopens.
+    if (sApp && sHost->regionKeepsStanding())
+    {
+        const bool saved = sApp->quit_to_quicksave();
+        if (!saved)
+            sApp->quit_unattended();
+        tip(saved ? "The region kept standing you up, so the editor closed. Your work is saved and reopens next time."
+                  : "The region kept standing you up, so the editor closed. Unsaved work is kept as an autosave.",
+            "SystemMessage");
+        return closeNow();
+    }
     if (sQuit || sFailed || (!want_open && !sApp))
         return closeNow();
     if (!want_open && !sClosing)
@@ -793,4 +1170,9 @@ void FSVATsEditor::update(bool want_open)
 bool FSVATsEditor::ownsWorld()
 {
     return sOpen;
+}
+
+U32 FSVATsEditor::filterControls(U32 flags)
+{
+    return sHost && (flags & (MOVEMENT | AGENT_CONTROL_STAND_UP)) ? sHost->filterControls(flags) : flags;
 }

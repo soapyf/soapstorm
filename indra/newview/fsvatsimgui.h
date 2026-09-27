@@ -30,7 +30,7 @@
 #include <functional>
 #include <string>
 
-// One ImGui context drawn over the viewer's UI. It exists only while at least one client is
+// One ImGui context drawn with the world, under the viewer's UI. It exists only while at least one client is
 // registered (the editor, or the "VATsImGuiTest" debug setting's demo), so with nothing open every
 // hook below returns after one null check and no GL objects exist.
 //
@@ -39,17 +39,19 @@
 // the viewer's display scale, so it scales with the UI Size setting and HiDPI like LLUI does,
 // renders at full window resolution and matches LLViewerCamera's projection (spec 09 U3).
 //
-// Layers (spec 09 U4): the world layer (ImGui's background draw list: bones, gizmos, markers, ghosts) is drawn
-// with the world, under the viewer's own windows (renderWorld); the editor's panels are drawn over everything,
-// just before swap (render), except while a viewer menu or modal dialog is open: then they are drawn under LLUI
-// too, and the clicks are the viewer's, so its menus and questions (the upload price) stay usable.
+// Layers (spec 09 U4b): the whole frame, the world layer (bones, gizmos, markers, ghosts) and the editor's
+// panels over it, is drawn just before LLUI (renderWorld), so every viewer window (floaters, chat, toasts,
+// menus, dialogs, toolbars) is drawn over the panels.
 //
-// Clicks and keys while the editor is open (spec 09 U4): a press over an ImGui window goes to ImGui first; any
-// other press goes to LLUI (floaters, toasts, the chat bar) as usual; a press that would reach the world goes to
-// the editor instead (worldClick), unless Alt is held (the viewer's camera: Alt-cam, Ctrl+Alt orbit, Ctrl+Alt+Shift
-// pan). The wheel over the world stays the viewer's zoom. Keys go to an ImGui text field first, then to LLUI while
-// one of its controls has keyboard focus (the chat bar, a floater); the viewer's Alt camera keys (Alt with the
-// arrows, Page Up/Down, A, D, W, S, E, C) stay the viewer's; every other key is the editor's. Without the editor (the "VATsImGuiTest" demo) ImGui gets only what its windows take.
+// Input matches that order: LLUI first. The pointer reaches ImGui only where the viewer's hover reached the
+// world (no LLUI view under it; the panels sit on the world view), or during an ImGui drag. A press no viewer
+// window takes comes back through worldClick: over an ImGui window or with an ImGui popup open it is ImGui's;
+// on the world it is the editor's while the editor is open, unless Alt is held (the viewer's camera: Alt-cam,
+// Ctrl+Alt orbit, Ctrl+Alt+Shift pan). The wheel is ImGui's over its windows, else the viewer's zoom. Keys go to
+// an ImGui text field first, then to LLUI while one of its controls has keyboard focus (the chat bar, a
+// floater); the viewer's Alt camera keys (Alt with the arrows, Page Up/Down, A, D, W, S, E, C) stay the
+// viewer's; every other key is the editor's. Without the editor (the "VATsImGuiTest" demo) ImGui gets only
+// what its windows take.
 namespace FSVATsImGui
 {
     // Clients: each draws its ImGui windows inside the frame (between NewFrame and Render).
@@ -61,8 +63,8 @@ namespace FSVATsImGui
     bool isOpen();
 
     // Display path: renderWorld, just before LLUI draws (render_ui_2d, and display_startup for the login screen),
-    // builds this frame's ImGui frame and draws its world layer; render, just before swap, draws the panels over
-    // everything (and, on a frame with no world pass, builds the frame and draws both layers).
+    // builds this frame's ImGui frame and draws it; render, just before swap, draws it only on a frame that had
+    // no such pass (a snapshot), and updates the cursor.
     void renderWorld();
     void render();
     // LLViewerWindow::stopGL: frees ImGui's GL objects before the GL context goes; recreated on the next render.
@@ -84,7 +86,7 @@ namespace FSVATsImGui
     void keyUp(KEY key, MASK mask);
     bool unicodeChar(llwchar uni_char, MASK mask);
     void focusLost();
-    // True while the pointer is over an ImGui window or popup, or ImGui owns a drag: the viewer skips hover.
+    // True while ImGui owns a drag: the viewer skips hover.
     bool capturesMouse();
     // True while the viewer's hover reached the world this frame (no LLUI view under the pointer).
     bool pointerOnWorld();

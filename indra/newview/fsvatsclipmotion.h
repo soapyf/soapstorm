@@ -44,13 +44,21 @@ public:
     struct Joint
     {
         std::string name;       // viewer joint name
-        bool position = false;  // the pose sets its position too
+        bool position = false;  // the pose sets its position too: base plus the pose's offset
+        LLVector3 base;         // the joint's own position (the worn avatar's), in its parent's frame
     };
     struct Playback
     {
         const vats::Skeleton* skeleton = nullptr;
         const vats::Pose* pose = nullptr;  // shown as is every update
         std::vector<Joint> joints;          // bound when the motion initialises
+        // The visual pin (spec 09 U4b): while pin is on, the avatar is drawn with its root where it was when the
+        // pin was taken, whatever the region does to its position. Local only; nothing is sent.
+        bool pin = false;                   // set by the editor every frame (off while seated on an object)
+        bool pinned = false;                // pin_pos and pin_rot hold the root as first seen with pin on
+        LLVector3 pin_pos;                  // agent frame
+        LLQuaternion pin_rot;
+        LLVector3 root_at_update;           // the root's real position at the last update (for the editor's drawing)
     };
     static Playback sEditor;
 
@@ -76,8 +84,10 @@ private:
         S32 node;
         LLPointer<LLJointState> state;
         bool position;
+        LLVector3 base;
     };
     std::vector<Bound> mBound;
+    LLCharacter* mCharacter = nullptr;
     bool mWarnedNonFinite = false;
 };
 

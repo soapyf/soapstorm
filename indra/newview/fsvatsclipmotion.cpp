@@ -26,6 +26,7 @@
 #include "fsvatsclipmotion.h"
 
 #include "llcharacter.h"
+#include "lljoint.h"
 
 #include <algorithm>
 #include <cmath>
@@ -47,6 +48,7 @@ LLMotion::LLMotionInitStatus VATsClipMotion::onInitialize(LLCharacter* character
     if (!character || !sEditor.skeleton)
         return STATUS_FAILURE;
 
+    mCharacter = character;
     mBound.clear();
     for (const Joint& j : sEditor.joints)
     {
@@ -59,7 +61,7 @@ LLMotion::LLMotionInitStatus VATsClipMotion::onInitialize(LLCharacter* character
         state->setUsage(j.position ? LLJointState::ROT | LLJointState::POS : LLJointState::ROT);
         state->setPriority(LLJoint::ADDITIVE_PRIORITY);  // above any animation, as Black Dragon's poser does
         addJointState(state);
-        mBound.push_back({ node, state, j.position });
+        mBound.push_back({ node, state, j.position, j.base });
     }
     LL_INFOS("VATsAnimator") << mName << " bound " << mBound.size() << " of " << sEditor.joints.size() << " joints"
                               << LL_ENDL;
@@ -71,16 +73,29 @@ bool VATsClipMotion::onUpdate(F32, U8*)
     if (!sEditor.pose || !sEditor.skeleton)
         return true;  // nothing to show this frame; the editor stops the motion
 
-    // The same values VATs' .anim exporter writes: rest x pose rotation; the pelvis position as an offset,
-    // other joints as rest position plus offset, clamped to the format's 5 m.
+    // Rotations as VATs' .anim exporter writes them (rest x pose rotation). Positions are the pose's offsets on
+    // the joint's own position in the worn avatar (Joint::base: sliders, mesh joint offsets), not on VATs'
+    // default rest, so a mesh head keeps its shape; clamped to the format's 5 m.
     const vats::Pose& pose = *sEditor.pose;
+    // The pin: the root is where the region put the avatar this frame; the pelvis is placed so the body is drawn
+    // where the root was when pinned (Playback::pin).
+    LLJoint* root = mCharacter ? mCharacter->getRootJoint() : nullptr;
+    const bool pin = sEditor.pin && root;
+    if (root)
+        sEditor.root_at_update = root->getPosition();
+    if (pin && !sEditor.pinned)
+    {
+        sEditor.pin_pos = root->getPosition();
+        sEditor.pin_rot = root->getRotation();
+        sEditor.pinned = true;
+    }
     for (Bound& b : mBound)
     {
         if (b.node >= (S32)pose.rot.size())
             continue;
         const vats::Node& node = (*sEditor.skeleton)[b.node];
         const vats::Quat q = (node.rest * pose.rot[b.node]).normalized();
-        vats::Vec3 p = pose.offset[b.node] + (b.node == 0 ? vats::Vec3{} : node.pos);
+        vats::Vec3 p = pose.offset[b.node] + vats::Vec3{ b.base.mV[VX], b.base.mV[VY], b.base.mV[VZ] };
         // Never hand the avatar a non-finite value: it would spread to the head, the camera and the
         // agent updates sent to the region.
         if (!std::isfinite(q.x) || !std::isfinite(q.y) || !std::isfinite(q.z) || !std::isfinite(q.w) ||
@@ -91,12 +106,20 @@ bool VATsClipMotion::onUpdate(F32, U8*)
             mWarnedNonFinite = true;
             continue;
         }
-        b.state->setRotation(LLQuaternion(F32(q.x), F32(q.y), F32(q.z), F32(q.w)));
+        LLQuaternion rot(F32(q.x), F32(q.y), F32(q.z), F32(q.w));
+        LLVector3 pos(F32(std::clamp(p.x, -MAX_OFFSET, MAX_OFFSET)), F32(std::clamp(p.y, -MAX_OFFSET, MAX_OFFSET)),
+                      F32(std::clamp(p.z, -MAX_OFFSET, MAX_OFFSET)));
+        if (pin && b.node == 0)
+        {
+            // Pelvis in the root's frame such that its world placement is the one it would have on the pinned root.
+            const LLQuaternion inv_root = ~root->getRotation();
+            rot = rot * sEditor.pin_rot * inv_root;
+            pos = (sEditor.pin_pos - root->getPosition() + pos * sEditor.pin_rot) * inv_root;
+        }
+        b.state->setRotation(rot);
         if (b.position)
         {
-            b.state->setPosition(LLVector3(F32(std::clamp(p.x, -MAX_OFFSET, MAX_OFFSET)),
-                                           F32(std::clamp(p.y, -MAX_OFFSET, MAX_OFFSET)),
-                                           F32(std::clamp(p.z, -MAX_OFFSET, MAX_OFFSET))));
+            b.state->setPosition(pos);
         }
     }
     return true;  // the editor removes the motion when it closes

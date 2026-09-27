@@ -33,11 +33,9 @@
 #include "llframetimer.h"
 #include "llgl.h"
 #include "llglslshader.h"
-#include "llmodaldialog.h"
 #include "llrender.h"
 #include "lltimer.h"
 #include "llviewercontrol.h"
-#include "llviewermenu.h"
 #include "llviewerwindow.h"
 #include "llwindow.h"
 
@@ -61,9 +59,7 @@ namespace
     ImVec2 sOrigin;                     // the world view's top-left in the window, scaled UI units
     U32 sWorldHoverFrame = 0;           // the last frame the viewer's hover reached the world (worldHover)
     bool sBuilt = false;                // this frame's ImGui frame is built (buildFrame)
-    bool sWorldDrawn = false;           // and its world layer drawn (renderWorld)
-    bool sPanelsDrawn = false;          // and its panels drawn (under LLUI while a viewer popup is open)
-    ImDrawList* sWorldList = nullptr;   // the world layer: ImGui's background draw list
+    bool sDrawn = false;                // and drawn (renderWorld, or render on a frame without a world pass)
     std::string sIniPath;
     std::string sClipboard;             // backing store for ImGui's GetClipboardText
     LLTimer sFrameTimer;
@@ -350,43 +346,21 @@ namespace
         return io.WantCaptureKeyboard || FSVATsEditor::ownsWorld();
     }
 
-    // A viewer menu or modal dialog is open: it goes over the editor's panels and gets the clicks.
-    bool viewerPopupOpen()
+    LLCoordGL sMousePos;  // the pointer, raw window coordinates
+
+    // The pointer reaches ImGui only where no LLUI view is under it (the viewer's hover reached the world, which
+    // includes the world view under the editor's panels), or while ImGui holds a button (a drag).
+    bool pointerForImGui()
     {
-        return (gMenuHolder && gMenuHolder->hasVisibleMenu()) || LLModalDialog::activeCount() > 0;
+        return sWorldHoverFrame == LLFrameTimer::getFrameCount() || sCapturedButtons != 0;
     }
 
-    // A press ImGui's own windows take: over a window, or anywhere while a popup is open (clicking away closes
-    // it). Presses over the world come through worldClick instead, after LLUI had its chance.
-    bool panelsTakePress()
+    // Draws the frame built this frame: the world layer (the background list: bones, gizmos, markers) and the
+    // panels over it, all before LLUI, so every viewer window is drawn over them (spec 09 U4b).
+    void drawFrame()
     {
-        const ImGuiContext& g = *ImGui::GetCurrentContext();
-        return !viewerPopupOpen() && (g.HoveredWindow != nullptr || g.OpenPopupStack.Size > 0);
-    }
-
-    // Draws one layer of the frame built this frame: the world layer (the background list: bones, gizmos,
-    // markers) or the rest (the panels).
-    void drawLayer(bool world)
-    {
-        const ImDrawData* all = ImGui::GetDrawData();
-        if (!all || !all->Valid)
-        {
-            return;
-        }
-        ImDrawData part = *all;
-        part.CmdLists.resize(0);
-        part.TotalVtxCount = part.TotalIdxCount = 0;
-        for (ImDrawList* list : all->CmdLists)
-        {
-            if ((list == sWorldList) == world)
-            {
-                part.CmdLists.push_back(list);
-                part.TotalVtxCount += list->VtxBuffer.Size;
-                part.TotalIdxCount += list->IdxBuffer.Size;
-            }
-        }
-        part.CmdListsCount = part.CmdLists.Size;
-        if (!part.CmdListsCount)
+        ImDrawData* data = ImGui::GetDrawData();
+        if (!data || !data->Valid || data->CmdLists.Size == 0)  // CmdListsCount is obsolete in 1.92.9 and stays 0
         {
             return;
         }
@@ -397,7 +371,7 @@ namespace
         {
             before.read();
         }
-        ImGui_ImplOpenGL3_RenderDrawData(&part);
+        ImGui_ImplOpenGL3_RenderDrawData(data);
         if (sGLChecksLeft > 0)
         {
             --sGLChecksLeft;
@@ -495,14 +469,24 @@ static bool buildFrame()
     const LLVector2& scale = gViewerWindow->getDisplayScale();
     io.DisplayFramebufferScale = ImVec2(scale.mV[VX], scale.mV[VY]);
     io.DeltaTime = llmax((F32)sFrameTimer.getElapsedTimeAndResetF32(), 1e-4f);
+    // The pointer only where no viewer window is over it (they are drawn over the panels).
+    const ImVec2 mouse = pointerForImGui() ? toImGui(sMousePos) : ImVec2(-FLT_MAX, -FLT_MAX);
+    io.AddMousePosEvent(mouse.x, mouse.y);
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
+    // A viewer control took the keyboard (a click on a floater or the chat bar): no VATs window holds it.
+    static LLFocusableElement* s_llui_focus = nullptr;
+    LLFocusableElement* focus = gFocusMgr.getKeyboardFocus();
+    if (focus && focus != s_llui_focus)
+    {
+        ImGui::FocusWindow(nullptr);
+    }
+    s_llui_focus = focus;
     for (auto& client : sClients)
     {
         client.second.draw();
     }
-    sWorldList = ImGui::GetBackgroundDrawList();
     ImGui::Render();
     // Drawn into the whole window, offset to the world view: the backend's viewport and scissor are
     // window-sized, its projection starts at DisplayPos.
@@ -510,7 +494,7 @@ static bool buildFrame()
     draw_data->DisplayPos = ImVec2(-sOrigin.x, -sOrigin.y);
     draw_data->DisplaySize = ImVec2((F32)gViewerWindow->getWindowWidthScaled(), window_h);
     sBuilt = true;
-    sWorldDrawn = sPanelsDrawn = false;
+    sDrawn = false;
     return true;
 }
 
@@ -520,13 +504,8 @@ void FSVATsImGui::renderWorld()
     {
         return;
     }
-    drawLayer(true);
-    sWorldDrawn = true;
-    if (viewerPopupOpen())
-    {
-        drawLayer(false);  // the viewer's menu or modal dialog goes over the panels
-        sPanelsDrawn = true;
-    }
+    drawFrame();
+    sDrawn = true;
 }
 
 void FSVATsImGui::render()
@@ -535,15 +514,11 @@ void FSVATsImGui::render()
     {
         return;
     }
-    if (!sWorldDrawn)
+    if (!sDrawn)
     {
-        drawLayer(true);  // no world pass this frame (the login screen)
+        drawFrame();  // no pass before LLUI this frame (a snapshot)
     }
-    if (!sPanelsDrawn)
-    {
-        drawLayer(false);
-    }
-    sBuilt = sWorldDrawn = sPanelsDrawn = false;
+    sBuilt = sDrawn = false;
 
     ImGuiIO& io = ImGui::GetIO();
     if (io.WantCaptureMouse)
@@ -595,14 +570,7 @@ bool FSVATsImGui::mouseButton(LLCoordGL pos, MASK mask, EMouseClickType click, b
     }
     if (down)
     {
-        if (panelsTakePress())
-        {
-            takePress(pos, mask, button);
-            return true;
-        }
-        // Not ImGui's: LLUI or the world (worldClick) has it. A VATs window stops holding the keyboard.
-        ImGui::FocusWindow(nullptr);
-        return false;
+        return false;  // LLUI first: a press no viewer window takes comes back through worldClick
     }
     // Releases always reach ImGui, so it is never left with a button held; the viewer loses only those
     // whose press ImGui took.
@@ -623,10 +591,18 @@ bool FSVATsImGui::mouseButton(LLCoordGL pos, MASK mask, EMouseClickType click, b
 
 bool FSVATsImGui::worldClick(LLCoordGL pos, MASK mask, EMouseClickType click, bool down)
 {
-    // Alt presses are the viewer's camera (Alt-cam, Ctrl+Alt orbit, Ctrl+Alt+Shift pan).
-    const int button = sCtx && down && !(mask & MASK_ALT) && FSVATsEditor::ownsWorld() ? toImGuiButton(click) : -1;
+    const int button = sCtx && down ? toImGuiButton(click) : -1;
     if (button < 0)
     {
+        return false;
+    }
+    // Over an ImGui window, or anywhere while an ImGui popup is open (clicking away closes it): ImGui's. On the
+    // world: the editor's, except Alt presses, which are the viewer's camera (Alt-cam, Ctrl+Alt orbit, pan).
+    const ImGuiContext& g = *ImGui::GetCurrentContext();
+    const bool panels = g.HoveredWindow != nullptr || g.OpenPopupStack.Size > 0;
+    if (!panels && ((mask & MASK_ALT) || !FSVATsEditor::ownsWorld()))
+    {
+        ImGui::FocusWindow(nullptr);  // the world's: a VATs window stops holding the keyboard
         return false;
     }
     takePress(pos, mask, button);
@@ -646,11 +622,7 @@ bool FSVATsImGui::worldHover(MASK mask)
 
 void FSVATsImGui::mouseMove(LLCoordGL pos, MASK mask)
 {
-    if (sCtx)
-    {
-        ImVec2 p = toImGui(pos);
-        ImGui::GetIO().AddMousePosEvent(p.x, p.y);
-    }
+    sMousePos = pos;  // handed to ImGui at the next frame, where no viewer window covers it (buildFrame)
 }
 
 void FSVATsImGui::mouseLeave()
@@ -730,7 +702,7 @@ void FSVATsImGui::focusLost()
 bool FSVATsImGui::capturesMouse()
 {
     // Not ImGui's world capture (a bone under the pointer): LLUI windows over the world keep their hover.
-    return sCtx && (panelsTakePress() || sCapturedButtons != 0);
+    return sCtx && sCapturedButtons != 0;
 }
 
 bool FSVATsImGui::pointerOnWorld()

@@ -1274,7 +1274,7 @@ bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK m
         }
     }
 
-    if (FSVATsImGui::worldClick(pos, mask, clicktype, down)) return true; // VATs ImGui UI: world clicks go to the editor
+    if (FSVATsImGui::worldClick(pos, mask, clicktype, down)) return true; // VATs ImGui UI: clicks no viewer window took
     // Do not allow tool manager to handle mouseclicks if we have disconnected
     if(!gDisconnected && LLToolMgr::getInstance()->getCurrentTool()->handleAnyMouseClick( x, y, mask, clicktype, down ) )
     {
@@ -4029,7 +4029,7 @@ void LLViewerWindow::updateUI()
 
     updateMouseDelta();
     updateKeyboardFocus();
-    if (FSVATsImGui::capturesMouse()) mMouseInWindow = false; // VATs ImGui UI: no viewer hover under it
+    if (FSVATsImGui::capturesMouse()) mMouseInWindow = false; // VATs ImGui UI: no viewer hover during its drags
 
     bool handled = false;
 

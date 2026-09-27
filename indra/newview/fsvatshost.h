@@ -24,6 +24,8 @@
 #ifndef FS_VATSHOST_H
 #define FS_VATSHOST_H
 
+#include "stdtypes.h"
+
 // The VATs editor (Avatar > VATs Editor, setting "VATsEditor"): Viewport Avatar Toolset's own editor
 // UI (indra/libvats/ui, vats::App) drawn by FSVATsImGui over the world, with a viewer implementation
 // of vats::ui::Host (paths under app_settings/vats and user_settings/vats, the worn avatar driven
@@ -36,6 +38,10 @@ namespace FSVATsEditor
     void update(bool want_open);
     // True while the editor is open: the world's clicks and the keys are the editor's (FSVATsImGui).
     bool ownsWorld();
+    // From LLAgent::setControlFlags (spec 09 U4b): the flags that may reach the avatar. While the editor holds it,
+    // no movement input does (only the editor's own return autopilot), and neither does Stand Up while the
+    // editor has sat it down (with a "Close the editor to stand up" tip).
+    U32 filterControls(U32 flags);
 }
 
 #endif // FS_VATSHOST_H
