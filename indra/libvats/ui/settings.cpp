@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <utility>
 
 #include "vats/json.h"
 
@@ -91,6 +92,10 @@ void Settings::load(const std::string& file) {
     if (auto* r = j.find("recent"); r && r->is_array())
         for (auto& e : r->arr)
             if (e.is_string() && recent.size() < 10) recent.push_back(e.str);
+    for (auto [key, list] : {std::pair{"project_folders", &project_folders}, std::pair{"anim_folders", &anim_folders}})
+        if (auto* r = j.find(key); r && r->is_array())
+            for (auto& e : r->arr)
+                if (e.is_string()) list->push_back(e.str);
 }
 
 void Settings::save(const std::string& file) const {
@@ -125,6 +130,11 @@ void Settings::save(const std::string& file) const {
     Json r = Json::array();
     for (auto& f : recent) r.push(f);
     j.set("recent", r);
+    for (auto [key, list] : {std::pair{"project_folders", &project_folders}, std::pair{"anim_folders", &anim_folders}}) {
+        Json a = Json::array();
+        for (auto& f : *list) a.push(f);
+        j.set(key, a);
+    }
     j.set("mocap", mocap);
     std::string p = file, tmp = p + ".tmp";
     {

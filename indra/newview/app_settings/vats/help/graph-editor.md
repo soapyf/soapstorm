@@ -64,6 +64,23 @@ The list on the left shows the curves of the selected bones. The drop-down above
 
 Click a row to show only that channel; **Shift+click** or **Ctrl+click** adds or removes rows. A pinned point also lists its pin offset curves, marked **(pin)**. With nothing selected the graph reads "Select a bone to see its curves".
 
+### The toolbar
+
+The buttons along the top show icons only; hover one for its name, its key in your [[Control presets|preset]] where it has one, and what it does. From left to right, after the drop-down:
+
+| Button | Icon |
+|---|---|
+| **Frame All** | four corner brackets |
+| **Frame Selected** | four corner brackets round a dot |
+| **Auto**, **Spline**, **Plateau**, **Linear**, **Flat**, **Stepped**, **Break**, **Unify** | a small drawing of each curve shape (see the table in "Shaping curves: tangents" below) |
+| **Fit Values** | two arrows pointing away from a line |
+| **Euler Filter** | an arrow turning back on itself |
+| **Flip Time** | two triangles mirrored left and right |
+| **Flip Values** | two triangles mirrored up and down |
+| **Delete** | a bin |
+
+Then **Snap frames** and the **Frame** and **Value** boxes.
+
 ### Selecting and moving keys
 
 - **Click** a key to select it. **Shift+click** toggles a key in the selection; **Ctrl+click** removes one. Clicking the same spot again cycles through keys stacked on top of each other.
@@ -80,23 +97,23 @@ With two or more keys selected, a box with eight handles appears around them. Dr
 ### Adding and deleting keys
 
 - **Double-click** a curve to add a key on it at that point (**Insert Key**). The curve's shape does not change.
-- **Delete** (the button, or **Delete** with the mouse over the graph) removes the selected keys.
+- **Delete** (the bin button, or **Delete** with the mouse over the graph) removes the selected keys.
 - **Ctrl+C** and **Ctrl+V** with the mouse over the graph copy and paste keys; pasting puts them at the current frame.
 
 ### Shaping curves: tangents
 
-A selected key shows its handles; drag them to shape the curve. The buttons along the top set the tangent type of the selected keys:
+A selected key shows its handles; drag them to shape the curve. The eight buttons after **Frame Selected** set the tangent type of the selected keys. Each shows the shape it makes, with the keys as amber dots:
 
-| Button | Curve |
-|---|---|
-| **Auto** | Smooth, flat at peaks and valleys |
-| **Spline** | Smooth through the neighbours; can overshoot |
-| **Plateau** | Smooth without ever overshooting |
-| **Linear** | Straight towards the neighbouring keys |
-| **Flat** | Level handles: eases in and out of the key |
-| **Stepped** | Holds the value until the next key |
-| **Break** | Lets each handle move on its own |
-| **Unify** | Lines both handles up again |
+| Button | Icon | Curve |
+|---|---|---|
+| **Auto** | a hill, flat on top | Smooth, flat at peaks and valleys |
+| **Spline** | a curve rising through a key and swinging past the next | Smooth through the neighbours; can overshoot |
+| **Plateau** | a curve rising to a key, then level | Smooth without ever overshooting |
+| **Linear** | two straight lines meeting at a key | Straight towards the neighbouring keys |
+| **Flat** | a key with a level handle | Level handles: eases in and out of the key |
+| **Stepped** | a staircase | Holds the value until the next key |
+| **Break** | a key with two handles in a V | Lets each handle move on its own |
+| **Unify** | a key with both handles in one slanted line | Lines both handles up again |
 
 ### Fixing and flipping curves
 

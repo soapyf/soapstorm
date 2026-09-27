@@ -77,8 +77,19 @@ void load_fonts(const char* assets_dir) {
     ImGuiIO& io = ImGui::GetIO();
     ImFontConfig cfg;
     cfg.OversampleH = 2;
-    if (!io.Fonts->AddFontFromFileTTF((std::string(assets_dir) + "/fonts/Inter-Regular.ttf").c_str(), 15.f, &cfg))
+    ImFontConfig regular = cfg;
+    static const ImWchar private_use[] = {0xE000, 0xF8FF, 0};  // Inter's own glyphs there would hide the icons
+    regular.GlyphExcludeRanges = private_use;
+    if (!io.Fonts->AddFontFromFileTTF((std::string(assets_dir) + "/fonts/Inter-Regular.ttf").c_str(), 15.f, &regular))
         io.Fonts->AddFontDefault();
+    // The icons (icons.h) join the regular font, so any label can hold one. ImGui rasterises each size as it
+    // is used, so they stay sharp at every UI scale. Lucide's glyphs stand on the baseline and are an em
+    // tall; the offset centres them on the capitals. Without the file, labels show a box instead.
+    ImFontConfig icons;
+    icons.MergeMode = true;
+    icons.GlyphOffset.y = 2;
+    icons.Flags |= ImFontFlags_NoLoadError;
+    io.Fonts->AddFontFromFileTTF((std::string(assets_dir) + "/fonts/lucide-icons.ttf").c_str(), 15.f, &icons);
     g_bold = io.Fonts->AddFontFromFileTTF((std::string(assets_dir) + "/fonts/Inter-SemiBold.ttf").c_str(), 15.f, &cfg);
 }
 

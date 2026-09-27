@@ -6,6 +6,8 @@
 #include <cmath>
 #include <cstdio>
 
+#include "icon_button.h"
+#include "icons.h"
 #include "theme.h"
 
 namespace vats {
@@ -291,11 +293,10 @@ void GraphEditor::draw_toolbar(GraphContext& ctx) {
         }
         first = false;
     };
-    auto button = [&](const char* label, const char* tip) {
-        place(ImGui::CalcTextSize(label, nullptr, true).x + ImGui::GetStyle().FramePadding.x * 2);
-        bool pressed = ImGui::Button(label);
-        ImGui::SetItemTooltip("%s", tip);
-        return pressed;
+    // Icon only; the tooltip names the button, its key and what it does.
+    auto button = [&](const char* id, const char* icon, const std::string& tip) {
+        place(icon_button_width());
+        return icon_button(id, icon, tip);
     };
     auto need_keys = [&]() {
         if (!selection_.empty()) return true;
@@ -313,37 +314,41 @@ void GraphEditor::draw_toolbar(GraphContext& ctx) {
     const char* modes[] = {"Selected bones", "All animated bones"};
     if (ImGui::Combo("##mode", &m, modes, 2)) mode_ = Mode(m);
     sep();
-    // TG-31: the label carries the preset's shortcut; "###" keeps the ID stable when it changes.
+    // TG-31: the tooltip carries the preset's shortcut.
     auto with_key = [&](const char* label, const char* id) {
         std::string k = ctx.key_name ? ctx.key_name(id) : "";
-        return std::string(label) + (k.empty() ? "" : " (" + k + ")") + "###" + id;
+        return std::string(label) + (k.empty() ? "" : " (" + k + ")");
     };
-    if (button(with_key("Frame All", "frame_all").c_str(), "Fit every shown curve")) frame_all(ctx);
-    if (button(with_key("Frame Selected", "frame_selected").c_str(), "Fit the selected keys")) frame_selected(ctx);
+    if (button("frame_all", icon::kFrameAll, with_key("Frame All", "frame_all") + ": fit every shown curve")) frame_all(ctx);
+    if (button("frame_selected", icon::kFrameSelected, with_key("Frame Selected", "frame_selected") + ": fit the selected keys"))
+        frame_selected(ctx);
     sep();
     struct T {
         const char* label;
         Tangent t;
+        CurveIcon icon;
         const char* tip;
     };
     static const T tangents[] = {
-        {"Auto", Tangent::Auto, "Smooth, flat at peaks and valleys"},
-        {"Spline", Tangent::Spline, "Smooth through the neighbours; can overshoot"},
-        {"Plateau", Tangent::Plateau, "Smooth without ever overshooting"},
-        {"Linear", Tangent::Linear, "Straight towards the neighbouring keys"},
-        {"Flat", Tangent::Flat, "Level handles"},
-        {"Stepped", Tangent::Stepped, "Hold the value until the next key"},
-        {"Break", Tangent::Break, "Move each handle on its own"},
-        {"Unify", Tangent::Unify, "Line both handles up again"},
+        {"Auto", Tangent::Auto, CurveIcon::Auto, "Auto: smooth, flat at peaks and valleys"},
+        {"Spline", Tangent::Spline, CurveIcon::Spline, "Spline: smooth through the neighbours; can overshoot"},
+        {"Plateau", Tangent::Plateau, CurveIcon::Plateau, "Plateau: smooth without ever overshooting"},
+        {"Linear", Tangent::Linear, CurveIcon::Linear, "Linear: straight towards the neighbouring keys"},
+        {"Flat", Tangent::Flat, CurveIcon::Flat, "Flat: level handles"},
+        {"Stepped", Tangent::Stepped, CurveIcon::Stepped, "Stepped: hold the value until the next key"},
+        {"Break", Tangent::Break, CurveIcon::Break, "Break: move each handle on its own"},
+        {"Unify", Tangent::Unify, CurveIcon::Unify, "Unify: line both handles up again"},
     };
-    for (auto& t : tangents)
-        if (button(t.label, t.tip) && need_keys()) {
+    for (auto& t : tangents) {
+        place(icon_button_width());
+        if (curve_icon_button(t.label, t.icon, t.tip) && need_keys()) {
             auto sel = selection_;
             edit(ctx, t.label, [&](Clip& c) { apply_tangent(c, sel, t.t); });
         }
+    }
     sep();
-    if (button("Fit Values", "Fit the value range to the visible curves")) fit_values(ctx);
-    if (button("Euler Filter", "Remove 360-degree jumps from rotation curves")) {
+    if (button("fit_values", icon::kFitValues, "Fit Values: fit the value range to the visible curves")) fit_values(ctx);
+    if (button("euler_filter", icon::kEulerFilter, "Euler Filter: remove 360-degree jumps from rotation curves")) {
         std::vector<std::string> tracks;
         for (int c : shown_channels())
             if (channels_[c].channel.rfind("rot_", 0) == 0 &&
@@ -357,17 +362,17 @@ void GraphEditor::draw_toolbar(GraphContext& ctx) {
             ctx.status(n ? "Euler filter fixed " + std::to_string(n) + " bone(s)" : "Rotation curves are already clean");
         }
     }
-    if (button("Flip Time", "Mirror the selected keys in time") && need_keys()) {
+    if (button("flip_time", icon::kFlipTime, "Flip Time: mirror the selected keys in time") && need_keys()) {
         auto sel = selection_;
         edit(ctx, "Flip Time", [&](Clip& c) { flip_time(c, sel, snap_); });
         selection_ = sel;
     }
-    if (button("Flip Values", "Mirror the selected keys across zero") && need_keys()) {
+    if (button("flip_values", icon::kFlipValues, "Flip Values: mirror the selected keys across zero") && need_keys()) {
         auto sel = selection_;
         edit(ctx, "Flip Values", [&](Clip& c) { flip_values(c, sel); });
         selection_ = sel;
     }
-    if (button("Delete", "Delete the selected keys (Delete)")) delete_selected(ctx);
+    if (button("delete", icon::kDelete, "Delete (Delete): delete the selected keys")) delete_selected(ctx);
     sep();
     place(ImGui::GetFontSize() * 6);
     ImGui::Checkbox("Snap frames", &snap_);

@@ -316,6 +316,11 @@ void App::draw_export_section() {
     if (ImGui::Checkbox("Also export the other side (mirrored)", &both)) set("both", both);
     ImGui::SetCursorPosX(label_w);
     if (ImGui::Checkbox("Count the number up after each export", &count_up)) set("count_up", count_up);
+    bool to_library = json_bool(ex, "save_to_library");
+    ImGui::SetCursorPosX(label_w);
+    if (ImGui::Checkbox("Also save to Animations library", &to_library)) set("save_to_library", to_library);
+    ImGui::SetItemTooltip("Each exported%s .anim is also copied to the Inventory's Animations, replacing one of the same name",
+                          host_.can_upload() ? " or uploaded" : "");
     ImGui::SetCursorPosX(label_w);
     if (ImGui::Checkbox("Export mirrored (left and right swapped)", &mirrored)) {
         edit("Export Mirrored", [&](Clip& c) { c.mirror_export = mirrored; });
@@ -426,6 +431,7 @@ void App::upload_now() {
                 break;
             }
             for (auto& e : validate_anim(r.file, skel_, true)) problems += "- " + name + ": " + e + "\n";  // 60 s, 250000 bytes
+            if (json_bool(ex, "save_to_library")) anim_to_library(name + ".anim", bytes);
             queue.emplace_back(name, std::move(bytes));
         }
     }
@@ -484,7 +490,7 @@ void App::export_now(bool bvh, bool all_bones) {
     }
     std::vector<bool> variants{mirrored};
     if (json_bool(ex, "both")) variants.push_back(!mirrored);
-    const bool count_up = json_bool(ex, "count_up");
+    const bool count_up = json_bool(ex, "count_up"), to_library = !bvh && json_bool(ex, "save_to_library");
     int replaced = 0;
     std::string names;
     // GR-3: one file per actor, all with the active actor's export settings; the actor is switched in turn.
@@ -505,6 +511,7 @@ void App::export_now(bool bvh, bool all_bones) {
             ok = bvh ? export_bvh(path, all_bones) : export_anim(path);
             doc_.clip().mirror_export = saved;
             if (!ok) break;  // the export already explained why
+            if (to_library) anim_file_to_library(path);
             names += (names.empty() ? "" : ", ") + path.substr(path.find_last_of('/') + 1);
         }
     }
@@ -524,6 +531,7 @@ void App::export_now(bool bvh, bool all_bones) {
         mark_dirty();
     }
     status("Exported " + names + " to " + folder + (replaced ? " (" + std::to_string(replaced) + " replaced)" : "") +
+           (to_library ? ", and to the Animations library" : "") +
            (export_summary_.empty() ? "" : ": " + export_summary_));  // UI-34
 }
 

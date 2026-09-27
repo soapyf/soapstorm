@@ -17,6 +17,7 @@ add_library(vats_core STATIC
     src/fbx.cpp
     src/edit.cpp
     src/export_name.cpp
+    src/file_library.cpp
     src/fcurve.cpp
     src/gltf.cpp
     src/json.cpp

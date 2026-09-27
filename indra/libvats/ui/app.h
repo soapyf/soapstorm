@@ -609,6 +609,19 @@ private:
     int time_prompt_ = 0, time_prompt_value_ = 10;  // 1 insert, 2 stretch
     bool dragging_audio_ = false;
     double audio_press_offset_ = 0, audio_press_frame_ = 0;
+    // --- project and animation library (file_library_ui.cpp; spec 08 FL) ---
+    void draw_file_library();         // the Inventory's Projects and Animations sections
+    void rescan_files();              // after a save or export; the Inventory also rescans on focus
+    void save_to_library();           // File > Save to Library...
+    void insert_anim_file(const std::string& path, bool mirrored);  // a .anim's keys pasted at the frame
+    // Export's "Also save to Animations library": an exported file, or an upload's bytes, copied in.
+    void anim_file_to_library(const std::string& path);
+    void anim_to_library(const std::string& file_name, const std::vector<std::uint8_t>& bytes);
+    void file_drop(const ImGuiPayload* payload, std::string& hint);  // a VATS_FILE drop on the view
+    void draw_file_prompt();          // Rename... and Save to Library...'s name prompt, and Add Folder... answers
+    bool inv_match(const std::string& name) const;  // the Inventory's filter box
+    std::string inv_filter_;
+    std::shared_ptr<struct FileLibUi> file_lib_;  // defined in file_library_ui.cpp
 };
 
 }  // namespace vats

@@ -37,7 +37,9 @@ add_library(vats_ui STATIC
     gizmo.cpp
     graph_editor.cpp
     hand_poser.cpp
+    file_library_ui.cpp
     help_ui.cpp
+    icon_button.cpp
     inventory.cpp
     loop_ui.cpp
     migrate.cpp

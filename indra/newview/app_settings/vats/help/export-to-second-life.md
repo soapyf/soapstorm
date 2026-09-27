@@ -41,6 +41,8 @@ trims separators from the ends, so an empty side leaves no stray underscore: `Wa
   `_mirrored` appended.
 - **Count the number up after each export** adds 1 to **Number** after each successful `.anim` export,
   so the next export does not replace the last one.
+- **Also save to Animations library** copies each exported `.anim` into the **Inventory**'s Animations
+  library as well ([[Project library]]).
 - **Export mirrored (left and right swapped)** swaps the sides in the exported file only; the project is
   unchanged.
 

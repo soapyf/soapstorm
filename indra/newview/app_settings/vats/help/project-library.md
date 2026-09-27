@@ -1,0 +1,133 @@
+# Project library
+
+The **Projects** and **Animations** sections at the top of the **Inventory** tab list your project files
+(`.vat` and Hexton `.hxanim`) and SL animation files (`.anim`) from a library folder in VATs' data
+folder and from any other folders you add. Open a project or an animation from there, insert an animation
+into the open project, or rename, duplicate and delete the files.
+
+> Related articles: [[Projects and files]], [[Pose library]], [[Export to Second Life]], [[Interface]]
+
+## Usage
+
+### What is listed
+
+Each section has groups, which fold open and closed:
+
+| Group | Section | Files |
+|---|---|---|
+| **Library** | both | the files in `library/Projects/` or `library/Animations/` in the data folder |
+| **Recent** | Projects | the projects of **File → Open Recent** that still exist |
+| a folder's name | both | the files in a folder you added with **Add Folder...** |
+
+A group's title gives the number of files it shows. Only files directly in the folder are listed, not
+those in folders inside it. Hover a folder's group title for its full path.
+
+Each item shows a thumbnail (the middle frame on the current body) or an icon for its kind, the name,
+and a second line:
+
+- Projects: length in seconds, frame rate, priority, `loops` when the loop is on, and the number of actors.
+- Animations: length in seconds, the number of rotation and position keys, priority, and `loops`.
+
+A file VATs cannot read is listed with a warning sign and `Cannot read:` followed by the reason. Hover an
+item for the same details and its path.
+
+### Opening
+
+- **Double-click** a project, or right-click it and choose **Open**, to open it. With unsaved changes,
+  VATs first asks `Save changes to <name>?`, as **File → Open...** does.
+- **Double-click** an animation, or choose **Open**, to import it as a new project, as **File → Import SL
+  .anim...** does.
+- **Drag** a project onto the view to open it.
+
+### Inserting an animation
+
+Right-click an animation and choose **Insert into Current Project at This Frame**, or drag it onto the
+view. Its keys are pasted at the current frame, the same way a [[Pose library|clip]] is pasted: every bone
+the file moves, retimed to the project's frame rate. When the keys run past the last frame, the project
+is lengthened to fit. It is one undo step.
+
+**Insert Mirrored** pastes it with left and right swapped. A drag onto the view uses the **Apply mirrored**
+tick of the **Poses** section.
+
+### Managing files
+
+Right-click an item:
+
+| Item | What it does |
+|---|---|
+| **Rename...** | asks for a new name; the extension stays. A name already taken in that folder is refused. |
+| **Duplicate** | copies the file as `<name> copy`, then `<name> copy 2` and so on. |
+| **Delete** | asks `Delete "<file>"? This cannot be undone.` and deletes the file. |
+| **Show in Folder** | opens the file's folder in the system's file manager. |
+
+**Rename...**, **Duplicate** and **Delete** only work on files directly inside a listed folder (the two
+library folders and the added ones); for other files, such as a recent project stored elsewhere, they are
+greyed out. Characters that cannot be in a file name (`/ \ : * ? " < > |`) are left out of a new name.
+
+Renaming the open project's file keeps it open under the new name.
+
+### Saving to the library
+
+- **File → Save to Library...**, or **Save to Library...** in the **Projects** section, asks for a name and
+  saves the project as `library/Projects/<name>.vat`. The project then belongs to that file, as after
+  **Save As...**. If another project already has that name, VATs asks before replacing it.
+- **Also save to Animations library**, in the **Export** section of **Properties** (and the **Export SL
+  .anim** window), copies every `.anim` that **Export SL .anim** writes into `library/Animations/`,
+  replacing a file of the same name. In the SoapStorm viewer the same tick also keeps a copy of each
+  **Upload Animation...**. The tick is saved with the project.
+
+### Adding folders
+
+**Add Folder...** in either section lists another folder's files there too, for example your export folder.
+Right-click the folder's group title for **Show in Folder** or **Remove Folder from Inventory**; removing
+it only takes it off the list, the files stay.
+
+### Filtering
+
+**Filter by name...** at the top of the **Inventory** shows only the items whose names contain the text,
+ignoring case, in every section: projects, animations, mesh bodies, props, poses, clips and starter poses.
+Groups with no match are hidden while filtering.
+
+## Configuration
+
+The library folders are in the data folder's `library` folder, beside `poses.json`:
+
+| Files | Linux |
+|---|---|
+| Projects | `~/.local/share/viewport-avatar-toolset/library/Projects/` |
+| Animations | `~/.local/share/viewport-avatar-toolset/library/Animations/` |
+
+On Windows they are under `%APPDATA%\viewport-avatar-toolset\library\`. `--data-dir` and `--library-dir`
+move them with the rest of the library; see [[Command line]].
+
+Added folders are kept in `settings.json` as `project_folders` and `anim_folders`
+([[Preferences#Settings file]]).
+
+The lists are read again when the **Inventory** gets the focus, when VATs comes back to the front, and after
+a save or an export. VATs keeps what it read about each file and reads a file again only when its size or
+time has changed.
+
+## Troubleshooting
+
+### A file is missing from the list
+
+Only `.vat`, `.hxanim` and `.anim` files directly in a listed folder are shown. Files copied in while VATs
+was open appear when you click into the **Inventory**.
+
+### "Cannot read:" on an item
+
+The file is damaged or not what its extension says. A project that VATs cannot read also fails to open
+with **Could not open project**; an animation fails with **Import failed**. Delete it, or restore a backup
+(`.vat.bak` beside the project).
+
+## App and viewer
+
+> **Note:** In the SoapStorm viewer the lists work the same, but items show their kind icon instead of a
+> thumbnail, and **Show in Folder** depends on the viewer opening a `file://` link.
+
+## See also
+
+- [[Projects and files]]
+- [[Export to Second Life]]
+
+Category: Interface

@@ -8,6 +8,8 @@
 #include <fstream>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "theme.h"
 
 namespace vats {
@@ -394,8 +396,7 @@ void App::draw_actors_panel() {
         ImGui::ColorButton("##c", col, ImGuiColorEditFlags_NoTooltip, ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight()));
         ImGui::SameLine();
         std::string label = a.name + (a.hidden ? " (hidden)" : "") + (a.locked ? " (locked)" : "");
-        const float buttons = ImGui::CalcTextSize("placeunlockshow").x + 6 * ImGui::GetStyle().FramePadding.x +
-                              3 * ImGui::GetStyle().ItemSpacing.x;
+        const float buttons = 3 * (icon_button_width() + ImGui::GetStyle().ItemSpacing.x);
         if (ImGui::Selectable(label.c_str(), i == p.active, 0, ImVec2(ImGui::GetContentRegionAvail().x - buttons, 0)))
             activate_actor(i);
         if (ImGui::BeginPopupContextItem("actor_menu")) {  // on the name, where people right-click
@@ -406,16 +407,20 @@ void App::draw_actors_panel() {
         ImGui::BeginDisabled(i == p.active);
         const bool placing = place_actor_ == i;
         if (placing) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-        if (ImGui::SmallButton("place")) place_actor_ = placing ? -1 : i;
+        if (icon_small_button("place", icon::kPlace,
+                              "Place: move or turn this actor with a gizmo in the view (Rotate tool: turn about Z)"))
+            place_actor_ = placing ? -1 : i;
         if (placing) ImGui::PopStyleColor();
         ImGui::EndDisabled();
-        ImGui::SetItemTooltip("Move or turn this actor with a gizmo in the view (Rotate tool: turn about Z)");
         ImGui::SameLine();
         bool hidden = a.hidden, locked = a.locked;
-        if (ImGui::SmallButton(hidden ? "show" : "hide") && i != p.active)
+        // Each shows the actor's state; a click changes it.
+        if (icon_small_button("hide", hidden ? icon::kHidden : icon::kShown, hidden ? "Hidden: click to show" : "Shown: click to hide") &&
+            i != p.active)
             scene_edit(hidden ? "Show Actor" : "Hide Actor", [i, hidden](Project& pr) { pr.actors[i].hidden = !hidden; });
         ImGui::SameLine();
-        if (ImGui::SmallButton(locked ? "unlock" : "lock") && i != p.active)
+        if (icon_small_button("lock", locked ? icon::kLocked : icon::kUnlocked, locked ? "Locked: click to unlock" : "Unlocked: click to lock") &&
+            i != p.active)
             scene_edit(locked ? "Unlock Actor" : "Lock Actor", [i, locked](Project& pr) { pr.actors[i].locked = !locked; });
         ImGui::PopID();
     }

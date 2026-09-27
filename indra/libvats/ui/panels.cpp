@@ -5,6 +5,8 @@
 #include <cstring>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "imgui_internal.h"
 #include "vats/anim_file.h"
 #include "vats/edit.h"
@@ -425,71 +427,51 @@ void App::draw_timeline_panel() {
         std::string k = key_hint(id);
         return k.empty() ? std::string(what) : std::string(what) + " (" + k + ")";
     };
-    auto tool_button = [&](const char* text, bool on, const char* tip) {
-        if (on) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_Header));
-        bool pressed = ImGui::Button(text);
-        if (on) ImGui::PopStyleColor();
-        ImGui::SetItemTooltip("%s", tip);
+    // Tool buttons: an icon and the name; the name and shortcut in the tooltip (UI-26).
+    auto tool_button = [&](const char* icon, const char* label, bool on, const std::string& tip_text) {
+        bool pressed = icon_label_button(icon, label, tip_text, on);
         ImGui::SameLine();
         return pressed;
     };
-    // Transport: drawn icons, icon only, the name and shortcut in the tooltip (UI-26).
-    enum class Icon { Start, PrevKey, Play, Pause, NextKey, End };
-    auto icon_button = [&](const char* id, Icon icon, bool on, const std::string& tip_text) {
-        const float h = ImGui::GetFrameHeight();
-        if (on) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_Header));
-        bool pressed = ImGui::Button(id, ImVec2(ImGui::GetFontSize() * 2.7f, h));
-        if (on) ImGui::PopStyleColor();
-        ImGui::SetItemTooltip("%s", tip_text.c_str());
-        ImDrawList* d = ImGui::GetWindowDrawList();
-        ImVec2 lo = ImGui::GetItemRectMin(), hi = ImGui::GetItemRectMax();
-        const float cx = (lo.x + hi.x) / 2, cy = (lo.y + hi.y) / 2, r = h * 0.2f;
-        const ImU32 col = ImGui::GetColorU32(ImGuiCol_Text);
-        auto tri = [&](float x, float dir) {  // dir +1 points right
-            d->AddTriangleFilled(ImVec2(x - r * dir, cy - r), ImVec2(x + r * dir, cy), ImVec2(x - r * dir, cy + r), col);
-        };
-        auto bar = [&](float x) { d->AddRectFilled(ImVec2(x - 1.5f, cy - r), ImVec2(x + 1.5f, cy + r), col); };
-        switch (icon) {
-            case Icon::Start: bar(cx - r * 1.3f), tri(cx + r * 0.2f, -1); break;
-            case Icon::PrevKey: tri(cx - r * 0.55f, -1), tri(cx + r * 0.95f, -1); break;
-            case Icon::Play: tri(cx + r * 0.2f, 1); break;
-            case Icon::Pause: bar(cx - r * 0.5f), bar(cx + r * 0.5f); break;
-            case Icon::NextKey: tri(cx - r * 0.95f, 1), tri(cx + r * 0.55f, 1); break;
-            case Icon::End: tri(cx - r * 0.2f, 1), bar(cx + r * 1.3f); break;
-        }
+    // Transport: icon only, the name and shortcut in the tooltip (UI-26).
+    auto transport = [&](const char* id, const char* icon, bool on, const std::string& tip_text) {
+        bool pressed = icon_button(id, icon, tip_text, on);
         ImGui::SameLine();
         return pressed;
     };
-    // Tool buttons carry their shortcut in the label, e.g. "Rotate (E)", following the preset (UI-26).
-    auto labelled = [&](const char* name, const char* id) {
-        std::string k = key_hint(id);
-        return (k.empty() ? std::string(name) : std::string(name) + " (" + k + ")") + "###" + id;
-    };
-    if (icon_button("##start", Icon::Start, false, tip("Go to start", "start"))) run_action("start");
-    if (icon_button("##prev_key", Icon::PrevKey, false, tip("Previous key", "prev_key"))) run_action("prev_key");
-    if (icon_button("##play", playing_ ? Icon::Pause : Icon::Play, playing_, tip("Play / pause", "play"))) run_action("play");
-    if (icon_button("##next_key", Icon::NextKey, false, tip("Next key", "next_key"))) run_action("next_key");
-    if (icon_button("##end", Icon::End, false, tip("Go to end", "end"))) run_action("end");
+    if (transport("start", icon::kStart, false, tip("Go to start", "start"))) run_action("start");
+    if (transport("prev_key", icon::kPrevKey, false, tip("Previous key", "prev_key"))) run_action("prev_key");
+    if (transport("play", playing_ ? icon::kPause : icon::kPlay, playing_, tip("Play / pause", "play"))) run_action("play");
+    if (transport("next_key", icon::kNextKey, false, tip("Next key", "next_key"))) run_action("next_key");
+    if (transport("end", icon::kEnd, false, tip("Go to end", "end"))) run_action("end");
+    if (transport("loop", icon::kLoop, clip.loop, "Loop: repeat Loop In to Loop Out in SL (the Loop box in Properties)"))
+        edit("Loop", [loop = !clip.loop](Clip& c) {
+            c.loop = loop;
+            if (loop && c.loop_out == 0) c.loop_out = c.end_frame;
+        });
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
     int f = int(std::floor(frame_ + 1e-9));
     if (ImGui::DragInt("##frame", &f, 0.2f, 0, clip.end_frame, "Frame %d")) set_frame(f);
     ImGui::SameLine();
     ImGui::TextDisabled("/ %d", clip.end_frame);
     ImGui::SameLine(0, 24);
-    if (tool_button(labelled("Select", "tool_select").c_str(), tool_ == Tool::Select, "Select tool: click bones without a gizmo"))
+    if (tool_button(icon::kSelect, "Select", tool_ == Tool::Select, tip("Select tool", "tool_select") + ": click bones without a gizmo"))
         tool_ = Tool::Select;
-    if (tool_button(labelled("Move", "tool_move").c_str(), tool_ == Tool::Move, "Move tool")) tool_ = Tool::Move;
-    if (tool_button(labelled("Rotate", "tool_rotate").c_str(), tool_ == Tool::Rotate, "Rotate tool")) tool_ = Tool::Rotate;
-    if (tool_button(labelled("Scale", "tool_scale").c_str(), tool_ == Tool::Scale, "Scale tool (static props only)"))
+    if (tool_button(icon::kMove, "Move", tool_ == Tool::Move, tip("Move tool", "tool_move"))) tool_ = Tool::Move;
+    if (tool_button(icon::kRotate, "Rotate", tool_ == Tool::Rotate, tip("Rotate tool", "tool_rotate"))) tool_ = Tool::Rotate;
+    if (tool_button(icon::kScale, "Scale", tool_ == Tool::Scale, tip("Scale tool", "tool_scale") + " (static props only)"))
         tool_ = Tool::Scale;
     ImGui::SameLine(0, 16);
-    if (tool_button(orientation_ == Orientation::Local ? "Local###orient" : orientation_ == Orientation::World ? "World###orient" : "Gimbal###orient",
-                    false, tip("Gizmo axes: Local, World or Gimbal", "orientation").c_str()))
+    const bool local = orientation_ == Orientation::Local, world = orientation_ == Orientation::World;
+    if (tool_button(local ? icon::kLocal : world ? icon::kWorld : icon::kGimbal,
+                    local ? "Local###orient" : world ? "World###orient" : "Gimbal###orient", false,
+                    tip("Gizmo axes: Local, World or Gimbal", "orientation")))
         run_action("orientation");
-    if (tool_button(labelled("IK / FK", "ik_toggle").c_str(), false, "Switch the selected limb between IK and FK, matched"))
+    if (tool_button(icon::kIkFk, "IK / FK", false, tip("IK / FK", "ik_toggle") + ": switch the selected limb between IK and FK, matched"))
         run_action("ik_toggle");
     ImGui::SameLine(0, 16);
-    if (tool_button(labelled("Set Key", "key").c_str(), false, "Key the selected bones, pins and IK controls")) run_action("key");
+    if (tool_button(icon::kSetKey, "Set Key", false, tip("Set Key", "key") + ": key the selected bones, pins and IK controls"))
+        run_action("key");
     ImGui::NewLine();
 
     // Timeline strip.

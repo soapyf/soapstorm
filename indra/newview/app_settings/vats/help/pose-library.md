@@ -2,7 +2,7 @@
 
 The pose library holds poses and clips you can reuse in any project: your own saved poses and clips, and a set of starter hand and body poses that come with VATs. It lives in the **Poses** and **Starter poses** sections of the **Inventory** tab.
 
-> Related articles: [[Posing]], [[Hand poser]], [[Mirror, flip and reverse]], [[Keys and timeline]]
+> Related articles: [[Posing]], [[Hand poser]], [[Mirror, flip and reverse]], [[Keys and timeline]], [[Project library]]
 
 ## Usage
 

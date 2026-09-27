@@ -44,6 +44,7 @@ struct Settings {
     std::string mesh_body;  // id of a library mesh body shown instead of the Linden mesh ("" = none)
     std::array<CameraView, 4> cameras;
     std::vector<std::string> recent;
+    std::vector<std::string> project_folders, anim_folders;  // Inventory folders added with Add Folder... (spec 08 FL)
     Json mocap = Json::object();  // Motion Capture and face-tracking choices, read and written by mocap_ui.cpp
 
     // file: the host's settings.json (ui::Paths::settings; --data-dir puts it there too, IO-53).

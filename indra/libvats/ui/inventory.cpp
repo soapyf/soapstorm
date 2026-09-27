@@ -11,6 +11,8 @@
 #include <sstream>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "vats/pose_presets.h"
 #include "theme.h"
 
@@ -128,6 +130,7 @@ void App::draw_prop_grid(std::vector<PropLibraryItem>& items, bool user) {
     for (int i = 0; i < int(items.size()); ++i) {
         PropLibraryItem& it = items[i];
         const Prop& p = it.prop;
+        if (!inv_match(p.name)) continue;
         const Json* cat = p.extra.find("category");
         if (cat && cat->is_string() && cat->str != category) {  // starter props come grouped by category
             category = cat->str;
@@ -193,8 +196,8 @@ void App::draw_prop_grid(std::vector<PropLibraryItem>& items, bool user) {
                 }
                 ImGui::SetItemTooltip("Overwrite this item's mesh, parent, position, rotation and scale with the selected prop's");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Rename...")) prop_to_rename = i;
-                if (ImGui::MenuItem("Delete from Inventory")) remove = i;
+                if (menu_item_icon(icon::kRename, "Rename...")) prop_to_rename = i;
+                if (menu_item_icon(icon::kDelete, "Delete from Inventory")) remove = i;
             }
             ImGui::EndPopup();
         }
@@ -303,20 +306,27 @@ bool App::library_row(const LibraryItem& it, const std::string& label) {
 
 void App::draw_inventory_panel() {
     if (!ImGui::Begin("Inventory")) return ImGui::End();
+    {
+        ImGui::SetNextItemWidth(-1);
+        char buf[128];
+        std::snprintf(buf, sizeof buf, "%s", inv_filter_.c_str());
+        if (ImGui::InputTextWithHint("##invfilter", "Filter by name...", buf, sizeof buf)) inv_filter_ = buf;
+    }
+    draw_file_library();  // Projects and Animations (file_library_ui.cpp)
     draw_bodies_section();
     if (section_header("Meshes")) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
         ImGui::TextWrapped("Drag onto a bone to attach, double-click to add, right-click for more.");
         ImGui::PopStyleColor();
         draw_prop_grid(prop_library_, true);
-        if (ImGui::Button("Import .dae / .fbx...")) run_action("import_prop");
+        if (icon_label_button(icon::kImport, "Import .dae / .fbx...")) run_action("import_prop");
         if (!starter_props_.empty()) {
             ImGui::SeparatorText("Starter props");
             draw_prop_grid(starter_props_, false);
         }
     }
     ImGui::SeparatorText("Poses");
-    if (ImGui::Button("Save Pose...")) {
+    if (icon_label_button(icon::kAddToLibrary, "Save Pose...")) {
         name_prompt_ = selection_.empty() ? "Whole pose" : "Selected bones";
         name_action_ = NameAction::SavePose;
     }
@@ -325,7 +335,7 @@ void App::draw_inventory_panel() {
     double a, b;
     bool range = clip_range(a, b);
     ImGui::BeginDisabled(!range || selection_.empty());
-    if (ImGui::Button("Save Clip...")) {
+    if (icon_label_button(icon::kAddToLibrary, "Save Clip...")) {
         name_prompt_ = "Clip";
         name_action_ = NameAction::SaveClip;
     }
@@ -341,7 +351,7 @@ void App::draw_inventory_panel() {
         ImGui::TextDisabled(pass == 0 ? "Poses" : "Clips");
         for (int i = 0; i < int(library_.items.size()); ++i) {
             LibraryItem& it = library_.items[i];
-            if (it.clip != (pass == 1)) continue;
+            if (it.clip != (pass == 1) || !inv_match(it.name)) continue;
             ImGui::PushID(i);
             std::string label = it.name + "   ";
             if (!it.side.empty()) label += it.side + " ";
@@ -358,8 +368,8 @@ void App::draw_inventory_panel() {
                 if (ImGui::MenuItem(it.clip ? "Paste at This Frame" : "Apply at This Frame")) use_library_item(i, false);
                 if (ImGui::MenuItem(it.clip ? "Paste Mirrored" : "Apply Mirrored")) use_library_item(i, true);
                 ImGui::Separator();
-                if (ImGui::MenuItem("Rename...")) rename = i;
-                if (ImGui::MenuItem("Delete")) remove = i;
+                if (menu_item_icon(icon::kRename, "Rename...")) rename = i;
+                if (menu_item_icon(icon::kDelete, "Delete")) remove = i;
                 ImGui::EndPopup();
             }
             ImGui::PopID();
@@ -401,6 +411,7 @@ void App::draw_inventory_panel() {
     if (section_header("Starter poses")) {
         hint("Click a hand pose for the left hand, Shift+click for the right.");
         for (const LibraryItem& it : builtin_poses(skel_)) {
+            if (!inv_match(it.name)) continue;
             ImGui::PushID(it.id.c_str());
             std::string label = it.name + (it.kind == "hand" ? "   hand" : "   body");
             if (library_row(it, label)) {

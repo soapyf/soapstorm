@@ -39,7 +39,7 @@ The **Set Key** button on the timeline bar does the same as **S**. In the Blende
 | **Playback → Next Key** / **Previous Key** | **.** / **,** |
 | **Playback → Go to Start** / **Go to End** | **Home** / **End** |
 
-**Next Key** and **Previous Key** jump between the keys of the selection. The same commands sit on the timeline bar as icons; hover one for its name and key.
+**Next Key** and **Previous Key** jump between the keys of the selection. The same commands sit on the timeline bar as icons; hover one for its name and key, or see [[Interface#Timeline]] for what each icon looks like.
 
 ### Length and frame rate
 
@@ -52,7 +52,7 @@ In **Properties → Animation**:
 
 ### Looping
 
-Tick **Loop** in **Properties → Animation**. The loop is the frames between **Loop in** and **Loop out**, shown as two flags on the timeline:
+Tick **Loop** in **Properties → Animation**, or press the **Loop** button on the timeline bar (two arrows chasing each other, after **Go to end**; highlighted while looping). The loop is the frames between **Loop in** and **Loop out**, shown as two flags on the timeline:
 
 - Drag a flag to move it. Dragging a flag also turns **Loop** on.
 - **Alt+drag** inside the loop band moves both flags together.

@@ -11,7 +11,7 @@ between sessions.
 | Panel | Default place | Holds |
 |---|---|---|
 | **Bones** | left | the skeleton as a list, with a filter box and selection buttons |
-| **Inventory** | left, a tab beside **Bones** | poses, clips, props and mesh bodies |
+| **Inventory** | left, a tab beside **Bones** | projects, animations, mesh bodies, props, poses and clips |
 | **Viewport** | centre | the avatar, the gizmo, the view cube |
 | **Properties** | right | the selected bone or prop, the animation settings, the export settings |
 | **Graph** | bottom | the curve editor |
@@ -40,8 +40,15 @@ attachment points in green. See [[Skeleton]].
 
 ### Inventory
 
-Holds the [[Pose library]] (poses and clips), the prop library ([[Props]]) and your [[Mesh bodies]].
-Drag or double-click an item to use it.
+**Filter by name...** at the top narrows every section to the items whose names contain the text. Then:
+
+- **Projects** and **Animations**: your `.vat`, `.hxanim` and `.anim` files, from the library folders, recent
+  projects and folders you add ([[Project library]]).
+- **Bodies**: your [[Mesh bodies]].
+- **Meshes**: the prop library ([[Props]]).
+- **Poses**, **Clips** and **Starter poses**: the [[Pose library]].
+
+Drag or double-click an item to use it; right-click it for the rest.
 
 ### Viewport
 
@@ -70,11 +77,25 @@ Graph Editor**) shows or hides it. See [[Graph editor]].
 
 ### Timeline
 
-From left to right: **Go to start**, **Previous key**, **Play / pause**, **Next key**, **Go to end**
-(the tooltips), the frame box and the last frame, the tool buttons **Select**, **Move**, **Rotate** and
-**Scale** with their keys, the axes button (**Local**, **World** or **Gimbal**), **IK / FK** and
-**Set Key**. Below them is the frame ruler with the keys, the loop and ease markers and, when loaded,
-the [[Audio track]]. See [[Keys and timeline]].
+From left to right: the play controls, the frame box and the last frame, the tool buttons, the axes
+button, **IK / FK** and **Set Key**. Below them is the frame ruler with the keys, the loop and ease
+markers and, when loaded, the [[Audio track]]. See [[Keys and timeline]].
+
+The play controls are icons only; hover one for its name and key:
+
+| Button | Icon |
+|---|---|
+| **Go to start** | a bar, then a triangle pointing left |
+| **Previous key** | two triangles pointing left |
+| **Play / pause** | a triangle pointing right; two bars while playing |
+| **Next key** | two triangles pointing right |
+| **Go to end** | a triangle pointing right, then a bar |
+| **Loop** | two arrows chasing each other; highlighted while **Loop** is on |
+
+The other buttons show an icon and their name: **Select** (an arrow pointer), **Move** (four arrows),
+**Rotate** (a circling arrow), **Scale** (a corner with a dot), the axes button (**Local** with a box,
+**World** with a globe, **Gimbal** with three axes), **IK / FK** (a bone) and **Set Key** (a diamond with
+a plus). Their keys are in the tooltips. The active tool is highlighted.
 
 ### Menus
 

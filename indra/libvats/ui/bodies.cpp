@@ -7,6 +7,8 @@
 #include <sstream>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "imgui.h"
 #include "theme.h"
 #include "vats/fbx.h"
@@ -169,6 +171,7 @@ void App::draw_bodies_section() {
     int remove = -1;
     for (int i = 0; i < int(bodies_.size()); ++i) {
         const MeshBody& b = bodies_[i];
+        if (!inv_match(b.name)) continue;
         ImGui::PushID(i);
         std::string label = b.name + "  (" + std::to_string(b.parts.size()) + (b.parts.size() == 1 ? " part)" : " parts)");
         if (ImGui::Selectable(label.c_str(), settings_.mesh_body == b.id, ImGuiSelectableFlags_AllowDoubleClick) &&
@@ -192,7 +195,7 @@ void App::draw_bodies_section() {
         bodies_.erase(bodies_.begin() + remove);
         save_bodies();
     }
-    if (ImGui::Button("Import Body Parts (.dae, .fbx)...")) show_dialog(Dialog::ImportBody);
+    if (icon_label_button(icon::kImport, "Import Body Parts (.dae, .fbx)...")) show_dialog(Dialog::ImportBody);
     ImGui::SetItemTooltip("Choose every part at once: body, head, hands and feet");
 }
 

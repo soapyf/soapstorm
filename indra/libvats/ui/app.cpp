@@ -15,6 +15,7 @@
 #include <random>
 #include <sstream>
 
+#include "icon_button.h"
 #include "imgui_internal.h"
 #include "vats/anim_convert.h"
 #include "vats/bvh.h"
@@ -257,6 +258,7 @@ bool App::save(const std::string& path) {
     clear_autosave();
     if (!headless_) settings_.add_recent(path), save_settings();  // UI-29: not from scripted runs
     update_title();
+    rescan_files();  // the Inventory's Projects
     status("Saved " + file_name(path));
     return true;
 }
@@ -380,6 +382,7 @@ bool App::export_anim(const std::string& path) {
         message("Export failed", "Could not write " + path + "\n\n" + g_write_error);
         return false;
     }
+    rescan_files();  // the export folder may be one of the Inventory's
     if (made == 2) {
         export_summary_ = "unchanged since import, written as it was";
         status("Exported " + file_name(path) + ": " + export_summary_);
@@ -527,6 +530,7 @@ void App::build_actions() {
     add("save", {"Save", ctrl | ImGuiKey_S, 0, false,
                  [this] { doc_.path.empty() ? show_dialog(Dialog::SaveAs) : (void)save(doc_.path); }, {}});
     add("save_as", {"Save As...", ctrl | shift | ImGuiKey_S, 0, false, [this] { show_dialog(Dialog::SaveAs); }, {}});
+    add("save_to_library", {"Save to Library...", 0, 0, false, [this] { save_to_library(); }, {}});
     add("import_bvh", {"Import BVH...", 0, 0, false,
                        [this] { guard_unsaved([this] { show_dialog(Dialog::ImportBvh); }); }, {}});
     add("import_retarget", {"Import Animation (Retarget)...", 0, 0, false, [this] { guard_unsaved([this] { show_dialog(Dialog::ImportRetarget); }); }, {}});
@@ -1131,7 +1135,7 @@ void App::menu_item(const char* id) {
         if (std::string_view(aid) != id) continue;
         std::string shortcut = a.key ? key_label(a.key) : "";
         const char* why = a.unavailable ? a.unavailable() : nullptr;
-        if (ImGui::MenuItem(a.label, shortcut.c_str(), false, why == nullptr)) a.run();
+        if (menu_item_icon(action_icon(id), a.label, shortcut.c_str(), false, why == nullptr)) a.run();
         if (why) ImGui::SetItemTooltip("%s", why);
         return;
     }
@@ -1159,7 +1163,7 @@ void App::draw_menus() {
             }
             ImGui::EndMenu();
         }
-        for (const char* id : {"save", "save_as"}) menu_item(id);
+        for (const char* id : {"save", "save_as", "save_to_library"}) menu_item(id);
         ImGui::Separator();
         menu_item("import_bvh");
         menu_item("import_anim");
@@ -1488,6 +1492,7 @@ bool App::frame() {
     { VATS_PROFILE("status bar"); draw_status_bar(); }
     draw_message_popup();
     draw_name_prompt();
+    draw_file_prompt();
     draw_time_prompt();
     draw_preferences();
     draw_export_dialog();

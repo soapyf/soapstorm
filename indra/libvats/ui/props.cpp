@@ -521,7 +521,7 @@ void App::draw_prop_sl_popup() {
 
 void App::viewport_drop_target(ImVec2 origin, ImVec2 size) {
     const ImGuiPayload* payload = ImGui::GetDragDropPayload();
-    if (!payload || !(payload->IsDataType("VATS_PROP") || payload->IsDataType("VATS_POSE"))) return;
+    if (!payload || !(payload->IsDataType("VATS_PROP") || payload->IsDataType("VATS_POSE") || payload->IsDataType("VATS_FILE"))) return;
     if (!ImGui::BeginDragDropTargetCustom(ImRect(origin, ImVec2(origin.x + size.x, origin.y + size.y)),
                                           ImGui::GetID("##view_drop")))
         return;
@@ -557,6 +557,8 @@ void App::viewport_drop_target(ImVec2 origin, ImVec2 size) {
                 add_library_prop(*it, b, pt, !it->prop.rigged && b == it->prop.bone && pt == it->prop.point);
             }
         }
+    } else if (payload->IsDataType("VATS_FILE")) {
+        file_drop(payload, hint);  // Projects and Animations (file_library_ui.cpp)
     } else {
         const LibraryItem* pose = nullptr;
         for (const LibraryItem& it : library_.items)

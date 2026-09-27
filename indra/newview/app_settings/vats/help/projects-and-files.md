@@ -5,7 +5,7 @@ the actors and the export settings. It keeps a backup of the previous save, auto
 and offers that work back after a crash. Your libraries and settings live in data folders in your
 home folder, separate from projects.
 
-> Related articles: [[Project file format]], [[Preferences]], [[Export to Second Life]], [[Troubleshooting]]
+> Related articles: [[Project file format]], [[Project library]], [[Preferences]], [[Export to Second Life]], [[Troubleshooting]]
 
 ## Usage
 
@@ -15,6 +15,8 @@ home folder, separate from projects.
   name first.
 - **File → Save As...** (**Ctrl+Shift+S**; **Ctrl+A** in QAvimator) saves under a new name. The dialog
   starts beside the current project, and VATs adds `.vat` when the name has no extension.
+- **File → Save to Library...** asks only for a name and saves into the Projects library, listed in the
+  **Inventory** ([[Project library]]).
 
 Each save writes a temporary file and then renames it over the project, so a failed save never leaves
 half a file. The previous version is kept beside it as `<name>.vat.bak`, replacing the older
@@ -31,6 +33,8 @@ The title bar shows `*` after the file name while there are unsaved changes.
 - **File → Open...** (**Ctrl+O**) opens a VATs project (`.vat`) or a Hexton project (`.hxanim`).
 - **File → Open Recent** lists up to 10 recent projects, newest first, numbered. Files that no longer
   exist are hidden. **Clear Recent** empties the list.
+- Double-click a project or `.anim` file in the **Projects** and **Animations** sections of the
+  **Inventory** ([[Project library]]).
 - Drop a file on the VATs window: a project opens, a `.anim` or `.bvh` file is imported, a `.dae`
   or `.fbx` file is added as a prop, a `.gltf` or `.glb` file opens the [[Retargeting|retarget]] dialog,
   and a `.wav`, `.mp3`, `.ogg` or `.flac` file is loaded as the [[Audio track]].
@@ -116,6 +120,7 @@ holds:
 | `library/poses.json` | the pose library: poses and clips ([[Pose library]]) |
 | `library/library.json` | the prop library ([[Props]]) |
 | `library/bodies.json` | your mesh bodies ([[Mesh bodies]]) |
+| `library/Projects/`, `library/Animations/` | the Inventory's project and animation libraries ([[Project library]]) |
 | `library/*.png` | Inventory thumbnails |
 | `autosave/` | autosaves, a `.vat` and a `.path` file per session |
 | `layout.ini` | the panel layout |

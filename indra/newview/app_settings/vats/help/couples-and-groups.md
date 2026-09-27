@@ -29,12 +29,14 @@ Click an actor's body in the view, or its name in the **Actors** window. The Bon
 keying all work on that actor; the others are shown dimmed in their colour. A locked actor cannot be
 chosen.
 
-The buttons on each row act on the other actors:
+The three icon buttons at the end of each row act on the other actors; hover one for its name:
 
-- **place** shows a gizmo on that actor in the view. The Move tool moves it; the Rotate tool turns it
-  about the vertical axis.
-- **hide**/**show** hides the actor in the view.
-- **lock**/**unlock** stops the actor from being chosen or placed by accident.
+- **Place** (a map pin) shows a gizmo on that actor in the view. The Move tool moves it; the Rotate tool
+  turns it about the vertical axis.
+- **Shown**/**Hidden** (an open eye, or a crossed-out eye) shows whether the actor is drawn in the view;
+  click it to hide or show the actor.
+- **Unlocked**/**Locked** (an open or a closed padlock) shows whether the actor is locked; click it to
+  lock or unlock. A locked actor cannot be chosen or placed by accident.
 
 Right-click an actor's name for **Delete Actor**. Binds from other actors to it are removed as well.
 With one actor left, the project is an ordinary single-avatar project.

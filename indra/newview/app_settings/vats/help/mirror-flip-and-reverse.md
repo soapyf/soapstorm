@@ -34,7 +34,7 @@ Position keys are mirrored too where the bone has them, and always for attachmen
 
 **Edit → Reverse Animation** makes the whole animation play backwards: every key moves to the mirror frame (frame *f* becomes *last frame − f*), the handles and tangents are reversed with it, and the loop points and pins are flipped in time. The status bar says "The animation now plays backwards".
 
-To reverse just some keys, select them in the [[Graph editor]] and press **Flip Time**.
+To reverse just some keys, select them in the [[Graph editor]] and press **Flip Time** (the button with two triangles mirrored left and right).
 
 ## Tips and tricks
 

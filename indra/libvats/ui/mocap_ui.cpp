@@ -13,6 +13,8 @@
 #include <sstream>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "firewall.h"
 #include "theme.h"
 #include "imgui.h"
@@ -454,7 +456,7 @@ void App::draw_mocap_panel() {
                           "Off: only apps on this computer can send.");
     ImGui::EndDisabled();
     indent();
-    if (ImGui::Button(open ? "Stop Listening" : "Listen")) {
+    if (icon_label_button(open ? icon::kStop : icon::kListen, open ? "Stop Listening" : "Listen")) {
         if (open) {
             ui.rec.stop();
             ui.rec.frames.clear();
@@ -494,7 +496,7 @@ void App::draw_mocap_panel() {
         if (ImGui::InputTextWithHint("##phone", "192.168.1.20", ip, sizeof ip)) ui.phone_ip = ip;
         ImGui::SameLine();
         ImGui::BeginDisabled(!open || ui.phone_ip.empty());
-        if (ImGui::Button("Connect to iPhone")) {
+        if (icon_label_button(icon::kPhone, "Connect to iPhone")) {
             ui.error.clear();
             if (ui.sock.send_to(ui.phone_ip, kIFacialMocapPort, kIFacialMocapHello, ui.error))
                 status("Asked the iPhone to start streaming");
@@ -637,7 +639,7 @@ void App::draw_mocap_panel() {
     if (!ui.rec.active()) {
         ImGui::BeginDisabled(!ui.have_data || (ui.table.bones.empty() && ui.face.shapes.empty()) ||
                              (ui.selected_only && selection_.empty()));
-        if (ImGui::Button("Record")) {
+        if (icon_label_button(icon::kRecord, "Record")) {
             ui.only.clear();
             if (ui.face_only) {
                 ui.only = ui.face.bones();
@@ -664,7 +666,7 @@ void App::draw_mocap_panel() {
         if (ImGui::Button("Cancel")) ui.rec.stop(), ui.rec.frames.clear();
     } else {
         ImGui::TextColored(ImVec4(1, 0.45f, 0.45f, 1), "Recording frame %d", ui.rec.from + int(ui.rec.frames.size()) - 1);
-        if (ImGui::Button("Stop")) {
+        if (icon_label_button(icon::kStop, "Stop")) {
             ui.rec.stop();
             commit();
         }
