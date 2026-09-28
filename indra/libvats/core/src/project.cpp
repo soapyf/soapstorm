@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 #include "vats/project.h"
 #include "vats/prop.h"
+#include "vats/legacy.h"
 #include "guard.h"
 
 #include <algorithm>
@@ -324,7 +325,7 @@ bool read_clip(Loader& L, const Json& doc, Clip& c, bool vats, bool read_only) {
     if (vats && !L.get(doc, "ik_solve", ik)) return false;
     if (ik == "literal")
         c.ik_solve = IkSolve::Literal;
-    else if (ik != "vats" && !read_only)
+    else if (ik != "vats" && ik != legacy_name() && !read_only)
         return L.fail("unsupported ik_solve \"" + ik + "\"");
 
     // loop_out defaults to end_frame (03 section 3.4).
@@ -394,7 +395,7 @@ static bool load_project_text(std::string_view text, Project& out, std::string& 
     if (!doc.is_object()) return done(L.fail("not a JSON object"));
 
     const Json* format = doc.find("format");
-    bool vats = format && format->is_string() && format->str == kVATsFormat;
+    bool vats = format && format->is_string() && (format->str == kVATsFormat || format->str == legacy_name("-project"));
     if (!vats && !(format && format->is_string() && format->str == kHextonFormat))
         return done(L.fail("not a VATs or Hexton project (format is missing or unknown)"));
 

@@ -52,18 +52,24 @@ struct VmcState {
     bool has_face_head = false;
     Quat eye_left, eye_right;  // iFacialMocap's eye rotations (VMC senders send LeftEye/RightEye bones)
     bool has_eyes = false;
+    // On a rest pose: the performer stood in it (Capture Rest Pose Now), so takes measure hip travel from it.
+    bool captured = false;
 };
 
 // Applies one message; false when it is not a VMC message this handles.
 bool apply_vmc(const OscMessage& m, VmcState& s);
 
 // A rest pose for s: the same bone positions with identity rotations, which is a T-pose for
-// VRM-normalised models (what VMC senders drive).
+// VRM-normalised models (what VMC senders drive), with the hips standing on the floor under s's
+// feet (a crouch in s does not lower them).
 VmcState vmc_t_pose(const VmcState& s);
 
 // Frames as a SourceAnim for retargeting (07): joints are the bones rest knows, parented by the
 // Unity humanoid hierarchy; the root is folded into the hips. Bones missing from a frame hold rest.
-SourceAnim vmc_source(const VmcState& rest, const std::vector<VmcState>& frames, double fps);
+// The hips' travel is measured from origin (default: rest) standing on the floor under its feet: its
+// hips over the ground, at rest's height of the hips above the feet.
+SourceAnim vmc_source(const VmcState& rest, const std::vector<VmcState>& frames, double fps,
+                      const VmcState* origin = nullptr);
 
 // --- Rokoko Studio Live -------------------------------------------------------------------------
 
@@ -110,7 +116,8 @@ struct MocapCleanup {
 
 // Retargets the recorded frames with table and writes them into clip from frame `from`, replacing
 // keys in that range. only_tracks non-empty limits it to those bones; other tracks are untouched.
-// Returns report lines.
+// mPelvis's offset is the hips' travel from rest when rest.captured, else from where the first frame
+// stands (vmc_source). Returns report lines.
 std::vector<std::string> merge_recording(Clip& clip, const Skeleton& skel, const RigTable& table, const VmcState& rest,
                                          const std::vector<VmcState>& frames, int from,
                                          const std::vector<std::string>& only_tracks, const MocapCleanup& cleanup,

@@ -197,6 +197,29 @@ Xform bone_of(const VmcState& s, const VmcState& rest, const std::string& name) 
     return x;
 }
 
+// A bone's world transform: its local transform under the nearest parent rest knows, as vmc_source chains them.
+Xform world_of(const VmcState& s, const VmcState& rest, const std::string& name) {
+    Xform x = bone_of(s, rest, name);
+    for (const char* p = human_parent(name); p; p = human_parent(p))
+        if (rest.bones.count(p)) return world_of(s, rest, p) * x;
+    return x;
+}
+
+// s's hips standing up in rest's posture on the floor under s's feet: over the ground (X, Y) s's own hips; in
+// height the lowest foot joint of s plus the hips' height above the feet in rest, so a crouch in s does not lower
+// it. Without feet, s's hips as they are. rest must have hips.
+Vec3 standing_hips(const VmcState& s, const VmcState& rest) {
+    Vec3 hips = world_of(s, rest, "Hips").pos;
+    double floor = 1e300, rest_floor = 1e300;
+    for (const char* f : {"LeftFoot", "RightFoot", "LeftToes", "RightToes"})
+        if (rest.bones.count(f)) {
+            floor = std::min(floor, world_of(s, rest, f).pos.z);
+            rest_floor = std::min(rest_floor, world_of(rest, rest, f).pos.z);
+        }
+    if (floor < 1e300) hips.z = floor + world_of(rest, rest, "Hips").pos.z - rest_floor;
+    return hips;
+}
+
 }  // namespace
 
 bool apply_vmc(const OscMessage& m, VmcState& s) {
@@ -236,6 +259,8 @@ VmcState vmc_t_pose(const VmcState& s) {
     VmcState r = s;
     for (auto& [name, x] : r.bones) x.rot = Quat{};
     r.root.rot = Quat{};  // facing is kept in the pose, not the rest
+    // Standing where s stands, however bent s's legs are.
+    if (r.bones.count("Hips")) r.bones["Hips"].pos = standing_hips(s, r) - r.root.pos;
     return r;
 }
 
@@ -379,7 +404,9 @@ bool apply_rokoko(const std::uint8_t* data, size_t size, VmcState& s, const std:
     return guarded(err, [&] { return apply_rokoko_packet(data, size, s, actor, actor_out, err); });
 }
 
-SourceAnim vmc_source(const VmcState& rest, const std::vector<VmcState>& frames, double fps) {
+SourceAnim vmc_source(const VmcState& rest_in, const std::vector<VmcState>& frames, double fps, const VmcState* origin) {
+    VmcState rest = rest_in;
+    rest.root.rot = Quat{};  // facing is kept in the pose, not the rest
     SourceAnim src;
     src.fps = fps;
     src.has_bind = true;
@@ -394,7 +421,9 @@ SourceAnim vmc_source(const VmcState& rest, const std::vector<VmcState>& frames,
         j.name = b.name;
         j.parent = p ? index[p] : -1;
         Xform x = bone_of(rest, rest, b.name);
-        j.offset = x.pos;
+        // Hip travel is measured from here (07 RT-8): the origin standing, with the root's full turn as every
+        // frame's hips have it, so a performer standing still where the origin stood records no travel.
+        j.offset = j.name == "Hips" ? standing_hips(origin ? *origin : rest_in, rest_in) : x.pos;
         j.rot = x.rot;
         index[b.name] = int(src.joints.size());
         src.joints.push_back(j);
@@ -544,7 +573,8 @@ std::vector<std::string> merge_recording(Clip& clip, const Skeleton& skel, const
     has_face &= face != nullptr;
     RetargetResult res;
     if (!frames.front().bones.empty()) {
-        SourceAnim src = vmc_source(rest, frames, fps);
+        // A take starts where the performer stands as it starts, unless they captured a rest pose to measure from.
+        SourceAnim src = vmc_source(rest, frames, fps, rest.captured ? &rest : &frames.front());
         smooth_source(src, cleanup.smooth);
         BoneMap map;
         apply_rig_table(table, src, map);

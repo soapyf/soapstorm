@@ -21,6 +21,7 @@ add_library(vats_core STATIC
     src/fcurve.cpp
     src/gltf.cpp
     src/json.cpp
+    src/legacy.cpp
     src/pose_ops.cpp
     src/pose_presets.cpp
     src/project.cpp

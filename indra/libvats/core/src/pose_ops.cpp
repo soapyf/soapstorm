@@ -8,6 +8,7 @@
 
 #include "vats/edit.h"
 #include "vats/json.h"
+#include "vats/legacy.h"
 
 namespace vats {
 namespace {
@@ -496,7 +497,7 @@ bool load_library(std::string_view json_text, Library& out, std::string& err) {
     Json doc;
     if (!parse_json(json_text, doc, err)) return false;
     const Json* f = doc.find("format");
-    if (!f || !f->is_string() || (f->str != kFormat && f->str != kHextonFormat))
+    if (!f || !f->is_string() || (f->str != kFormat && f->str != legacy_name("-pose-library") && f->str != kHextonFormat))
         return err = "not a pose library (format is missing or unknown)", false;
     Library lib;
     if (const Json* items = doc.find("items")) {

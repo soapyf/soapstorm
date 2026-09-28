@@ -112,7 +112,10 @@ Hexton projects can be opened at any time with **File → Open...**; see
 | Settings (`settings.json`) | `~/.config/viewport-avatar-toolset/` | `%APPDATA%\viewport-avatar-toolset\` |
 | Libraries, autosaves, window layout | `~/.local/share/viewport-avatar-toolset/` | `%APPDATA%\viewport-avatar-toolset\` |
 
-On Linux the folders follow `$XDG_CONFIG_HOME` and `$XDG_DATA_HOME` when they are set. The data folder
+On Linux the folders follow `$XDG_CONFIG_HOME` and `$XDG_DATA_HOME` when they are set. The project had
+another name before it was called Viewport Avatar Toolset; on the first start after an update, the
+folders an earlier version wrote under that name move here (only when the new folder does not exist
+yet), with the settings, libraries, autosaves and window layout in them. The data folder
 holds:
 
 | Path | Contents |

@@ -85,6 +85,20 @@ Each take is one undo step. The clip's length grows to fit a take that runs past
 is cancelled if you open or create another document, or switch to another actor (see
 [[Couples and groups]]), before it ends.
 
+### Hip movement
+
+A take moves the hips (`mPelvis`) by how far the performer moves away from standing, scaled by the
+avatar's hip-to-ankle height over the performer's. Second Life plays that movement from where the avatar
+stands, so standing still plays at the avatar's own height.
+
+- Without a captured rest pose, a take starts where you stand when it starts: the hips start with no
+  forward or sideways movement, and a step forward moves them forward.
+- Height is measured from you standing upright on the floor under your feet. A take that starts in a
+  crouch starts with the hips low; the rest of the take is not raised.
+- After **Capture Rest Pose Now**, takes measure the hips from where you stood when you pressed it. A take
+  that starts a step in front of that spot starts a step forward.
+- The live view measures from the captured rest pose, or from where you stood when data first arrived.
+
 ### Cleaning up a take
 
 The **Clean-up** settings apply to the next take:
@@ -123,6 +137,12 @@ must be on the same network.
 ### Arms or legs come in twisted
 
 The sender's rest pose differs from VATs'. Stand in a T-pose and press **Capture Rest Pose Now**.
+
+### The take starts away from the avatar
+
+A rest pose was captured at another spot, and takes measure the hips from there. Stand where you will
+record and press **Capture Rest Pose Now** again. With the VMC protocol, **Reset to T-Pose** instead makes
+each take start where you stand.
 
 ### The take was cancelled
 

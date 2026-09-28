@@ -21,6 +21,7 @@
 #include "vats/bvh.h"
 #include "vats/edit.h"
 #include "vats/footlock.h"
+#include "vats/legacy.h"
 #include "vats/pose_presets.h"
 #include "theme.h"
 
@@ -528,9 +529,9 @@ void App::show_dialog(Dialog kind, std::function<void()> after_save) {
     std::string stem = doc_.path.empty() ? "Animation" : file_name(doc_.path).substr(0, file_name(doc_.path).rfind('.'));
     switch (kind) {
         case Dialog::Open:
-            host_.open_file_dialog({{"VATs project", "vats"}, {"Hexton project", "hxanim"}}, false, dialog_result(kind));
+            host_.open_file_dialog({{"VATs project", "vat;" + legacy_name()}, {"Hexton project", "hxanim"}}, false, dialog_result(kind));
             break;
-        case Dialog::SaveAs: host_.save_file_dialog({{"VATs project", "vats"}}, dir + stem + ".vat", dialog_result(kind)); break;
+        case Dialog::SaveAs: host_.save_file_dialog({{"VATs project", "vat"}}, dir + stem + ".vat", dialog_result(kind)); break;
         case Dialog::ImportAnim: host_.open_file_dialog({{"SL animation", "anim"}}, false, dialog_result(kind)); break;
         case Dialog::ImportBvh: host_.open_file_dialog({{"BVH motion", "bvh"}}, false, dialog_result(kind)); break;
         case Dialog::ImportProp: host_.open_file_dialog({mesh}, false, dialog_result(kind)); break;
@@ -1495,7 +1496,7 @@ bool App::frame() {
             switch (kind) {
                 case Dialog::Open: guarded(path, [&] { load_project_file(path); }); break;
                 case Dialog::SaveAs:
-                    if (auto after = std::exchange(after_save_as_, nullptr); save(with_extension(path, "vats")) && after) after();
+                    if (auto after = std::exchange(after_save_as_, nullptr); save(with_extension(path, "vat")) && after) after();
                     break;
                 case Dialog::ImportAnim:
                 case Dialog::ImportBvh: guarded(path, [&] { import_file(path); }); break;

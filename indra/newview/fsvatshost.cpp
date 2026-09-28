@@ -30,6 +30,7 @@
 #undef None
 #include "app.h"
 #include "theme.h"
+#include "vats/legacy.h"
 #pragma pop_macro("None")
 
 #include "fsvatsclipmotion.h"
@@ -168,7 +169,10 @@ namespace
             mPaths.assets = settings + delim + "assets";             // fonts, starter props, welcome.md
             mPaths.help = settings + delim + "help";                 // the wiki pages
             mPaths.character = gDirUtilp->getExpandedFilename(LL_PATH_CHARACTER, "");  // the avatar's own files
-            mPaths.user = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, "vats") + delim;
+            // First run after the rename: the folder saved under the former name moves here (never overwriting).
+            const std::string user = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, "vats");
+            vats::migrate_path(gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, vats::legacy_name()), user);
+            mPaths.user = user + delim;
             LLFile::mkdir(mPaths.user);
             mPaths.settings = mPaths.user + "settings.json";
         }

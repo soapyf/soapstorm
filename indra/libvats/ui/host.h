@@ -40,7 +40,7 @@ struct Paths {
     std::string character;  // the Linden character files; "" = <data>/character (the viewer ships its own)
 };
 
-// A file-type filter for the file dialogs: {"VATs project", "vats;hxanim"}.
+// A file-type filter for the file dialogs: {"VATs project", "vat;hxanim"}.
 struct FileFilter {
     std::string name, patterns;
 };

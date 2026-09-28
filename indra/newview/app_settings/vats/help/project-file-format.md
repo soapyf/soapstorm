@@ -5,6 +5,9 @@ timing, props, pins, simulations, audio and actors. The app and the
 [[VATs Editor (viewer)|VATs Editor]] read and write the same format. This page is a reference for
 people who read or generate project files with their own tools.
 
+Project files and libraries saved by versions from before the rename, with their older extension and
+`format` names, still open; saving them writes the current `format` names.
+
 > Related articles: [[Projects and files]], [[Anim format]], [[BVH]]
 
 ## Format

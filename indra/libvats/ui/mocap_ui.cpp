@@ -43,7 +43,7 @@ struct MocapUi {
     int face_preset = 0;
     std::string phone_ip;
     VmcState state, rest;
-    bool have_data = false, rest_from_pose = false, drive = true;
+    bool have_data = false, drive = true;
 
     MocapRecorder rec;
     int take_actor = 0;           // the take belongs to this actor of this document (App::doc_generation_)
@@ -206,7 +206,6 @@ void App::draw_mocap_panel() {
             // VMC: positions from the first frame, T-pose rotations. Rokoko sends each joint in its own
             // axes, so the first frame is the rest until the performer's T-pose is captured.
             ui.rest = ui.source == 1 ? ui.state : vmc_t_pose(ui.state);
-            ui.rest.root.rot = Quat{};
         }
         for (auto& [name, x] : ui.state.bones)  // bones a sender starts sending later
             if (!ui.rest.bones.count(name)) ui.rest.bones[name] = Xform{Quat{}, x.pos};
@@ -443,7 +442,7 @@ void App::draw_mocap_panel() {
     if (ImGui::Combo("##source", &ui.source, "VMC protocol\0Rokoko Studio Live\0iFacialMocap (iPhone)\0")) {
         const int defaults[3] = {39539, kRokokoPort, kIFacialMocapPort};
         if (ui.port == defaults[previous]) ui.port = defaults[ui.source];  // keep a port the user chose
-        ui.rest_from_pose = false;
+        ui.rest.captured = false;
     }
     label("Port", ImGui::GetFontSize() * 6);
     ImGui::InputInt("##port", &ui.port, 0);
@@ -511,7 +510,7 @@ void App::draw_mocap_panel() {
     ImGui::Checkbox("Drive the Avatar", &ui.drive);
     ImGui::SetItemTooltip("Shows the incoming motion on the avatar while listening. The clip is not changed until you record.");
     label("Rest pose");
-    ImGui::TextDisabled("%s", ui.rest_from_pose     ? "captured from the performer"
+    ImGui::TextDisabled("%s", ui.rest.captured     ? "captured from the performer"
                               : ui.source == 1     ? "first frame: stand in a T-pose and capture"
                                                    : "T-pose (VRM models)");
     if (open && ui.source == 1 && !ui.actor.empty()) {
@@ -520,16 +519,14 @@ void App::draw_mocap_panel() {
     }
     ImGui::BeginDisabled(!ui.have_data);
     if (ImGui::Button("Capture Rest Pose Now")) {
-        ui.rest = ui.state;
-        ui.rest.root.rot = Quat{};
-        ui.rest_from_pose = true;
+        ui.rest = ui.state;  // the root keeps its turn: vmc_source leaves it out of the rest's rotations only
+        ui.rest.captured = true;
     }
     ImGui::SetItemTooltip("Stand in a T-pose and press this if the arms or legs come in twisted.");
     if (ui.source == 0) {  // a Rokoko joint's T-pose is not the identity, so there is nothing to reset to
         ImGui::SameLine();
         if (ImGui::Button("Reset to T-Pose")) {
             ui.rest = vmc_t_pose(ui.state);
-            ui.rest_from_pose = false;
         }
     }
     ImGui::EndDisabled();

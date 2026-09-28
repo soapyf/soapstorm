@@ -11,6 +11,7 @@
 
 #include "guard.h"
 #include "vats/anim_file.h"
+#include "vats/legacy.h"
 #include "vats/project.h"
 
 namespace vats {
@@ -56,7 +57,7 @@ bool stat(const std::string& path, std::uintmax_t& size, std::int64_t& mtime) {
 
 bool lib_kind_of(const std::string& path, LibKind& kind) {
     const std::string ext = lower(str(u8(path).extension()));
-    if (ext == ".vat" || ext == ".hxanim") return kind = LibKind::Project, true;
+    if (ext == ".vat" || ext == "." + legacy_name() || ext == ".hxanim") return kind = LibKind::Project, true;
     if (ext == ".anim") return kind = LibKind::Anim, true;
     return false;
 }
