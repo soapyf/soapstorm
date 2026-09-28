@@ -10,7 +10,7 @@
 
 #include "app.h"
 #include "imgui.h"
-#include "vats/fbx.h"
+#include "vats/batch_retarget.h"
 #include "vats/footlock.h"
 #include "vats/project.h"
 #include "vats/retarget.h"
@@ -27,11 +27,13 @@ struct RetargetUi {
     RetargetOptions opt;
     FitOptions fit;
     bool lock_feet = true;  // RT-9
+    bool heel_toe = true, to_ground = false;  // 08 FC
     bool open = false, imported = false;
     std::string report;
     Clip raw;          // the last import before fitting: what split and trim start from (RT-10.4)
     bool fits = true;
     int trim_from = 0, trim_to = 0;
+    char map_name[64] = "";  // RT-12 Save Mapping
 };
 
 namespace {
@@ -49,40 +51,69 @@ std::string join(const std::vector<std::string>& v, const char* sep) {
 void App::open_retarget(const std::string& path) {
     auto ui = std::make_shared<RetargetUi>();
     ui->path = path;
-    std::ifstream f(path, std::ios::binary);
-    std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    std::string ext = path.substr(path.find_last_of('.') + 1), err;
-    for (char& c : ext) c = char(std::tolower(static_cast<unsigned char>(c)));
-    bool ok = !f.bad() && !bytes.empty() &&
-              (ext == "bvh"   ? read_bvh_source(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()), ui->src, err)
-               : ext == "fbx" ? read_fbx_source(bytes, ui->src, err)
-                              : read_gltf_source(bytes, path.substr(0, path.find_last_of("/\\")), ui->src, err));
-    if (!ok) return message("Import failed", base_name(path) + ": " + (err.empty() ? "could not be read" : err));
-
-    // Rig tables are data (RT-3): every data/retarget/*.json.
-    std::error_code ec;
-    for (auto& e : std::filesystem::directory_iterator(data_dir_ + "/retarget", ec)) {
-        if (e.path().extension() != ".json") continue;
-        std::ifstream t(e.path(), std::ios::binary);
-        std::stringstream ss;
-        ss << t.rdbuf();
-        RigTable table;
-        if (parse_rig_table(ss.str(), table, err)) ui->tables.push_back(std::move(table));
-    }
-    std::sort(ui->tables.begin(), ui->tables.end(), [](auto& a, auto& b) { return a.name < b.name; });
+    std::string err;
+    if (!read_source_file(path, ui->src, err))
+        return message("Import failed", base_name(path) + ": " + (err.empty() ? "could not be read" : err));
+    ui->tables = retarget_tables();
     ui->table = best_rig_table(ui->tables, ui->src, ui->map);
     ui->open = true;
     retarget_ui_ = ui;
 }
 
+// Rig tables are data (RT-3): every <data>/retarget/*.json, then the mappings the user saved (RT-12).
+std::vector<RigTable> App::retarget_tables() const {
+    std::vector<RigTable> t = load_rig_tables(data_dir_ + "/retarget");
+    if (const std::string user = host_.paths().user; !user.empty())
+        for (RigTable& r : load_rig_tables(user + "retarget")) t.push_back(std::move(r));
+    return t;
+}
+
+// RT-7, RT-9 and RT-11: the settings the Retarget dialog and Batch Retarget share. heel_toe and to_ground (08 FC):
+// shown when given (the dialog; Batch Retarget uses the foot clean-up's defaults).
+void retarget_settings_ui(RetargetOptions& opt, FitOptions& fit, bool& lock_feet, bool* heel_toe, bool* to_ground) {
+    ImGui::Checkbox("Rest Pose from Frame 0", &opt.rest_from_frame0);
+    ImGui::SetItemTooltip("Use when the file's own rest pose is wrong or missing: frame 0 must then be a T-pose or A-pose");
+    ImGui::SameLine();
+    ImGui::Checkbox("Clean Up Foot Sliding", &lock_feet);
+    ImGui::SetItemTooltip("Holds planted feet still with leg IK where the source had them on the ground");
+    if (heel_toe && to_ground) {
+        ImGui::BeginDisabled(!lock_feet);  // a row of its own: beside the two above it runs past the dialog's edge
+        ImGui::Checkbox("Heel and Toe", heel_toe);
+        ImGui::SetItemTooltip("Heel and toe land and leave separately (a heel-toe roll); off, the ankle alone");
+        ImGui::SameLine();
+        ImGui::Checkbox("Put Feet on the Ground", to_ground);
+        ImGui::SetItemTooltip("First moves the hips so the lowest foot touches the floor: fixes a take that floats or sinks");
+        ImGui::EndDisabled();
+    }
+    ImGui::TextUnformatted("To fit SL's limits, VATs may:");
+    ImGui::Checkbox("Reduce Keys", &fit.allow_tolerance);
+    ImGui::SameLine();
+    ImGui::Checkbox("Lower the Frame Rate", &fit.allow_fps);
+    ImGui::SameLine();
+    ImGui::Checkbox("Drop Face", &fit.allow_drop_face);
+    ImGui::SameLine();
+    ImGui::Checkbox("Drop Finger Tips", &fit.allow_drop_fingers);
+    ImGui::SameLine();
+    ImGui::Checkbox("Drop Toes", &fit.allow_drop_toes);
+}
+
 // RT-10.4: clip in consecutive parts that each fit SL's limits (split_to_fit), saved as projects <stem>_part<N>.vat
-// beside source. Parts from an earlier split may hold edits: when some exist they are listed in confirm and nothing
-// is written until this runs again with overwrite. advice follows "Even two-second parts are over SL's limits."
+// beside source (save_parts). advice follows "Even two-second parts are over SL's limits."
 void App::split_into_parts(const Clip& clip, const std::string& source, const FitOptions& fit, bool overwrite,
                            std::string& confirm, const std::string& advice) {
     std::vector<FitReport> reps;
     std::vector<Clip> parts = split_to_fit(skel_, clip, fit, &reps);
     if (parts.empty()) return message("Cannot split", "Even two-second parts are over SL's limits." + advice);
+    const std::string written = save_parts(std::move(parts), source, overwrite, confirm);
+    if (!written.empty())
+        message("Split into " + std::to_string(reps.size()) + " parts",
+                "Each part fits SL's limits and starts where the previous one ends. Saved beside the source file:\n" + written);
+}
+
+// Saves parts as projects <stem>_part<N>.vat beside source and returns what it wrote ("- name" lines), or "" when
+// nothing was. Parts from an earlier split may hold edits: when some exist they are listed in confirm and nothing
+// is written until this runs again with overwrite.
+std::string App::save_parts(std::vector<Clip> parts, const std::string& source, bool overwrite, std::string& confirm) {
     const std::string stem = source.substr(0, source.find_last_of('.'));
     auto part_path = [&](size_t i) { return stem + "_part" + std::to_string(i + 1) + ".vat"; };
     if (!overwrite) {
@@ -91,20 +122,21 @@ void App::split_into_parts(const Clip& clip, const std::string& source, const Fi
             if (std::error_code ec; std::filesystem::exists(u8path(part_path(i)), ec)) existing += "- " + base_name(part_path(i)) + "\n";
         if (!existing.empty()) {
             confirm = existing;
-            return;
+            return "";
         }
     }
     std::string written, why;
     for (size_t i = 0; i < parts.size(); ++i) {
         Project p;
         p.clip = std::move(parts[i]);
-        if (!write_text(part_path(i), save_project(p), true, why))
-            return message("Could not save the parts", "Could not write " + part_path(i) + "\n\n" + why +
-                                                             (written.empty() ? "" : "\n\nAlready saved:\n" + written));
+        if (!write_text(part_path(i), save_project(p), true, why)) {
+            message("Could not save the parts", "Could not write " + part_path(i) + "\n\n" + why +
+                                                    (written.empty() ? "" : "\n\nAlready saved:\n" + written));
+            return "";
+        }
         written += "- " + base_name(part_path(i)) + "\n";
     }
-    message("Split into " + std::to_string(reps.size()) + " parts",
-            "Each part fits SL's limits and starts where the previous one ends. Saved beside the source file:\n" + written);
+    return written;
 }
 
 // RT-10.4: a clip that still does not fit is split into parts saved beside the source, or trimmed.
@@ -181,6 +213,31 @@ void App::draw_retarget_dialog() {
     const bool usable = map_is_usable(ui.map, &missing);
     if (!usable)
         ImGui::TextColored(ImVec4(1, 0.6f, 0.4f, 1), "Pick source bones for: %s", join(missing, ", ").c_str());
+    // RT-12: the mapping as a rig table of the user's, for the next import and Batch Retarget.
+    if (const std::string user = host_.paths().user; !user.empty()) {
+        ImGui::SetNextItemWidth(200 * ImGui::GetFontSize() / 15.f);
+        ImGui::InputTextWithHint("##map_name", "Mapping name", ui.map_name, sizeof ui.map_name);
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!usable || !ui.map_name[0]);
+        if (ImGui::Button("Save Mapping")) {
+            std::string file = ui.map_name;
+            for (char& c : file)
+                if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-' && c != ' ') c = '_';
+            std::error_code ec;
+            std::filesystem::create_directories(u8path(user + "retarget"), ec);
+            std::string why;
+            if (write_text(user + "retarget/" + file + ".json", rig_table_json(ui.map_name, ui.map, ui.src), true, why)) {
+                ui.tables = retarget_tables();
+                for (int i = 0; i < int(ui.tables.size()); ++i)
+                    if (ui.tables[size_t(i)].name == ui.map_name) ui.table = i;
+                status(std::string("Saved the mapping \"") + ui.map_name + "\": it is in the Rig list from now on");
+            } else {
+                message("Could not save the mapping", why);
+            }
+        }
+        ImGui::EndDisabled();
+        ImGui::SetItemTooltip("Keep this mapping in the Rig list, for other files from the same rig and for Batch Retarget");
+    }
 
     ImGui::BeginChild("map", ImVec2(0, ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing() * 6.5f),
                       ImGuiChildFlags_Borders);
@@ -211,21 +268,7 @@ void App::draw_retarget_dialog() {
     ImGui::EndChild();
 
     // RT-7 and RT-11: rest pose choice, and which trades the fit may make.
-    ImGui::Checkbox("Rest Pose from Frame 0", &ui.opt.rest_from_frame0);
-    ImGui::SetItemTooltip("Use when the file's own rest pose is wrong or missing: frame 0 must then be a T-pose or A-pose");
-    ImGui::SameLine();
-    ImGui::Checkbox("Clean Up Foot Sliding", &ui.lock_feet);
-    ImGui::SetItemTooltip("Holds planted feet still with leg IK where the source had them on the ground");
-    ImGui::TextUnformatted("To fit SL's limits, VATs may:");
-    ImGui::Checkbox("Reduce Keys", &ui.fit.allow_tolerance);
-    ImGui::SameLine();
-    ImGui::Checkbox("Lower the Frame Rate", &ui.fit.allow_fps);
-    ImGui::SameLine();
-    ImGui::Checkbox("Drop Face", &ui.fit.allow_drop_face);
-    ImGui::SameLine();
-    ImGui::Checkbox("Drop Finger Tips", &ui.fit.allow_drop_fingers);
-    ImGui::SameLine();
-    ImGui::Checkbox("Drop Toes", &ui.fit.allow_drop_toes);
+    retarget_settings_ui(ui.opt, ui.fit, ui.lock_feet, &ui.heel_toe, &ui.to_ground);
 
     ImGui::BeginDisabled(!usable);
     if (ImGui::Button(ui.imported ? "Import Again" : "Import")) guarded(ui.path, [&] {
@@ -234,6 +277,7 @@ void App::draw_retarget_dialog() {
         if (ui.lock_feet) {
             FootLockOptions fl;
             fl.shape = ui.opt.shape;
+            fl.heel_toe = ui.heel_toe, fl.to_ground = ui.to_ground;
             for (auto& line : lock_feet(r.clip, *rig_, fl)) r.report.push_back(line);
         }
         ui.raw = r.clip;

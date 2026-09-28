@@ -108,6 +108,7 @@ void App::draw_tween_controls() {
         return;
     }
     ImGui::SameLine(0, 16);
+    if (ImGui::GetContentRegionAvail().x < em * 7) ImGui::NewLine();  // past the panel's edge: the row below
     ImGui::SetNextItemWidth(em * 7);
     const bool moved = ImGui::SliderFloat("##blend", &b.pct, 0, 150, "Blend %.0f%%");
     ImGui::SetItemTooltip("Blend the pose just applied with the pose before it: 0%% = as before, 100%% = as applied, "

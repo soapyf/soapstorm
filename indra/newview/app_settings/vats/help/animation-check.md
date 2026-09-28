@@ -62,8 +62,15 @@ Under the message:
 | Hand pose with finger bones | A **Hand pose** other than Relaxed is set while finger bones are keyed. Warning. | **Set Hand Pose to Relaxed**. |
 | Joints past their limits | A joint that goes more than 5° past the joint limits the [[Ragdoll]] uses, on any frame. Info. | **Key the Joint Inside Its Limits** keys the joint at its limit on each frame it is past it. |
 | Feet off the ground | The lowest ankle, foot or toe compared with where it is at rest, on the bake shape. More than 2 cm below on any frame is a Warning; never coming within 2 cm of it is Info. | **Raise the Hips by N cm** or **Drop the Hips by N cm**: every hip height key moves by that much (one held key is added when there are none), and so do the height keys of legs in IK. |
+| Body parts pass through each other | Two body parts overlap by more than 1 cm on a frame, measured with the [[Ragdoll]]'s capsules (one rounded rod per major bone: head, neck, chest, torso, hips, and each upper arm, forearm, hand, thigh, shin and foot). A bone and the one it hangs from are not compared, nor parts that already touch in the rest pose, such as the two thighs or the chest and the head: those are never compared with each other. With a mesh body shown, the check uses its proportions and also tests the capsules against its collision volumes. One finding per pair, naming both bones. Info: capsules are not the mesh, so this is a hint, not a guarantee. | **Push Out**, when one of the two is a shoulder, elbow or wrist: on each listed frame the hand is moved away from the other part through the arm's IK, by the overlap plus 5 mm, and again (up to four times) while the two still overlap by more than 1 cm. An arm in IK gets its target keyed; an arm in FK gets its shoulder, elbow and wrist keyed with the rotations IK finds. No fix when neither is an arm. |
 | Upload size | A file of 250,000 bytes or more, which Second Life refuses. Error. | **Thin Out Keys** re-keys every keyed bone from its own samples with linear keys, at the smallest tolerance that fits: twice the export's rotation tolerance, doubled until it fits (1 cm of position per degree). |
 | Duration | An animation longer than 60 s, which Second Life refuses. The other rules wait until it fits. Error. | **Trim to 60 s**: the last frame becomes 60 s; loop points past it move in. |
+
+### See where body parts pass through each other
+
+The frames of every **Body parts pass through each other** finding are marked with short red lines at the
+foot of the timeline strip. On such a frame, the two bones of the finding are drawn red in the view, unless
+they are selected. Switching the rule off removes the marks and the colour.
 
 The check looks at the animation as you edit it, not the mirrored copy **Export mirrored (left and right swapped)** writes.
 
@@ -86,6 +93,8 @@ check. The window notes how many are switched off. The choice is kept in `settin
 - **Raise the Hips** or **Drop the Hips** does not move feet held by a pin.
 - **Thin Out Keys** stops at a coarse tolerance; if the file is still too big, leave out bones or
   shorten the animation.
+- **Push Out** keys only the frames the finding lists, so the frames around them can overlap a little
+  once the keys change the curve; the check then lists those. A pin holding the hand wins over the new keys.
 
 ### The window says "Checking once the animation is still..."
 

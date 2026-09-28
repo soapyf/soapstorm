@@ -96,7 +96,9 @@ void App::look_from(const Vec3& dir) {
     Vec3 d = dir.normalized();
     double horiz = std::hypot(d.x, d.y);
     double yaw = horiz > 1e-6 ? std::atan2(d.y, d.x) : camera_.yaw;
-    double pitch = std::clamp(std::atan2(d.z, horiz), -1.5, 1.5);
+    // Ortho looks straight down or up (a true plan, VP-67); perspective keeps the orbit's +-1.5 rad.
+    const double limit = camera_.ortho ? kPi / 2 - 1e-4 : 1.5;
+    double pitch = std::clamp(std::atan2(d.z, horiz), -limit, limit);
     yaw = camera_.yaw + std::remainder(yaw - camera_.yaw, 2 * kPi);  // the short way round
     cam_anim_from_yaw_ = camera_.yaw, cam_anim_from_pitch_ = camera_.pitch;
     cam_anim_to_yaw_ = yaw, cam_anim_to_pitch_ = pitch;

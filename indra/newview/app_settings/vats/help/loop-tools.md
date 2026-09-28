@@ -87,7 +87,7 @@ Under **The cycle**, the menu measures the walk from its foot contacts (a foot c
 **Match Cycle to Speed**:
 
 - **Stretch Time** stretches or squashes the loop so its implied speed is the treadmill's. The stride stays; the steps get faster or slower.
-- **Scale Hip Travel** is for a walk whose hips move forward: it makes them travel at the treadmill's speed. The timing stays, so planted feet slide by the difference; **Tools → Clean Up Foot Sliding** plants them again. It is greyed out when the hips do not travel.
+- **Scale Hip Travel** is for a walk whose hips move forward: it makes them travel at the treadmill's speed. The timing stays, so planted feet slide by the difference; **Tools → Clean Up Foot Sliding...** plants them again. It is greyed out when the hips do not travel.
 
 Each is one undo step.
 

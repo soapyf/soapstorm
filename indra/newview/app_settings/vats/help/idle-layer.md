@@ -72,7 +72,7 @@ Phase 0 is at loop-in: a breath starts from the keyed pose there.
 
 - Keep **Amplitude** low. One or two degrees reads as alive; more reads as wobbling.
 - `mPelvis` turns the whole body, feet included. Take it out of a sway with **Use Selected Bones**, or run
-  **Tools → Clean Up Foot Sliding** after baking.
+  **Tools → Clean Up Foot Sliding...** after baking.
 - Two sway layers with different seeds and periods (one slow, one faster and smaller) look less regular
   than one.
 - Set the loop points before baking. Re-bake after changing them.

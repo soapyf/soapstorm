@@ -8,6 +8,7 @@
 
 #include "icon_button.h"
 #include "icons.h"
+#include "key_tags_ui.h"
 #include "theme.h"
 
 namespace vats {
@@ -231,26 +232,14 @@ bool GraphEditor::delete_selected(GraphContext& ctx) {
 
 void GraphEditor::copy_keys(GraphContext& ctx) {
     if (selection_.empty()) return ctx.status("Select keys in the graph to copy");
-    double first = 1e30;
-    for (auto& s : selection_) first = std::min(first, ctx.clip.curves.at(s.track).at(s.channel).keys[s.index].frame);
-    clipboard_.clear();
-    for (auto& s : selection_) {
-        const Key& k = ctx.clip.curves.at(s.track).at(s.channel).keys[s.index];
-        clipboard_.push_back({s.track, s.channel, k.frame - first, k.value, k.interp});
-    }
-    ctx.status("Copied " + std::to_string(clipboard_.size()) + " key(s)");
+    clipboard_ = vats::copy_keys(ctx.clip, selection_);
+    ctx.status("Copied " + std::to_string(clipboard_.keys.size()) + " key(s)");
 }
 
 void GraphEditor::paste_keys(GraphContext& ctx) {
-    if (clipboard_.empty()) return ctx.status("Nothing copied in the graph");
+    if (clipboard_.keys.empty()) return ctx.status("Nothing copied in the graph");
     std::vector<KeyRef> pasted;
-    edit(ctx, "Paste Keys", [&](Clip& c) {
-        for (auto& k : clipboard_) c.curves[k.track][k.channel].set_key(ctx.frame + k.offset, k.value, k.interp);
-        for (auto& k : clipboard_) {
-            const FCurve& cv = c.curves[k.track][k.channel];
-            pasted.push_back({k.track, k.channel, cv.find(ctx.frame + k.offset)});
-        }
-    });
+    edit(ctx, "Paste Keys", [&](Clip& c) { pasted = vats::paste_keys(c, clipboard_, ctx.frame); });
     selection_ = pasted;
     ctx.status("Pasted " + std::to_string(pasted.size()) + " key(s) at frame " + std::to_string(int(ctx.frame)));
 }
@@ -389,6 +378,8 @@ void GraphEditor::draw_toolbar(GraphContext& ctx) {
                 selection_ = sel;
             }
             ImGui::SetItemTooltip("Flip Values: mirror the selected keys across zero");
+            ImGui::SeparatorText("Tag keys");  // 08 KT-1
+            draw_tag_menu_items(ctx);
             ImGui::SeparatorText("Snapshot curves");  // PT-4
             if (menu_item_icon(nullptr, "Snapshot")) {
                 snapshot_curves(ctx.clip);
@@ -678,7 +669,9 @@ void GraphEditor::draw_canvas(GraphContext& ctx) {
                     dl->AddCircleFilled(h, 3.5f, hc);
                 }
             }
-            if (channels_[c].pole) {
+            if (k.tag != KeyTag::None) {  // 08 KT-1
+                draw_key_tag_mark(dl, p, sel ? 4.5f : 3.5f, k.tag, sel ? kKeySelected : key_tag_colour(k.tag));
+            } else if (channels_[c].pole) {
                 float r = sel ? 6 : 5;
                 ImVec2 q[4] = {{p.x, p.y - r}, {p.x + r, p.y}, {p.x, p.y + r}, {p.x - r, p.y}};
                 dl->AddQuadFilled(q[0], q[1], q[2], q[3], sel ? kKeySelected : IM_COL32(20, 20, 22, 255));
@@ -944,7 +937,7 @@ void GraphEditor::draw_canvas(GraphContext& ctx) {
                     else df = 0;
                 }
                 selection_ = press_sel_;
-                move_keys(clip, press_clip_, selection_, df, dv, snap_);
+                move_keys(clip, press_clip_, selection_, df, dv, snap_, &press_sel_);
                 break;
             case Drag::Handle: {
                 FCurve& cv = clip.curves[handle_key_.track][handle_key_.channel];

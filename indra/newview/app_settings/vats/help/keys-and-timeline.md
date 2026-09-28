@@ -39,10 +39,46 @@ Instead of the slider, press **Shift+E** and move the mouse left or right; the b
 
 Each use, a slider drag or a **Shift+E** drag, is one undo step, **Tween**. **Ctrl+click** the slider to type a value.
 
+The keys a tween sets are tagged **Breakdown** (see below). **Relax** leaves tags as they are.
+
+### Blocking and key tags
+
+Pose-to-pose animation starts with *blocking*: the key poses on stepped keys, each held until the next, so the timing reads before anything is smoothed.
+
+- **Blocking** on the timeline bar, right of **Set Key** (the square icon), or **Edit → Blocking**: while it is on, every new key is **Stepped**. Keys that already exist keep their interpolation, and keys that only move (a graph drag, **Insert Frames...**) are not changed. The change is part of the same undo step as the key. Blocking is not saved; it is off in every new session.
+- **Edit → Convert Blocking to Spline**, also in the timeline's right-click menu: every key of the animation gets the **Auto** tangent, except the IK/FK switches, which stay stepped. Each pair of neighbouring **Hold** keys on a rotation curve becomes a *moving hold*: when the second key is within 1° of the first, it is set 1° from the first, towards the key after the pair (or onwards from the key before it when the pair ends the curve), never past that key, and the two keys' facing handles are **Plateau**, so the curve drifts between them instead of stopping dead. Positions are not drifted. It is one undo step and turns **Blocking** off.
+
+A key can carry a tag that says what it is for. Tags change nothing in the export; they are drawn on the timeline and in the [[Graph editor]] by shape and colour:
+
+| Tag | Mark | Meaning |
+|---|---|---|
+| **Extreme** | red diamond | a key pose, the furthest point of a move |
+| **Breakdown** | teal circle | an in-between; keeps its share of the time when a neighbouring key moves |
+| **Hold** | violet bar | a held pose; a pair of them drifts on **Convert Blocking to Spline** |
+
+Untagged keys keep their usual marks. Where keys with different tags share a timeline column, the mark shows **Hold** over **Breakdown** over **Extreme**.
+
+To tag keys:
+
+- **Edit → Tag Keys Here**, or the timeline's right-click menu → **Keys → Tag Keys Here**: **Extreme**, **Breakdown**, **Hold** or **No Tag** for every key of the selected bones, pins and IK controls at the current frame.
+- In the graph, select keys, then **More → Tag keys**: the same four for the selected keys.
+
+A **Breakdown** key that is not selected keeps its place in proportion when a key around it moves in the graph. The keys it measures from are the nearest keys either side that are not Breakdowns: a Breakdown a quarter of the way from 0 to 20 moves to 7 when the key at 20 is dragged to 28. With **Snap frames** on it lands on the nearest whole frame. A Breakdown with no such key on one side stays where it is. Only moving keys does this; scaling, **Flip Time** and the time-editing commands move Breakdowns like any other key.
+
+![The timeline with the right shoulder selected: a red diamond at 0, a teal circle at 12, violet bars at 24 and 36 and a red diamond at 48](images/keys-and-timeline/blocking.png)
+*A blocked arm: Extremes at 0 and 48, a Breakdown at 12 and a Hold pair at 24 and 36.*
+
+![The graph of the right elbow: stepped curves, with the same tag marks on the keys](images/keys-and-timeline/tagged-keys.png)
+*The same keys in the graph: stepped, as **Blocking** keys them.*
+
+[Open the example](example:blocking-arm.vat)
+
+In the example, select **mShoulderRight** and use **Edit → Convert Blocking to Spline**: the arm moves smoothly and drifts from frame 24 to 36 instead of stopping.
+
 ### Reading the timeline
 
 - A faint tick marks every frame that has a key on any bone.
-- A diamond marks each key of the selection (bones, their pins and IK controls). The primary bone's diamonds are brighter and larger.
+- A diamond marks each key of the selection (bones, their pins and IK controls). The primary bone's diamonds are brighter and larger. A tagged key has its tag's mark instead (see [[Keys and timeline#Blocking and key tags]]).
 - In the **Bones** tab, a bone with a key on this frame is amber, and a bone animated anywhere is tan.
 - **Properties → Bone** says **Keyed at this frame** or **Not keyed at this frame** for the primary bone.
 
@@ -86,6 +122,10 @@ Second Life plays the part before **Loop in** once, then repeats the loop. For t
 
 **Shift+drag** along the timeline to mark a range; it shows as a yellow band. A plain click clears it. Ranges are used by [[Time editing]], **Edit → Save Clip of Selected Bones...** ([[Pose library]]) and the graph's keys.
 
+### Retime markers
+
+The **Retime** button on the timeline bar (a map pin, after **Mirror**) turns on retime markers: **double-click** the ruler to drop one, then drag it to stretch or squash the keys since the marker before it, with everything after it moving along. **Edit → Time → Retime Markers** does the same. See [[Time editing#Retiming with markers]].
+
 ### Priority, hand pose and expression
 
 The rest of **Properties → Animation** sets values stored in the exported `.anim`:
@@ -106,14 +146,16 @@ The rest of **Properties → Animation** sets values stored in the exported `.an
 ## Tips and tricks
 
 - **Select → Select Keyed on Frame** selects the bones keyed at the current frame, so **S** re-keys just those.
-- Block out with **Stepped** keys in the [[Graph editor]], then switch to **Auto** when the timing works.
+- Block out with **Blocking** on, tag the key poses, then **Convert Blocking to Spline** when the timing works.
 - Scrubbing with audio loaded plays short snippets of the sound; see [[Audio track]].
+- To move or stretch keys on many bones at once, use the [[Dope sheet]]; to see the arc a hand or foot
+  travels between keys, turn on a [[Motion paths|motion path]].
 
 ## Troubleshooting
 
 ### The animation is refused by Second Life for being too long
 
-Second Life rejects animations longer than 60 seconds. The seconds under **Last frame** turn red past that; shorten the clip or lower the frame count.
+Second Life rejects animations longer than 60 seconds. The seconds under **Last frame** turn red past that; shorten the clip or lower the frame count, or cut a dance into parts with **Tools → Split Dance at Beats...** ([[Time editing#Split a dance]]).
 
 ### Moving a loop flag turned looping on
 
@@ -122,7 +164,9 @@ That is intended: a loop flag only means something with **Loop** ticked. Untick 
 ## See also
 
 - [[Graph editor]]
+- [[Dope sheet]]
 - [[Onion skin]]
+- [[Motion paths]]
 - [[Export to Second Life]]
 
 Category: Animating

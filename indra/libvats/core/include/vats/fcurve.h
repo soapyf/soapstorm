@@ -16,6 +16,9 @@ enum class Interp : std::uint8_t { Constant = 0, Linear = 1, Bezier = 2 };
 // Handle types, stored as 0-6 in project files.
 enum class Handle : std::uint8_t { AutoClamped = 0, Auto, Vector, Aligned, Free, Flat, Plateau };
 
+// A key's role in the pose-to-pose workflow (spec 08 KT-1), saved as one byte per key (0-3).
+enum class KeyTag : std::uint8_t { None = 0, Extreme, Breakdown, Hold };
+
 // UI tangent commands.
 enum class Tangent { Auto, Spline, Plateau, Linear, Flat, Stepped, Break, Unify };
 
@@ -24,6 +27,7 @@ struct Key {
     Interp interp = Interp::Bezier;
     Handle left = Handle::AutoClamped, right = Handle::AutoClamped;
     double lx = 0, ly = 0, rx = 0, ry = 0;  // handle points, absolute (frame, value)
+    KeyTag tag = KeyTag::None;
 
     bool operator==(const Key&) const = default;
 };

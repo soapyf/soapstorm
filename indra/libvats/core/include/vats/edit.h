@@ -36,6 +36,11 @@ void reset_bone(Clip& clip, const std::string& track, double frame);
 std::vector<double> key_frames(const Clip& clip, const std::string& track);
 bool has_key_at(const Clip& clip, const std::string& track, double frame);
 
+// After a tool re-keyed the frames between keys at a and b (keyed in `before` too), puts back the outer handles
+// of those two keys (a's left, b's right) as `before` had them, frozen (Free), so the curves outside a..b keep
+// their shape; their inner handles go back to automatic, to follow the new keys.
+void keep_outer_handles(Clip& clip, const Clip& before, const std::string& track, int a, int b);
+
 // Drops empty curves and tracks.
 void prune(Clip& clip);
 

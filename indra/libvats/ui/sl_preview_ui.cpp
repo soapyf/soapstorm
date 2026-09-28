@@ -246,10 +246,14 @@ void App::draw_upload_meter() {
         x.keep_fit = false;
         const BudgetFit& f = *x.fit;
         if (f.fits && f.steps) {
-            Json a = Json::array();
-            a.push(f.rot_deg);
-            a.push(f.pos_m);
-            edit("Fit to 250 KB", [&](Clip& c) { c.export_settings.set("reduce", a); });
+            if (f.world_m > 0) {  // 08 WR-5: Anywhere on the body is the tolerance raised
+                edit("Fit to 250 KB", [&](Clip& c) { c.export_settings.set("reduce_world", f.world_m); });
+            } else {
+                Json a = Json::array();
+                a.push(f.rot_deg);
+                a.push(f.pos_m);
+                edit("Fit to 250 KB", [&](Clip& c) { c.export_settings.set("reduce", a); });
+            }
             x.keep_fit = true;
         }
     }
@@ -259,18 +263,20 @@ void App::draw_upload_meter() {
     if (x.fit) {
         const BudgetFit& f = *x.fit;
         if (f.fits) {
-            std::snprintf(buf, sizeof buf, "Fits at %.3f deg / %.2f mm: %s bytes. Largest change %.1f mm (%s), %.2f deg (%s).",
-                          f.rot_deg, f.pos_m * 1000, thousands(f.bytes).c_str(), f.max_mm, f.worst_mm.c_str(), f.max_deg,
-                          f.worst_deg.c_str());
+            char at[64];
+            if (f.world_m > 0) std::snprintf(at, sizeof at, "%.2f mm anywhere on the body", f.world_m * 1000);
+            else std::snprintf(at, sizeof at, "%.3f deg / %.2f mm", f.rot_deg, f.pos_m * 1000);
+            std::snprintf(buf, sizeof buf, "Fits at %s: %s bytes. Largest change %.1f mm (%s), %.2f deg (%s).", at,
+                          thousands(f.bytes).c_str(), f.max_mm, f.worst_mm.c_str(), f.max_deg, f.worst_deg.c_str());
             hint(buf);
         } else {
             if (f.too_long)
                 hint("Over 60 seconds: no key reduction helps. Split it into parts that play one after another.");
             else {
                 std::snprintf(buf, sizeof buf,
-                              "Still %s bytes at 5 deg / 50 mm. The keys you set are always kept, so a clip keyed on "
+                              "Still %s bytes at %s. The keys you set are always kept, so a clip keyed on "
                               "most frames needs splitting.",
-                              thousands(f.bytes).c_str());
+                              thousands(f.bytes).c_str(), f.world_m > 0 ? "50 mm anywhere on the body" : "5 deg / 50 mm");
                 hint(buf);
             }
             if (ImGui::Button("Split into Parts...", ImVec2(-1, 0))) {

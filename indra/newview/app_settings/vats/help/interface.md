@@ -1,6 +1,6 @@
 # Interface
 
-The VATs window is a menu bar, six docked panels and a status bar. Panels can be dragged by their
+The VATs window is a menu bar, seven docked panels and a status bar. Panels can be dragged by their
 tabs to other places, stacked as tabs, or pulled out as floating windows; VATs remembers the layout
 between sessions.
 
@@ -14,17 +14,19 @@ between sessions.
 | Panel | Default place | Holds |
 |---|---|---|
 | **Bones** | left | the skeleton as a list, with a filter box and selection buttons |
+| **Picker** | left, a tab beside **Bones** | an avatar outline to click body parts, and selection sets; see [[Picker]] |
 | **Inventory** | left, a tab beside **Bones** | projects, animations, mesh bodies, props, poses and clips |
 | **Viewport** | centre | the avatar, the gizmo, the view cube |
 | **Properties** | right | the selected bone or prop, the animation settings, the export settings |
 | **Graph** | bottom | the curve editor |
+| **Dope Sheet** | bottom, a tab beside **Graph** | the keyed frames per body part and bone |
 | **Timeline** | bottom, under **Graph** | play controls, the frame box, tool buttons and the frame ruler |
 
 The **status bar** runs along the bottom of the window. On the left it shows what the last command
-did, how many items are selected when there is more than one, and **Check: N** when the
-[[Animation check]] has found problems. On the right it shows the mouse
-controls of the active [[Control presets|control preset]], or the graph's controls while the pointer
-is over the **Graph** panel.
+did, how many items are selected when there is more than one, **Ortho** while the view is
+orthographic, and **Check: N** when the [[Animation check]] has found problems. On the right it shows the mouse
+controls of the active [[Control presets|control preset]], or the graph's or dope sheet's controls while
+the pointer is over the **Graph** or **Dope Sheet** panel.
 
 The title bar shows the project's file name (`Untitled` before the first save), `*` while there are
 unsaved changes, and the VATs version.
@@ -63,8 +65,30 @@ Drag or double-click an item to use it; right-click it for the rest.
 - The cube at the top left turns the view: click a face to look from that side, or drag the cube to
   orbit.
 - The axis marker at the bottom left shows the world axes.
+- **View → Orthographic** (**Num 5** in every [[Control presets|control preset]]) switches between
+  perspective and an orthographic view, and back. See [[Interface#Orthographic view]].
 
-### Properties
+### Orthographic view
+
+An orthographic view has no perspective: parts of the body the same size look the same size however
+far from the camera they are, and parallel lines stay parallel. Use it to check symmetry, a pose's
+silhouette, or where a hand is against the body, from **Front**, **Right** or **Top**.
+
+- **View → Orthographic** or **Num 5** turns it on; the menu item is ticked and the status bar shows
+  **Ortho**. The same key or item turns it off. The camera keeps its place and its direction.
+- At the orbit target the view is as tall as the perspective view, so turning it on keeps the framing.
+  Zoom (the wheel, drag zoom, **Zoom In** / **Zoom Out**) makes the view taller or shorter; **Frame
+  Selected** and **Frame All** fit it as they fit the perspective view.
+- With the view orthographic, the view cube's faces and **Top** look exactly along the axis: **Top**
+  looks straight down (a plan), not from 86° as in perspective. Orbiting from there tilts back to 86°.
+- Clicks, the gizmo, bone markers and onion-skin ghosts use the same projection, so what you click is
+  what you see.
+- The floor grid is edge-on in **Front**, **Back**, **Left** and **Right**, so it does not show there.
+- **Reset Camera** keeps the view orthographic.
+
+> **Note:** The orthographic view is not yet available in the [[VATs Editor (viewer)|viewer]]; there
+> **Num 5** says `This view has no orthographic mode yet`.
+
 
 Sections, each of which can be collapsed:
 
@@ -79,11 +103,18 @@ Sections, each of which can be collapsed:
 The curve editor for the selected bones. Close it with the **×** on its tab; **Ctrl+G** (**View →
 Graph Editor**) shows or hides it. See [[Graph editor]].
 
+### Dope Sheet
+
+The keys of the selected bones as diamonds, one row per body part, with a summary row on top; it shares
+its key selection, copied keys and time range with the graph. Close it with the **×** on its tab;
+**View → Dope Sheet** shows or hides it. See [[Dope sheet]].
+
 ### Timeline
 
 From left to right: the play controls, the frame box and the last frame, the tool buttons, the axes
-button, **IK / FK** and **Set Key**. Below them is the frame ruler with the keys, the loop and ease
-markers and, when loaded, the [[Audio track]]. See [[Keys and timeline]].
+button, **IK / FK**, **Mirror**, **Retime**, **Set Key** and the **Tween** slider. Below them is the frame ruler
+with the keys, the loop and ease markers, any retime markers and, when loaded, the [[Audio track]]. See
+[[Keys and timeline]].
 
 ![The Timeline panel: play controls, Frame 10 of 30, the tool buttons, and the ruler with keys at 0, 10, 20 and 30 inside a tinted loop band](images/interface/timeline.png)
 *The timeline of the [[First steps]] example: amber diamonds are keys, the small triangles at 6 and
@@ -111,13 +142,13 @@ for the names (a window about 1200 pixels wide), these buttons show their icons 
 
 | Menu | Holds |
 |---|---|
-| **File** | **New**, **Open...**, **Open Recent**, **Save**, **Save As...**, the imports (BVH, SL `.anim`, retarget, prop / mesh, audio), the exports (`.anim`, BVH), **Quit** |
-| **Edit** | **Undo**, **Redo**, keys, resets, copy and paste pose, **Save Clip of Selected Bones...**, **Time**, mirror and flip, **Reverse Animation**, **Preferences...** |
+| **File** | **New**, **Open...**, **Open Recent**, **Save**, **Save As...**, the imports (BVH, SL `.anim`, retarget, prop / mesh, audio), the exports (`.anim`, BVH, **Export Listing Media...**: see [[Listing media]]), **Quit** |
+| **Edit** | **Undo**, **Redo**, keys, resets, copy and paste pose, **Save Clip of Selected Bones...**, **Time**, mirror and flip, **Reverse Animation**, **Simplify Curves...**, **Preferences...** |
 | **Playback** | play, frame and key stepping, start and end |
-| **View** | view directions, framing and zoom, **Reset Camera**, **Camera Views**, **Graph Editor**, the bone group switches, **Show Collision Volumes**, **Onion Skin**, **Preview as SL Plays It**, **Body**, **Bones in Front (X-ray)** |
+| **View** | view directions, **Orthographic**, framing and zoom, **Reset Camera**, **Camera Views**, **Graph Editor**, **Dope Sheet**, the bone group switches, **Show Collision Volumes**, **Centre of Mass**, **Onion Skin**, **Motion Path**, **Reference...** (a picture behind the avatar: [[Reference images]]), **Preview as SL Plays It**, **Treadmill**, **Body**, **Bones in Front (X-ray)** |
 | **Light** | the lighting presets **Flat Noon**, **Three-Quarter Key**, **Rim / Back**, **Dusk** and **Night**, **Studio (Default)**, and **Plain Backdrop**: a grey wall and floor behind the actor that turn with the camera. They are for looking at the animation only; nothing is saved |
 | **Select** | **Select All**, **Select Keyed on Frame**, **Select All Keyed**, **Select None**, parent, child and siblings |
-| **Tools** | the four tools, the axes, IK and pins, **Clean Up Foot Sliding**, **Loop Tools**, **Hand Poser**, **Dynamics...**, **Idle Layer...**, **Overlap...**, **Ragdoll...**, **Face...**, **Actors (Couples and Groups)...**, **Motion Capture...**, **Animation Check...** |
+| **Tools** | the four tools, the axes, IK and pins, **Clean Up Foot Sliding...**, **Loop Tools**, **Hand Poser**, **Dynamics...**, **Idle Layer...**, **Overlap...**, **Auto-Balance...**, **Jump Arc...**, **Ragdoll...**, **Face...**, **Actors (Couples and Groups)...**, **Motion Capture...**, **Split Dance at Beats...**, **Animation Check...**, **Motion Quality...** |
 | **Help** | **Help Contents**, **Controls**, **Welcome**, **About Viewport Avatar Toolset** |
 
 A menu item that cannot be used now is greyed; hover over it to see why. The key shown beside an item
@@ -159,7 +190,8 @@ VATs keeps the panel layout in `layout.ini` in the data folder. See
 
 ### A panel is missing
 
-Only **Graph** can be closed; **Ctrl+G** brings it back. The other panels can be moved or undocked but
+Only **Graph** and **Dope Sheet** can be closed; **Ctrl+G** brings the graph back and **View → Dope
+Sheet** the dope sheet. The other panels can be moved or undocked but
 not closed, so a missing one is hidden behind another tab or pushed to a thin edge. To go back to the
 default layout, quit VATs, delete `layout.ini` from the data folder and start VATs again.
 

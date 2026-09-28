@@ -1,16 +1,17 @@
 # Face animation
 
 The **Face** window animates the Bento face bones by hand: sliders for the 52 ARKit face shapes and the VRM
-presets, a layer that adds blinks, eye darts and a look-at target, and a tool that turns the head or eyes
-towards a target. Everything is written as ordinary bone keys through the same face table as
-[[Face tracking]].
+presets, [[Lip sync]], a layer that adds blinks, eye darts and a look-at target, and a tool that turns the head or
+eyes towards a target. Everything is written as ordinary bone keys through the same face table as
+[[Face tracking]]. **Export Expression Pack...** turns expressions into a set of short face-only animations for an
+expression HUD.
 
-> Related articles: [[Face tracking]], [[Pose library]], [[Couples and groups]], [[Keys and timeline]]
+> Related articles: [[Face tracking]], [[Lip sync]], [[Pose library]], [[Couples and groups]], [[Keys and timeline]]
 
 ## Usage
 
-Open the window with **Tools → Face...**. It has three sections: **Expression**, **Blinks, Eye Darts and
-Look-At**, and **Look At**.
+Open the window with **Tools → Face...**. It has four sections: **Expression**, **Lip Sync** (see [[Lip sync]]),
+**Blinks, Eye Darts and Look-At**, and **Look At**.
 
 > **Note:** Face bones only show in Second Life on a mesh head rigged to the Bento face bones.
 
@@ -32,6 +33,29 @@ another way, the sliders are read back from the keys (see [[#Reading sliders bac
 Type a name under the sliders and click **Save Face Pose**. The pose goes to **Inventory → Poses** with the kind
 `face`, and applies like any pose, mirrored too (see [[Pose library]]). It holds every face bone's rotation at the
 frame and, with **Move face bones** on, the offsets of the bones the table moves.
+
+### Exporting an expression pack
+
+**Export Expression Pack...**, under **Save Face Pose**, writes one short `.anim` per expression, ready for an
+expression HUD: each moves the face bones only, eases in and out, and is named by one pattern.
+
+1. Tick the expressions: the **Starter set** (all ticked at first) and any of **Your face poses** (the face poses
+   in **Inventory → Poses**, unticked at first).
+2. Set the **Files** settings (see [[#Expression pack]]). **Saves as** shows the first name and how many follow.
+3. Click **Export to Folder...** and choose a folder. Files of the same name there are replaced. The status bar
+   says how many were exported, and which expressions were left out because they move nothing.
+4. In the viewer, **Upload All...** uploads every file under its name instead; the viewer asks to confirm the
+   price of each.
+
+Each file keys only the face bones its expression moves, so other animations, such as an AO's blinks, still move
+the rest. A held expression holds its face from the first frame to the last. The files are exported with the
+project's **Export** settings, as **Export SL .anim** would: the **Bake shape** (with **Your avatar**, your
+mesh head's joint positions), and the key reduction.
+
+> **Note:** With **Move face bones** off, an expression that only moves bones has nothing to key: it is greyed
+> out in the **Starter set** (**frown** and **sad** on the SL default head), and a face pose's offsets are left
+> out. In the viewer, the dialog warns as the Face window does when your mesh head has its own face joint
+> positions and **Bake shape** is not **Your avatar**.
 
 ### Blinks, eye darts and a look-at target
 
@@ -117,6 +141,41 @@ log-normal around **Hold**. Darts go straight up, down or sideways twice as ofte
 
 Towards a look-at target the eyes turn at most 30° from straight ahead.
 
+### Expression pack
+
+| Setting | Range | Default | Effect |
+|---|---|---|---|
+| **Prefix** | text | Face | the start of every file name |
+| **Priority** | 0–6 | 4 | the files' priority; above the body animations the face should win over |
+| **Length** | 0.5–10 s | 2 s | how long a held expression lasts |
+| **Ease in**, **Ease out** | 0–2 s | 0.30 s | the files' ease in and out |
+| **Hold until stopped (loop)** | on/off | on | held expressions loop until the HUD stops them; off: they play once |
+| **Also save to Animations library** | on/off | off | also copy each file to **Inventory → Animations** |
+
+Every file is named `<prefix>_<expression>`: the expression's name in lower case, with anything but letters and
+digits as one `_`, so **wink L** becomes `Face_wink_l.anim`. A second expression of the same name gets `_2`,
+`_3`, ... Names are cut to 63 characters, Second Life's limit for inventory names.
+
+The starter set, as ARKit weights (see [[Face tracking#The face table]]); Left/Right means both sides:
+
+| Expression | Face shapes | Motion |
+|---|---|---|
+| **smile** | mouthSmileLeft/Right 0.6, cheekSquintLeft/Right 0.2 | held |
+| **big smile** | mouthSmileLeft/Right 1, cheekSquintLeft/Right 0.5, eyeSquintLeft/Right 0.3, mouthUpperUpLeft/Right 0.3, jawOpen 0.15 | held |
+| **frown** | mouthFrownLeft/Right 0.8, browDownLeft/Right 0.4 | held |
+| **surprise** | browInnerUp 1, browOuterUpLeft/Right 1, eyeWideLeft/Right 0.8, jawOpen 0.35 | held |
+| **wink L** | eyeBlinkLeft 1, cheekSquintLeft 0.4, mouthSmileLeft 0.3 | held |
+| **wink R** | eyeBlinkRight 1, cheekSquintRight 0.4, mouthSmileRight 0.3 | held |
+| **angry** | browDownLeft/Right 1, eyeSquintLeft/Right 0.4, noseSneerLeft/Right 0.5, mouthFrownLeft/Right 0.4 | held |
+| **sad** | browInnerUp 0.9, mouthFrownLeft/Right 0.7, mouthShrugLower 0.3 | held |
+| **blink loop** | eyeBlinkLeft/Right 1 | a 4 s loop: one blink at 2 s, shut from 2.08 to 2.12 s and open again by 2.25 s |
+| **idle breathing** | jawOpen 0.06, cheekPuff 0.1, noseSneerLeft/Right 0.15 | a 4 s loop: to the face by 2 s and back |
+| **kiss** | mouthPucker 1, mouthFunnel 0.3, eyeSquintLeft/Right 0.2 | held |
+| **tongue out** | tongueOut 1, jawOpen 0.35 | held |
+
+The blink and breathing loops always loop, whatever **Hold until stopped (loop)** says. A face pose is held, with
+the rotations (and, with **Move face bones**, the offsets) it was saved with; bones at rest in it are left out.
+
 ### Looping clips
 
 With **Loop** on, the frames before loop-in and the loop itself are generated separately. Each ends with the
@@ -159,7 +218,9 @@ a least-squares fit that prefers fewer shapes. Limits:
   so head keys set after a bake with a look-at target are replaced.
 - For a couple, use **Look at Partner** for a steady gaze, or the layer with **Another actor** as the target
   for a gaze with blinks and darts.
-- Save the expressions you use often as face poses and apply them at the frames you need.
+- Save the expressions you use often as face poses and apply them at the frames you need; tick them in
+  **Export Expression Pack...** to make HUD animations of them.
+- Set the pack's **Priority** above your AO's (often 3 or 4 for faces), or the AO's face keys win.
 
 ## Troubleshooting
 
@@ -180,6 +241,7 @@ and says so.
 ## See also
 
 - [[Face tracking]]
+- [[Lip sync]]
 - [[Pose library]]
 - [[Couples and groups]]
 - [[Project file format#face_layer]]

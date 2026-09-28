@@ -1,5 +1,5 @@
-// Viewport Avatar Toolset - the Face window: expression sliders, the blink/saccade/look-at layer and the look-at
-// tool (spec 08 FA).
+// Viewport Avatar Toolset - the Face window: expression sliders, the blink/saccade/look-at layer, the look-at
+// tool (spec 08 FA), and the doors to expression packs and lip sync (EX, LS).
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 #include <algorithm>
 #include <cmath>
@@ -174,6 +174,7 @@ void App::draw_face_panel() {
     if (ImGui::Button("Reload")) {
         rescan();
         ui.head = "\x01";  // reread the table next frame
+        lip_ui_.reset();   // and lip sync's copy, with lip-shapes.json
     }
     ImGui::EndDisabled();
 
@@ -299,7 +300,13 @@ void App::draw_face_panel() {
         }
         ImGui::EndDisabled();
         ImGui::SetItemTooltip("Keep this frame's face in the pose library; apply it like any pose");
+        if (ImGui::Button("Export Expression Pack...")) ImGui::OpenPopup("Export Expression Pack");
+        ImGui::SetItemTooltip("One short face-only .anim per expression, for an expression HUD");
+        draw_expression_pack(ui.table, pos);  // expression_pack_ui.cpp
     }
+
+    // --- Lip sync (LS, lip_sync_ui.cpp) ---
+    if (ImGui::CollapsingHeader("Lip Sync")) draw_lip_sync(pos);
 
     // The target picker the layer and the look-at tool share. set() makes a discrete change; drags edit t in place and
     // report through dragged().

@@ -24,6 +24,7 @@ struct CheckUi {
 namespace {
 
 constexpr std::uint64_t kIdleNs = 500'000'000;  // re-check once the clip has been still this long
+constexpr ImU32 kContactMark = IM_COL32(235, 80, 70, 230);  // self-contact frames on the timeline (08 SX)
 
 ImU32 severity_colour(LintSeverity s) {
     return s == LintSeverity::Error ? IM_COL32(235, 80, 70, 255) : s == LintSeverity::Warning ? IM_COL32(240, 180, 70, 255)
@@ -80,7 +81,29 @@ void App::update_check() {
     opt.positions = export_positions();
     opt.worn_overrides = host_.joint_overrides();
     if (multi_actor()) opt.external = actor_resolver(doc_.project.active);
-    ui.findings = lint_clip(skel_, clip, opt, settings_.check_off);
+    ui.findings = lint_clip(skel_, clip, opt, settings_.check_off, mesh_body() ? view_body_shape() : nullptr);
+}
+
+// The self-penetration findings (08 SX) at a whole frame: their bones are tinted in the view.
+bool App::contact_bone(int node) const {
+    if (!check_ui_ || globals_.empty()) return false;
+    const int here = int(std::floor(frame_ + 1e-9));
+    for (const LintFinding& f : check_ui_->findings)
+        if (f.rule == "self_contact" && std::binary_search(f.frames.begin(), f.frames.end(), here))
+            for (const std::string& b : f.bones)
+                if (skel_.find(b) == node) return true;
+    return false;
+}
+
+// The self-penetration findings' frames (08 SX): a short red mark at the foot of the timeline strip for each.
+void App::draw_contact_marks(ImDrawList* dl, float x0, float x1, float y1, int last) const {
+    if (!check_ui_) return;
+    for (const LintFinding& f : check_ui_->findings)
+        if (f.rule == "self_contact")
+            for (int fr : f.frames) {
+                const float x = x0 + (x1 - x0) * float(fr) / float(std::max(last, 1));
+                dl->AddLine(ImVec2(x, y1 - 6), ImVec2(x, y1), kContactMark, 2);
+            }
 }
 
 void App::draw_check_badge() {

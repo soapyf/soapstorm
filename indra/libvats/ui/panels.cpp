@@ -8,6 +8,7 @@
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui_internal.h"
+#include "key_tags_ui.h"
 #include "vats/anim_file.h"
 #include "vats/edit.h"
 #include "theme.h"
@@ -230,6 +231,7 @@ void App::draw_bones_panel() {
         bool open = ImGui::TreeNodeEx(reinterpret_cast<void*>(intptr_t(i)), flags, "%s%s%s", n.name.c_str(),
                                       pinned ? " [pinned]" : "", scratch ? " (scratch)" : "");
         if (colour) ImGui::PopStyleColor();
+        planner_row_mark(i);  // 08 PP-2
         if (reveal_now && i == prim) ImGui::SetScrollHereY(0.5f);
         if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) select(i, ImGui::GetIO().KeyShift), bones_clicked_ = true;
         if (ImGui::IsItemHovered())
@@ -270,7 +272,9 @@ void App::draw_properties_panel() {
     int p = primary();
     if (selected_prop_ >= 0 && section("Prop")) draw_prop_section();
     if (selected_prop_ < 0 && section("Bone")) {
-        if (p < 0) {
+        if (const HandleRef* h = primary_handle(); p < 0 && h && !h->pole) {
+            draw_ik_target_properties(h->limb);  // 08 RC-1: the target's Pull
+        } else if (p < 0) {
             hint("Select a bone in the view or the Bones list.");
         } else {
             const Node& n = skel_[p];
@@ -472,14 +476,29 @@ void App::draw_timeline_panel() {
         run_action("orientation");
     if (tool_button(icon::kIkFk, "IK / FK", false, tip("IK / FK", "ik_toggle") + ": switch the selected limb between IK and FK, matched"))
         run_action("ik_toggle");
+    // Still too wide with icons only: the rest goes on a row of its own instead of past the panel's edge.
+    const float button_w = ImGui::GetItemRectSize().x + ImGui::GetStyle().ItemSpacing.x;
+    bool wrapped = false;
+    auto wrap_for = [&](float need) {
+        if (compact && ImGui::GetContentRegionAvail().x < need) ImGui::NewLine(), wrapped = true;
+    };
+    wrap_for(2 * button_w);  // Mirror and Retime
     if (tool_button(icon::kFlipTime, "Mirror", mirror_live_, "Mirror: posing a bone or IK control also keys its other side"))
         mirror_live_ = !mirror_live_;  // PT-1
+    if (tool_button(icon::kPlace, "Retime", retime_on_, "Retime: double-click the ruler to drop a marker; drag a marker to "
+                                                         "stretch the keys since the one before it and move the rest"))
+        set_retime(!retime_on_);  // 08 TE-5
     ImGui::SameLine(0, 16);
+    wrap_for(timeline_tail_w_);  // Set Key, Blocking and the tween controls, as wide as last time
+    const ImVec2 tail = ImGui::GetCursorScreenPos();
     if (tool_button(icon::kSetKey, "Set Key", false, tip("Set Key", "key") + ": key the selected bones, pins and IK controls"))
         run_action("key");
+    draw_blocking_button(compact);  // spec 08 KT-2
     draw_tween_controls();  // spec 08 TW-1, TW-2
     if (!compact) timeline_row_w_ = tween_row_end_ - ImGui::GetWindowPos().x - ImGui::GetStyle().WindowPadding.x;
-    ImGui::NewLine();
+    timeline_tail_w_ = tween_row_end_ - tail.x;
+    // A wrapped row (the tail, or Blend alone) takes this spare row's place, so the strip keeps its height.
+    if (!wrapped && ImGui::GetItemRectMin().y < tail.y + 1) ImGui::NewLine();
 
     // Timeline strip.
     ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -488,13 +507,15 @@ void App::draw_timeline_panel() {
     ImGui::InvisibleButton("##timeline", ImVec2(width, height));
     if (ImGui::BeginPopupContextItem("##timeline_menu")) {  // time editing and the audio track (08 TE, AU)
         draw_time_menu_items();
+        ImGui::SeparatorText("Keys");  // 08 KT
+        draw_key_tag_menu_items();
         ImGui::SeparatorText("Audio");
         draw_audio_menu_items();
         ImGui::EndPopup();
     }
     const float pad = 12, ruler = 20;
     const float x0 = origin.x + pad, x1 = origin.x + width - pad;
-    const int last = std::max(clip.end_frame, 1);
+    const int last = retime_drag_ >= 0 ? retime_view_last_ : std::max(clip.end_frame, 1);  // held while retiming (TE-5)
     auto x_of = [&](double fr) { return float(x0 + (x1 - x0) * fr / last); };
     auto frame_at = [&](float x) { return std::clamp(std::round(double(x - x0) / (x1 - x0) * last), 0.0, double(last)); };
 
@@ -511,6 +532,7 @@ void App::draw_timeline_panel() {
                           ui::kLoop);
 
     draw_audio_lane(dl, x0, x1, origin.y + ruler, origin.y + height, last);  // waveform and beats (AU-2)
+    draw_planner_band(dl, ImVec2(x0, origin.y + height - 5), ImVec2(x1, origin.y + height - 1));  // 08 PP-2
 
     // Ruler (TG-2): labels at least 50 px apart; unlabelled frames get a minor tick once a frame is 4 px wide.
     const TimelineColours& tc = timeline_colours();
@@ -537,21 +559,22 @@ void App::draw_timeline_panel() {
     float ky = origin.y + ruler + (height - ruler) * 0.5f;
     // Marks are gathered per pixel column: a dense clip has far more keys than pixels, and a mark per key
     // (hundreds of thousands with many bones selected) swamped both the CPU and the draw lists.
+    // A column holds 1 + the highest key tag in it (08 KT-1), 0 for none.
     const int cols = std::max(1, int(x1 - x0) + 1);
     std::vector<char> col(cols);
-    auto mark = [&](double fr) {
+    auto mark = [&](double fr, KeyTag tag = KeyTag::None) {
         int c = int(std::lround(x_of(fr) - x0));
-        if (c >= 0 && c < cols) col[c] = 1;
+        if (c >= 0 && c < cols) col[c] = std::max(col[c], char(1 + int(tag)));
     };
     auto each_column = [&](auto&& draw) {
         for (int c = 0; c < cols; ++c)
-            if (col[c]) draw(x0 + float(c));
+            if (col[c]) draw(x0 + float(c), KeyTag(col[c] - 1));
         std::fill(col.begin(), col.end(), char(0));
     };
     for (auto& [name, track] : clip.curves)
         for (auto& [ch, c] : track)
             for (auto& k : c.keys) mark(k.frame);
-    each_column([&](float x) { dl->AddLine(ImVec2(x, ky - 10), ImVec2(x, ky + 10), IM_COL32(255, 255, 255, 40)); });
+    each_column([&](float x, KeyTag) { dl->AddLine(ImVec2(x, ky - 10), ImVec2(x, ky + 10), IM_COL32(255, 255, 255, 40)); });
     auto diamond_at = [&](float x, float y, ImU32 c, float r, bool outline) {
         dl->AddQuadFilled(ImVec2(x, y - r), ImVec2(x + r, y), ImVec2(x, y + r), ImVec2(x - r, y), c);
         if (outline) dl->AddQuad(ImVec2(x, y - r), ImVec2(x + r, y), ImVec2(x, y + r), ImVec2(x - r, y), IM_COL32(20, 22, 26, 220));
@@ -563,13 +586,19 @@ void App::draw_timeline_panel() {
         auto it = clip.curves.find(t);
         if (it == clip.curves.end()) return;
         for (auto& [ch, c] : it->second)
-            for (auto& k : c.keys) mark(k.frame);
+            for (auto& k : c.keys) mark(k.frame, k.tag);
     };
     for (const std::string& t : selected_tracks())
         if (std::find(primary_tracks.begin(), primary_tracks.end(), t) == primary_tracks.end()) mark_track(t);
-    each_column([&](float x) { diamond_at(x, ky, ui::kKeyDim, 4, false); });
+    each_column([&](float x, KeyTag tag) {
+        if (tag == KeyTag::None) diamond_at(x, ky, ui::kKeyDim, 4, false);
+        else draw_key_tag_mark(dl, ImVec2(x, ky), 3.5f, tag, (key_tag_colour(tag) & 0x00FFFFFF) | 0x96000000, false);
+    });
     for (const std::string& t : primary_tracks) mark_track(t);
-    each_column([&](float x) { diamond_at(x, ky, ui::kKey, 6, true); });
+    each_column([&](float x, KeyTag tag) {
+        if (tag == KeyTag::None) diamond_at(x, ky, ui::kKey, 6, true);
+        else draw_key_tag_mark(dl, ImVec2(x, ky), 5, tag, key_tag_colour(tag));
+    });
 
     // Loop flags and ease edges, all draggable (decision 5, 05 section 5 items 1-2). Dragging a loop flag
     // turns loop on; Alt+drag inside the band moves both flags; the ease edges set seconds in 0.05 steps.
@@ -596,6 +625,7 @@ void App::draw_timeline_panel() {
     };
     const bool over_in = flag(1, clip.loop_in), over_out = flag(2, clip.loop_out);
     draw_loop_seam_mark(dl, x_of(clip.loop_out), ytop + 12, strip_hovered);  // 08 LP-2
+    draw_contact_marks(dl, x0, x1, ybot, last);                              // 08 SX
     const bool over_ein = ease_mark(4, std::min<double>(ein, last)), over_eout = ease_mark(5, std::max<double>(last - eout, 0));
     const bool over_band = clip.loop && strip_hovered && ImGui::GetIO().KeyAlt && m.y > ytop && m.x > x_of(clip.loop_in) &&
                            m.x < x_of(clip.loop_out);
@@ -606,8 +636,11 @@ void App::draw_timeline_panel() {
         else if (over_ein || over_eout) ImGui::SetTooltip("Ease %s: drag to set, %.2f s", over_ein ? "in" : "out",
                                                           over_ein ? clip.ease_in : clip.ease_out);
     }
+    const bool retiming = retime_timeline(dl, x0, x1, origin.y, ytop, last, strip_hovered);  // 08 TE-5 markers
+    // Lip sync's mouth shapes (08 LS): a press on one nudges it instead of scrubbing.
+    const bool lip_drag = !retiming && !dragging_handle && lip_sync_timeline(dl, x0, x1, ytop, ybot, last, strip_hovered);
     static bool picking_range = false;
-    if (ImGui::IsItemActivated()) {
+    if (ImGui::IsItemActivated() && !retiming && !lip_drag) {
         dragging_handle = over_in ? 1 : over_out ? 2 : over_ein ? 4 : over_eout ? 5 : over_band ? 3 : 0;
         band_press = int(frame_at(m.x)), band_in = clip.loop_in, band_out = clip.loop_out;
         if (dragging_handle) doc_.history.begin(clip);
@@ -624,7 +657,7 @@ void App::draw_timeline_panel() {
     if (ImGui::IsItemActive() && dragging_audio_ && clip.audio) {
         clip.audio->offset = audio_press_offset_ + (frame_at(m.x) - audio_press_frame_) / std::max(clip.fps, 1);
         ImGui::SetTooltip("Audio starts at %.2f s", clip.audio->offset);
-    } else if (ImGui::IsItemActive()) {
+    } else if (ImGui::IsItemActive() && !retiming && !lip_drag) {
         int fr = int(frame_at(m.x));
         auto seconds = [&](int frames) { return std::clamp(std::round(frames / double(clip.fps) / 0.05) * 0.05, 0.0, 10.0); };
         switch (dragging_handle) {
@@ -721,6 +754,12 @@ void App::draw_status_bar() {
                 const std::string editing = "Editing " + doc_.project.actors[doc_.project.active].name;
                 if (status_ != editing) ImGui::SameLine(0, 24), hint(editing.c_str());
             }
+            if (camera_.ortho) ImGui::SameLine(0, 24), hint("Ortho");  // VP-67
+            if (const ui::Host::Grid g = host_.grid(); !g.name.empty()) {  // spec 09 item 56: the viewer's grid
+                ImGui::SameLine(0, 24);
+                hint(("Grid: " + g.name).c_str());
+                ImGui::SetItemTooltip("%s", ui::grid_note(g).c_str());
+            }
             if (mirror_live_) {  // PT-1, in the gizmo's tint
                 ImGui::SameLine(0, 24);
                 ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kMirrorTint), "Mirror on");
@@ -735,7 +774,9 @@ void App::draw_status_bar() {
                 if (ImGui::SmallButton(("Notifications (" + std::to_string(h->unread_notices()) + ")").c_str())) h->toggle_notices();
             }
             draw_check_badge();
-            const std::string hint = graph_.hovered() ? graph_nav_hint() : nav_hint();
+            const std::string hint = graph_.hovered() ? graph_nav_hint()
+                                     : dope_.hovered() ? "Dope sheet: middle or Alt+drag pans   Wheel: zoom   Shift+Wheel: scroll"
+                                                       : nav_hint();
             ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize(hint.c_str()).x - 16);
             ImGui::TextDisabled("%s", hint.c_str());
             ImGui::EndMenuBar();

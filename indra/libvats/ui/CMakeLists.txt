@@ -29,6 +29,8 @@ endif()
 add_library(vats_ui STATIC
     actors_ui.cpp
     sit_export_ui.cpp
+    height_variant_ui.cpp
+    clips_ui.cpp
     app.cpp
     audio_track.cpp
     bodies.cpp
@@ -36,9 +38,13 @@ add_library(vats_ui STATIC
     dynamics_ui.cpp
     idle_ui.cpp
     overlap_ui.cpp
+    balance_ui.cpp
     firewall.cpp
     gizmo.cpp
     curve_filter_ui.cpp
+    motion_quality_ui.cpp
+    simplify_ui.cpp
+    dope_sheet.cpp
     graph_editor.cpp
     hand_poser.cpp
     file_library_ui.cpp
@@ -46,18 +52,31 @@ add_library(vats_ui STATIC
     icon_button.cpp
     inventory.cpp
     light_ui.cpp
+    listing_media_ui.cpp
     lint_ui.cpp
     loop_ui.cpp
     loop_assist_ui.cpp
+    footlock_ui.cpp
+    pinned_ghosts_ui.cpp
+    pose_match_ui.cpp
     pose_tools_ui.cpp
     mocap_ui.cpp
     modal.cpp
+    motion_path_ui.cpp
     panels.cpp
     props.cpp
+    reference_ui.cpp
     ragdoll_ui.cpp
     face_ui.cpp
+    expression_pack_ui.cpp
+    lip_sync_ui.cpp
     tween_ui.cpp
+    key_tags_ui.cpp
+    picker_ui.cpp
     retarget_ui.cpp
+    retime_ui.cpp
+    batch_retarget_ui.cpp
+    priority_plan_ui.cpp
     sl_preview_ui.cpp
     settings.cpp
     theme.cpp

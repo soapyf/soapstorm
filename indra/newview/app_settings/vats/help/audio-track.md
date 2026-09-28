@@ -2,7 +2,7 @@
 
 An animation can carry one audio track, so you can time a dance or a gesture to the music while you work. The waveform shows along the timeline and plays with the animation; beat markers and a beat grid help put keys on the beat. The audio stays in VATs: it is never put in the exported `.anim`.
 
-> Related articles: [[Keys and timeline]], [[Time editing]], [[Projects and files]], [[Export to Second Life]]
+> Related articles: [[Keys and timeline]], [[Time editing]], [[Lip sync]], [[Projects and files]], [[Export to Second Life]]
 
 ## Usage
 
@@ -35,7 +35,7 @@ The timeline's right-click menu has an **Audio** section:
 | **Beat Grid Starts Here** | Puts a beat of the grid on the current frame (needs a BPM) |
 | **Mark a Beat Here** | Adds a beat marker at the current frame (**B**) |
 | **Clear Marked Beats** | Removes every beat marker |
-| **Snap to Beats** | Makes scrubbing and range picks land on the nearest beat |
+| **Snap to Beats** | Makes scrubbing, range picks and retime markers land on the nearest beat |
 
 Each change is one undo step.
 
@@ -46,7 +46,7 @@ There are two ways to get beats onto the timeline; they can be used together:
 - **A beat grid**: type the song's **BPM**, scrub to a frame that is on a beat, and choose **Beat Grid Starts Here**. Grid lines appear every beat.
 - **Tapped beats**: play the animation and press **B** on each beat. **Mark a Beat Here** marks the current frame, so it works while stopped too.
 
-With **Snap to Beats** on, the playhead and **Shift+drag** ranges snap to a beat within 3 frames of the mouse.
+With **Snap to Beats** on, the playhead, **Shift+drag** ranges and [[Time editing#Retiming with markers|retime markers]] snap to a beat within 3 frames of the mouse.
 
 ![The timeline with a waveform and beat grid lines every 15 frames](images/audio-track/timeline-beats.png)
 *A 120 BPM click track at 30 fps: the waveform shows each click, and the grid puts a line every 15 frames.*
@@ -67,9 +67,13 @@ The audio is saved in the project as a path to the file, relative to the project
 ## Tips and tricks
 
 - Set **Snap to Beats**, then key the big poses by scrubbing from beat to beat.
+- To move keys that are already there onto the beat, use retime markers: turn on **Retime**, drop a marker on a pose and drag it to a beat line. See [[Time editing#Retiming with markers]].
+- A dance over 60 seconds can go to Second Life in parts cut on the beat: **Tools → Split Dance at Beats...**, see [[Time editing#Split a dance]].
 - Set the animation's frame rate so a beat lands on whole frames: at 120 BPM a beat is 0.5 s, which is 15 frames at 30 fps.
 - To pair the sound with the animation in Second Life, upload the sound too and start both from the same script.
 - [[Time editing]] moves keys but not the audio; slide the audio separately if you insert frames before it.
+- For speech, [[Lip sync]] keys the jaw and lips from the loaded audio, or from a Rhubarb Lip Sync file made from
+  it; its mouth shapes show on the timeline above the waveform.
 
 ## Troubleshooting
 
@@ -98,6 +102,7 @@ That is how Second Life works: animations carry no sound. Upload the sound separ
 
 - [[Keys and timeline]]
 - [[Time editing]]
+- [[Lip sync]]
 - [[Export to Second Life]]
 
 Category: Animating

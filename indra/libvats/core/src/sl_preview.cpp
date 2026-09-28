@@ -129,14 +129,20 @@ BudgetFit fit_anim_budget(const Rig& rig, const Clip& clip, AnimExportOptions op
     constexpr double kMaxRot = 5, kMaxPos = 0.05;  // the Reduce keys fields' upper ends
     AnimExportResult r = export_anim(skel, clip, opt);
     fit.bytes = write_anim(r.file).size();
-    while (fit.bytes >= kAnimMaxUploadBytes && (opt.reduce_rot_deg < kMaxRot || opt.reduce_pos_m < kMaxPos)) {
-        opt.reduce_rot_deg = std::min(kMaxRot, std::max(opt.reduce_rot_deg, 0.05) * 1.5);
-        opt.reduce_pos_m = std::min(kMaxPos, std::max(opt.reduce_pos_m, 0.0005) * 1.5);
+    const bool world = opt.reduce_world_m > 0;  // WR-5: the world tolerance is the one to raise
+    while (fit.bytes >= kAnimMaxUploadBytes &&
+           (world ? opt.reduce_world_m < kMaxPos : opt.reduce_rot_deg < kMaxRot || opt.reduce_pos_m < kMaxPos)) {
+        if (world) {
+            opt.reduce_world_m = std::min(kMaxPos, std::max(opt.reduce_world_m, 0.0005) * 1.5);
+        } else {
+            opt.reduce_rot_deg = std::min(kMaxRot, std::max(opt.reduce_rot_deg, 0.05) * 1.5);
+            opt.reduce_pos_m = std::min(kMaxPos, std::max(opt.reduce_pos_m, 0.0005) * 1.5);
+        }
         ++fit.steps;
         r = export_anim(skel, clip, opt);
         fit.bytes = write_anim(r.file).size();
     }
-    fit.rot_deg = opt.reduce_rot_deg, fit.pos_m = opt.reduce_pos_m;
+    fit.rot_deg = opt.reduce_rot_deg, fit.pos_m = opt.reduce_pos_m, fit.world_m = opt.reduce_world_m;
     fit.fits = fit.bytes < kAnimMaxUploadBytes && !r.file.joints.empty();
     if (!fit.fits) return fit;
     for (const BoneDeviation& d : anim_deviation(rig, clip, r.file, opt.shape, opt.positions)) {

@@ -17,6 +17,7 @@ const Rgb kCategoryColour[kCategoryCount] = {{0.95f, 0.62f, 0.25f}, {0.55f, 0.80
                                              {0.80f, 0.80f, 0.80f}, {1.00f, 1.00f, 1.00f}, {0.78f, 0.74f, 0.90f}};
 const Rgb kVolume{0.80f, 0.78f, 1.00f};  // pale lavender-grey (VP-10)
 const Rgb kSelected{1.0f, 0.95f, 0.2f};
+const Rgb kContact{0.92f, 0.31f, 0.27f};  // in a self-contact finding at this frame (08 SX)
 
 Rgb mix(Rgb a, Rgb b, float t) { return {a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t}; }
 
@@ -218,11 +219,13 @@ std::vector<OnionGhost> App::ghost_poses() {
 // with distance; the pre-filter ghost is grey. Drawn see-through and never picked.
 void App::draw_onion(const SceneColours& colours) {
     const OnionView v = onion_view();
+    const bool bones = v.bones_only || (body_ == Body::SkeletonOnly && !mesh_body());
+    for (const auto& g : pinned_ghost_poses())  // pinned ghosts (ON-5): violet, whether onion skin is on or not
+        draw_ghost(g, mix({0.72f, 0.42f, 1.0f}, colours.body, 0.2f), 0.35f, bones);
     const auto ghosts = ghost_poses();
     if (ghosts.empty()) return;
     const Rgb cool = mix({0.35f, 0.62f, 1.0f}, colours.body, 0.2f), warm = mix({1.0f, 0.58f, 0.28f}, colours.body, 0.2f);
     const Rgb grey = mix({0.85f, 0.85f, 0.85f}, colours.body, 0.2f);
-    const bool bones = v.bones_only || (body_ == Body::SkeletonOnly && !mesh_body());
     for (auto it = ghosts.rbegin(); it != ghosts.rend(); ++it)  // farthest first
         draw_ghost(it->globals, it->at.offset < 0 ? cool : it->at.offset > 0 ? warm : grey,
                    0.12f + 0.28f * it->at.weight, bones);
@@ -267,6 +270,7 @@ ImTextureID App::render_scene(int w, int h) {
     const SceneColours& colours = scene_colours();
     { VATS_PROFILE("vp begin+ground");
     if (!host_.scene_begin(ui::SceneTarget::View, w, h, camera_, colours)) return ImTextureID{};  // the viewer: the world is the view
+    draw_reference(true, double(w) / h);  // 08 RF: the backdrop, behind everything
     host_.scene_ground(globals_.empty() ? Vec3{} : globals_[0].pos); }
 
     static std::vector<Vertex> prop_verts;
@@ -284,6 +288,7 @@ ImTextureID App::render_scene(int w, int h) {
     { VATS_PROFILE("vp props"); draw_props(prop_verts, prop_indices); }
     draw_treadmill();  // 08 LP-8
     draw_backdrop();   // 08 LT-2
+    draw_reference(false, double(w) / h);  // 08 RF: the plane in the scene
 
     VATS_PROFILE("vp volumes+bones+end");
     static std::vector<Vertex> volumes;
@@ -298,9 +303,11 @@ ImTextureID App::render_scene(int w, int h) {
         Vec3 end = sh ? skel_[i].end.mul(sh->scale[i]) : skel_[i].end;
         if (end.length() < 1e-5) continue;
         Rgb c = kCategoryColour[int(skel_[i].category)];
+        planner_colour(i, c);  // 08 PP-2: the winning clip's colour
         bool sel = std::find(selection_.begin(), selection_.end(), i) != selection_.end();
         if (i == primary()) c = kSelected;
         else if (sel) c = mix(kSelected, c, 0.45f);
+        else if (contact_bone(i)) c = kContact;
         else if (i == hover_bone_) c = mix(c, {1, 1, 1}, 0.5f);
         bone_glyph(bones, globals_[i].pos, globals_[i].apply(end), local_axes(i), c);
     }
@@ -667,10 +674,12 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
         } else {
             const char* label = tool == Tool::Rotate ? "Rotate" : tool == Tool::Scale ? "Scale" : "Move";
             std::string what = sp ? sp->name : ph ? rig_->limbs()[ph->limb].label + (ph->pole ? " pole" : " IK") : skel_[p].name;
+            const bool reached = ph && !ph->pole && tool == Tool::Move && reach_after_drag(ph->limb);  // 08 RC-1, same step
             if (doc_.history.commit(std::string(label) + " " + what, doc_.clip())) {
                 mark_dirty();
-                status(std::string(tool == Tool::Rotate ? "Rotated " : tool == Tool::Scale ? "Scaled " : "Moved ") + what + " at frame " +
-                       std::to_string(int(std::round(frame_))));
+                if (!reached)
+                    status(std::string(tool == Tool::Rotate ? "Rotated " : tool == Tool::Scale ? "Scaled " : "Moved ") + what +
+                           " at frame " + std::to_string(int(std::round(frame_))));
             }
             gizmo_.end_drag();
             dragging_gizmo_ = false;
@@ -770,9 +779,11 @@ void App::draw_bone_lines(ImDrawList* dl) const {
         double hx, hy, tx, ty;
         if (!projector_.to_screen(globals_[i].pos, hx, hy) || !projector_.to_screen(globals_[i].apply(end), tx, ty)) continue;
         Rgb c = kCategoryColour[int(skel_[i].category)];
+        planner_colour(i, c);  // 08 PP-2
         const bool sel = std::find(selection_.begin(), selection_.end(), i) != selection_.end();
         if (i == primary()) c = kSelected;
         else if (sel) c = mix(kSelected, c, 0.45f);
+        else if (contact_bone(i)) c = kContact;
         else if (i == hover_bone_) c = mix(c, {1, 1, 1}, 0.5f);
         const ImU32 col = IM_COL32(int(c.r * 255), int(c.g * 255), int(c.b * 255), 235);
         const ImVec2 a{float(hx), float(hy)}, b{float(tx), float(ty)};
@@ -801,6 +812,7 @@ void App::render_world_scene() {
     draw_props(verts, indices);
     draw_treadmill();  // 08 LP-8
     draw_backdrop();   // 08 LT-2
+    draw_reference(false, 1);  // 08 RF: the plane, when the host draws pictures (else draw_viewport's overlay)
     host_.scene_end();
 }
 
@@ -839,6 +851,14 @@ void App::draw_world_extras(ImDrawList* dl) {
                 line(g.globals[parent].pos, g.globals[i].pos, c, 1.5f);
         }
     }
+
+    // Pinned ghosts (08 ON-5), as the onion ghosts are drawn here: bone lines, violet.
+    for (const auto& g : pinned_ghost_poses())
+        for (int i = 1; i < skel_.volume_start(); ++i) {
+            const int parent = skel_[i].parent;
+            if (parent >= 0 && !skel_[i].attachment && skel_[i].category != Category::Face && node_visible(i))
+                line(g[parent].pos, g[i].pos, IM_COL32(184, 107, 255, 220), 1.5f);
+        }
 
     // The SL preview's original (08 SP-2), as the onion ghosts are drawn here: bone lines, green.
     for (int i = 1; !sl_ghost_.empty() && i < skel_.volume_start(); ++i) {
@@ -913,7 +933,11 @@ void App::draw_viewport() {
     const float cube = settings_.view_cube_size;
     ImVec2 mp = ImGui::GetIO().MousePos;
     bool over_cube = mp.x >= origin.x + 8 && mp.x <= origin.x + 8 + cube && mp.y >= origin.y + 8 && mp.y <= origin.y + 8 + cube;
-    { VATS_PROFILE("vp input"); viewport_input(origin, size, hovered && !over_cube && cube_drag_ == 0); }
+    {
+        VATS_PROFILE("vp input");
+        const bool path = motion_path_input(hovered && !over_cube && cube_drag_ == 0);  // 08 MP-3: a key dot's drag
+        viewport_input(origin, size, hovered && !over_cube && cube_drag_ == 0 && !path);
+    }
     if (world && ImGui::GetDragDropPayload()) {
         // The world view has no window of its own to drop onto: an empty one over it while something is dragged.
         ImGui::SetNextWindowPos(origin);
@@ -933,6 +957,7 @@ void App::draw_viewport() {
     else render_world_scene();
     ImDrawList* dl = world ? ImGui::GetBackgroundDrawList() : ImGui::GetWindowDrawList();  // world: behind every panel
     if (scene) dl->AddImage(scene, origin, ImVec2(origin.x + size.x, origin.y + size.y), ImVec2(0, 1), ImVec2(1, 0));
+    if (world) draw_reference_overlay(dl, origin, size);  // 08 RF
 
     dl->PushClipRect(origin, ImVec2(origin.x + size.x, origin.y + size.y), true);
     if (world) draw_world_extras(dl), draw_bone_lines(dl);
@@ -948,6 +973,8 @@ void App::draw_viewport() {
         dl->AddCircle(ImVec2(float(x), float(y)), 4.5f, IM_COL32(10, 12, 14, 200), 0, 1.2f);
     }
     draw_handles(dl);
+    draw_motion_paths(dl);  // 08 MP: through projector_, so the viewer draws it over the world too
+    draw_balance(dl);  // View > Centre of Mass (08 CM-1)
     // IO-42: a prop whose mesh is missing is a dashed-looking orange box, so it can still be found and picked.
     for (int k = 0; k < int(doc_.clip().props.size()); ++k) {
         const Prop& p = doc_.clip().props[k];
@@ -977,6 +1004,14 @@ void App::draw_viewport() {
         ImVec2 m = ImGui::GetIO().MousePos;
         std::string label = hover_handle_ >= 0 ? rig_->limbs()[hover_handle_].label + (hover_handle_pole_ ? " IK pole" : " IK")
                                                : skel_[hover_bone_].name;
+        if (hover_handle_ < 0 && skel_[hover_bone_].attachment && !skel_[hover_bone_].volume)  // spec 09 item 55: the viewer
+            if (const std::vector<std::string> worn = host_.worn_on(skel_[hover_bone_].attach_id); !worn.empty()) {
+                label += "\nYou wear here:";
+                for (const std::string& w : worn) label += "\n  " + w;
+                const auto track = doc_.clip().curves.find(skel_[hover_bone_].name);
+                if (track != doc_.clip().curves.end() && !track->second.empty())
+                    label += "\nThis point is keyed: in-world the animation moves what you wear here";
+            }
         const char* name = label.c_str();
         ImVec2 ts = ImGui::CalcTextSize(name), at(m.x + 14, m.y + 22);
         dl->AddRectFilled(ImVec2(at.x - 5, at.y - 3), ImVec2(at.x + ts.x + 5, at.y + ts.y + 3), IM_COL32(12, 13, 16, 220), 4);
@@ -1018,6 +1053,7 @@ void App::draw_viewport() {
     if (!world) return ImGui::End();
     // The world view takes the pointer only over what the editor draws, so every other click reaches the world.
     const bool taken = dragging_gizmo_ || bone_drag_ >= 0 || euler_drag_bone_ >= 0 || modal_ != Modal::None ||
+                       motion_path_.drag_limb >= 0 || (hovered && motion_path_.hover) ||
                        actor_dragging_ || cube_drag_ != 0 ||
                        (hovered && (hover_bone_ >= 0 || hover_handle_ >= 0 || gizmo_hover_ != Gizmo::None ||
                                     actor_gizmo_hover_ != Gizmo::None || over_cube));

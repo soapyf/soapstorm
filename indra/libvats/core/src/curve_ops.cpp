@@ -69,15 +69,30 @@ void store(FCurve& curve, std::vector<Tagged>& keys, const CurveId& id, std::vec
 
 // A drag's selection as keys of at_press. The unselected keys of the live curve are untouched copies of at_press
 // keys (same frame), so every at_press key not among them is a selected one.
+// With press_sel (indices into at_press) the selection is taken from it as it is.
 struct Pressed {
     CurveId id;
     FCurve* now;
     const FCurve* base;
     std::vector<bool> picked;
+    std::vector<double> slide;  // frames each unpicked key moves by (08 KT-3), empty = none
 };
 
-std::vector<Pressed> pressed(Clip& clip, const Clip& at_press, const std::vector<KeyRef>& sel) {
+std::vector<Pressed> pressed(Clip& clip, const Clip& at_press, const std::vector<KeyRef>& sel,
+                             const std::vector<KeyRef>* press_sel = nullptr) {
     std::vector<Pressed> out;
+    if (press_sel) {
+        for (auto& [id, idx] : by_curve(*press_sel)) {
+            FCurve* now = curve_of(clip, id);
+            const FCurve* base = curve_of(at_press, id);
+            if (!now || !base) continue;
+            std::vector<bool> picked(base->keys.size(), false);
+            for (int i : idx)
+                if (i >= 0 && i < static_cast<int>(picked.size())) picked[i] = true;
+            out.push_back({id, now, base, std::move(picked), {}});
+        }
+        return out;
+    }
     for (auto& [id, idx] : by_curve(sel)) {
         FCurve* now = curve_of(clip, id);
         const FCurve* base = curve_of(at_press, id);
@@ -93,7 +108,7 @@ std::vector<Pressed> pressed(Clip& clip, const Clip& at_press, const std::vector
                                        [](const Key& k, double v) { return k.frame < v; });
             if (it != base->keys.end() && it->frame == f) picked[it - base->keys.begin()] = false;
         }
-        out.push_back({id, now, base, std::move(picked)});
+        out.push_back({id, now, base, std::move(picked), {}});
     }
     return out;
 }
@@ -106,8 +121,13 @@ void rebuild(std::vector<Pressed>& ps, std::vector<KeyRef>& sel, F&& edit) {
         std::vector<Key> moving;
         std::vector<Tagged> keys;
         for (size_t j = 0; j < p.base->keys.size(); ++j) {
-            if (p.picked[j]) moving.push_back(p.base->keys[j]);
-            else keys.push_back({p.base->keys[j], false});
+            if (p.picked[j]) {
+                moving.push_back(p.base->keys[j]);
+            } else {
+                Key k = p.base->keys[j];
+                if (!p.slide.empty()) shift(k, p.slide[j], 0);
+                keys.push_back({k, false});
+            }
         }
         edit(moving);
         for (auto& k : moving) keys.push_back({k, true});
@@ -246,14 +266,33 @@ int insert_on_curve(FCurve& curve, double frame) {
     return b;
 }
 
-void move_keys(Clip& clip, const Clip& at_press, std::vector<KeyRef>& sel, double dframe, double dvalue, bool snap) {
-    auto ps = pressed(clip, at_press, sel);
+void move_keys(Clip& clip, const Clip& at_press, std::vector<KeyRef>& sel, double dframe, double dvalue, bool snap,
+               const std::vector<KeyRef>* press_sel) {
+    auto ps = pressed(clip, at_press, sel, press_sel);
     double lo = std::numeric_limits<double>::infinity();
     for (auto& p : ps)
         for (size_t j = 0; j < p.picked.size(); ++j)
             if (p.picked[j]) lo = std::min(lo, p.base->keys[j].frame);
     if (snap) dframe = std::round(dframe);
     if (lo + dframe < 0) dframe = snap ? std::ceil(-lo) : -lo;
+    // 08 KT-3: an unpicked Breakdown key keeps its share of the time between the nearest keys around it that are not
+    // Breakdowns, when either of them moves.
+    for (auto& p : ps) {
+        const std::vector<Key>& ks = p.base->keys;
+        const int n = int(ks.size());
+        for (int j = 0; j < n; ++j) {
+            if (p.picked[j] || ks[j].tag != KeyTag::Breakdown) continue;
+            int a = j - 1, b = j + 1;
+            while (a >= 0 && ks[a].tag == KeyTag::Breakdown) --a;
+            while (b < n && ks[b].tag == KeyTag::Breakdown) ++b;
+            if (a < 0 || b >= n || !(p.picked[a] || p.picked[b])) continue;
+            const double fa = ks[a].frame + (p.picked[a] ? dframe : 0), fb = ks[b].frame + (p.picked[b] ? dframe : 0);
+            double f = fa + (ks[j].frame - ks[a].frame) / (ks[b].frame - ks[a].frame) * (fb - fa);
+            if (snap) f = std::round(f);
+            p.slide.resize(n, 0);
+            p.slide[j] = f - ks[j].frame;
+        }
+    }
     rebuild(ps, sel, [&](std::vector<Key>& ks) {
         for (auto& k : ks) shift(k, dframe, dvalue);
     });

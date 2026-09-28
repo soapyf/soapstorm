@@ -47,6 +47,16 @@ inline Mat4 perspective(double fov_y_rad, double aspect, double znear, double zf
     return r;
 }
 
+// Parallel projection of the box [-half_w, half_w] x [-half_h, half_h] x [-zfar, -znear] (view space) to clip space.
+inline Mat4 orthographic(double half_w, double half_h, double znear, double zfar) {
+    Mat4 r;
+    r.m[0] = float(1 / half_w);
+    r.m[5] = float(1 / half_h);
+    r.m[10] = float(-2 / (zfar - znear));
+    r.m[14] = float(-(zfar + znear) / (zfar - znear));
+    return r;
+}
+
 inline Mat4 look_at(const Vec3& eye, const Vec3& target, const Vec3& up) {
     Vec3 f = (target - eye).normalized(), s = f.cross(up).normalized(), u = s.cross(f);
     Mat4 r;
@@ -65,6 +75,12 @@ struct Camera {
     Vec3 target{0, 0, 1.0};
     double yaw = 0.6, pitch = 0.18, distance = kDefaultDistance;
     double fov = kFov;  // vertical; a host whose camera has its own lens (the viewer's) sets it
+    // Orthographic (VP-67): parallel rays along forward(). The view is as tall at the target as the perspective
+    // one (ortho_half_height), so distance stays the zoom and framing keeps its meaning. Anything up to
+    // kOrthoBack behind the eye still draws and picks, since a close zoom puts the eye inside the body.
+    bool ortho = false;
+    static constexpr double kOrthoBack = 10;
+    double ortho_half_height() const { return distance * std::tan(fov / 2); }
 
     Vec3 forward() const {  // from the camera towards the target
         return Vec3{-std::cos(pitch) * std::cos(yaw), -std::cos(pitch) * std::sin(yaw), -std::sin(pitch)};
@@ -74,7 +90,13 @@ struct Camera {
     Vec3 up() const { return right().cross(forward()); }
 
     Mat4 view() const { return look_at(eye(), target, {0, 0, 1}); }
-    Mat4 projection(double aspect) const { return perspective(fov, aspect, 0.01, 200.0); }
+    Mat4 projection(double aspect) const {
+        if (!ortho) return perspective(fov, aspect, 0.01, 200.0);
+        const double h = ortho_half_height();
+        return orthographic(h * aspect, h, -kOrthoBack, 200.0);
+    }
+    // The unit direction from p towards the viewer: towards the eye, or straight back along the view in ortho.
+    Vec3 to_viewer(const Vec3& p) const { return ortho ? -forward() : (eye() - p).normalized(); }
 
     void orbit(double dx, double dy) {
         yaw -= dx * 0.008;
@@ -133,13 +155,21 @@ struct Projector {
     }
     // World units per pixel at the depth of p (for constant-size gizmos).
     double world_per_pixel(const Camera& cam, const Vec3& p) const {
+        if (cam.ortho) return 2 * cam.ortho_half_height() / h;
         double depth = (p - cam.eye()).dot(cam.forward());
         return 2 * depth * std::tan(cam.fov / 2) / h;
     }
-    // A ray from the camera through a screen point.
+    // A ray from the camera through a screen point. In ortho every ray runs along forward(), from kOrthoBack
+    // behind the eye's plane (what the projection still draws).
     void ray(const Camera& cam, double sx, double sy, Vec3& origin, Vec3& dir) const {
         double nx = (sx - x0) / w * 2 - 1, ny = 1 - (sy - y0) / h * 2;
         double t = std::tan(cam.fov / 2);
+        if (cam.ortho) {
+            const double k = cam.ortho_half_height();
+            dir = cam.forward();
+            origin = cam.eye() - dir * Camera::kOrthoBack + cam.right() * (nx * k * w / h) + cam.up() * (ny * k);
+            return;
+        }
         origin = cam.eye();
         dir = (cam.forward() + cam.right() * (nx * t * w / h) + cam.up() * (ny * t)).normalized();
     }

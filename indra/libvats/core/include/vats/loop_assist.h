@@ -23,6 +23,31 @@ struct LoopCandidate {
 std::vector<LoopCandidate> find_loop_points(const Rig& rig, const Clip& clip, int min_length, int count = 5,
                                             const Shape* shape = nullptr);
 
+// LP-5's pose distance, shared with pose-matched insertion (08 PM-1). A trace holds frames from..to of a clip
+// (clamped to it) as the distance compares them: every node's local rotation (heading_free: the hips turned to
+// face +X, so a clip turned about Z matches), its angular velocity in degrees per 0.1 s and the pelvis height in cm.
+struct PoseTrace {
+    int from = 0;
+    std::vector<std::vector<Quat>> rot;
+    std::vector<std::vector<Vec3>> vel;
+    std::vector<double> height;
+};
+PoseTrace pose_trace(const Rig& rig, const Clip& clip, int from, int to, const Shape* shape = nullptr,
+                     bool heading_free = false);
+// The distance between frame fa of one trace and fb of another (clip frames, inside the traces). The joints
+// compared are the weighted ones that move somewhere in the traces given here.
+class PoseDistance {
+public:
+    PoseDistance(const Skeleton& sk, const std::vector<const PoseTrace*>& traces);
+    double operator()(const PoseTrace& a, int fa, const PoseTrace& b, int fb) const;
+    bool any() const { return wsum_ > 0; }
+
+private:
+    std::vector<std::pair<int, double>> joints_;  // node, weight
+    double wsum_ = 0;
+    bool pelvis_ = false;
+};
+
 // LP-6: a loop of `beats` beats at `bpm` and `fps`. frames is the nearest whole number of frames; residual_ms
 // is how far each loop ends from the beat (positive = late), loops_to_drift how many loops until that adds up
 // to one frame (0 = never), suggested_fps the frame rate nearest fps (10..60) on which every beat is a whole

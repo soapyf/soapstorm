@@ -168,9 +168,10 @@ Vec3 limit_axis(const Skeleton& skel, const std::vector<Xform>& rest, const Join
 
 double angle_between(const Quat& a, const Quat& b) { return 2 * std::acos(std::min(1.0, std::fabs(a.dot(b)))); }
 
+}  // namespace
 
 // Closest points between segments p1-q1 and p2-q2 (Ericson, Real-Time Collision Detection 5.1.9).
-void closest_points(const Vec3& p1, const Vec3& q1, const Vec3& p2, const Vec3& q2, Vec3& c1, Vec3& c2) {
+void segment_closest_points(const Vec3& p1, const Vec3& q1, const Vec3& p2, const Vec3& q2, Vec3& c1, Vec3& c2) {
     const Vec3 d1 = q1 - p1, d2 = q2 - p2, r = p1 - p2;
     const double a = d1.dot(d1), e = d2.dot(d2), f = d2.dot(r);
     double s = 0, t = 0;
@@ -194,8 +195,6 @@ void closest_points(const Vec3& p1, const Vec3& q1, const Vec3& p2, const Vec3& 
     }
     c1 = p1 + d1 * s, c2 = p2 + d2 * t;
 }
-
-}  // namespace
 
 std::vector<std::string> ragdoll_joint_names() {
     std::vector<std::string> out;
@@ -305,12 +304,20 @@ void RagdollSolver::reset(const std::vector<Xform>& g, const std::vector<Xform>&
             for (const Vec3& ea : A.ends)
                 for (const Vec3& eb : B.ends) {
                     Vec3 pa, pb;
-                    closest_points(joint_world(A), point_world(A, ea), joint_world(B), point_world(B, eb), pa, pb);
+                    segment_closest_points(joint_world(A), point_world(A, ea), joint_world(B), point_world(B, eb), pa, pb);
                     touching = touching || (pa - pb).length() < A.radius + B.radius + 0.01;
                 }
             if (!touching) self_pairs_.push_back({a, c});
         }
     last_blend_ = 1;
+}
+
+Vec3 RagdollSolver::centre_of_mass() const {
+    Vec3 sum;
+    double mass = 0;
+    for (const Body& b : bodies_)
+        if (b.inv_mass > 0) sum += b.x * (1 / b.inv_mass), mass += 1 / b.inv_mass;
+    return mass > 0 ? sum * (1 / mass) : Vec3{};
 }
 
 double RagdollSolver::lowest_surface() const {
@@ -320,6 +327,22 @@ double RagdollSolver::lowest_surface() const {
         for (const Vec3& e : b.ends) z = std::min(z, point_world(b, e).z - b.radius);
     }
     return z;
+}
+
+std::vector<RagdollCapsule> RagdollSolver::capsules() const {
+    std::vector<RagdollCapsule> out;
+    for (const Body& b : bodies_) {
+        RagdollCapsule c{b.node, b.parent >= 0 ? bodies_[b.parent].node : -1, b.radius, {}};
+        for (const Vec3& e : b.ends) c.segments.push_back({joint_world(b), point_world(b, e)});
+        out.push_back(std::move(c));
+    }
+    return out;
+}
+
+std::vector<RagdollCapsule> ragdoll_capsules(const Skeleton& skel, const std::vector<Xform>& globals) {
+    RagdollSolver s(skel, Ragdoll{}, {});
+    s.reset(globals, globals, 1);
+    return s.capsules();
 }
 
 void RagdollSolver::positional(int a, int b, const Vec3& pa, const Vec3& pb, const Vec3& correction) {
@@ -435,7 +458,7 @@ void RagdollSolver::solve_contacts(double friction) {
         for (const Vec3& ea : A.ends)
             for (const Vec3& eb : B.ends) {
                 Vec3 pa, pb;
-                closest_points(joint_world(A), point_world(A, ea), joint_world(B), point_world(B, eb), pa, pb);
+                segment_closest_points(joint_world(A), point_world(A, ea), joint_world(B), point_world(B, eb), pa, pb);
                 Vec3 d = pa - pb;
                 double dist = d.length(), want = A.radius + B.radius;
                 if (dist >= want || dist < 1e-9) continue;

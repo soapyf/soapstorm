@@ -72,6 +72,7 @@ void Settings::load(const std::string& file) {
     boolean("bvh_reduce", bvh_reduce);
     boolean("viewer_reset_joints", viewer_reset_joints);
     boolean("viewer_show_others", viewer_show_others);
+    boolean("mixamo_notice_seen", mixamo_notice_seen);
     boolean("mirror_centre", mirror_centre);
     boolean("scratch_existing_only", scratch_existing_only);
     str("scratch_scrub", scratch_scrub);
@@ -118,6 +119,7 @@ void Settings::save(const std::string& file) const {
     j.set("bvh_reduce", bvh_reduce);
     j.set("viewer_reset_joints", viewer_reset_joints);
     j.set("viewer_show_others", viewer_show_others);
+    j.set("mixamo_notice_seen", mixamo_notice_seen);
     j.set("mirror_centre", mirror_centre);
     j.set("scratch_existing_only", scratch_existing_only);
     j.set("scratch_scrub", scratch_scrub);

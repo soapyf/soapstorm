@@ -24,8 +24,10 @@ std::string export_file_name(const ExportNaming& n, const std::string& project_s
     std::snprintf(number, sizeof number, "%02d", n.number < 0 ? 0 : n.number > 999 ? 999 : n.number);
 
     std::string s = n.pattern.empty() ? "[NAME]_[#]_[SIDE]" : n.pattern;
+    if (!n.clip.empty() && s.find("[CLIP]") == std::string::npos) s += "_[CLIP]";
     if (!n.actor.empty() && s.find("[ACTOR]") == std::string::npos) s += "_[ACTOR]";
     replace_all(s, "[ACTOR]", n.actor);
+    replace_all(s, "[CLIP]", n.clip);
     replace_all(s, "[NAME]", name);
     replace_all(s, "[#]", number);
     replace_all(s, "[SIDE]", side);

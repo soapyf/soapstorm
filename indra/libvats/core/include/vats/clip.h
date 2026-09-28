@@ -14,6 +14,7 @@
 
 #include "vats/fcurve.h"
 #include "vats/prop.h"
+#include "vats/reference.h"
 #include "vats/skeleton.h"
 
 namespace vats {
@@ -144,6 +145,32 @@ struct FaceLayer {
     bool operator==(const FaceLayer&) const = default;
 };
 
+// A named group of bones to select at once (spec 08 SS-1). The functions live in selection_sets.h; the sets live on
+// the clip so they save with the project and undo covers them.
+struct SelectionSet {
+    std::string name;
+    std::vector<std::string> bones;
+
+    bool operator==(const SelectionSet&) const = default;
+};
+
+// Lip sync (spec 08 LS): mouth shapes on frames, keyed onto the mouth bones as ARKit shapes. Made and keyed by
+// lip_sync.h; kept so the shapes show on the timeline and a nudge re-keys them.
+struct LipSync {
+    struct Cue {
+        int frame = 0;
+        std::string shape;  // a mouth shape of data/retarget/lip-shapes.json: A-H, X, open, rounded, wide
+        bool operator==(const Cue&) const = default;
+    };
+    int from = 0, to = 0;       // the keyed frames
+    bool positions = false;     // Move face bones when keyed: taking the moves back uses the same
+    std::vector<Cue> cues;      // by frame; each holds until the next
+    std::vector<double> level;  // 0..1 per frame from..to (the loudness, tier 1); empty = 1 everywhere
+    Json extra = Json::object();  // unknown fields, written back
+
+    bool operator==(const LipSync&) const = default;
+};
+
 // Two-bone IK frame (spec 02 section 3.7). VATs lines the mid joint up with the pole, so Switch to IK
 // never twists the limb; Literal is section 3.7 as written, the solve converted projects use.
 enum class IkSolve { VATs, Literal };
@@ -162,6 +189,7 @@ struct Clip {
 
     std::map<std::string, Track> curves;       // track name -> channels
     std::map<std::string, int> joint_priority;  // per-joint overrides (-1 = use the clip's)
+    std::map<std::string, double> ik_pull;      // spec 08 RC-1: limb name -> Pull 0..1 (absent = 0), reach.h
     std::vector<AnimConstraint> constraints;
     std::vector<OrphanJoint> orphans;
     std::vector<Pin> pins;  // in application order
@@ -171,6 +199,9 @@ struct Clip {
     std::optional<Ragdoll> ragdoll;  // spec 08 RD
     std::optional<AudioTrack> audio;  // spec 08 AU
     std::optional<FaceLayer> face_layer;  // spec 08 FA-5; absent = off
+    std::vector<SelectionSet> selection_sets;  // spec 08 SS-1
+    std::optional<LipSync> lip_sync;      // spec 08 LS; absent = none
+    std::optional<Reference> reference;   // spec 08 RF; absent = none
     // Export choices live on the clip so undo covers them (UI-28); saved as the project's "export"
     // and "mirror_export" keys.
     bool mirror_export = false;

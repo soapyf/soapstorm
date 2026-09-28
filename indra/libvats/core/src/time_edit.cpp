@@ -82,11 +82,15 @@ void remove_time(Clip& clip, int a, int b, const std::vector<std::string>& track
 }
 
 void scale_time(Clip& clip, int a, int b, int length, const std::vector<std::string>& tracks) {
-    if (b <= a || length < 1) return;
-    const double s = double(length) / (b - a);
-    if (tracks.empty()) clip.end_frame = std::max(1, clip.end_frame + length - (b - a));
-    remap(clip, tracks,
-          [&](double x) { return x > b + 1e-6 ? x + (length - (b - a)) : x >= a - 1e-6 ? a + (x - a) * s : x; }, never);
+    if (length < 1) return;
+    scale_time_to(clip, a, b, a + length, tracks);
+}
+
+void scale_time_to(Clip& clip, double a, double b, double to, const std::vector<std::string>& tracks) {
+    if (b <= a || to <= a) return;
+    const double s = (to - a) / (b - a), d = to - b;
+    if (tracks.empty()) clip.end_frame = std::max(1, int(std::lround(clip.end_frame + d)));
+    remap(clip, tracks, [&](double x) { return x > b + 1e-6 ? x + d : x >= a - 1e-6 ? a + (x - a) * s : x; }, never);
 }
 
 KeyRange copy_range(const Clip& clip, int a, int b, const std::vector<std::string>& tracks) {

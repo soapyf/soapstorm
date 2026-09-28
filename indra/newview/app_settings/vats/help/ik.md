@@ -2,7 +2,7 @@
 
 IK (inverse kinematics) poses a limb by its end: place the hand or foot and the arm or leg bends to reach it. VATs has IK for the arms, legs, fingers, spine, hind legs and wings, and you can switch each limb between IK and FK (bone-by-bone rotation) at any frame without the limb jumping.
 
-> Related articles: [[Posing]], [[Hold and bind]], [[Graph editor]], [[Keys and timeline]]
+> Related articles: [[Posing]], [[Hold and bind]], [[Balance]], [[Graph editor]], [[Keys and timeline]]
 
 ## Usage
 
@@ -46,6 +46,18 @@ Select the limb (a bone, the target or the pole) and press **K** again. From tha
 
 Moving the target or pole keys it at the current frame, like any bone. **S** (Set Key) with a target or pole selected keys both the target and the pole.
 
+### Full-body reach
+
+A hand target dragged further than the arm reaches normally leaves the hand short. Give the target a **Pull** and the body goes after it instead.
+
+1. Select the target (**Left Arm IK**, **Right Leg IK** and so on). **Properties → Bone** shows the target's name and a **Pull** slider, 0 to 1, 0 by default. Arms and legs have it; fingers and the spine do not.
+2. Set **Pull**, for example `1`. It is saved with the project, per target.
+3. Drag the target out of reach with the **Move** tool and let go.
+
+When you let go of an arm's target past the arm's full length, the spine leans towards it first, up to 30°, through the spine's own IK solve, as far as it takes to bring the shoulder within reach. What is still missing after the lean, times **Pull**, moves the hips straight towards the target. With **Pull** `1` the hand reaches the target; with `0.5` the hips go half the remaining way and the hand stops short by the rest. A leg's target skips the lean and moves only the hips. The status bar says, for example, "Hips moved 12.4 cm to reach".
+
+The result is ordinary keys at the current frame: rotation keys on `mTorso` and `mChest` (or the **Spine** target when the spine is in IK) and a position key on `mPelvis`, in the same undo step as the drag. Feet held by [[Hold and bind|pins]] stay where they are while the hips move; feet that are not pinned travel with the hips. A target within reach, a rotate drag and **Pull** `0` change nothing but the target.
+
 ### IK Controls in the Bones tab
 
 The **Bones** tab lists every limb that uses IK under **IK Controls**, as **Left Arm IK** and **Left Arm Pole** and so on. Click one to select it. A limb whose IK is off at the current frame is marked **(FK)** and drawn dimmer.
@@ -85,7 +97,7 @@ The pole decides which way the joint bends. Move the pole out on the side the el
 
 ### The hand stops short of the target
 
-The target is further away than the limb can reach. The limb straightens and points at the target; it does not stretch. Bring the target closer or move the body.
+The target is further away than the limb can reach. The limb straightens and points at the target; it does not stretch. Bring the target closer, move the body, or give the target a **Pull** so the body follows it (see [[IK#Full-body reach]]).
 
 ## App and viewer
 
@@ -95,6 +107,7 @@ The target is further away than the limb can reach. The limb straightens and poi
 ## See also
 
 - [[Hold and bind]]
+- [[Balance]]
 - [[Posing]]
 - [[VATs Editor (viewer)]]
 

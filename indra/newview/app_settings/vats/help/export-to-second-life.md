@@ -52,7 +52,7 @@ The export settings are saved with the project, and each change to them is an un
 | **Name** | The animation name. Empty uses the project file name, or `Animation` for an unsaved project. |
 | **Number** | 0–999, written with at least two digits (`01`). |
 | **Side** | **(none)**, **Left** or **Right**. |
-| **Pattern** | Default `[NAME]_[#]_[SIDE]`. Tokens: `[NAME]`, `[#]`, `[SIDE]`, `[ACTOR]`. |
+| **Pattern** | Default `[NAME]_[#]_[SIDE]`. Tokens: `[NAME]`, `[#]`, `[SIDE]`, `[ACTOR]`, `[CLIP]`. |
 
 VATs removes the characters `\ / : * ? " < > |`, collapses doubled separators (`__` becomes `_`) and
 trims separators from the ends, so an empty side leaves no stray underscore: `Wave_01.anim`.
@@ -66,6 +66,13 @@ trims separators from the ends, so an empty side leaves no stray underscore: `Wa
   library as well ([[Project library]]).
 - **Export mirrored (left and right swapped)** swaps the sides in the exported file only; the project is
   unchanged.
+- **Also export for heights** writes every file again for avatars of other heights, with the height at the end
+  of the name: `Wave_01_H175.anim`. See [[Export to Second Life#Export for other heights]].
+
+With several [[Clips]], the export settings are the current clip's, the dialog's top line names the clip, and
+every name includes the clip: `[CLIP]` is the clip's name, and a pattern without `[CLIP]` gets `_` and the name at
+the end. **Export All Clips (.anim)**, under **Every clip** in the dialog and in the **File** menu, exports every
+clip with its own settings into the current clip's folder; see [[Clips#Export every clip]].
 
 ### Choose the bake shape
 
@@ -77,6 +84,35 @@ against, whatever the view shows:
 - **SL Default** and **SL Default (Male)**;
 - **Mesh body:** and the body name, for each body in the inventory. A mesh body uses the joint positions it was
   rigged to (see [[Mesh bodies]]).
+
+### Export for other heights
+
+An animation baked on one body puts hands and feet in the wrong place on a much shorter or taller one: a hand
+pinned to a table floats above it or sinks into it. **Also export for heights**, under **Also export the other
+side (mirrored)**, writes the animation again for each height you choose, baked on a body of that height, so IK
+and pins are solved again on it and the contacts hold.
+
+- Ticking it adds three heights: `1.75 m`, `1.95 m` and `2.15 m`. Each row has a list with those presets and
+  **Custom**, which shows a field from `1.40` to `2.40 m`. **Remove** takes a row away and **Add Height** adds
+  one: two or three heights, each with its name ending (`_H175`) beside it.
+- Heights are as Firestorm's shape editor shows them: the viewer's body size (the Z of `llGetAgentSize`) plus
+  0.195 m. SL Default is `1.88 m`, SL Default (Male) `1.97 m`.
+- Each body is SL Default, or SL Default (Male) when **Bake shape** is **SL Default (Male)**, with its shape's
+  **Height** slider moved until it is that tall, and **Leg Length** after that once **Height** is at its end.
+  They reach from about `1.41` to `2.32 m` (`1.50` to `2.40 m` male); a height beyond that is made as close as
+  they allow. Other bake shapes (a mesh body, **Your avatar**) get the female body, and position keys are written
+  from its default joint positions.
+- The file names end in the height in centimetres, after everything else: `Wave_01_Right_H175.anim`, and with
+  **Also export the other side (mirrored)** each height gets its mirrored copy, `Wave_01_Left_H175.anim`.
+  **Saves as** lists every file.
+- **Export SL .anim** and **Upload Animation...** write every height; BVH export and **Export This Actor as
+  .anim...** write none. An imported `.anim` you have not edited still goes out as it came in; its height files
+  are baked anew.
+- **Upload size** and [[Preview as SL plays it]] measure the file without a height.
+
+In a [[Couples and groups|couple or group]] every actor is exported at each height, and a pin on the partner is
+solved against the partner at that height too. The placement note then gives each height's seat offsets; see
+[[Couples and groups#Export]].
 
 ### Your avatar
 
@@ -120,9 +156,26 @@ written, holding it where the animation has it. BVH export is not affected.
 ### Reduce keys
 
 VATs samples every bone at every whole frame, then removes keys that the viewer's interpolation
-reproduces within a tolerance. **Reduce keys** has two fields: rotation (default `0.050 deg`) and
-position (default `0.50 mm`). The first and last frames and the frames where you set keys are always
-kept. Set both fields to `0` to keep a key on every frame.
+reproduces within a tolerance. The first and last frames, the frames where you set keys, and a key at least
+every 60 frames are always kept. **Reduce keys** has two modes, chosen in its list:
+
+- **Per bone** (the default): two fields, rotation (default `0.050 deg`) and position (default `0.50 mm`).
+  Each bone keeps the keys its own rotation and position need to stay within them. Set both fields to `0` to
+  keep a key on every frame.
+- **Anywhere on the body**: one field, a distance (default `1.00 mm`, from `0.05` to `50 mm`). Keys go while no
+  point of the body ends up further than that from your animation, in the world, as SL plays the file.
+
+A key left out of a shoulder moves the whole arm, while one left out of a finger moves only the fingertip. **Per
+bone** allows every bone the same angle, so it keeps too many finger keys or loses too much at the hand.
+**Anywhere on the body** measures a bone's difference by how far it moves the farthest point below it (at least
+0.1 m away, so fingertips, eyes and attachment points count too), and shares the distance out down each chain
+from the hip: each bone gets the distance divided by the number of rotation and position tracks on the longest
+chain through it, so the differences down to a fingertip add up to no more than the distance (plus the file's
+rounding, under 0.2 mm). For the same largest difference it usually keeps fewer keys than **Per bone**. It picks keys by splitting each stretch at its
+frame of largest difference until every frame is within its share (the Ramer–Douglas–Peucker method).
+
+[[Export to Second Life#Positions that do not move]] and **Leave out bones that don't move** use the **Per
+bone** tolerances in either mode.
 
 To see what the reduced file looks like when it plays, use **View → Preview as SL Plays It**
 ([[Preview as SL plays it]]).
@@ -144,13 +197,14 @@ while the left mouse button is held down.
 **Fit to 250 KB** is available while the file is over the size limit or longer than 60 seconds. It raises
 both **Reduce keys** tolerances by half again, step by step, starting from the current values (at least
 `0.050 deg` and `0.50 mm`) and going no further than `5 deg` and `50 mm`, until the file is under 250,000
-bytes. When it fits, the new tolerances become **Reduce keys** (one undo step, `Fit to 250 KB`), and a line
+bytes. With **Anywhere on the body** it raises that distance instead, the same way, from at least `0.50 mm` up to
+`50 mm`, and leaves the **Per bone** values as they are. When it fits, the new tolerances become **Reduce keys** (one undo step, `Fit to 250 KB`), and a line
 gives the size and the largest difference between the fitted file and your animation, in the world, in
 millimetres and degrees, with the bones where they occur. The [[Preview as SL plays it|SL preview]] table shows
 the differences bone by bone.
 
 The keys you set are always kept, so an animation keyed on most frames, such as motion capture, can stay over
-the limit at `5 deg` and `50 mm`, and an animation over 60 seconds never fits. Then **Split into Parts...**
+the limit at `5 deg` and `50 mm` (or `50 mm` anywhere on the body), and an animation over 60 seconds never fits. Then **Split into Parts...**
 appears: it saves the animation as consecutive projects beside this one, `<name>_part1.vat`,
 `<name>_part2.vat` and so on, each under 60 seconds and the size limit, each starting where the previous one
 ends. Each part is fitted as [[Retargeting#Fit SL's limits]] fits a clip, which may also lower its frame rate
@@ -169,7 +223,8 @@ per-bone priorities or constraints; see [[BVH#Export]].
 
 In a standard Second Life viewer, choose **Build → Upload → Animation**, pick the `.anim` file, and
 confirm the fee. In SoapStorm, the [[VATs Editor (viewer)]] uploads directly with **File → Upload Animation...**:
-every file Export would write, each with the viewer's price confirmation.
+every file Export would write, the mirrored copies and heights included, each with the viewer's price
+confirmation. **Upload All Clips...** does the same for every clip of a project with several [[Clips]].
 
 > **Warning:** Uploading costs L$ and cannot be undone. Test on the Aditi beta grid, where uploads are
 > free, or preview the animation in the viewer first.
@@ -183,7 +238,8 @@ every file Export would write, each with the viewer's price confirmation.
 | Bake shape | **SL Default**; in the viewer **Your avatar** while you wear mesh joint positions | **Properties → Export** |
 | Use Your avatar for every actor | off (the viewer only) | **Properties → Export** |
 | Leave out bones that don't move | off | **Properties → Export** |
-| Reduce keys | `0.05` degrees, `0.5` mm | **Properties → Export** |
+| Reduce keys | **Per bone**: `0.05` degrees, `0.5` mm; **Anywhere on the body**: `1` mm | **Properties → Export** |
+| Also export for heights | off; ticked: `1.75`, `1.95`, `2.15` m | **Properties → Export** |
 | BVH: include bone positions | off | **Properties → Export** |
 
 All of these are stored in the project, not in the preferences.

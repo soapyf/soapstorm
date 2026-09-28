@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <map>
+#include <optional>
 
 #include "vats/curve_ops.h"
 #include "vats/dynamics.h"
@@ -13,6 +14,8 @@
 #include "vats/loop_tools.h"
 #include "vats/ragdoll.h"
 #include "vats/rig.h"
+#include "vats/world_reduce.h"
+#include "vats/self_contact.h"
 
 namespace vats {
 namespace {
@@ -42,6 +45,7 @@ const std::vector<LintRule> kRules = {
     {"hand_pose", "Hand pose with finger bones"},
     {"joint_limits", "Joints past their limits"},
     {"ground", "Feet off the ground"},
+    {"self_contact", "Body parts pass through each other"},
     {"upload_size", "Upload size"},
     {"duration", "Duration"},
 };
@@ -125,6 +129,10 @@ AnimExportOptions with_clip_settings(const Clip& clip, AnimExportOptions o) {
     if (const Json* r = ex.find("reduce"); r && r->is_array() && r->arr.size() == 2 && r->arr[0].is_number() &&
                                            r->arr[1].is_number())
         o.reduce_rot_deg = r->arr[0].num, o.reduce_pos_m = r->arr[1].num;
+    if (const Json* m = ex.find("reduce_mode"); m && m->is_string() && m->str == "world") {  // 08 WR
+        const Json* w = ex.find("reduce_world");
+        o.reduce_world_m = w && w->is_number() && w->num > 0 ? w->num : kReduceWorldDefault;
+    }
     return o;
 }
 
@@ -140,7 +148,7 @@ std::string list(const std::vector<std::string>& names) {
 const std::vector<LintRule>& lint_rules() { return kRules; }
 
 std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const AnimExportOptions& opt,
-                                   const std::vector<std::string>& off) {
+                                   const std::vector<std::string>& off, const Shape* mesh_body) {
     std::vector<LintFinding> out;
     auto on = [&](const char* rule) { return std::find(off.begin(), off.end(), rule) == off.end(); };
     auto add = [&](const char* rule, LintSeverity sev, std::vector<std::string> bones, std::vector<int> frames,
@@ -315,6 +323,37 @@ std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const
                          if (!keyed_any) break;
                      }
                  }});
+        }
+    }
+
+    // Self-penetration (08 SX): the ragdoll's capsules on every frame; on the mesh body, with its volumes, when there
+    // is one.
+    if (on("self_contact")) {
+        const Shape* body = mesh_body ? mesh_body : opt.shape;
+        std::map<std::pair<int, int>, std::pair<double, std::vector<int>>> hits;  // pair -> deepest, frames
+        const SelfContactCheck check(skel, body, mesh_body != nullptr);
+        for (int f = 0; f <= last; ++f)
+            for (const SelfContact& s : check.find(skel.global_pose(poses[f], body))) {
+                auto& h = hits[{s.a, s.b}];
+                h.first = std::max(h.first, s.depth);
+                h.second.push_back(f);
+            }
+        // The fix outlives this call: it keeps its own copies of the shapes.
+        const std::optional<Shape> sh = opt.shape ? std::optional<Shape>(*opt.shape) : std::nullopt;
+        const std::optional<Shape> mb = mesh_body ? std::optional<Shape>(*mesh_body) : std::nullopt;
+        for (auto& [ab, h] : hits) {
+            const auto [a, b] = ab;
+            LintFix fix;
+            if (push_out_moves(skel[a].name) || push_out_moves(skel[b].name))
+                fix = {"Push Out", [&skel, ext = opt.external, a, b, frames = h.second, sh, mb](Clip& c) {
+                           Rig r(skel);
+                           r.external = ext;
+                           push_out(c, r, a, b, frames, sh ? &*sh : nullptr, mb ? &*mb : nullptr);
+                       }};
+            add("self_contact", LintSeverity::Info, {skel[a].name, skel[b].name}, h.second,
+                skel[a].name + " and " + skel[b].name +
+                    fmt(" pass %.1f cm into each other (their capsules: a hint, not the mesh)", h.first * 100),
+                std::move(fix));
         }
     }
 

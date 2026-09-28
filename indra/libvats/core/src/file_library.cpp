@@ -218,4 +218,26 @@ bool lib_delete(const std::vector<std::string>& roots, const std::string& path, 
     return true;
 }
 
+bool lib_add_folder(std::vector<std::string>& list, std::string dir) {
+    std::replace(dir.begin(), dir.end(), '\\', '/');
+    if (dir.empty()) return false;
+    if (dir.back() != '/') dir += '/';
+    if (std::find(list.begin(), list.end(), dir) != list.end()) return false;
+    list.push_back(dir);
+    return true;
+}
+
+std::vector<std::pair<LibKind, std::string>> community_folders(const std::string& root) {
+    std::string r = root;
+    std::replace(r.begin(), r.end(), '\\', '/');
+    if (r.empty()) return {};
+    if (r.back() != '/') r += '/';
+    std::vector<std::pair<LibKind, std::string>> out;
+    for (auto [sub, kind] : {std::pair{"poses", LibKind::Anim}, {"clips", LibKind::Anim}, {"animations", LibKind::Anim},
+                             {"projects", LibKind::Project}})
+        if (std::error_code ec; fs::is_directory(u8(r + sub), ec)) out.push_back({kind, r + sub + "/"});
+    if (out.empty()) out = {{LibKind::Project, r}, {LibKind::Anim, r}};
+    return out;
+}
+
 }  // namespace vats

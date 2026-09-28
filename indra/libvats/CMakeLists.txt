@@ -6,6 +6,8 @@ project(libvats)
 
 include(00-Common)
 
+# The legacy import is never synced here (sync-to-viewer.sh); forced off, also over a cache from an older copy that had it.
+set(VATS_LEGACY_IMPORT OFF CACHE BOOL "Legacy project and library import" FORCE)
 add_subdirectory(core)  # target vats_core, alias vats::core
 
 # The editor UI (spec 09 U3), target vats_ui, built against the viewer's own imgui target (indra/imgui).

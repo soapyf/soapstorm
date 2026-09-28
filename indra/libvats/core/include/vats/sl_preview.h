@@ -55,11 +55,13 @@ AnimCost anim_cost(const Skeleton& skel, const AnimFile& f);
 // UM-3: "Fit to 250 KB". Raises the key-reduction tolerances step by step (x1.5 each, rotation and position
 // together, starting from opt's and at least 0.05 deg / 0.5 mm, capped at 5 deg / 50 mm, the Reduce keys fields'
 // range) until the export is under kAnimMaxUploadBytes. The clip's own keys anchor the reduction (export_anim keeps
-// them), so a clip keyed on most frames may not fit at any tolerance.
+// them), so a clip keyed on most frames may not fit at any tolerance. With world reduction on (opt.reduce_world_m
+// > 0, 08 WR-5) only that tolerance is raised, the same way, from at least 0.5 mm up to 50 mm.
 struct BudgetFit {
     bool fits = false;
     bool too_long = false;  // over 60 s: no tolerance helps (split the clip)
     double rot_deg = 0, pos_m = 0;  // the tolerances of the last export tried
+    double world_m = 0;             // its world tolerance (0 = per-bone reduction)
     std::size_t bytes = 0;          // its size
     int steps = 0;                  // tolerance steps taken (0 = it fitted as it was)
     double max_mm = 0, max_deg = 0;  // its worst world-space error (anim_deviation), when it fits

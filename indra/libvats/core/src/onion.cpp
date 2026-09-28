@@ -45,4 +45,10 @@ std::vector<OnionGhost> onion_ghosts(const Rig& rig, const Clip& clip, double fr
     return out;
 }
 
+std::vector<Xform> pose_ghost(const Rig& rig, const Clip& clip, double frame, const Shape* shape, const LibraryItem& pose) {
+    Clip posed = clip;  // ponytail: a whole-clip copy per drawn frame; fine for a few pinned poses
+    apply_pose(posed, rig.skeleton(), pose, frame, false);
+    return evaluate(rig, posed, frame, shape).globals;
+}
+
 }  // namespace vats

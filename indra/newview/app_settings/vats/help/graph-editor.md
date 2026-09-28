@@ -83,7 +83,7 @@ The buttons along the top show icons only; hover one for its name, its key in yo
 | **Ease** | the word **Ease**; opens the easing presets (see "Easing presets" below) |
 | **Fit Values** | two arrows pointing away from a line |
 | **Delete** | a bin |
-| **More** | the word **More** and an arrow; a drop-down with **Euler Filter**, **Filter Curves...**, **Flip Time**, **Flip Values** and, under **Snapshot curves**, **Snapshot**, **Swap** and **Clear** (see "Buffer curves" below) |
+| **More** | the word **More** and an arrow; a drop-down with **Euler Filter**, **Filter Curves...**, **Flip Time**, **Flip Values**, under **Tag keys** the key tags **Extreme**, **Breakdown**, **Hold** and **No Tag** for the selected keys (see [[Keys and timeline#Blocking and key tags]]) and, under **Snapshot curves**, **Snapshot**, **Swap** and **Clear** (see "Buffer curves" below) |
 
 Then **Snap frames** and the **Frame** and **Value** boxes. The toolbar is one row down to a window about 1200 pixels wide; narrower, it wraps.
 
@@ -191,13 +191,47 @@ curve heading somewhere keeps heading there. When the animation loops and the ra
 the whole loop is filtered as one cycle, so the loop's end still meets its start (a whole turn or the
 hips' travel per cycle is kept).
 
-> **Tip:** Filtering leaves a key on every frame. Export's **Reduce keys** leaves out the ones the motion does not need; see [[Export to Second Life#Reduce keys]].
+> **Tip:** Filtering leaves a key on every frame. **Edit → Simplify Curves...** turns them back into a few keys you can edit (see [[#Simplifying curves]]); export's **Reduce keys** also leaves out the ones the motion does not need; see [[Export to Second Life#Reduce keys]].
+
+### Simplifying curves
+
+**Edit → Simplify Curves...** replaces the dense keys of baked, captured or filtered motion (a key on every frame) with a few keys, placed where an animator would put them, so the curves can be edited by hand again. It works on the rotation and position curves of the selected bones (their pin and IK tracks included), or of every bone. It opens a dialog in the bottom right corner:
+
+![The Simplify Curves dialog over the graph, with the hip's walk curves reduced to a few keys](images/graph-editor/simplify-curves.png)
+*mHipLeft in the retarget-walk example: 174 keys in the range become 19.*
+
+| Setting | Default | Effect |
+|---|---|---|
+| **All bones** | on when nothing is selected | off: only the tracks selected when the dialog opened |
+| **Rotation** | `0.25` deg (0.01–5) | how far a rotation curve may move from where it was, at any whole frame |
+| **Position** | `0.50` mm (0.05–20) | the same for position curves, such as the hips' travel |
+| **From** ... **to** | the whole animation | the frames to simplify; keys outside stay as they are |
+| **Keep frames where feet are planted** | off | every curve keeps a key on the frames where a foot plants and where it lifts (the foot contacts [[Retargeting#Clean up foot sliding|Tools → Clean Up Foot Sliding]] finds, with its default settings); greyed when there are none |
+| **Frame** | | moves the current frame while the dialog is open |
+
+The dialog shows how many keys the range has before and after, live. While it is open, the curves, the graph and the 3D view show the result, and the curves as they were are the grey [[#Buffer curves]]. **OK** (or **Enter**) applies it as one undo step (**Simplify Curves**); **Cancel** (or **Esc**) puts the curves back.
+
+How the keys are chosen, per curve:
+
+1. The ends of the range keep a key, and so does every turn (a peak or a dip) where the curve reverses by more than the tolerance. Reversals smaller than the tolerance, such as tracker jitter, are not turns.
+2. Between two turns, where the curve bends like an S rather than running straight, the steepest frame (the inflection) keeps a key.
+3. The curve is refitted with Bezier segments between those keys. A segment that misses a whole frame by more than the tolerance first gets **Free** handles on the curve's own slope; if it still misses, it gets a key at the frame it misses most, and the fit repeats. Keys that fit with **Auto** tangents keep them.
+
+Every whole frame of the range stays within the tolerance of the curve as it was. Frames in between may differ a little more; export samples whole frames only.
+
+Some curves are left as they are, and the dialog lists them:
+
+- the rotation of a bone whose Y rotation comes within 5° of ±90° anywhere in the range: near this gimbal lock the X and Z curves swing wildly and do not simplify well;
+- curves with **Stepped** keys in the range;
+- curves the fit would not give fewer keys, such as curves that are already hand-keyed.
+
+> **Tip:** Filter jittery motion first: jitter larger than the tolerance is real motion to the fit, and keeps many keys.
 
 ### Buffer curves
 
 **Snapshot** keeps a copy of every curve of the animation and draws it in grey under the live curves, for the channels shown, until **Clear**. **Swap** exchanges the live curves and the grey ones, as one undo step, so you can go back and forth between two versions. A new snapshot replaces the old one; **New** and **Open** clear it, and it is not saved with the project.
 
-**Euler Filter**, **Bake** and **Re-bake** in the [[Dynamics]] window, and the [[Loop tools]] (**Make Loop Seamless**, **Remove Hip Travel (In Place)**, **Add Travel Forward**, **Start Cycle at Frame**) take a snapshot before they change the curves, so the curves as they were stay in view.
+**Euler Filter**, **Simplify Curves...**, **Bake** and **Re-bake** in the [[Dynamics]] window, and the [[Loop tools]] (**Make Loop Seamless**, **Remove Hip Travel (In Place)**, **Add Travel Forward**, **Start Cycle at Frame**) take a snapshot before they change the curves, so the curves as they were stay in view.
 
 ### Navigating
 
@@ -224,6 +258,7 @@ A [[Hold and bind|pin]] shows as a band over the frames it covers. Drag its star
 - Use **Plateau** on keys where a limb must stop without drifting past its pose.
 - A bone that suddenly spins between two keys usually has a 360° jump: run **Euler Filter**.
 - Run **Euler Filter** before **Filter Curves...** on imported motion: filtering across a 360° jump bends the curve through it.
+- After **Filter Curves...** or a bake, **Simplify Curves...** and [[Motion quality]] show what each step did to the key count, the shake and the size.
 - **All animated bones** with **Frame All** is a quick way to see the timing of the whole animation.
 
 ## Troubleshooting
@@ -242,7 +277,9 @@ In every preset except Industry, the middle button is used for panning. Drag the
 
 ## See also
 
+- [[Dope sheet]]
 - [[Keys and timeline]]
+- [[Motion quality]]
 - [[Keyboard shortcuts]]
 - [[VATs Editor (viewer)]]
 

@@ -38,8 +38,9 @@ const std::vector<LintRule>& lint_rules();
 
 // Checks the clip as export_anim would write it with opt. The clip's own export settings ("reduce", "leave_static")
 // win over opt's, so a fix that changes them clears its finding. Rules named in off are skipped. The fixes may keep
-// a pointer to skel: apply them before it goes.
+// a pointer to skel: apply them before it goes. mesh_body: the shape of the mesh body shown, if any; the self-contact
+// rule then measures on its proportions and adds its collision volumes.
 std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const AnimExportOptions& opt,
-                                   const std::vector<std::string>& off = {});
+                                   const std::vector<std::string>& off = {}, const Shape* mesh_body = nullptr);
 
 }  // namespace vats

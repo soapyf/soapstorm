@@ -46,7 +46,7 @@ void Gizmo::place(GizmoKind kind, const Vec3& centre, const Quat& axes, const Ca
     proj_ = proj;
     size_px_ = size_px;
     radius_ = size_px * proj.world_per_pixel(cam, centre);
-    visible_ = (centre - cam.eye()).dot(cam.forward()) > 0.02 && screen(centre, centre_px_);
+    visible_ = (centre - cam.eye()).dot(cam.forward()) > (cam.ortho ? -Camera::kOrthoBack : 0.02) && screen(centre, centre_px_);
 }
 
 void Gizmo::ring_points(int i, ImVec2* pts, bool* front) const {
@@ -54,7 +54,7 @@ void Gizmo::ring_points(int i, ImVec2* pts, bool* front) const {
     u = (u - a * u.dot(a)).normalized();  // gimbal axes are not orthogonal
     if (u.length() < 1e-6) u = (std::fabs(a.x) < 0.9 ? Vec3{1, 0, 0} : Vec3{0, 1, 0}).cross(a).normalized();
     Vec3 v = a.cross(u);
-    Vec3 to_eye = (cam_.eye() - centre_).normalized();
+    Vec3 to_eye = cam_.to_viewer(centre_);
     for (int k = 0; k <= kSegments; ++k) {
         double t = 2 * kPi * k / kSegments;
         Vec3 d = u * std::cos(t) + v * std::sin(t);

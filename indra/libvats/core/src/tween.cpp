@@ -49,11 +49,10 @@ std::vector<double> pose_frames(const Clip& clip, const std::string& track) {
     return out;
 }
 
-// Keys track at frame, t of the way from a's pose at fa to b's at fb: rotation, position and pole groups.
-// A group b lacks is left alone. A group a lacks is rest (zero) on a bone; on an IK controller it means
-// "follow the end bone" or "derive the pole", which has no value to blend from, so b's is keyed as it is.
+}  // namespace
+
 void key_mix(Clip& out, const std::string& track, double frame, const Clip& a, double fa, const Clip& b, double fb,
-             double t) {
+             double t, bool breakdown) {
     const bool ik = is_ik(track);
     struct Keyed {
         const char* const* names;
@@ -74,10 +73,12 @@ void key_mix(Clip& out, const std::string& track, double frame, const Clip& a, d
     }
     Track& tr = out.curves[track];  // every value first: out may be a or b
     for (const Keyed& k : keyed)
-        for (int i = 0; i < 3; ++i) tr[k.names[i]].set_key(frame, k.v[i]);
+        for (int i = 0; i < 3; ++i) {
+            FCurve& c = tr[k.names[i]];
+            c.set_key(frame, k.v[i]);
+            if (breakdown) c.keys[c.find(frame)].tag = KeyTag::Breakdown;
+        }
 }
-
-}  // namespace
 
 std::vector<std::string> tween_tracks(const Rig& rig, const Clip& clip, double frame,
                                       const std::vector<std::string>& tracks) {
@@ -112,7 +113,7 @@ int tween(Clip& clip, const std::vector<std::string>& tracks, double frame, doub
                 else if (!next) next = &f;
             }
             if (!prev || !next) continue;
-            key_mix(clip, track, frame, clip, *prev, clip, *next, t);
+            key_mix(clip, track, frame, clip, *prev, clip, *next, t, true);
         } else {
             const bool keyed = std::any_of(frames.begin(), frames.end(), [&](double f) { return same_frame(f, frame); });
             if (!keyed || frames.size() < 2) continue;

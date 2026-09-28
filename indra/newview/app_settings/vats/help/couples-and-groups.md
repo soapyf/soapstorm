@@ -133,6 +133,10 @@ The bind works like any other pin (see [[Hold and bind]]); release it later with
 It is baked into the exported file. Binds follow one level: an actor bound to a second actor that is
 itself bound to a third follows the second actor's own animation only.
 
+To line a contact up by eye, pin the partner's pose as a ghost: **View → Onion Skin → Ghost Other Actor at
+Frame** and the actor's name draws that actor's pose at the current frame in violet, and it stays while you
+move to other frames or switch to posing the other actor (see [[Onion skin#Pinned ghosts]]).
+
 **Look at Partner**, below the bind, keys the active actor's head and eyes to look between the eyes of the
 **Other actor** on every frame, as one undo step (see [[Face animation#Look at partner]]).
 
@@ -152,6 +156,15 @@ llSitTarget(<0.600, 0.000, 0.000>, llEuler2Rot(<0.0, 0.0, 180.00> * DEG_TO_RAD))
 ```
 
 The note ends with the lines for AVsitter2 and nPose V4, the same as in [[#Sit systems (AVsitter and nPose)]].
+
+With **Also export for heights** on (see [[Export to Second Life#Export for other heights]]), every actor is
+exported at each height, `Hug_01_Lead_H175.anim` and so on, and a pin on the other actor is solved against that
+actor at the same height. SL seats an avatar by its hips, and the hips of a taller body stand higher, so the note
+gets a section per height: for each actor the lift, how much higher its hips stand on that body than on its bake
+shape (about `-0.11 m` for 1.75 m on SL Default, `+0.22 m` for 2.15 m), the offset raised by it, and the AVsitter2 and
+nPose V4 lines with the height's pose and animation names (`Hug_01_H175`, `Hug_01_Lead_H175`) and the raised
+positions. Seat each height's files with its own lines, and hands and feet meet where they did in VATs. The
+**Sit systems (furniture)** section in the **Actors** window shows the lines without a height only.
 
 ### Sit systems (AVsitter and nPose)
 

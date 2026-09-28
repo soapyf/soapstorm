@@ -5,7 +5,7 @@ higher priority on that bone. VATs sets a priority for the whole clip and, when 
 bones. This page also covers the other playback settings stored in the `.anim` header: loop, ease, hand
 pose and expression.
 
-> Related articles: [[Export to Second Life]], [[Anim format]], [[Keys and timeline]]
+> Related articles: [[Export to Second Life]], [[Anim format]], [[Keys and timeline]], [[Priority planner]]
 
 ## Usage
 
@@ -37,7 +37,8 @@ Use this to let a hand or the head win over other animations while the rest of t
 Second Life decides bone by bone, not animation by animation. For each bone, every animation that has a
 record for it is a candidate at its own priority for that bone: the clip's priority, or the bone's own
 where one is set. The candidate with the highest priority moves the bone; the others are ignored on that
-bone only, and still play on the bones where they win.
+bone only, and still play on the bones where they win. On equal priority, the animation started most
+recently wins the bone.
 
 ![Three animations stacked: an AO stand at 2 and a dance at 4 on every bone, and a hand hold at 2 with the wrist at 5; per bone, the dance wins everywhere except the wrist](images/animation-priority/priority-stacking.png)
 *The dance takes the body, including the hold's elbow; the hold keeps only the wrist, where its 5 beats the dance's 4.*
@@ -49,6 +50,9 @@ Two things follow from this:
 - Key only the bones you mean to take. Had the hold keyed the shoulder as well, the shoulder would have
   been a losing candidate against the dance, but a winning one against the AO whenever the dance
   stopped.
+
+To check a clip against the animations it plays with, add them in **Tools → Priority Planner...**
+([[Priority planner]]): it colours each bone by the animation that wins it and lists the bones yours loses.
 
 ### Know which bones an animation claims
 

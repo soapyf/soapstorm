@@ -44,8 +44,10 @@ says so in a note. See [[VATs Editor (viewer)]] for what differs in the viewer.
 - [[IK]]: inverse kinematics on arms, legs and spine.
 - [[Hold and bind]]: pinning a hand or foot to the world or to another bone.
 - [[Hand poser]]: finger poses.
-- [[Face animation]]: face sliders, blinks, eye darts and looking at things.
+- [[Face animation]]: face sliders, blinks, eye darts and looking at things; expression packs for HUDs.
+- [[Lip sync]]: jaw and lips from speech, from the audio or Rhubarb Lip Sync.
 - [[Pose library]]: stored poses and clips in the Inventory.
+- [[Community content]]: shared CC0 poses, clips and animations from a cloned folder.
 - [[Mirror, flip and reverse]]: mirroring, flipping and playing backwards.
 - [[Onion skin]]: ghosts of nearby frames.
 - [[Loop tools]]: seamless loops and hip travel.
@@ -60,6 +62,7 @@ says so in a note. See [[VATs Editor (viewer)]] for what differs in the viewer.
 - [[Idle layer]]: breathing and sway that loop cleanly.
 - [[Overlap]]: follow-through down a keyed chain.
 - [[Ragdoll]]: physics falls.
+- [[Balance]]: the centre of mass, Auto-Balance and Jump Arc.
 
 ## Import and export
 
@@ -74,6 +77,7 @@ says so in a note. See [[VATs Editor (viewer)]] for what differs in the viewer.
 - [[Export to Second Life]]: settings, limits and upload.
 - [[Preview as SL plays it]]: the exported file played back, and how far each bone moves from yours.
 - [[Animation priority]]: which animation wins in-world.
+- [[Priority planner]]: your clip against an AO, a dance or a pose, bone by bone.
 - [[Animation check]]: problems that show only in-world, with fixes.
 
 ## Viewer

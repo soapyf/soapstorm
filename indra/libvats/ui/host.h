@@ -13,6 +13,7 @@
 //   UI's "quit" (the viewer closes the editor); App::request_quit() is the host's close button.
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -22,6 +23,7 @@
 #include "firewall.h"
 #include "imgui.h"
 #include "scene.h"
+#include "vats/priority_plan.h"
 #include "vats/project.h"
 #include "vats/skeleton.h"
 #include "theme.h"
@@ -75,6 +77,22 @@ public:
     virtual ImTextureID load_texture(const std::string& png) = 0;
     virtual void free_texture(ImTextureID texture) = 0;
 
+    // --- Reference picture and listing media (08 RF, LM) -------------------------------------------
+    // A load_texture picture on a quad, corners bottom-left, bottom-right, top-right, top-left of the picture, see-through
+    // by opacity (0..1). backdrop: the corners are clip-space x, y and the picture lies behind everything drawn after it
+    // (the UI sends it right after scene_begin); else they are in the scene, depth-tested, writing no depth. False when
+    // the host cannot: the UI then draws the picture over the view itself, on ImGui's background list (the viewer, for
+    // now; spec 09 §0e).
+    virtual bool scene_image(ImTextureID texture, const std::array<Vec3, 4>& corners, float opacity, bool backdrop) {
+        (void)texture, (void)corners, (void)opacity, (void)backdrop;
+        return false;
+    }
+    // The last Thumbnail picture as straight-alpha RGBA, top row first; false when it cannot (listing media's GIF).
+    virtual bool thumbnail_pixels(std::vector<std::uint8_t>& rgba, int& width, int& height) {
+        (void)rgba, (void)width, (void)height;
+        return false;
+    }
+
     // --- Lighting (08 LT-1) -----------------------------------------------------------------------
     // The Light menu's preset, or null for the host's own lighting. The app lights its scene with the key and fill;
     // the viewer sets a local sky from them (only this viewer sees it) and puts the sky it had back with null, and
@@ -90,7 +108,16 @@ public:
     // --- Camera and picking ---------------------------------------------------------------------
     // The camera the view shows and the UI's navigation edits (orbit, pan, zoom, view cube, focus,
     // camera views). The viewer keeps it in step with its own camera, fov included.
+    // camera().ortho is the view's projection (View > Orthographic, spec 04 VP-67). Ortho or not, distance is the
+    // zoom and fov the lens: the ortho view is 2 x distance x tan(fov / 2) tall, as tall at the target as the
+    // perspective one, so zoom and framing mean the same in both. A host keeping camera() in step with its own
+    // camera writes these logical values back, not the lens it draws ortho with.
     virtual Camera& camera() = 0;
+    // The UI turns ortho on and off only through here; false = this host has no ortho view (the default, so a host
+    // that does not implement it never has camera().ortho set under a perspective picture). The app sets the flag
+    // and draws a true ortho projection (Camera::projection). The viewer (spec 09 section 0e "TODO (viewer):
+    // orthographic") sets it and switches its own lens to a telephoto near-ortho, with projector() still matching.
+    virtual bool set_orthographic(bool on) { (void)on; return false; }
     // The projection of the view shown in this rectangle (the Viewport panel, window coordinates):
     // to_screen for markers, gizmos and picking, ray (with camera()) for clicks. The viewer maps the
     // whole window instead, since its world fills it.
@@ -114,6 +141,22 @@ public:
     // The joints whose position a worn mesh overrides (its joint positions, e.g. a mesh head's face bones),
     // by skeleton name; empty = none or unknown. Only names: export warns with it, and never writes the positions.
     virtual std::vector<std::string> joint_overrides() const { return {}; }
+    // The animations running on the host's own avatar (never another's), for the Priority Planner (spec 08 PP-5):
+    // each one's name and the priority of every joint it has keys for, in the order they started (the last started
+    // last). Names and priorities only, never keyframes; the editor's own playback is left out. Empty = none or
+    // unknown (the app).
+    virtual std::vector<PlanClip> running_motions() const { return {}; }
+    // The names of what the host's own avatar wears on an attachment point (avatar_lad.xml id), for the point's hover
+    // label (spec 09 build 19, item 55). Names only; empty = nothing worn there, or unknown (the app).
+    virtual std::vector<std::string> worn_on(int attach_id) const { (void)attach_id; return {}; }
+    // The grid the host is on, for the status bar and the upload section (spec 09 build 19, item 56); an empty name =
+    // none (the app, or not logged in).
+    struct Grid {
+        std::string name;          // e.g. "Second Life", "Second Life Beta", an OpenSim grid's name
+        bool test_grid = false;    // not Second Life's main grid (Aditi or OpenSim): uploads may be free there
+        int upload_cost = -1;      // L$ per animation upload on this grid, -1 = not known
+    };
+    virtual Grid grid() const { return {}; }
 
     // --- Look (the viewer) -----------------------------------------------------------------------
     // The host's own colours (the viewer's skin), asked every frame: true replaces the colour theme with them,
@@ -188,5 +231,13 @@ public:
     // Runs shell commands for the firewall helper (firewall.h), possibly on another thread.
     virtual CommandRunner command_runner() = 0;
 };
+
+// One line about uploading on a host's grid: its price, or that a test grid may charge nothing.
+inline std::string grid_note(const Host::Grid& g) {
+    if (g.test_grid)
+        return "On " + g.name + ", a test or OpenSim grid, uploads may be free" +
+               (g.upload_cost > 0 ? " (it lists L$" + std::to_string(g.upload_cost) + ")" : std::string());
+    return "On " + g.name + (g.upload_cost >= 0 ? ", an upload costs L$" + std::to_string(g.upload_cost) : std::string());
+}
 
 }  // namespace vats::ui

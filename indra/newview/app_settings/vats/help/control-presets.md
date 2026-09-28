@@ -52,6 +52,7 @@ In every preset:
 - Right-click a bone for its body-part menu.
 - **Esc** or a right-click during a drag cancels it.
 - The mouse wheel zooms.
+- **Num 5** switches the view between perspective and orthographic ([[Interface#Orthographic view]]).
 
 ### Industry (Maya-style)
 

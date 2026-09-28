@@ -102,4 +102,28 @@ void prune(Clip& clip) {
     }
 }
 
+void keep_outer_handles(Clip& clip, const Clip& before, const std::string& track, int a, int b) {
+    auto was = before.curves.find(track);
+    auto now = clip.curves.find(track);
+    if (was == before.curves.end() || now == clip.curves.end()) return;
+    for (auto& [name, curve] : now->second) {
+        auto old = was->second.find(name);
+        if (old == was->second.end()) continue;
+        const int ia = old->second.find(a), ib = old->second.find(b), ja = curve.find(a), jb = curve.find(b);
+        if (ia >= 0 && ja >= 0) {
+            const Key& k = old->second.keys[ia];
+            Key& n = curve.keys[ja];
+            n.left = Handle::Free, n.lx = k.lx, n.ly = k.ly;
+            if (jb != ja) n.right = Handle::AutoClamped;
+        }
+        if (ib >= 0 && jb >= 0) {
+            const Key& k = old->second.keys[ib];
+            Key& n = curve.keys[jb];
+            n.right = Handle::Free, n.rx = k.rx, n.ry = k.ry;
+            if (jb != ja) n.left = Handle::AutoClamped;
+        }
+        curve.recompute_handles();
+    }
+}
+
 }  // namespace vats

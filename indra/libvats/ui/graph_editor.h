@@ -14,6 +14,7 @@
 #include "vats/curve_filter.h"
 #include "vats/curve_ops.h"
 #include "vats/history.h"
+#include "vats/pose_ops.h"
 #include "vats/pose_tools.h"
 #include "vats/rig.h"
 #include "vats/skeleton.h"
@@ -44,11 +45,14 @@ bool filter_kind_ui(FilterKind& k);
 bool filter_params_ui(FilterSettings& s, const std::function<void(const char*)>& label);
 
 class GraphEditor {
+    friend class DopeSheet;  // spec 08 DS: shares the key selection, clipboard, list mode, snap and time range
+
 public:
     enum class Mode { Selected, AllAnimated };
 
     void draw(GraphContext& ctx);
     bool hovered() const { return hovered_; }
+    bool snap_frames() const { return snap_; }  // the toolbar's Snap frames (also used by retime markers, 08 TE-5)
     // True once after Escape cancelled a graph drag this frame, so the app can skip its own Escape action.
     bool take_escape() { return std::exchange(escape_used_, false); }
     Mode mode() const { return mode_; }
@@ -82,17 +86,13 @@ private:
     struct View {
         double t0 = -2, t1 = 32, v0 = -100, v1 = 100;
     };
-    struct Copied {
-        std::string track, channel;
-        double offset, value;
-        Interp interp;
-    };
 
     void build_channels(const GraphContext& ctx);
     void draw_toolbar(GraphContext& ctx);
     void draw_channel_list(GraphContext& ctx);
     void draw_canvas(GraphContext& ctx);
     void draw_ease_menu(GraphContext& ctx);  // spec 08 TW-3, in tween_ui.cpp
+    void draw_tag_menu_items(GraphContext& ctx);  // spec 08 KT-1, in key_tags_ui.cpp
     void edit(GraphContext& ctx, const char* label, const std::function<void(Clip&)>& change);
     void open_filter(GraphContext& ctx);  // curve_filter_ui.cpp
     void preview_filter(GraphContext& ctx);
@@ -134,7 +134,7 @@ private:
     bool handle_right_ = false;
     int scale_handle_ = -1;  // 0..7 around the box
     double scale_pivot_f_ = 0, scale_pivot_v_ = 0, scale_w_ = 1, scale_h_ = 1;
-    std::vector<Copied> clipboard_;
+    KeyClipboard clipboard_;  // pose_ops.h (AM-98)
     int pin_sel_ = -1;           // selected pin (index into clip.pins)
     bool pin_end_ = false;       // dragging the release marker rather than the start
     int pin_frame_ = 0;          // where the dragged marker is

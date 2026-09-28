@@ -239,6 +239,9 @@ void App::add_time_actions(const std::function<void(const char*, Action)>& add) 
 }
 
 void App::draw_time_menu_items() {
+    if (ImGui::MenuItem("Retime Markers", nullptr, retime_on_)) set_retime(!retime_on_);  // TE-5 (retime_ui.cpp)
+    ImGui::SetItemTooltip("Double-click the ruler to drop a marker; drag a marker to retime the keys around it");
+    ImGui::Separator();
     for (const char* id : {"insert_frames", "remove_range", "stretch_range"}) menu_item(id);
     ImGui::Separator();
     for (const char* id : {"copy_range", "paste_range", "paste_range_insert", "paste_range_mirrored"}) menu_item(id);

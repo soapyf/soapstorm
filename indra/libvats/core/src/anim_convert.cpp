@@ -7,6 +7,7 @@
 #include <cstdio>
 
 #include "vats/rig.h"
+#include "vats/world_reduce.h"
 
 namespace vats {
 namespace {
@@ -219,6 +220,20 @@ AnimExportResult export_anim(const Skeleton& skel, const Clip& clip, const AnimE
             if (!has_pos[i]) animated[i] = 0;
         }
 
+    // IO-14w: world-space reduction. Each frame's global pose is computed once; the reach and the budgets come from it.
+    const bool world = opt.reduce_world_m > 0;
+    std::vector<std::vector<double>> reach;
+    std::vector<double> budget;
+    if (world) {
+        std::vector<std::vector<Xform>> globals(n);
+        for (int fr = 0; fr < n; ++fr) globals[fr] = skel.global_pose(frames[fr], opt.shape);
+        reach = world_reach(skel, globals);
+        std::vector<char> rot_keyed(skel.size(), 0), pos_keyed(skel.size(), 0);
+        for (int i = 0; i < skel.size(); ++i)
+            rot_keyed[i] = animated[i] && rot_out[i], pos_keyed[i] = animated[i] && has_pos[i];
+        budget = world_budgets(skel, rot_keyed, pos_keyed, opt.reduce_world_m);
+    }
+
     bool clamped = false;
     for (int i = 0; i < skel.size(); ++i) {
         if (!animated[i]) continue;
@@ -232,8 +247,13 @@ AnimExportResult export_anim(const Skeleton& skel, const Clip& clip, const AnimE
         for (int fr = 0; fr < n; ++fr) rot[fr] = (node.rest * frames[fr].rot[i]).normalized();
         static const Track kNoTrack;
         const Track& track = tracks[i] ? *tracks[i] : kNoTrack;
-        for (int k : rot_out[i] ? reduce_rotation_keys(rot, opt.reduce_rot_deg, opt.max_gap, key_frames(track, kRotChannels, n))
-                                : std::vector<int>{}) {
+        std::vector<int> rot_keys;
+        if (rot_out[i]) {
+            const std::vector<char> anchors = key_frames(track, kRotChannels, n);
+            rot_keys = world ? reduce_rotation_keys_world(rot, reach[i], budget[i], opt.max_gap, anchors)
+                             : reduce_rotation_keys(rot, opt.reduce_rot_deg, opt.max_gap, anchors);
+        }
+        for (int k : rot_keys) {
             auto c = encode_rotation(rot[k]);
             j.rot.push_back({time_code(k, fps, f.duration), c[0], c[1], c[2]});
         }
@@ -249,7 +269,17 @@ AnimExportResult export_anim(const Skeleton& skel, const Clip& clip, const AnimE
                 }
                 pos[fr] = p;
             }
-            for (int k : reduce_position_keys(pos, opt.reduce_pos_m, opt.max_gap, key_frames(track, kPosChannels, n))) {
+            const std::vector<char> anchors = key_frames(track, kPosChannels, n);
+            std::vector<int> pos_keys;
+            if (world) {
+                const int p = node.parent;
+                const Vec3 s = opt.shape && p >= 0 && p < int(opt.shape->scale.size()) ? opt.shape->scale[p] : Vec3{1, 1, 1};
+                const double scale = std::max({std::fabs(s.x), std::fabs(s.y), std::fabs(s.z)});
+                pos_keys = reduce_position_keys_world(pos, scale, budget[i], opt.max_gap, anchors);
+            } else {
+                pos_keys = reduce_position_keys(pos, opt.reduce_pos_m, opt.max_gap, anchors);
+            }
+            for (int k : pos_keys) {
                 auto c = encode_position(pos[k]);
                 j.pos.push_back({time_code(k, fps, f.duration), c[0], c[1], c[2]});
             }

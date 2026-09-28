@@ -107,6 +107,7 @@ active preset.*
 | Right | 3 | Num 3, 3 | 3 | 3 |
 | Left | Ctrl+3 | Ctrl+Num 3, Ctrl+3 | Ctrl+3 | Ctrl+3 |
 | Top | 7 | Num 7, 7 | 7 | 7 |
+| Orthographic | Num 5 | Num 5 | Num 5 | Num 5 |
 | Frame Selected | F | Num . | F | F |
 | Frame All | A | Home | Ctrl+0, A | A |
 | Zoom In | – | – | Page Up | – |

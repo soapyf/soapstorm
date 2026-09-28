@@ -19,9 +19,11 @@
 #include "imgui_internal.h"
 #include "vats/anim_convert.h"
 #include "vats/bvh.h"
+#include "vats/clips.h"
 #include "vats/edit.h"
 #include "vats/footlock.h"
 #include "vats/pose_presets.h"
+#include "vats/world_reduce.h"
 #include "theme.h"
 #ifdef VATS_LEGACY_IMPORT
 #include "vats/legacy_import.h"
@@ -151,6 +153,7 @@ void App::shutdown() {
     if (!keep_autosave_) clear_autosave();  // a clean exit: whatever was unsaved was discarded on purpose
     free_thumbnails();
     help_ui_.reset();  // frees the help's images while the host can still free textures
+    reference_ui_.reset();  // and the reference picture's
 }
 
 void App::set_body(int b, bool remember) {
@@ -229,6 +232,7 @@ bool App::write_text(const std::string& path, const std::string& text, bool back
 }
 
 void App::mark_dirty() {
+    blocking_after_edit();  // 08 KT-2
     doc_.dirty = true;
     update_title();
 }
@@ -245,6 +249,7 @@ void App::new_document() {
     doc_ = Document();
     graph_.clear_snapshot();  // PT-4
     scratch_.reset(), scratch_marks_.clear();  // PT-2: the scratch pose and its history were the old document's
+    pinned_ghosts_.clear();  // 08 ON-5: they point at the old document's frames and actors
     doc_.clip().loop_tangents = true;  // 08 LP-7: on for new projects (opened ones keep their own)
     clip_replaced();
     clear_selection();
@@ -258,8 +263,11 @@ bool App::save(const std::string& path) {
     // Prop paths are written relative to the project where possible (IO-42); in memory they stay absolute.
     Project copy = doc_.project;
     const std::string dir = path.substr(0, path.find_last_of('/'));
-    for (Prop& p : copy.clip.props) p.path = prop_path_to_stored(p.path, dir);
-    if (copy.clip.audio) copy.clip.audio->path = prop_path_to_stored(copy.clip.audio->path, dir);  // AU-1, like props
+    for_each_clip(copy, [&](Clip& c) {  // every actor's clip of every take (08 CL)
+        for (Prop& p : c.props) p.path = prop_path_to_stored(p.path, dir);
+        if (c.audio) c.audio->path = prop_path_to_stored(c.audio->path, dir);  // AU-1, like props
+        if (c.reference) c.reference->path = prop_path_to_stored(c.reference->path, dir);  // 08 RF
+    });
     std::string text = save_project(copy);
     if (!write_file(path, text.data(), text.size(), true)) {
         message("Save failed", "Could not write " + path + "\n\n" + g_write_error);
@@ -287,13 +295,16 @@ void App::load_project_file(const std::string& path, bool example) {
     doc_.project = std::move(p);
     clip_replaced();  // history and body follow the file's active actor, not the empty document's
     const std::string dir = path.substr(0, path.find_last_of('/'));
-    for (Prop& prop : doc_.clip().props) {
-        prop.path = prop_path_from_stored(prop.path, dir);
-        // A starter prop saved on another computer (or by the help's examples): this installation's copy.
-        if (prop.lib_id.rfind("starter-", 0) == 0 && !prop_model(prop.path))
-            if (const PropLibraryItem* it = find_prop_item(prop.lib_id)) prop.path = it->prop.path;
-    }
-    if (doc_.clip().audio) doc_.clip().audio->path = prop_path_from_stored(doc_.clip().audio->path, dir);
+    for_each_clip(doc_.project, [&](Clip& c) {  // every actor's clip of every take (08 CL)
+        for (Prop& prop : c.props) {
+            prop.path = prop_path_from_stored(prop.path, dir);
+            // A starter prop saved on another computer (or by the help's examples): this installation's copy.
+            if (prop.lib_id.rfind("starter-", 0) == 0 && !prop_model(prop.path))
+                if (const PropLibraryItem* it = find_prop_item(prop.lib_id)) prop.path = it->prop.path;
+        }
+        if (c.audio) c.audio->path = prop_path_from_stored(c.audio->path, dir);
+        if (c.reference) c.reference->path = prop_path_from_stored(c.reference->path, dir);  // 08 RF
+    });
     if (auto miss = missing_prop_meshes(); !miss.empty()) {  // IO-42: placeholders, never a failed load
         std::string t;
         for (auto& m : miss) t += "- " + m + "\n";
@@ -421,6 +432,7 @@ void App::save_actor(const std::string& actor, const std::string& path, bool ani
     const std::string dir = path.substr(0, path.find_last_of('/'));
     for (Prop& p : one.clip.props) p.path = prop_path_to_stored(p.path, dir);
     if (one.clip.audio) one.clip.audio->path = prop_path_to_stored(one.clip.audio->path, dir);
+    if (one.clip.reference) one.clip.reference->path = prop_path_to_stored(one.clip.reference->path, dir);
     const std::string text = save_project(one);
     if (!write_file(path, text.data(), text.size(), true)) return message("Save failed", "Could not write " + path + "\n\n" + g_write_error);
     rescan_files();
@@ -440,6 +452,13 @@ AnimExportOptions App::anim_export_options() {
     if (const Json* reduce = doc_.clip().export_settings.find("reduce"); reduce && reduce->is_array() && reduce->arr.size() == 2 &&
                                                                           reduce->arr[0].is_number() && reduce->arr[1].is_number())
         opt.reduce_rot_deg = reduce->arr[0].num, opt.reduce_pos_m = reduce->arr[1].num;
+    // IO-14w (08 WR): "anywhere on the body", in metres, when that mode is chosen.
+    const Json& ex = doc_.clip().export_settings;
+    if (const Json* m = ex.find("reduce_mode"); m && m->is_string() && m->str == "world") {
+        const Json* w = ex.find("reduce_world");
+        opt.reduce_world_m = w && w->is_number() && w->num > 0 ? w->num : kReduceWorldDefault;
+    }
+    if (height_shape_) opt.shape = height_shape_, opt.positions = nullptr;  // HV: a height variant bakes on its body
     return opt;
 }
 
@@ -452,7 +471,7 @@ Clip App::anim_export_clip() const {
 // hold whatever file there is (the upload meter and the SL preview show an oversize one too).
 int App::export_in_memory(AnimExportResult& r, std::vector<std::uint8_t>& bytes) {
     ScratchAside aside(*this);  // PT-2: the document, not a scratch pose
-    if (raw_import_ && !doc_.clip().mirror_export)
+    if (raw_import_ && !doc_.clip().mirror_export && !height_shape_)
         if (const AnimFile* same = raw_reexport(*raw_import_, doc_.clip())) {
             r.file = *same;
             bytes = write_anim(*same);
@@ -654,8 +673,20 @@ void App::show_dialog(Dialog kind, std::function<void()> after_save) {
         case Dialog::ExportActor:
             host_.save_file_dialog({{"SL animation", "anim"}}, dir + stem + "_" + file_actor_ + ".anim", dialog_result(kind));
             break;
+        case Dialog::AoNotecard:
+            host_.save_file_dialog({{"Text", "txt"}}, dir + stem + (ao_format_ ? "_ZHAO.txt" : "_FirestormAO.txt"), dialog_result(kind));
+            break;
         case Dialog::SitLines:
             host_.save_file_dialog({{"Text", "txt"}}, dir + stem + (sit_format_ ? "_nPose.txt" : "_AVpos.txt"), dialog_result(kind));
+            break;
+        case Dialog::ExpressionPack: host_.open_folder_dialog("", dialog_result(kind)); break;
+        case Dialog::Rhubarb:
+            host_.open_file_dialog({{"Rhubarb Lip Sync (JSON or TSV)", "json;tsv;txt"}}, false, dialog_result(kind));
+            break;
+        case Dialog::LoadReference: host_.open_file_dialog({{"PNG picture", "png"}}, false, dialog_result(kind)); break;
+        case Dialog::ListingMedia:  // 08 LM
+            if (listing_png_) host_.save_file_dialog({{"PNG pictures", "png"}}, dir + stem + "_listing.png", dialog_result(kind));
+            else host_.save_file_dialog({{"Animated GIF", "gif"}}, dir + stem + "_listing.gif", dialog_result(kind));
             break;
     }
 }
@@ -690,6 +721,10 @@ void App::build_actions() {
     add("import_bvh", {"Import BVH...", 0, 0, false,
                        [this] { guard_unsaved([this] { show_dialog(Dialog::ImportBvh); }); }, {}});
     add("import_retarget", {"Import Animation (Retarget)...", 0, 0, false, [this] { guard_unsaved([this] { show_dialog(Dialog::ImportRetarget); }); }, {}});
+    add("batch_retarget", {"Batch Retarget Folder...", 0, 0, false, [this] {  // 07 RT-13
+                               show_batch_retarget_ = true;
+                               batch_ui_ = nullptr;  // a fresh dialog re-reads the rig tables and saved mappings
+                           }, {}});
     add("import_anim", {"Import SL .anim...", 0, 0, false,
                         [this] { guard_unsaved([this] { show_dialog(Dialog::ImportAnim); }); }, {}});
     add("import_prop", {"Import Prop / Mesh (.dae, .fbx)...", ctrl | ImGuiKey_I, 0, false, [this] { show_dialog(Dialog::ImportProp); }, {}});
@@ -698,6 +733,11 @@ void App::build_actions() {
     if (host_.can_upload()) add("upload", {"Upload Animation...", 0, 0, false, [this] { upload_now(); }, {}});
     add("export_bvh", {"Export BVH (Animated Bones)...", 0, 0, false, [this] { export_now(true, false); }, {}});
     add("export_bvh_all", {"Export BVH (All Bento Bones)...", 0, 0, false, [this] { export_now(true, true); }, {}});
+    // 08 CL-4: every clip, each with its own export settings.
+    auto several_clips = [this]() -> const char* { return clip_count(doc_.project) > 1 ? nullptr : "The project has one clip (Tools > Clips)"; };
+    add("export_all_clips", {"Export All Clips (.anim)", 0, 0, false, [this] { export_now(false, false, true); }, several_clips});
+    if (host_.can_upload())
+        add("upload_all_clips", {"Upload All Clips...", 0, 0, false, [this] { upload_now(true); }, several_clips});
     // In the viewer the editor closes and the viewer stays.
     add("quit", {host_.world_view() ? "Close Editor" : "Quit", ctrl | ImGuiKey_Q, 0, false, [this] { request_quit(); }, {}});
 
@@ -763,7 +803,7 @@ void App::build_actions() {
                     {}});
     add("delete_key", {"Delete Key", ImGuiKey_Delete, ImGuiKey_Backspace, false,
                        [this] {
-                           if (graph_.hovered()) return (void)with_graph([&](GraphContext& g) { graph_.delete_selected(g); });
+                           if (keys_hovered()) return (void)with_graph([&](GraphContext& g) { graph_.delete_selected(g); });
                            if (selected_prop_ >= 0) {  // Delete removes a selected prop (VP-82)
                                int i = selected_prop_;
                                selected_prop_ = -1;
@@ -777,7 +817,7 @@ void App::build_actions() {
                            status(n ? "Deleted keys at frame " + std::to_string(int(frame_)) : "No keys here to delete");
                        },
                        [this]() -> const char* {
-                           return graph_.hovered() || selected_prop_ >= 0 || !selection_.empty() ? nullptr : "Select a bone first";
+                           return keys_hovered() || selected_prop_ >= 0 || !selection_.empty() ? nullptr : "Select a bone first";
                        }});
     add("delete_frame", {"Delete Keys on All Bones at Frame", shift | ImGuiKey_Delete, 0, false,
                          [this] {
@@ -871,9 +911,16 @@ void App::build_actions() {
     add("view_right", {"Right", ImGuiKey_3, 0, false, [this] { look_from({0, -1, 0}); }, {}});
     add("view_left", {"Left", ctrl | ImGuiKey_3, 0, false, [this] { look_from({0, 1, 0}); }, {}});
     add("view_top", {"Top", ImGuiKey_7, 0, false, [this] { look_from({0, 0, 1}); }, {}});
+    // VP-67: Numpad 5 in every preset (no preset table rebinds it).
+    add("view_ortho", {"Orthographic", ImGuiKey_Keypad5, 0, false,
+                       [this] {
+                           if (!host_.set_orthographic(!camera_.ortho)) return status("This view has no orthographic mode yet");
+                           status(camera_.ortho ? "Orthographic view" : "Perspective view");
+                       },
+                       {}});
     add("frame_selected", {"Frame Selected", ImGuiKey_F, 0, false,
                            [this] {
-                               if (graph_.hovered()) return (void)with_graph([&](GraphContext& g) { graph_.frame_selected(g); });
+                               if (keys_hovered()) return (void)with_graph([&](GraphContext& g) { graph_.frame_selected(g); });
                                int p = primary();
                                if (p < 0) {
                                    camera_.target = {0, 0, 1.0};
@@ -886,7 +933,7 @@ void App::build_actions() {
                            {}});
     add("frame_all", {"Frame All", ImGuiKey_A, 0, false,
                       [this] {
-                          if (graph_.hovered()) return (void)with_graph([&](GraphContext& g) { graph_.frame_all(g); });
+                          if (keys_hovered()) return (void)with_graph([&](GraphContext& g) { graph_.frame_all(g); });
                           camera_.target = {0, 0, 1.0};
                           camera_.distance = Camera::kDefaultDistance;
                       },
@@ -894,7 +941,7 @@ void App::build_actions() {
 
     add("copy", {"Copy Pose", ctrl | ImGuiKey_C, 0, false,
                  [this] {
-                     if (graph_.hovered()) return with_graph([&](GraphContext& g) { graph_.copy_keys(g); });
+                     if (keys_hovered()) return with_graph([&](GraphContext& g) { graph_.copy_keys(g); });
                      if (prop_sl_copy()) return;
                      std::vector<std::string> tracks;
                      for (int s : selection_) tracks.push_back(skel_[s].name);
@@ -906,7 +953,7 @@ void App::build_actions() {
                  {}});
     add("paste", {"Paste Pose", ctrl | ImGuiKey_V, 0, false,
                   [this] {
-                      if (graph_.hovered()) return with_graph([&](GraphContext& g) { graph_.paste_keys(g); });
+                      if (keys_hovered()) return with_graph([&](GraphContext& g) { graph_.paste_keys(g); });
                       if (prop_sl_paste()) return;
                       std::vector<std::string> tracks;
                       for (int s : selection_) tracks.push_back(skel_[s].name);
@@ -917,7 +964,7 @@ void App::build_actions() {
                       status("Pasted the pose at frame " + std::to_string(int(frame_)));
                   },
                   [this]() -> const char* {
-                      return graph_.hovered() || selected_prop_ >= 0 || !pose_clipboard_.entries.empty() ? nullptr
+                      return keys_hovered() || selected_prop_ >= 0 || !pose_clipboard_.entries.empty() ? nullptr
                                                                                                            : "Copy a pose first";
                   }});
     add("ik_toggle", {"Switch IK / FK", ImGuiKey_K, 0, false,
@@ -991,6 +1038,7 @@ void App::build_actions() {
                       save_settings();
                   },
                   {}});
+    add("dope_sheet", {"Dope Sheet", 0, 0, false, [this] { show_dope_ = !show_dope_; }, {}});  // spec 08 DS
     add("select_all", {"Select All", ctrl | ImGuiKey_A, 0, false,
                        [this] {
                            clear_selection();
@@ -1056,7 +1104,9 @@ void App::build_actions() {
 
     add("reset_camera", {"Reset Camera", 0, 0, false,
                          [this] {
+                             const bool ortho = camera_.ortho;  // a view mode, not a camera place
                              camera_ = Camera();
+                             camera_.ortho = ortho;
                              status("Camera reset");
                          },
                          {}});
@@ -1076,27 +1126,8 @@ void App::build_actions() {
                           if (selection_.empty()) return "Select the bones to save first";
                           return clip_range(a, b) ? nullptr : "Shift-drag a frame range on the timeline, or select keys in the graph";
                       }});
-    // RT-9 on the current clip: both legs, or only the legs of the selected bones.
-    add("foot_lock", {"Clean Up Foot Sliding", 0, 0, false,
-                      [this] {
-                          FootLockOptions fl;
-                          fl.shape = export_shape();
-                          bool l = false, r = false;
-                          for (int n : selection_) {
-                              const std::string& name = skel_[n].name;
-                              bool leg = name.rfind("mHip", 0) == 0 || name.rfind("mKnee", 0) == 0 ||
-                                         name.rfind("mAnkle", 0) == 0 || name.rfind("mFoot", 0) == 0 || name.rfind("mToe", 0) == 0;
-                              if (leg && name.find("Left") != std::string::npos) l = true;
-                              if (leg && name.find("Right") != std::string::npos) r = true;
-                          }
-                          if (l || r) fl.left = l, fl.right = r;
-                          std::vector<std::string> report;
-                          edit("Clean Up Foot Sliding", [&](Clip& c) { report = lock_feet(c, *rig_, fl); });
-                          std::string s;
-                          for (auto& line : report) s += (s.empty() ? "" : "; ") + line;
-                          status(s);
-                      },
-                      {}});
+    // RT-9 and 08 FC on the current clip (footlock_ui.cpp).
+    add("foot_lock", {"Clean Up Foot Sliding...", 0, 0, false, [this] { show_foot_lock_ = true; }, {}});
     add("follow_target", {"Follow Target (Bake)...", 0, 0, false, [this] { show_follow_ = true; },
                           [this]() -> const char* {
                               return selection_.size() == 2 ? nullptr
@@ -1333,11 +1364,16 @@ void App::draw_menus() {
         menu_item("import_bvh");
         menu_item("import_anim");
         menu_item("import_retarget");
+        menu_item("batch_retarget");
         menu_item("import_prop");
         menu_item("load_audio");
         ImGui::Separator();
-        for (const char* id : {"export_anim", "export_bvh", "export_bvh_all"}) menu_item(id);
-        if (host_.can_upload()) menu_item("upload");
+        for (const char* id : {"export_anim", "export_bvh", "export_bvh_all", "export_all_clips"}) menu_item(id);
+        if (!host_.world_view()) {  // 08 LM, the app only: the viewer renders no thumbnails
+            if (ImGui::MenuItem("Export Listing Media...")) show_listing_ = true;
+            ImGui::SetItemTooltip("The animation as an animated GIF or numbered PNG pictures, for a Marketplace listing");
+        }
+        if (host_.can_upload()) menu_item("upload"), menu_item("upload_all_clips");
         ImGui::Separator();
         menu_item("quit");
         ImGui::EndMenu();
@@ -1347,6 +1383,8 @@ void App::draw_menus() {
         menu_item("redo");
         ImGui::Separator();
         for (const char* id : {"key", "key_all", "tween", "delete_key", "delete_frame"}) menu_item(id);
+        ImGui::Separator();
+        draw_key_tag_menu_items();  // 08 KT
         ImGui::Separator();
         for (const char* id : {"reset_bone", "reset_hip", "reset_pose"}) menu_item(id);
         ImGui::Separator();
@@ -1361,6 +1399,8 @@ void App::draw_menus() {
         draw_pose_tool_menu_items();  // Scratch Pose, Propagate Pose (PT-2, PT-3)
         ImGui::Separator();
         menu_item("reverse");
+        if (ImGui::MenuItem("Simplify Curves...", nullptr, false, !doc_.history.is_open())) open_simplify();
+        ImGui::SetItemTooltip("Fewer keys on the selected bones' curves (or all), within a tolerance");
         ImGui::Separator();
         menu_item("prefs");
         ImGui::EndMenu();
@@ -1371,6 +1411,7 @@ void App::draw_menus() {
     }
     if (ImGui::BeginMenu("View")) {  // order of spec 06 section 3.4; Camera Views, zoom and reset are additions
         for (const char* id : {"view_front", "view_back", "view_right", "view_left", "view_top"}) menu_item(id);
+        if (ImGui::MenuItem("Orthographic", key_hint("view_ortho").c_str(), camera_.ortho)) run_action("view_ortho");
         ImGui::Separator();
         for (const char* id : {"frame_selected", "frame_all", "zoom_in", "zoom_out", "reset_camera"}) menu_item(id);
         if (ImGui::BeginMenu("Camera Views")) {
@@ -1381,16 +1422,26 @@ void App::draw_menus() {
         }
         ImGui::Separator();
         menu_item("graph");
+        menu_item("dope_sheet");
         ImGui::Separator();
         static const char* cats[] = {"Show Body Bones", "Show Hand Bones",  "Show Face Bones",  "Show Wing Bones",
                                      "Show Tail Bones", "Show Hind Limb Bones", "Show Groin Bones", "Show Attachment Points"};
         for (int c = 0; c < 8; ++c) ImGui::MenuItem(cats[c], nullptr, &show_category_[c]);
         ImGui::Separator();
         ImGui::MenuItem("Show Collision Volumes", nullptr, &show_volumes_);
+        ImGui::MenuItem("Centre of Mass", nullptr, &show_com_);  // 08 CM-1
+        ImGui::SetItemTooltip("The body's centre of mass over the planted feet; red when it falls outside them");
         if (ImGui::BeginMenu("Onion Skin")) {
             draw_onion_settings();
+            draw_pinned_ghost_menu();  // 08 ON-5
             ImGui::EndMenu();
         }
+        if (ImGui::BeginMenu("Motion Path")) {  // 08 MP
+            draw_motion_path_menu();
+            ImGui::EndMenu();
+        }
+        ImGui::MenuItem("Reference...", nullptr, &show_reference_);  // 08 RF
+        ImGui::SetItemTooltip("A picture or picture sequence behind the avatar, to pose or animate over");
         ImGui::MenuItem("Preview as SL Plays It", nullptr, &sl_preview_);
         ImGui::SetItemTooltip("Plays the exported .anim as Second Life will, with your animation as a ghost");
         if (ImGui::BeginMenu("Treadmill")) {  // 08 LP-8
@@ -1447,12 +1498,19 @@ void App::draw_menus() {
         ImGui::MenuItem("Dynamics...", nullptr, &show_dynamics_);
         ImGui::MenuItem("Idle Layer...", nullptr, &show_idle_);
         ImGui::MenuItem("Overlap...", nullptr, &show_overlap_);
+        ImGui::MenuItem("Auto-Balance...", nullptr, &show_auto_balance_);  // 08 CM-2
+        ImGui::MenuItem("Jump Arc...", nullptr, &show_jump_arc_);          // 08 JA-1
+        if (ImGui::MenuItem("Make Transition...", nullptr, &show_transition_)) transition_.to = int(std::round(frame_));  // 08 PM-3
         ImGui::MenuItem("Ragdoll...", nullptr, &show_ragdoll_);
         ImGui::MenuItem("Face...", nullptr, &show_face_);
         ImGui::MenuItem("Actors (Couples and Groups)...", nullptr, &show_actors_);
+        ImGui::MenuItem("Clips (AO Sets)...", nullptr, &show_clips_);
         ImGui::MenuItem("Motion Capture...", nullptr, &show_mocap_);
+        ImGui::MenuItem("Split Dance at Beats...", nullptr, &show_split_dance_);  // 08 TE-6
         ImGui::Separator();
         ImGui::MenuItem("Animation Check...", nullptr, &show_check_);
+        ImGui::MenuItem("Motion Quality...", nullptr, &show_quality_);
+        ImGui::MenuItem("Priority Planner...", nullptr, &show_planner_);
         ImGui::EndMenu();
     }
     if (ui::Host::HostUi* h = host_.host_ui()) {  // the viewer's own UI beside the editor (spec 09 U4b)
@@ -1605,9 +1663,11 @@ void App::draw_dockspace() {
             ImGui::DockBuilderSplitNode(main, ImGuiDir_Left, left_w / ws.x, &left, &main);
             ImGui::DockBuilderSplitNode(main, ImGuiDir_Right, right_w / (ws.x - left_w), &right, &main);
             ImGui::DockBuilderDockWindow("Bones", left);
+            ImGui::DockBuilderDockWindow("Picker", left);
             ImGui::DockBuilderDockWindow("Inventory", left);
             ImGui::DockBuilderDockWindow("Properties", right);
             ImGui::DockBuilderDockWindow("Graph", bottom);
+            ImGui::DockBuilderDockWindow("Dope Sheet", bottom);  // spec 08 DS: a tab beside the graph
             if (ui::Host::HostUi* h = host_.host_ui()) ImGui::DockBuilderDockWindow(h->pane_title(), bottom);
             ImGui::DockBuilderDockWindow("Timeline", timeline);
             if (!world) ImGui::DockBuilderDockWindow("Viewport", main);
@@ -1655,10 +1715,16 @@ bool App::frame() {
                 case Dialog::SaveActor: save_actor(file_actor_, with_extension(path, "vat"), false); break;
                 case Dialog::ExportActor: save_actor(file_actor_, with_extension(path, "anim"), true); break;
                 case Dialog::SitLines: save_sit_lines(with_extension(path, "txt")); break;
+                case Dialog::AoNotecard: save_ao_notecard(with_extension(path, "txt")); break;
+                case Dialog::ExpressionPack: export_expression_pack(path); break;
+                case Dialog::Rhubarb: guarded(path, [&] { import_rhubarb(path); }); break;
+                case Dialog::LoadReference: guarded(path, [&] { load_reference(path, reference_pick_sequence_); }); break;
+                case Dialog::ListingMedia: export_listing_media(with_extension(path, listing_png_ ? "png" : "gif")); break;
                 case Dialog::ExportFolder:
                     doc_.clip().export_settings.set("folder", path);
                     mark_dirty();
-                    if (int after = std::exchange(export_after_folder_, -1); after >= 0) export_now(after > 0, after == 2);
+                    if (int after = std::exchange(export_after_folder_, -1); after >= 0)
+                        export_now(after > 0, after == 2, std::exchange(export_all_after_folder_, false));
                     break;
             }
         }
@@ -1683,22 +1749,35 @@ bool App::frame() {
     { VATS_PROFILE("evaluate"); evaluate(); }
     { VATS_PROFILE("dock+menus"); draw_dockspace(); draw_menus(); }
     { VATS_PROFILE("panel bones"); draw_bones_panel(); }
+    draw_picker_panel();  // 08 PK
     { VATS_PROFILE("panel inventory"); draw_inventory_panel(); }
     { VATS_PROFILE("panel properties"); draw_properties_panel(); }
     draw_dynamics_panel();
     draw_idle_panel();
     draw_overlap_panel();
+    draw_auto_balance_panel();
+    draw_jump_arc_panel();
+    draw_match_poses_window();  // 08 PM
+    draw_transition_window();
     draw_ragdoll_panel();
     draw_face_panel();
     draw_loop_assist_window();
+    draw_foot_lock_window();
     draw_actors_panel();
+    draw_clips_panel();
     draw_mocap_panel();  // every frame: it polls the socket while listening
     draw_check_panel();  // every frame: it re-checks after edits
+    draw_quality_panel();
+    draw_planner_panel();
     draw_sl_preview_window();
+    draw_split_dance_window();  // 08 TE-6
+    draw_reference_window();
+    draw_listing_window();
     { VATS_PROFILE("panel timeline"); draw_timeline_panel(); }
     if (!pending_tab_.empty() && ImGui::GetFrameCount() > 2)  // once the dock layout exists
         ImGui::SetWindowFocus(std::exchange(pending_tab_, "").c_str());
     { VATS_PROFILE("panel graph"); draw_graph_panel(); }
+    draw_dope_panel();
     { VATS_PROFILE("viewport"); draw_viewport(); }
     draw_host_pane();
     draw_hand_poser();
@@ -1713,11 +1792,13 @@ bool App::frame() {
     draw_about();
     draw_bvh_prompt();
     draw_scratch_prompt();
+    draw_simplify_dialog();
     draw_body_prompt();
 #ifdef VATS_LEGACY_IMPORT
     draw_migration_prompt();
 #endif
     draw_retarget_dialog();
+    draw_batch_retarget();
     draw_controls_help();
     draw_welcome();
     draw_help_browser();

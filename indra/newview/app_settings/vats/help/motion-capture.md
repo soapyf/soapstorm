@@ -114,7 +114,13 @@ The **Clean-up** settings apply to the next take:
 | **Smoothing** | **Off**, **Box (average)**, **One-Euro**, **Savitzky-Golay**, **Butterworth** | **Off** | calms tracker jitter; see below |
 | **Reduce keys** | degrees, millimetres | on, `0.5` deg, `2.0` mm | removes keys that don't change the motion by more than these amounts |
 | **Edge blend** | 0–15 frames | 4 | eases a punched-in take in and out of the animation around it |
-| **Clean Up Foot Sliding** | on/off | off | holds planted feet still with leg [[IK]] where the take had them on the ground |
+| **Clean Up Foot Sliding** | on/off | off | holds planted feet still with leg [[IK]] where the take had them on the ground; see [[Retargeting#Clean up foot sliding]] |
+| **Heel and Toe** | on/off | on | holds the heel and the toe separately, so a heel-toe roll hands over from heel to toe; off, the ankle alone |
+
+With **Clean Up Foot Sliding** on, the **Last take** report gives the take's ground height (for example
+`ground: 1.2 cm above the floor`) and how far the hips were lowered where a leg could not reach its held
+foot. A take has no **Put Feet on the Ground** tick, because moving the hips would move the whole
+animation around a punched-in take too. Use **Tools → Clean Up Foot Sliding...** on the clip afterwards.
 
 **Smoothing** choices:
 
@@ -131,6 +137,18 @@ mean over its bones, the three shakiest bones, and the hips' travel in m/s³ whe
 RMS of the jerk (the third difference of each curve), in degrees per second cubed.
 
 **Last take** reports what the last take recorded.
+
+A take has a key on every frame. To edit it by hand, or to see what each clean-up step changes:
+
+1. **Filter Curves...** in the [[Graph editor#Filtering curves|graph editor]] calms jitter that the take's
+   **Smoothing** did not remove.
+2. **Tools → Clean Up Foot Sliding** plants the feet, if the take's own clean-up did not.
+3. **Edit → Simplify Curves...** turns the dense keys back into a few, within a tolerance; see
+   [[Graph editor#Simplifying curves]]. Tick **Keep frames where feet are planted** to keep a key where
+   each foot plants and lifts.
+
+**Tools → Motion Quality...** shows the shake, the foot slide, the keys and the size before and after each
+of these steps; see [[Motion quality]].
 
 ## Tips and tricks
 
@@ -171,6 +189,7 @@ The document or the edited actor changed while recording. Record again without s
 ## See also
 
 - [[Face tracking]]
+- [[Motion quality]]
 - [[Retargeting]] for recorded files (BVH, glTF, FBX) instead of live streams
 - [[VATs Editor (viewer)]]
 - [VMC protocol specification](https://protocol.vmc.info/english)

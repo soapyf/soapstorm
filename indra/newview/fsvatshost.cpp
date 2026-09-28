@@ -49,6 +49,11 @@
 #include "llfloaterreg.h"
 #include "llmodaldialog.h"
 #include "llfloaterperms.h"
+#include "llinventoryfunctions.h"
+#include "llinventorymodel.h"
+#include "llviewerinventory.h"
+#include "llviewerjointattachment.h"
+#include "llviewernetwork.h"
 #include "llnotificationsutil.h"
 #include "llstartup.h"
 #include "lluicolortable.h"
@@ -96,6 +101,9 @@ namespace
                           { return x.name == y.name && x.position == y.position && x.base == y.base; });
     }
 
+    // Build 19 (spec 09 §0e): View > Orthographic as a telephoto near-ortho. The narrowest lens the viewer allows
+    // (llcamera.h's MIN_FIELD_OF_VIEW); the camera is pulled back so the framing at the focus matches.
+    constexpr F32 ORTHO_FOV = MIN_FIELD_OF_VIEW;
     constexpr const char* AUTOPILOT = "VATsEditor";  // the behaviour name of the editor's return autopilot
     constexpr F32 RETURN_DISTANCE = 0.5f;              // metres the region may move a flying avatar before it is flown back
     constexpr U32 MOVEMENT = AGENT_CONTROL_AT_POS | AGENT_CONTROL_AT_NEG | AGENT_CONTROL_LEFT_POS | AGENT_CONTROL_LEFT_NEG |
@@ -189,6 +197,7 @@ namespace
                              bool translucent) override;
         ImTextureID scene_end() override { mSceneOpen = false; return ImTextureID{}; }
         bool save_thumbnail_png(const std::string&) override { return false; }
+        bool scene_image(ImTextureID texture, const std::array<Vec3, 4>& corners, float opacity, bool backdrop) override;
         ImTextureID load_texture(const std::string& png) override;
         void free_texture(ImTextureID texture) override;
         void set_light(const vats::LightPreset* preset) override;
@@ -196,6 +205,7 @@ namespace
         void drive_avatar(const vats::Skeleton& skel, const vats::Pose& pose, const vats::Clip& clip, double) override;
 
         vats::Camera& camera() override { return mCamera; }
+        bool set_orthographic(bool on) override;
         // The world view fills ImGui's whole display (FSVATsImGui maps it onto LLViewerCamera's rectangle).
         vats::Projector projector(ImVec2, ImVec2) override
         {
@@ -208,7 +218,7 @@ namespace
 
         void open_file_dialog(const std::vector<vats::ui::FileFilter>&, bool multiple, vats::ui::FilesChosen done) override
         {
-            // ponytail: FFLOAD_ALL, since VATs' filters (.vat, .hxanim, glTF, audio...) have no ELoadFilter.
+            // ponytail: FFLOAD_ALL, since VATs' filters (.vat, glTF, audio...) have no ELoadFilter.
             LLFilePickerReplyThread::startPicker(
                 [done](const std::vector<std::string>& files, LLFilePicker::ELoadFilter, LLFilePicker::ESaveFilter) { done(files); },
                 LLFilePicker::FFLOAD_ALL, multiple,
@@ -255,6 +265,9 @@ namespace
         const vats::Shape* body_shape() const override { return mHaveShape ? &mShape : nullptr; }
         void set_view_frame(const vats::Xform& edited_in_yours) override;
         std::vector<std::string> joint_overrides() const override;
+        std::vector<vats::PlanClip> running_motions() const override;
+        std::vector<std::string> worn_on(int attach_id) const override;
+        Grid grid() const override;
         void setSkeleton(const vats::Skeleton* skel) { mSkel = skel; }  // before the first frame, so body_shape is ready
         // Spec 09 §5a: the face-positions check without uploading; a line for the log and the status bar.
         std::string faceCheck(const vats::App::FaceCheck& fc);
@@ -321,9 +334,14 @@ namespace
         // VATs' space has its origin at the feet (the pelvis rests 1.067 m up); the viewer's mRoot sits where
         // the pelvis rests.
         Vec3 pelvisRest() const { return mSkel && mSkel->size() ? (*mSkel)[0].pos : Vec3{ 0, 0, 1.067 }; }
+        // Ortho: how far the telephoto's eye stands from the focus for the UI's logical distance (same framing there).
+        double pullBack(double logical) const { return logical * std::tan(mLensFov / 2) / std::tan(ORTHO_FOV / 2); }
+        void drawImages(const glm::mat4& mvp, U32 world_depth, const LLRect& world);  // drawScene: the scene_image quads
 
         vats::ui::Paths mPaths;
         vats::Camera mCamera, mSynced;  // mSynced: as read from the viewer this frame, to spot the UI's edits
+        F32 mLensFov = DEFAULT_FIELD_OF_VIEW;  // ortho: the viewer's lens before (restored when off), the UI's fov meanwhile
+        F32 mFarWas = 0.f;                // ortho: the draw distance before, restored when off
         vats::Mat4 mViewProj;
         LLVector3 mPos;                  // VATs' space in the agent frame: the avatar's mRoot
         LLQuaternion mRot;
@@ -385,6 +403,16 @@ namespace
             std::vector<U32> indices;
         };
         SceneBatch mScene[2];
+        struct SceneImage  // a reference picture's plane (scene_image): corners in the agent frame, bottom-left first
+        {
+            GLuint texture = 0;
+            LLVector3 corners[4];
+            F32 opacity = 1.f;
+        };
+        std::vector<SceneImage> mImages;
+        U32 mImageProgram = 0, mImageVbo = 0;
+        bool mImageFailed = false;
+        S32 mImgMvpLoc = -1, mImgRectLoc = -1, mImgUseDepthLoc = -1, mImgDepthLoc = -1, mImgTexLoc = -1, mImgOpacityLoc = -1;
         bool mSceneOpen = false;
         U32 mProgram = 0, mVao = 0, mVbo = 0, mEbo = 0;
         S32 mMvpLoc = -1, mLightLoc = -1, mRectLoc = -1, mUseDepthLoc = -1, mDepthLoc = -1;
@@ -528,6 +556,82 @@ namespace
             if (LLJoint* joint = self->avatarJoint(i); joint && joint->hasAttachmentPosOverride(pos, mesh_id))
                 out.push_back((*mSkel)[i].name);
         return out;
+    }
+
+    // Build 19 (spec 09 §0e): the Priority Planner's Add Running Animations. Your own avatar only; each animation's name
+    // and the priority of every joint it animates, never its keys. What plays is what the region signals (the AO's,
+    // scripts', gestures'), oldest first by the region's sequence numbers. The editor has stopped them locally
+    // (isolate), but a motion keeps its joint states, which say what it animates and at what priority.
+    std::vector<vats::PlanClip> ViewerHost::running_motions() const
+    {
+        std::vector<vats::PlanClip> out;
+        if (!mSkel || !isAgentAvatarValid())
+            return out;
+        LLVOAvatarSelf* avatar = gAgentAvatarp.get();
+        std::vector<std::pair<S32, LLUUID>> started;
+        for (const auto& [id, sequence] : avatar->mSignaledAnimations)
+            started.emplace_back(sequence, id);
+        std::sort(started.begin(), started.end());
+        for (const auto& [sequence, id] : started)
+        {
+            if (id == ANIM_AGENT_SIT_GROUND_CONSTRAINED && mWeSat)
+                continue;  // the editor's own sit
+            LLMotion* motion = avatar->findMotion(avatar->remapMotionID(id));
+            if (!motion || motion->getID() == mMotionID)
+                continue;
+            vats::PlanClip clip;
+            LLPose* pose = motion->getPose();
+            for (LLJointState* state = pose->getFirstJointState(); state; state = pose->getNextJointState())
+            {
+                const int node = state->getUsage() && state->getJoint() ? mSkel->find_viewer(state->getJoint()->getName()) : -1;
+                if (node < 0)
+                    continue;  // a keyless record moves nothing; a joint VATs does not know is left out
+                const LLJoint::JointPriority priority = state->getPriority();
+                clip.joints[(*mSkel)[node].name] = priority == LLJoint::USE_MOTION_PRIORITY ? motion->getPriority() : priority;
+            }
+            if (clip.joints.empty())
+                continue;  // not loaded yet, or a procedural motion with no joints
+            // The name: your inventory item's for this asset, else the built-in animation's, else the id.
+            LLInventoryModel::cat_array_t cats;
+            LLInventoryModel::item_array_t items;
+            LLAssetIDMatches match(id);
+            gInventory.collectDescendentsIf(gInventory.getRootFolderID(), cats, items, LLInventoryModel::EXCLUDE_TRASH, match);
+            const char* builtin = gAnimLibrary.animStateToString(id);
+            clip.name = !items.empty() ? items.front()->getName() : builtin ? std::string(builtin) : id.asString();
+            out.push_back(std::move(clip));
+        }
+        return out;
+    }
+
+    // Build 19, item 55: what you wear on an attachment point, by inventory name (names only).
+    std::vector<std::string> ViewerHost::worn_on(int attach_id) const
+    {
+        std::vector<std::string> out;
+        if (!isAgentAvatarValid())
+            return out;
+        const auto point = gAgentAvatarp->mAttachmentPoints.find(attach_id);
+        if (point == gAgentAvatarp->mAttachmentPoints.end() || !point->second)
+            return out;
+        for (const LLPointer<LLViewerObject>& object : point->second->mAttachedObjects)
+            if (object)
+            {
+                const LLViewerInventoryItem* item = gInventory.getItem(object->getAttachmentItemID());
+                out.push_back(item ? item->getName() : std::string("(an object not in your inventory)"));
+            }
+        return out;
+    }
+
+    // Build 19, item 56: the grid, and what an animation upload costs there (the grid's own benefits).
+    vats::ui::Host::Grid ViewerHost::grid() const
+    {
+        Grid g;
+        if (LLStartUp::getStartupState() < STATE_STARTED)
+            return g;
+        LLGridManager* grids = LLGridManager::getInstance();
+        g.name = grids->getGridLabel();
+        g.test_grid = !grids->isInSLMain();  // Aditi, or an OpenSim grid
+        g.upload_cost = LLAgentBenefitsMgr::current().getAnimationUploadCost();
+        return g;
     }
 
     // Spec 09 §5a, "Face positions check without uploading", as one step: the exact upload bytes are decoded by the
@@ -932,11 +1036,14 @@ namespace
         F64 distance = 3.2;
         if (isAgentAvatarValid())
             distance = (gAgent.getPosAgentFromGlobal(gAgentCamera.getFocusGlobal()) - cam->getOrigin()) * cam->getAtAxis();
-        mCamera.fov = cam->getView();
-        mCamera.distance = llclamp(distance, 0.1, 512.0);
+        distance = llclamp(distance, 0.1, 512.0);
+        // Ortho: camera() keeps the logical values, the lens from before and the distance with the same framing at the
+        // focus; the projection below stays the telephoto's own, so markers sit exactly on what is drawn.
+        mCamera.fov = mCamera.ortho ? mLensFov : cam->getView();
+        mCamera.distance = mCamera.ortho ? distance * std::tan(ORTHO_FOV / 2) / std::tan(mLensFov / 2) : distance;
         mCamera.pitch = std::asin(llclamp(-at.z, -1.0, 1.0));
         mCamera.yaw = std::atan2(-at.y, -at.x);
-        mCamera.target = eye + at * mCamera.distance;
+        mCamera.target = eye + at * distance;
         mSynced = mCamera;
         mViewProj = vats::perspective(cam->getView(), cam->getAspect(), 0.05, 1024.0) * vats::look_at(eye, eye + at, up);
     }
@@ -1042,9 +1149,43 @@ namespace
                           std::fabs(mCamera.pitch - mSynced.pitch) < 1e-6 && std::fabs(mCamera.distance - mSynced.distance) < 1e-6;
         if (same || !isAgentAvatarValid() || gAgentCamera.cameraMouselook())
             return;
-        const LLVector3 eye = toAgent(mCamera.eye()), target = toAgent(mCamera.target);
+        const Vec3 at_eye = mCamera.ortho ? mCamera.target - mCamera.forward() * pullBack(mCamera.distance) : mCamera.eye();
+        const LLVector3 eye = toAgent(at_eye), target = toAgent(mCamera.target);
         gAgentCamera.setFocusOnAvatar(false, false);
         gAgentCamera.setCameraPosAndFocusGlobal(gAgent.getPosGlobalFromAgent(eye), gAgent.getPosGlobalFromAgent(target), LLUUID::null);
+        if (mCamera.ortho)  // zoomed: the scene behind the focus stays within the draw distance
+            gAgentCamera.mDrawDistance = mFarWas + F32(pullBack(mCamera.distance));
+    }
+
+    // View > Orthographic (spec 09 §0e): a telephoto at the viewer's narrowest lens, pulled back along the view so the
+    // framing at the focus is the same, the draw distance pushed out by the pull-back. Off: all three back.
+    bool ViewerHost::set_orthographic(bool on)
+    {
+        if (on == mCamera.ortho)
+            return true;
+        LLViewerCamera* cam = LLViewerCamera::getInstance();
+        const Vec3 target = mCamera.target, forward = mCamera.forward();
+        const double logical = mCamera.distance;  // the UI's zoom: the perspective distance, or ortho's logical one
+        if (on)
+        {
+            mLensFov = cam->getDefaultFOV();
+            mFarWas = gAgentCamera.mDrawDistance;
+        }
+        mCamera.ortho = on;
+        cam->setDefaultFOV(on ? ORTHO_FOV : mLensFov);
+        const double real = on ? pullBack(logical) : logical;
+        gAgentCamera.mDrawDistance = on ? mFarWas + F32(real) : mFarWas;
+        if (isAgentAvatarValid() && !gAgentCamera.cameraMouselook())
+        {
+            gAgentCamera.setFocusOnAvatar(false, false);
+            gAgentCamera.setCameraPosAndFocusGlobal(gAgent.getPosGlobalFromAgent(toAgent(target - forward * real)),
+                                                    gAgent.getPosGlobalFromAgent(toAgent(target)), LLUUID::null);
+        }
+        mCamera.fov = mLensFov;
+        mSynced = mCamera;  // this frame's camera edit is done; syncCamera reads the new lens next frame
+        LL_INFOS("VATsEditor") << "orthographic " << (on ? "on" : "off") << ": lens " << (on ? ORTHO_FOV : mLensFov) * RAD_TO_DEG
+                                << " degrees, camera " << real << " m from the focus" << LL_ENDL;
+        return true;
     }
 
     void ViewerHost::drawQuestion()
@@ -1132,6 +1273,7 @@ namespace
     {
         mScene[0].verts.clear(), mScene[0].indices.clear();
         mScene[1].verts.clear(), mScene[1].indices.clear();
+        mImages.clear();
         // Only logged in: before that the login page covers the world view, and there is no world depth to test against.
         mSceneOpen = target == vats::ui::SceneTarget::View && LLStartUp::getStartupState() >= STATE_STARTED && !mProgramFailed;
         return mSceneOpen;
@@ -1159,13 +1301,123 @@ namespace
                 b.indices.push_back(base + i);
     }
 
+    // Build 19 (spec 09 §0e): a reference picture's plane drawn in the world (drawImages), so what stands in front of it
+    // hides it. Only for pictures this host loaded; the backdrop stays the UI's overlay (the world has no layer behind
+    // everything to put it in).
+    bool ViewerHost::scene_image(ImTextureID texture, const std::array<Vec3, 4>& corners, float opacity, bool backdrop)
+    {
+        const GLuint tex = GLuint(texture);
+        if (backdrop || !mSceneOpen || mImageFailed || !mTextures.count(tex))
+            return false;
+        SceneImage image;
+        image.texture = tex;
+        image.opacity = llclamp(opacity, 0.f, 1.f);
+        for (int i = 0; i < 4; ++i)
+            image.corners[i] = toAgent(corners[i]);
+        mImages.push_back(image);
+        return true;
+    }
+
+    // Inside drawScene's saved state (its program, buffers, viewport, blend and depth state are put back there): each
+    // picture as one quad, alpha-blended at its opacity, depth-tested against the world's depth (as the triangles) and
+    // the triangles drawn before it, writing no depth. Unit 1 holds the picture and is put back.
+    void ViewerHost::drawImages(const glm::mat4& mvp, U32 world_depth, const LLRect& world)
+    {
+        if (mImages.empty())
+            return;
+        if (!mImageProgram && !mImageFailed)
+        {
+            static const char* vs = "#version 150\n"
+                "uniform mat4 u_mvp; in vec3 a_pos; in vec2 a_uv; out vec2 v_uv;\n"
+                "void main() { gl_Position = u_mvp * vec4(a_pos, 1.0); v_uv = a_uv; }\n";
+            static const char* fs = "#version 150\n"
+                "uniform sampler2D u_depth; uniform sampler2D u_tex; uniform vec4 u_rect; uniform int u_use_depth; uniform float u_opacity;\n"
+                "in vec2 v_uv; out vec4 o_col;\n"
+                "void main() {\n"
+                "  if (u_use_depth != 0) {\n"
+                "    ivec2 size = textureSize(u_depth, 0);\n"
+                "    ivec2 at = clamp(ivec2((gl_FragCoord.xy - u_rect.xy) / u_rect.zw * vec2(size)), ivec2(0), size - 1);\n"
+                "    if (gl_FragCoord.z > texelFetch(u_depth, at, 0).r) discard;\n"
+                "  }\n"
+                "  vec4 c = texture(u_tex, v_uv);\n"
+                "  o_col = vec4(c.rgb, c.a * u_opacity);\n"
+                "}\n";
+            auto compile = [](GLenum kind, const char* src) {
+                const GLuint sh = glCreateShader(kind);
+                glShaderSource(sh, 1, &src, nullptr);
+                glCompileShader(sh);
+                return sh;
+            };
+            const GLuint v = compile(GL_VERTEX_SHADER, vs), f = compile(GL_FRAGMENT_SHADER, fs);
+            mImageProgram = glCreateProgram();
+            glAttachShader(mImageProgram, v);
+            glAttachShader(mImageProgram, f);
+            glBindAttribLocation(mImageProgram, 0, "a_pos");
+            glBindAttribLocation(mImageProgram, 1, "a_uv");
+            glBindFragDataLocation(mImageProgram, 0, "o_col");
+            glLinkProgram(mImageProgram);
+            glDeleteShader(v);
+            glDeleteShader(f);
+            GLint linked = 0;
+            glGetProgramiv(mImageProgram, GL_LINK_STATUS, &linked);
+            if (!linked)
+            {
+                LL_WARNS("VATsEditor") << "the reference picture shader did not link: pictures stay the editor's overlay" << LL_ENDL;
+                glDeleteProgram(mImageProgram);
+                mImageProgram = 0;
+                mImageFailed = true;
+                return;
+            }
+            mImgMvpLoc = glGetUniformLocation(mImageProgram, "u_mvp");
+            mImgRectLoc = glGetUniformLocation(mImageProgram, "u_rect");
+            mImgUseDepthLoc = glGetUniformLocation(mImageProgram, "u_use_depth");
+            mImgDepthLoc = glGetUniformLocation(mImageProgram, "u_depth");
+            mImgTexLoc = glGetUniformLocation(mImageProgram, "u_tex");
+            mImgOpacityLoc = glGetUniformLocation(mImageProgram, "u_opacity");
+            glGenBuffers(1, &mImageVbo);
+        }
+        GLint unit1 = 0;
+        glActiveTexture(GL_TEXTURE1);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &unit1);
+        glUseProgram(mImageProgram);
+        glUniformMatrix4fv(mImgMvpLoc, 1, GL_FALSE, glm::value_ptr(mvp));
+        glUniform4f(mImgRectLoc, (F32)world.mLeft, (F32)world.mBottom, (F32)llmax(world.getWidth(), 1), (F32)llmax(world.getHeight(), 1));
+        glUniform1i(mImgUseDepthLoc, world_depth ? 1 : 0);
+        glUniform1i(mImgDepthLoc, 0);  // drawScene bound the world's depth on unit 0
+        glUniform1i(mImgTexLoc, 1);
+        glBindBuffer(GL_ARRAY_BUFFER, mImageVbo);
+        glDisableVertexAttribArray(2);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(F32), (void*)0);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(F32), (void*)(3 * sizeof(F32)));
+        glDepthMask(GL_FALSE);
+        static const F32 uv[4][2] = { { 0.f, 1.f }, { 1.f, 1.f }, { 1.f, 0.f }, { 0.f, 0.f } };  // the first row is the top
+        for (const SceneImage& image : mImages)
+        {
+            F32 quad[20];
+            for (int i = 0; i < 4; ++i)
+            {
+                quad[i * 5 + 0] = image.corners[i].mV[VX];
+                quad[i * 5 + 1] = image.corners[i].mV[VY];
+                quad[i * 5 + 2] = image.corners[i].mV[VZ];
+                quad[i * 5 + 3] = uv[i][0];
+                quad[i * 5 + 4] = uv[i][1];
+            }
+            glBufferData(GL_ARRAY_BUFFER, sizeof quad, quad, GL_STREAM_DRAW);
+            glBindTexture(GL_TEXTURE_2D, image.texture);
+            glUniform1f(mImgOpacityLoc, image.opacity);
+            glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+        }
+        glBindTexture(GL_TEXTURE_2D, unit1);
+        glActiveTexture(GL_TEXTURE0);
+    }
+
     // Plain GL, every state it touches put back (FSVATsImGui checks GL and LLRender's caches around the whole draw on the
     // first frames). The world's own matrices from the end of its render (gGLLast*), the world view as the viewport, and
     // the world's depth (the deferred target's depth texture) sampled per fragment: a fragment behind the world is
     // dropped. Lit by a light at the camera, a little from above. Nothing to draw: nothing is done at all.
     void ViewerHost::drawScene()
     {
-        if (mScene[0].indices.empty() && mScene[1].indices.empty())
+        if (mScene[0].indices.empty() && mScene[1].indices.empty() && mImages.empty())
             return;
         if (!mProgram && !mProgramFailed)
         {
@@ -1287,6 +1539,7 @@ namespace
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, b.indices.size() * sizeof(U32), b.indices.data(), GL_STREAM_DRAW);
             glDrawElements(GL_TRIANGLES, GLsizei(b.indices.size()), GL_UNSIGNED_INT, nullptr);
         }
+        drawImages(mvp, world_depth, world);
 
         glBindVertexArray(vao);  // brings back its element buffer
         glBindBuffer(GL_ARRAY_BUFFER, array_buffer);
@@ -1307,6 +1560,7 @@ namespace
         // The context is going with them (stopGL); new ones are made on the next draw. The help's pictures go too: the
         // help keeps their stale names until its page changes (drawn blank), and free_texture ignores them.
         mProgram = mVao = mVbo = mEbo = 0;
+        mImageProgram = mImageVbo = 0;
         mTextures.clear();
     }
 
@@ -1650,6 +1904,7 @@ namespace
 
     void ViewerHost::close()
     {
+        set_orthographic(false);  // the viewer's lens, draw distance and camera distance back
         showChrome();
         mViewRect = LLRect();
         updateToasts();  // the toasts back in the viewer's own places

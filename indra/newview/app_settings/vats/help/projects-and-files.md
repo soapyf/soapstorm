@@ -1,7 +1,7 @@
 # Projects and files
 
 VATs saves your work as a `.vat` project: the animation with every key, the props, the audio track,
-the actors and the export settings. It keeps a backup of the previous save, autosaves unsaved work,
+the actors, the [[Clips]] and the export settings. It keeps a backup of the previous save, autosaves unsaved work,
 and offers that work back after a crash. Your libraries and settings live in data folders in your
 home folder, separate from projects.
 
@@ -24,7 +24,11 @@ backup. If the save fails, the **Save failed** message gives the reason, and the
 unchanged.
 
 Prop meshes and the audio file are stored relative to the project where possible, so a project folder
-can be moved or copied with its files.
+can be moved or copied with its files. This holds for every clip and every actor of the project.
+
+A project can hold several clips, such as the animations of an AO set; **Tools → Clips (AO Sets)...** lists them.
+**Save** writes them all into the one file, and opening it returns to the clip that was being edited. A project
+from before clips opens as one clip called `Clip`. See [[Clips]].
 
 The title bar shows `*` after the file name while there are unsaved changes.
 
@@ -116,6 +120,7 @@ holds:
 | `library/Projects/`, `library/Animations/` | the Inventory's project and animation libraries ([[Project library]]) |
 | `library/*.png` | Inventory thumbnails |
 | `faces/` | face tables for your own heads ([[Face animation#Head and Move face bones]]) |
+| `retarget/` | your saved retarget mappings ([[Retargeting#Save a mapping]]) |
 | `autosave/` | autosaves, a `.vat` and a `.path` file per session |
 | `layout.ini` | the panel layout |
 

@@ -1,0 +1,19 @@
+{
+	"format": "vats-lip-shapes",
+	"version": 1,
+	"note": "Mouth shapes for lip sync as ARKit weights (0..1), keyed through the face table. A-H and X are Preston Blair's mouth shapes as Rhubarb Lip Sync names them: A closed (P, B, M), B slightly open with teeth together (K, S, T, EE), C open (EH, AE), D wide open (AA), E slightly rounded (AO, ER), F puckered (UW, OW, W), G teeth on the lower lip (F, V), H tongue up (L), X at rest. open, rounded and wide are the audio analysis's vowel classes; their weights are scaled by the loudness, so their jawOpen follows the loudness. Most mouth shapes only move bones, so without Move face bones only the jaw moves.",
+	"shapes": {
+		"X": {},
+		"A": {"mouthClose": 0.3, "mouthPressLeft": 0.4, "mouthPressRight": 0.4},
+		"B": {"jawOpen": 0.12, "mouthStretchLeft": 0.3, "mouthStretchRight": 0.3},
+		"C": {"jawOpen": 0.35, "mouthSmileLeft": 0.15, "mouthSmileRight": 0.15, "mouthLowerDownLeft": 0.3, "mouthLowerDownRight": 0.3},
+		"D": {"jawOpen": 0.7, "mouthLowerDownLeft": 0.4, "mouthLowerDownRight": 0.4},
+		"E": {"jawOpen": 0.3, "mouthFunnel": 0.4},
+		"F": {"jawOpen": 0.1, "mouthPucker": 0.8, "mouthFunnel": 0.3},
+		"G": {"jawOpen": 0.05, "mouthRollLower": 0.6, "mouthUpperUpLeft": 0.2, "mouthUpperUpRight": 0.2},
+		"H": {"jawOpen": 0.3, "tongueOut": 0.15},
+		"open": {"jawOpen": 0.8},
+		"rounded": {"jawOpen": 0.8, "mouthFunnel": 0.5, "mouthPucker": 0.5},
+		"wide": {"jawOpen": 0.8, "mouthSmileLeft": 0.4, "mouthSmileRight": 0.4, "mouthStretchLeft": 0.3, "mouthStretchRight": 0.3}
+	}
+}

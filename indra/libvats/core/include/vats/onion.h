@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "vats/clip.h"
+#include "vats/pose_ops.h"
 #include "vats/rig.h"
 
 namespace vats {
@@ -34,5 +35,9 @@ struct OnionGhost {
 
 std::vector<OnionGhost> onion_ghosts(const Rig& rig, const Clip& clip, double frame, const Shape* shape,
                                      const OnionSettings& s);
+
+// ON-5: a library pose drawn in place as a target to match: the clip's pose at frame with the pose applied there
+// (a part pose over the rest of the body as it is), fully evaluated. The clip is not changed.
+std::vector<Xform> pose_ghost(const Rig& rig, const Clip& clip, double frame, const Shape* shape, const LibraryItem& pose);
 
 }  // namespace vats

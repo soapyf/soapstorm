@@ -29,7 +29,11 @@ int insert_on_curve(FCurve& curve, double frame);
 // key goes below frame 0 (spacing is kept; spec 05 section 5 item 6). snap rounds dframe to whole
 // frames. Curves are re-sorted; sel is updated to the keys' new indices. Duplicates are NOT merged
 // here (call finish_transform on release).
-void move_keys(Clip& clip, const Clip& at_press, std::vector<KeyRef>& sel, double dframe, double dvalue, bool snap);
+// Unselected Breakdown keys keep their share of the time between the nearest non-Breakdown keys around them when
+// one of those moves (spec 08 KT-3). Such a key no longer sits where at_press has it, so a drag that calls this again
+// and again passes press_sel, the selection as indices into at_press; without it the selection is worked out from sel.
+void move_keys(Clip& clip, const Clip& at_press, std::vector<KeyRef>& sel, double dframe, double dvalue, bool snap,
+               const std::vector<KeyRef>* press_sel = nullptr);
 
 // Scales the selected keys about (pivot_frame, pivot_value) from their state in at_press. A negative
 // sx reverses them in time with the rules of 02 section 3.5. snap rounds each resulting frame.

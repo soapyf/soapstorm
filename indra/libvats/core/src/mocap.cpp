@@ -689,7 +689,7 @@ std::vector<std::string> merge_recording(Clip& clip, const Skeleton& skel, const
     if (cleanup.lock_feet) {
         auto has = [&](const char* b) { return std::find(merged.begin(), merged.end(), b) != merged.end(); };
         FootLockOptions fl;
-        fl.from = from, fl.to = last, fl.shape = shape;
+        fl.from = from, fl.to = last, fl.shape = shape, fl.heel_toe = cleanup.heel_toe;
         fl.left = has("mAnkleLeft") || has("mKneeLeft") || has("mHipLeft");
         fl.right = has("mAnkleRight") || has("mKneeRight") || has("mHipRight");
         if (fl.left || fl.right) locked = lock_feet(clip, Rig(skel), fl);

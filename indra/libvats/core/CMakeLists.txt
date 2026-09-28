@@ -11,37 +11,60 @@ add_library(vats_core STATIC
     src/clip.cpp
     src/curve_filter.cpp
     src/curve_ops.cpp
+    src/motion_quality.cpp
+    src/simplify.cpp
+    src/dope_sheet.cpp
+    src/motion_path.cpp
     src/dynamics.cpp
     src/idle.cpp
     src/overlap.cpp
     src/ragdoll.cpp
+    src/retime.cpp
     src/time_edit.cpp
     src/dae.cpp
     src/fbx.cpp
     src/edit.cpp
     src/export_name.cpp
     src/sit_export.cpp
+    src/world_reduce.cpp
+    src/height_variant.cpp
+    src/clips.cpp
+    src/ao_notecard.cpp
     src/file_library.cpp
     src/fcurve.cpp
+    src/gif.cpp
     src/gltf.cpp
     src/json.cpp
     src/pose_ops.cpp
     src/pose_tools.cpp
     src/pose_presets.cpp
     src/project.cpp
+    src/reference.cpp
     src/prop.cpp
     src/face_anim.cpp
+    src/expression_pack.cpp
+    src/lip_sync.cpp
     src/facecap.cpp
     src/footlock.cpp
+    src/balance.cpp
+    src/jump_arc.cpp
+    src/reach.cpp
     src/lint.cpp
+    src/self_contact.cpp
     src/loop_tools.cpp
     src/loop_assist.cpp
     src/tween.cpp
+    src/key_tags.cpp
+    src/picker.cpp
+    src/selection_sets.cpp
     src/onion.cpp
+    src/pose_match.cpp
     src/sl_preview.cpp
     src/mocap.cpp
     src/wiki.cpp
     src/retarget.cpp
+    src/batch_retarget.cpp
+    src/priority_plan.cpp
     src/rig.cpp
     src/shape.cpp
     src/skeleton.cpp

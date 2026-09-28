@@ -115,6 +115,7 @@ struct MocapCleanup {
     double rot_deg = 0.5, pos_m = 0.002;
     int blend = 4;           // frames at each punch edge eased from the old animation into the take
     bool lock_feet = false;  // foot-contact clean-up (07 RT-9) over the take
+    bool heel_toe = true;    // its heel and toe contacts (08 FC); off = the ankle only
 };
 
 // Retargets the recorded frames with table and writes them into clip from frame `from`, replacing

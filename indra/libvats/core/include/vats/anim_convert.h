@@ -29,6 +29,10 @@ struct AnimExportOptions {
     // within reduce_rot_deg of rest on every frame get no rotation keys, so other animations (an AO's blinks) move
     // them; a joint left with neither rotations nor positions gets no record.
     bool leave_out_static_rotations = false;
+    // IO-14w (spec 08 WR, "Reduce keys: N mm anywhere on the body"): > 0 = keys are reduced by the error they cause
+    // in the world, at most this many metres anywhere on the body (world_reduce.h), instead of by reduce_rot_deg /
+    // reduce_pos_m (which still decide IO-11a/b). The first and last frames, set keys and max_gap hold as before.
+    double reduce_world_m = 0;
 };
 
 struct AnimExportResult {

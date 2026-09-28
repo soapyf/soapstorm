@@ -371,6 +371,8 @@ void App::draw_inventory_panel() {
             if (ImGui::BeginPopupContextItem()) {
                 if (ImGui::MenuItem(it.clip ? "Paste at This Frame" : "Apply at This Frame")) use_library_item(i, false);
                 if (ImGui::MenuItem(it.clip ? "Paste Mirrored" : "Apply Mirrored")) use_library_item(i, true);
+                if (it.clip && ImGui::MenuItem("Paste, Matching Poses...")) open_match_poses(library_clip(it, apply_mirrored_), it.name);
+                if (!it.clip && ImGui::MenuItem("Show as Ghost")) pin_pose_ghost(it);  // 08 ON-5
                 ImGui::Separator();
                 if (menu_item_icon(icon::kRename, "Rename...")) rename = i;
                 if (menu_item_icon(icon::kDelete, "Delete")) remove = i;
@@ -442,6 +444,7 @@ void App::draw_inventory_panel() {
                 } else if (ImGui::MenuItem("Apply at This Frame")) {
                     apply_library_item(it, false);
                 }
+                if (ImGui::MenuItem("Show as Ghost")) pin_pose_ghost(it);  // 08 ON-5
                 ImGui::EndPopup();
             }
             ImGui::PopID();

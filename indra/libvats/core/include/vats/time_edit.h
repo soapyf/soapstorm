@@ -21,6 +21,8 @@ void insert_time(Clip& clip, int at, int frames, const std::vector<std::string>&
 void remove_time(Clip& clip, int a, int b, const std::vector<std::string>& tracks = {});
 // Stretches or squashes a..b to a..a+length; later keys move by the difference.
 void scale_time(Clip& clip, int a, int b, int length, const std::vector<std::string>& tracks = {});
+// The same on fractional frames: a..b becomes a..to, later keys move by to - b; the length rounds (TE-5).
+void scale_time_to(Clip& clip, double a, double b, double to, const std::vector<std::string>& tracks = {});
 
 // Keys of a..b (inclusive), frames relative to a.
 struct KeyRange {

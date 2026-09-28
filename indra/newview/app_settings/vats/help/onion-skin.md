@@ -24,6 +24,24 @@ Ghosts are see-through and can't be clicked, so they never get in the way of sel
 3. Set **View → Onion Skin → Before** to 0. The blue ghost goes; the orange one at frame 12 stays.
 4. Go to frame 12: no ghosts at all, since there is nothing after the last frame and **Before** is 0.
 
+### Pinned ghosts
+
+A pinned ghost stays in the view, in violet, until you remove it: a pose to come back to, or a target to
+match. The **Pinned Ghosts** part of **View → Onion Skin** has:
+
+- **Pin Ghost at This Frame**: the pose at the current frame, listed as `Frame 12`.
+- **Ghost Other Actor at Frame** (with two or more actors): another actor's pose at the current frame, at its
+  place, listed as `Bob, frame 12`. See [[Couples and groups]].
+- The pinned ghosts, each with a remove button, and **Remove All Pinned Ghosts** when there are two or more.
+
+**Show as Ghost** on a pose in the [[Pose library]] adds a third kind, listed as `Pose` and its name: your
+pose at the current frame with the saved pose put on it, following the playhead.
+
+Pinned ghosts show whether **Show Ghosts** is on or not, and while the animation plays. **Bones Only** applies
+to them too. Each is drawn from the animation as it is now, so it follows your edits and undo. They are not
+saved with the project and not part of undo: opening or starting another project clears them, and so does
+closing the program. A ghost of an actor that has been removed or renamed is not drawn. Another actor's ghost is drawn in the edited actor's body.
+
 ## Configuration
 
 All settings are in **View → Onion Skin**:
@@ -62,11 +80,12 @@ The pose doesn't change around this frame. Raise **Every** to spread the ghosts 
 ## App and viewer
 
 > **Note:** In the viewer the ghosts are bone lines over the world, blue before the current frame and orange
-> after, whatever **Bones only** says. See [[VATs Editor (viewer)#The world as the view]].
+> after, pinned ghosts violet, whatever **Bones only** says. See [[VATs Editor (viewer)#The world as the view]].
 
 ## See also
 
 - [[Keys and timeline]]
+- [[Motion paths]]
 - [[Loop tools]]
 
 Category: Animating

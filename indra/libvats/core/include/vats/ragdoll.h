@@ -8,6 +8,7 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "vats/clip.h"
@@ -19,6 +20,14 @@ namespace vats {
 struct RagdollBox {
     Xform frame;  // centre and orientation
     Vec3 half;    // half extents, metres
+};
+
+// One body's capsules in the world (the self-penetration check, 08 SX): each segment runs from the joint.
+struct RagdollCapsule {
+    int node = -1;    // the joint
+    int parent = -1;  // the parent body's joint, -1 for the pelvis
+    double radius = 0;
+    std::vector<std::pair<Vec3, Vec3>> segments;
 };
 
 // The solver, with the same reset / step / apply shape as DynSim so another backend (Jolt) could take its
@@ -37,6 +46,10 @@ public:
     const std::vector<int>& nodes() const { return sim_nodes_; }  // joints whose rotation it sets
     bool moves_pelvis() const { return moves_pelvis_; }
     double lowest_surface() const;  // lowest capsule bottom (z - radius), for tests
+    // Mass-weighted centre of the bodies (de Leva segment masses) after reset(); the whole body with
+    // Ragdoll::whole_body. Used by the centre-of-mass display (balance.h).
+    Vec3 centre_of_mass() const;
+    std::vector<RagdollCapsule> capsules() const;  // where reset() or step() left the bodies
 
 private:
     // One rigid body per ragdoll joint: the bone from the joint to its child (or a rigid group: the hips,
@@ -76,6 +89,11 @@ private:
     bool moves_pelvis_ = false;
     double last_blend_ = 1;
 };
+
+// The whole-body ragdoll's capsules at a pose (global transforms, as Skeleton::global_pose gives them).
+std::vector<RagdollCapsule> ragdoll_capsules(const Skeleton& skel, const std::vector<Xform>& globals);
+// Closest points c1, c2 between segments p1-q1 and p2-q2.
+void segment_closest_points(const Vec3& p1, const Vec3& q1, const Vec3& p2, const Vec3& q2, Vec3& c1, Vec3& c2);
 
 // The joints a ragdoll can move (whole body), for the UI.
 std::vector<std::string> ragdoll_joint_names();

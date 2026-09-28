@@ -54,53 +54,82 @@ Key shifted(Key k, double df, double dv) {
 
 }  // namespace
 
-std::vector<LoopCandidate> find_loop_points(const Rig& rig, const Clip& clip, int min_length, int count,
-                                            const Shape* shape) {
+PoseTrace pose_trace(const Rig& rig, const Clip& clip, int from, int to, const Shape* shape, bool heading_free) {
     const Skeleton& sk = rig.skeleton();
-    const int n = std::max(clip.end_frame, 0) + 1;
-    min_length = std::max(min_length, 1);
-    std::vector<LoopCandidate> out;
-    if (n <= min_length) return out;
-
-    std::vector<std::vector<Quat>> rot(n);
-    std::vector<double> height(n);
+    const int last = std::max(clip.end_frame, 0);
+    PoseTrace t;
+    t.from = std::clamp(from, 0, last);
+    const int n = std::clamp(to, t.from, last) - t.from + 1;
+    // One frame more on each side where the clip has it, so the velocities at the edges are central too.
+    const int lo = std::max(t.from - 1, 0), hi = std::min(t.from + n, last);
+    std::vector<std::vector<Quat>> rot(hi - lo + 1);
+    t.height.resize(n);
     const int pelvis = sk.find("mPelvis");
-    for (int f = 0; f < n; ++f) {
+    for (int f = lo; f <= hi; ++f) {
         Evaluation e = evaluate(rig, clip, f, shape);
-        rot[f] = std::move(e.pose.rot);
-        height[f] = pelvis >= 0 ? e.globals[pelvis].pos.z * 100 : 0;  // centimetres, compared like degrees
+        if (pelvis >= 0 && heading_free) {  // turn the hips to face +X: a clip turned about Z then matches
+            const Vec3 fwd = e.pose.rot[pelvis].rotate({1, 0, 0});
+            e.pose.rot[pelvis] = Quat::axis_angle({0, 0, 1}, -std::atan2(fwd.y, fwd.x)) * e.pose.rot[pelvis];
+        }
+        rot[f - lo] = std::move(e.pose.rot);
+        if (f >= t.from && f < t.from + n) t.height[f - t.from] = pelvis >= 0 ? e.globals[pelvis].pos.z * 100 : 0;  // cm
     }
-    // Joints that move somewhere in the clip; still ones would only dilute the average.
-    std::vector<std::pair<int, double>> joints;
-    double wsum = pelvis >= 0 ? 4 : 0;  // the pelvis height
+    // Angular velocity per joint and frame, in degrees per 0.1 s (so the frame rate does not matter).
+    const double per = std::max(clip.fps, 1) * 0.1;
+    t.rot.resize(n);
+    t.vel.resize(n);
+    for (int k = 0; k < n; ++k) {
+        const int f = t.from + k, f0 = std::max(f - 1, lo), f1 = std::min(f + 1, hi);
+        t.rot[k] = rot[f - lo];
+        t.vel[k].resize(sk.joint_count());
+        for (int b = 0; b < sk.joint_count(); ++b)
+            t.vel[k][b] = rotvec(rot[f1 - lo][b] * rot[f0 - lo][b].conj()) * (per / std::max(f1 - f0, 1));
+    }
+    return t;
+}
+
+PoseDistance::PoseDistance(const Skeleton& sk, const std::vector<const PoseTrace*>& traces) {
+    pelvis_ = sk.find("mPelvis") >= 0;
+    wsum_ = pelvis_ ? 4 : 0;  // the pelvis height
+    // Joints that move somewhere in the traces (or differ between them); still ones would only dilute the average.
+    const PoseTrace* first = nullptr;
+    for (const PoseTrace* t : traces)
+        if (t && !t->rot.empty()) first = first ? first : t;
+    if (!first) return;
     for (int b = 0; b < sk.joint_count(); ++b) {
         const double w = joint_weight(sk[b]);
         if (w <= 0) continue;
         bool moves = false;
-        for (int f = 1; f < n && !moves; ++f) moves = std::fabs(rot[f][b].dot(rot[0][b])) < 1 - 1e-9;
-        if (moves) joints.emplace_back(b, w), wsum += w;
+        for (const PoseTrace* t : traces)
+            for (size_t f = 0; t && f < t->rot.size() && !moves; ++f)
+                moves = std::fabs(t->rot[f][b].dot(first->rot[0][b])) < 1 - 1e-9;
+        if (moves) joints_.emplace_back(b, w), wsum_ += w;
     }
-    if (wsum <= 0) return out;
-    // Angular velocity per joint and frame, in degrees per 0.1 s (so the frame rate does not matter).
-    const double per = std::max(clip.fps, 1) * 0.1;
-    std::vector<std::vector<Vec3>> vel(n, std::vector<Vec3>(joints.size()));
-    for (int f = 0; f < n; ++f) {
-        const int f0 = std::max(f - 1, 0), f1 = std::min(f + 1, n - 1);
-        for (size_t k = 0; k < joints.size(); ++k) {
-            const int b = joints[k].first;
-            vel[f][k] = rotvec(rot[f1][b] * rot[f0][b].conj()) * (per / std::max(f1 - f0, 1));
-        }
+}
+
+double PoseDistance::operator()(const PoseTrace& a, int fa, const PoseTrace& b, int fb) const {
+    if (wsum_ <= 0) return 0;
+    const int i = fa - a.from, j = fb - b.from;
+    const double dh = a.height[i] - b.height[j];
+    double d = pelvis_ ? 4 * dh * dh : 0;
+    for (const auto& [bone, w] : joints_) {
+        const double ang = std::acos(std::min(1.0, std::fabs(a.rot[i][bone].dot(b.rot[j][bone])))) * 2 * kDeg;
+        const Vec3 dv = a.vel[i][bone] - b.vel[j][bone];
+        d += w * (ang * ang + dv.dot(dv));
     }
-    auto distance = [&](int i, int j) {
-        double d = pelvis >= 0 ? 4 * (height[i] - height[j]) * (height[i] - height[j]) : 0;
-        for (size_t k = 0; k < joints.size(); ++k) {
-            const int b = joints[k].first;
-            const double ang = std::acos(std::min(1.0, std::fabs(rot[i][b].dot(rot[j][b])))) * 2 * kDeg;
-            const Vec3 dv = vel[i][k] - vel[j][k];
-            d += joints[k].second * (ang * ang + dv.dot(dv));
-        }
-        return std::sqrt(d / wsum);
-    };
+    return std::sqrt(d / wsum_);
+}
+
+std::vector<LoopCandidate> find_loop_points(const Rig& rig, const Clip& clip, int min_length, int count,
+                                            const Shape* shape) {
+    const int n = std::max(clip.end_frame, 0) + 1;
+    min_length = std::max(min_length, 1);
+    std::vector<LoopCandidate> out;
+    if (n <= min_length) return out;
+    const PoseTrace t = pose_trace(rig, clip, 0, n - 1, shape);
+    const PoseDistance dist(rig.skeleton(), {&t});
+    if (!dist.any()) return out;
+    auto distance = [&](int i, int j) { return dist(t, i, t, j); };
     // ponytail: every pair, O(frames^2 x joints); a coarse-to-fine search if minute-long clips get slow.
     std::vector<LoopCandidate> all;
     for (int i = 0; i + min_length < n; ++i) {
@@ -178,6 +207,7 @@ Gait measure_gait(const Rig& rig, const Clip& clip, const Shape* shape) {
     Gait g;
     const LoopRange r = loop_range(clip);
     FootLockOptions o;
+    o.heel_toe = false;  // the ankle alone: its travel is what the gait measures
     o.speed = 1e9;  // an in-place cycle's planted foot slides at the walk speed: height alone tells a contact
     o.from = r.in, o.to = r.out, o.shape = shape;
     const std::vector<FootContact> contacts = find_foot_contacts(rig, clip, o);

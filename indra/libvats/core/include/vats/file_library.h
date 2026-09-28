@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace vats {
@@ -62,5 +63,14 @@ bool lib_rename(const std::vector<std::string>& roots, const std::string& path, 
 bool lib_duplicate(const std::vector<std::string>& roots, const std::string& path, std::string& out,
                    std::string& err);  // "<name> copy", then "<name> copy 2", ...
 bool lib_delete(const std::vector<std::string>& roots, const std::string& path, std::string& err);
+
+// Adds a folder to one of the Inventory's folder lists (settings project_folders / anim_folders, Add Folder...): '\'
+// becomes '/', a trailing '/' is added, and a folder already listed is not added twice. False when nothing was added.
+bool lib_add_folder(std::vector<std::string>& list, std::string dir);
+
+// Add Community Folder... (08 CF): the folders to list for a community content folder (a clone of a community repo):
+// its "poses", "clips" and "animations" subfolders as Animations folders and "projects" as a Projects folder, those
+// that exist. A folder with none of them is listed whole in both sections. Each goes through lib_add_folder.
+std::vector<std::pair<LibKind, std::string>> community_folders(const std::string& root);
 
 }  // namespace vats

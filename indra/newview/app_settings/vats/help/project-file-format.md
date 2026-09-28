@@ -45,7 +45,7 @@ A project is one JSON object. VATs writes the fields below; readers must accept 
 | Field | Value |
 |---|---|
 | `format` | `"vats-project"` |
-| `version` | `1` for a project with one actor, `2` for a project with two or more actors (see actors below) |
+| `version` | `1` for a project with one actor and one clip, `2` for two or more actors and one clip (see actors below), `3` for a project with a clip list (see clips below) |
 | `euler_order` | `"xyz-extrinsic"`, the only order: a rotation `(x, y, z)` in degrees is X applied first, then Y, then Z |
 | `meta` | a free-form object, always kept |
 
@@ -67,6 +67,7 @@ A file with a higher `version` than VATs knows opens with a warning and is saved
 | `mirror_export` | bool | `false` | the export is mirrored left to right |
 | `export` | object | `{}` | export settings (below) |
 | `ik_solve` | string | absent | `"literal"`: IK uses the literal two-bone frame instead of lining the mid joint up with the pole |
+| `ik_pull` | object | absent | each IK target's **Pull**, 0–1, by limb: `{ "ArmRight": 1 }`; absent targets have 0 (see [[IK#Full-body reach]]) |
 
 The `export` object holds the settings of **File → Export**: `name`, `number`, `side`, `pattern`,
 `folder`, `both`, `count_up`, the body `shape` (default `"sl-default"`), `reduce` as an array
@@ -96,6 +97,25 @@ Each key is an array of nine numbers:
 
 On load, VATs recomputes the handles of every key whose handle type is not aligned or free, so the
 stored handles of those keys are ignored.
+
+### key_tags
+
+The [[Keys and timeline#Blocking and key tags|key tags]], when any key has one. `key_tags` is keyed by track and
+channel like `curves`, and each channel is a string of two hex digits (one byte) per key, in the channel's key
+order: `00` none, `01` Extreme, `02` Breakdown, `03` Hold. Channels with no tagged key are left out:
+
+```
+"key_tags": { "mShoulderLeft": { "rot_z": "0102" } }
+```
+
+A project without `key_tags` loads with no tags. A channel whose string does not have one byte per key, or that
+holds a value above `03`, loads with no tags; the rest of the project loads as usual.
+
+### selection_sets
+
+The [[Picker]]'s selection sets, when there are any: an array of `{ "name": "Right Arm", "bones": ["mShoulderRight",
+"mElbowRight"] }`. Each actor of a group scene has its own, in its `clip` object. Bones the skeleton lacks are kept
+and skipped when the set is recalled.
 
 ### props
 
@@ -143,10 +163,25 @@ The blink, eye-dart and look-at layer of [[Face animation]], when added: `seed`,
 `actor` and `bone` (`""` is between the eyes), `head_share`, `head_max` (degrees), `baked`, `head_baked`, and
 `source` when baked: the eye, eyelid and head tracks from before the bake.
 
+### lip_sync
+
+The [[Lip sync]], when keyed: `from` and `to` (the keyed frames), `positions` (whether **Move face bones** was on),
+`cues` (an array of `{frame, shape}`, each shape held until the next; shapes are the names in
+`data/retarget/lip-shapes.json`) and `level` (from the audio: the loudness, 0–1, on each frame from `from` to
+`to`; empty for Rhubarb). The keys themselves are in `curves`; this is what the timeline shows and what a nudge
+or **Remove Lip Sync** keys again from.
+
 ### audio
 
 The [[Audio track]], when there is one: `path` (relative like props), `offset`, `volume`, `bpm`,
 `beat_offset`, `beats` (an array of marked beats) and `snap`.
+
+### reference
+
+The [[Reference images|reference image]], when there is one: `path` (relative like props; for a sequence, one of
+its pictures), `sequence`, `in_scene`, `hidden`, `view` (`"any"`, `"front"`, `"back"`, `"right"`, `"left"` or
+`"top"`), `opacity` (0 to 1), `scale`, `offset` (`[right, up]`), `flip_x`, `flip_y`, `frame_offset` (the timeline
+frame the first picture shows on) and `fps` (the sequence's own rate). An unknown `view` fails the load.
 
 ### Imported data
 
@@ -163,6 +198,16 @@ The active actor's animation is the top level of the file, and `active` is its i
 has a `clip` object with the same fields as the top level: timing, curves, props, anchors and the rest.
 `fps`, `end_frame` and the loop settings are shared: the active actor's values apply to all.
 
+### clips
+
+A project with a clip list (see [[Clips]]) has version `3`, a `clips` array and `active_clip`, the index of the
+clip being edited. Each entry has `name`, `ao_state` (the AO state for the notecards; left out when there is
+none) and, for every clip but the active one, a `clip` object with the same fields as the top level. The active
+clip is the top level of the file, as for actors. In a project with actors as well, the active actor's clips are
+these; every other actor has a `clips` array with one clip object per entry, and `{}` at `active_clip`, whose
+animation is that actor's `clip`. A project that has never had a second clip, or a named clip, has no `clips` and
+keeps version `1` or `2`; older projects open as one clip called `Clip`.
+
 ### View settings
 
 `onion` holds the [[Onion skin]] settings of the project.
@@ -170,7 +215,7 @@ has a `clip` object with the same fields as the top level: timing, curves, props
 ### Unknown fields
 
 VATs keeps every field it does not know, at the top level, in each actor and clip, and in pins, chains,
-idle layers, the ragdoll, the face layer and the audio track, and writes them back on save. A tool can store its
+idle layers, the ragdoll, the face layer, the audio track and the reference image, and writes them back on save. A tool can store its
 own data in a project this way; a name with a prefix of its own avoids clashes with later VATs fields.
 
 ## Usage
@@ -193,7 +238,7 @@ The file uses another rotation order. Convert the rotations to `xyz-extrinsic`.
 
 ### A prop or the audio file is missing after moving the project
 
-Relative paths are relative to the project file. Move the prop and audio files with the project, keeping
+Relative paths are relative to the project file. Move the prop, audio and reference files with the project, keeping
 their place relative to it.
 
 ## See also

@@ -5,13 +5,13 @@ The **Projects** and **Animations** sections at the top of the **Inventory** tab
 folder and from any other folders you add. Open a project or an animation from there, insert an animation
 into the open project, or rename, duplicate and delete the files.
 
-> Related articles: [[Projects and files]], [[Pose library]], [[Export to Second Life]], [[Interface]]
+> Related articles: [[Projects and files]], [[Pose library]], [[Community content]], [[Export to Second Life]], [[Interface]]
 
 ## Usage
 
 ### What is listed
 
-![The top of the Inventory: the filter box, the Projects section with Save to Library... and Add Folder..., and the Animations section, each with an empty Library group](images/project-library/inventory.png)
+![The top of the Inventory: the filter box, the Projects section with Save to Library..., Add Folder... and Add Community Folder..., and the Animations section, each with an empty Library group](images/project-library/inventory.png)
 *The two sections on a new installation. Each **Library** group says what fills it.*
 
 Each section has groups, which fold open and closed:
@@ -20,7 +20,7 @@ Each section has groups, which fold open and closed:
 |---|---|---|
 | **Library** | both | the files in `library/Projects/` or `library/Animations/` in the data folder |
 | **Recent** | Projects | the projects of **File → Open Recent** that still exist |
-| a folder's name | both | the files in a folder you added with **Add Folder...** |
+| a folder's name | both | the files in a folder you added with **Add Folder...** or **Add Community Folder...** |
 
 A group's title gives the number of files it shows. Only files directly in the folder are listed, not
 those in folders inside it. Hover a folder's group title for its full path.
@@ -51,6 +51,41 @@ is lengthened to fit. It is one undo step.
 
 **Insert Mirrored** pastes it with left and right swapped. A drag onto the view uses the **Apply mirrored**
 tick of the **Poses** section.
+
+### Inserting with matched poses
+
+**Insert, Matching Poses...** on an animation's right-click menu opens the **Match Poses** window instead of
+pasting at the current frame. It joins the animation onto the end of the open clip, where the two poses match
+best, and blends the join. The **Apply mirrored** tick decides whether it goes in mirrored.
+
+VATs compares the last **Search** frames of the clip with the first **Search** frames of the animation, with the
+pose distance [[Loop tools#Finding the best loop points|Find Best Loop Points]] uses (rotations and angular
+speed, hips and legs weighted most, plus the hip height). The cut stays at least **Blend** frames before the
+clip's end. Pairs that differ by less than 0.001 count as equal, and the later cut wins. The window shows the
+result before anything changes:
+
+- `Cut at frame 60, where walk's frame 12 lands.`: the clip plays to frame 60, then the animation from its frame 12.
+- `Pose difference`: the distance there, marked `(close)` under 5 and `(far apart)` from 15.
+- `Turned -90 degrees, moved 1.20 m`: how far **Align the hips** turns and moves the animation.
+- `The clip becomes 120 frames long.`
+
+| Setting | Values | Default | What it does |
+|---|---|---|---|
+| **Search** | 2–60 frames | 15 | Frames compared at the end of the clip and the start of the animation |
+| **Blend** | 0–30 frames | 6 | Frames over which the clip's motion eases into the animation's; 0 is a straight cut |
+| **Ease** | Linear, Quad, Cubic, Sine | Sine | The blend's shape, In-Out |
+| **Align the hips** | on / off | on | Turns the animation about Z and moves it along the ground so its hips carry on from the clip's; the hip height stays the animation's own. IK targets and pins are not turned with the hips |
+
+**Insert** runs it as one undo step, **Insert, Matching Poses**. Each bone the animation moves loses its keys
+after the cut; over the blend it is keyed on every frame, both motions playing, and the animation's own keys
+follow. Bones the animation doesn't move keep their keys. With **Align the hips**, **mPelvis** is keyed on
+every frame of the inserted part. An IK limb switches between IK and FK at the end of the blend. The clip ends
+where the animation ends; loop points past the new end move to it.
+
+> **Note:** Second Life blends whole animations itself, through each one's **Ease in** and **Ease out**
+> ([[Export to Second Life]]). **Match Poses** builds one file from several pieces.
+
+A library clip's right-click menu has the same thing as **Paste, Matching Poses...** (see [[Pose library]]).
 
 ### Managing files
 
@@ -100,6 +135,10 @@ Renaming the open project's file keeps it open under the new name.
 **Add Folder...** in either section lists another folder's files there too, for example your export folder.
 Right-click the folder's group title for **Show in Folder** or **Remove Folder from Inventory**; removing
 it only takes it off the list, the files stay.
+
+**Add Community Folder...**, under the **Projects** buttons, adds a folder of shared content, such as a clone
+of a community repository: its `poses`, `clips` and `animations` folders to **Animations** and its
+`projects` folder to **Projects**, each as its own group. See [[Community content]].
 
 ### Filtering
 

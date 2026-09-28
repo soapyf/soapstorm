@@ -30,8 +30,17 @@ inline constexpr double kTweenMin = -0.2, kTweenMax = 1.2;
 
 // TW-1: keys each track at frame. Rotations slerp, then take the Euler triple nearest the curve (AM-30);
 // positions and IK poles lerp; IK blend is never touched. Breakdown skips a track without a key on both
-// sides of frame; Relax skips a track without a key at frame. Returns the number of tracks keyed.
+// sides of frame and tags the keys it sets Breakdown (08 KT-1); Relax skips a track without a key at frame and
+// leaves tags alone. Returns the number of tracks keyed.
 int tween(Clip& clip, const std::vector<std::string>& tracks, double frame, double t, TweenMode mode);
+
+// Keys track at frame, t of the way from a's pose at fa to b's at fb: rotation (slerp, the Euler triple nearest
+// out's curve), position and IK pole groups; IK blend is never touched. A group b lacks is left alone. A group a
+// lacks is rest (zero) on a bone; on an IK controller it means "follow the end bone" or "derive the pole", which has
+// no value to blend from, so b's is keyed as it is. out may be a or b. breakdown tags the keys Breakdown (08 KT-1).
+// Shared with 08 PM (pose_match.h).
+void key_mix(Clip& out, const std::string& track, double frame, const Clip& a, double fa, const Clip& b, double fb,
+             double t, bool breakdown = false);
 
 // TW-2: blends the pose a library pose, hand pose or Paste Pose keyed at frame. clip is after (the clip
 // with the pose applied) or an earlier blend of the same two; every track that differs between before and

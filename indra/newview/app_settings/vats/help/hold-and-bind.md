@@ -85,7 +85,8 @@ To make the same thing yourself, pose the hand on the table at the first frame, 
 - **Passing a drink**: wear the glass on the **Right Hand** attachment point and animate the two hands meeting. At the frame they meet, select `mWristLeft`, **Shift+click** the **Right Hand** point, then **Bind to Selected Bone from Here**. From there the glass travels with the left hand.
 - **A two-handed weapon**: pose both hands on the grip with the elbows bent. At the first frame select `mWristRight`, **Shift+click** `mWristLeft`, and bind. Animate only the right arm; the left hand stays on the grip.
 - **Planted feet**: select `mAnkleLeft`, **Hold in World from Here**, then lower the hips. The knee bends and the foot stays planted.
-- For walks whose feet slide, **Tools → Clean Up Foot Sliding** plants the feet automatically, on both legs or only on the legs of the selected bones.
+- For walks whose feet slide, **Tools → Clean Up Foot Sliding...** plants the feet automatically, on both legs or only on the legs of the selected bones.
+- Pin the feet before a big reach: an IK target with a **Pull** moves the hips when it is dragged out of reach, and pinned feet stay on their spots while the hips go (see [[IK#Full-body reach]]). **Tools → Auto-Balance...** holds planted feet still with leg IK while it moves the hips over them (see [[Balance]]).
 - Pins are baked into ordinary keys on export, so the uploaded animation plays them exactly as you see them.
 
 ## Troubleshooting

@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "gizmo.h"
+#include "dope_sheet.h"
 #include "graph_editor.h"
 #include "host.h"
 #include "imgui.h"
@@ -21,16 +22,23 @@
 #include "vats/anim_convert.h"
 #include "vats/audio.h"
 #include "vats/avatar_mesh.h"
+#include "vats/balance.h"
 #include "vats/dae.h"
 #include "vats/dynamics.h"
+#include "vats/export_name.h"
 #include "vats/face_anim.h"
 #include "vats/history.h"
+#include "vats/jump_arc.h"
 #include "vats/loop_assist.h"
+#include "vats/motion_path.h"
 #include "vats/onion.h"
 #include "vats/overlap.h"
+#include "vats/pose_match.h"
 #include "vats/pose_ops.h"
 #include "vats/project.h"
+#include "vats/motion_quality.h"
 #include "vats/rig.h"
+#include "vats/simplify.h"
 #include "vats/skeleton.h"
 #include "vats/time_edit.h"
 #include "view_math.h"
@@ -38,6 +46,11 @@
 namespace vats {
 
 struct FitOptions;
+struct RetargetOptions;
+struct RigTable;
+// The Retarget dialog's rest pose, foot clean-up and fitting settings (retarget_ui.cpp); Batch Retarget shares them.
+void retarget_settings_ui(RetargetOptions& opt, FitOptions& fit, bool& lock_feet, bool* heel_toe = nullptr,
+                          bool* to_ground = nullptr);
 
 std::string key_label(ImGuiKeyChord chord);  // "Ctrl+Up", "]": shortcut text for menus and tooltips
 std::string folder_url(const std::string& dir);  // a file:// URL of a folder for Host::open_url (file_library_ui.cpp)
@@ -94,6 +107,13 @@ public:
     bool apply_builtin_pose(const std::string& slug);
     void focus_selection() { run_action("frame_selected"); }
     void set_camera_distance(double d) { camera_.distance = d; }
+    // --view front|back|right|left|top|ortho: that View menu action, with the camera's swing finished at once.
+    bool cli_view(const std::string& name) {
+        const std::string id = "view_" + name;
+        for (auto& [aid, a] : actions_)
+            if (aid == id) return run_action(id.c_str()), update_camera_animation(1), true;
+        return false;
+    }
     void set_headless(bool h) { headless_ = h, show_welcome_ = show_welcome_ && !h; }  // scripted runs: no dialogs
     void start_playing() { playing_ = true; }  // --bench
     void select_all() { run_action("select_all"); }  // --select-all
@@ -122,6 +142,8 @@ public:
         else pending_tab_ = tab == "bones" ? "Bones" : "Inventory";
         inv_scroll_poses_ = tab == "poses";
     }
+    void planner_add(const std::string& path);           // --plan-clip: the Priority Planner with this context clip
+    void batch_retarget_folder(const std::string& dir);  // --batch-retarget: Batch Retarget run on this folder
     // --window: opens a tool window or brings a panel to the front, by its --window name; false when unknown.
     bool show_window(const std::string& name);
     bool set_theme(const std::string& name) {  // --theme: by its name in Preferences; false when unknown
@@ -144,6 +166,10 @@ public:
     // --light <noon|key|rim|dusk|night|studio> and --backdrop (08 LT): the Light menu from the command line.
     bool set_light(const std::string& id);
     void show_backdrop() { backdrop_ = true; }
+    // --reference <png> (08 RF): a picture as the backdrop; --listing <file.gif|file.png> (08 LM): writes listing
+    // media with the window's settings (its size, turntable on) and says what it wrote.
+    void cli_reference(const std::string& path) { guarded(path, [&] { load_reference(path, false); }); }
+    bool export_listing_media(const std::string& path);
     void select_by_name(const std::string& name) {
         int i = skel_.find(name);
         if (i >= 0) select(i, false);
@@ -179,7 +205,8 @@ private:
     AnimExportOptions anim_export_options();  // the active actor's, as every .anim export uses them
     Clip anim_export_clip() const;            // the active clip as it exports: mirrored with Export mirrored
     bool export_anim(const std::string& path);
-    void upload_now();  // the viewer's direct upload (Host::can_upload): every file Export would write
+    // The viewer's direct upload (Host::can_upload): every file Export would write; all_clips: of every clip (08 CL-4).
+    void upload_now(bool all_clips = false);
     void upload_next();  // the next queued upload, after the previous one's confirmation
     std::deque<std::pair<std::string, std::vector<std::uint8_t>>> upload_queue_;  // name, bytes
     bool export_bvh(const std::string& path, bool all_bones);
@@ -188,7 +215,9 @@ private:
 
     // File dialogs run asynchronously; results come back through this queue.
     enum class Dialog { Open, SaveAs, ImportAnim, ImportBvh, ImportProp, ImportBody, ImportRetarget, LoadAudio, ExportFolder,
-                        LoadActor, SaveActor, ExportActor, SitLines };  // the *Actor ones act on file_actor_; SitLines on sit_format_
+                        LoadActor, SaveActor, ExportActor, SitLines, AoNotecard, ExpressionPack, Rhubarb, LoadReference,
+                        ListingMedia };
+    // the *Actor ones act on file_actor_; SitLines on sit_format_, AoNotecard on ao_format_
     // A dialog's answer, queued for the next frame (hosts may answer on another thread). Several files
     // (body parts) arrive joined with newlines; "" = cancelled.
     ui::FilesChosen dialog_result(Dialog kind, bool folder_of_file = false);
@@ -221,6 +250,7 @@ private:
     };
     std::vector<Recoverable> recoverable_;  // the last export's bones, length, priority and points (UI-34)
     int export_after_folder_ = -1;  // export waiting for a folder: 0 .anim, 1 BVH, 2 BVH all bones
+    bool export_all_after_folder_ = false;  // ... of every clip (08 CL-4)
     // after_save: with SaveAs, what runs once the file is saved (a New, Open or Quit that asked to save first).
     void show_dialog(Dialog kind, std::function<void()> after_save = {});
     std::function<void()> after_save_as_;
@@ -265,7 +295,13 @@ private:
     void draw_follow_dialog();
     void draw_about();
     void draw_bvh_prompt();
-    void export_now(bool bvh, bool all_bones);  // Export tab: writes straight to the export folder
+    // Export tab: writes straight to the export folder; all_clips: every clip in turn (08 CL-4), in the active one's folder.
+    void export_now(bool bvh, bool all_bones, bool all_clips = false);
+    // The export naming of the active actor's clip k (-1 = the active clip), with [CLIP] when the project has several
+    // clips (08 CL-4).
+    ExportNaming export_naming(int k = -1) const;
+    const Clip& active_actor_clip(int k) const;  // the active actor's clip k (08 CL), without switching to it
+    std::string export_stem() const;  // the project file's stem, [NAME]'s fallback
     void handle_shortcuts();
     void menu_item(const char* id);
     void draw_menus();
@@ -399,6 +435,13 @@ private:
     // During a multi-actor export or upload: the actor the user was editing, whose settings apply; -1 otherwise.
     int export_home_ = -1;
     const Json& export_home_settings() const;  // that actor's export settings (the active one's when not exporting)
+    // HV (spec 08 section 20, ui/height_variant_ui.cpp): while a height variant exports, the body it bakes on (for
+    // the active actor and the cross-actor pin targets); null otherwise.
+    const Shape* height_shape_ = nullptr;
+    BodyShape height_body_;
+    void set_export_height(double height_m);  // 0 = none; SL Default (Male) bake shapes get the male body
+    double export_hip_lift() const;           // how much higher the hips stand on height_shape_ than on the bake shape
+    void draw_height_variants(float label_w);  // Properties > Export, "Also export for heights"
     bool exporting_yours() const;               // the actor being exported (the active one) may use Your avatar
     std::string bake_shape_label(const std::string& key) const;  // "SL Default", "Mesh body: <name>", ...
     int limb_for_action() const;  // the limb of the primary handle or bone, or -1
@@ -476,6 +519,7 @@ private:
     ImVec2 last_click_{-100, -100};
 
     GraphEditor graph_;
+    DopeSheet dope_{graph_};  // spec 08 DS: shares graph_'s key selection
     bool show_hands_ = false;
     Library library_;
     bool apply_mirrored_ = false;
@@ -600,6 +644,37 @@ private:
     int overlap_length_ = 3;  // bones in the chain from the selected one
     OverlapSettings overlap_;
 
+    // --- simplify curves / motion quality ---
+    // Spec 08 SC: Edit > Simplify Curves..., a dialog whose live preview is an open history step (simplify_ui.cpp);
+    // spec 08 MQ: Tools > Motion Quality..., the last clean-up step's numbers before and after (motion_quality_ui.cpp).
+    void open_simplify();
+    void preview_simplify();
+    void draw_simplify_dialog();
+    bool simplify_open_ = false, simplify_all_ = false, simplify_planted_ = false;
+    Clip simplify_before_;
+    std::vector<std::string> simplify_tracks_;  // the selected tracks when the dialog opened
+    std::vector<int> simplify_contacts_;        // frames where a foot plants or lifts in simplify_before_
+    SimplifyOptions simplify_;
+    SimplifyResult simplify_result_;
+    float simplify_dim_ = 0;  // the style's modal dimming, put back on close
+    void draw_quality_panel();
+    bool show_quality_ = false;
+    unsigned long long quality_serial_ = ~0ull;  // History::serial() when last measured
+    std::string quality_label_;                  // the clean-up step shown; "" = none, quality_[1] is the clip now
+    Clip quality_after_;
+    MotionQuality quality_[2];                   // before, after
+    // --- balance, jump arc, reach (spec 08 section 21, balance_ui.cpp) ---
+    void draw_balance(ImDrawList* dl) const;  // View > Centre of Mass
+    void draw_auto_balance_panel();           // Tools > Auto-Balance...
+    void draw_jump_arc_panel();               // Tools > Jump Arc...
+    void draw_ik_target_properties(int limb);  // Properties > Bone with an IK target selected: its Pull
+    bool reach_after_drag(int limb);           // a released target drag pulls the spine and hips (RC-1); true if it did
+    bool show_com_ = true;
+    bool show_auto_balance_ = false;
+    bool show_jump_arc_ = false;
+    AutoBalanceOptions balance_;
+    JumpArcOptions jump_;
+
     // --- retarget ---
     // Spec 07: File > Import Animation (Retarget)... and its mapping/report dialog (retarget_ui.cpp).
 public:
@@ -609,8 +684,23 @@ private:
     void draw_retarget_split(struct RetargetUi& ui);  // RT-10.4 split / trim
     void split_into_parts(const Clip& clip, const std::string& source, const FitOptions& fit, bool overwrite,
                           std::string& confirm, const std::string& advice);  // RT-10.4, also Fit to 250 KB's fallback
+    std::string save_parts(std::vector<Clip> parts, const std::string& source, bool overwrite, std::string& confirm);
     std::shared_ptr<struct RetargetUi> retarget_ui_;  // defined in retarget_ui.cpp
     std::shared_ptr<struct HelpUi> help_ui_;          // defined in help_ui.cpp
+    std::vector<RigTable> retarget_tables() const;    // <data>/retarget, then the user's saved mappings (RT-12)
+    // File > Batch Retarget Folder... (batch_retarget_ui.cpp; spec 07 RT-13, RT-14).
+    void draw_batch_retarget();
+    bool show_batch_retarget_ = false;
+    std::shared_ptr<struct BatchUi> batch_ui_;  // defined in batch_retarget_ui.cpp
+
+    // --- priority planner (priority_plan_ui.cpp; spec 08 PP) ---
+    void draw_planner_panel();  // Tools > Priority Planner...; call every frame
+    bool show_planner_ = false;
+    std::shared_ptr<struct PlannerUi> planner_ui_;  // defined in priority_plan_ui.cpp
+    // PP-2 tint: the winning clip's colour for a node while the planner shows one; false = leave c alone.
+    bool planner_colour(int node, Rgb& c) const;
+    void planner_row_mark(int node);                              // Bones list: after the node's row
+    void draw_planner_band(ImDrawList* dl, ImVec2 a, ImVec2 b);  // Timeline: the primary bone's winner
 
     // --- mocap ---
     // Spec 08 MC: Tools > Motion Capture... (VMC over UDP, mocap_ui.cpp).
@@ -644,6 +734,28 @@ private:
     // Where a look-at target is at each frame, in the active actor's space; empty when it cannot be found.
     LookTarget look_target(const FaceLayer& target);
     void look_at_partner(int actor);  // Actors: the head and eyes look at another actor's eyes, the whole clip
+    // --- expression packs and lip sync --- (expression_pack_ui.cpp, lip_sync_ui.cpp; spec 08 EX, LS)
+    // The Face window's Export Expression Pack... dialog (opened by its button), with the window's head and Move face bones.
+    void draw_expression_pack(const FaceTable& table, bool positions);
+    void export_expression_pack(const std::string& folder);  // the folder chosen for it
+    std::shared_ptr<struct ExpressionPackUi> pack_ui_;       // defined in expression_pack_ui.cpp
+    void draw_lip_sync(bool positions);                      // the Face window's Lip Sync section
+    void import_rhubarb(const std::string& path);
+    bool lip_tables(std::string& err);  // loads the head's face table and data/retarget/lip-shapes.json into lip_ui_
+    // The mouth shapes on the timeline between y0 and y1: drawn, and dragged to nudge them. True while a drag owns
+    // the timeline's press.
+    bool lip_sync_timeline(ImDrawList* dl, float x0, float x1, float y0, float y1, int last, bool hovered);
+    std::shared_ptr<struct LipSyncUi> lip_ui_;  // defined in lip_sync_ui.cpp
+
+    // --- clips --- (clips_ui.cpp, spec 08 CL): several named clips, Export All Clips and the AO notecards.
+    bool show_clips_ = false;
+    void draw_clips_panel();
+    void clip_edit(const std::string& label, const std::function<void(Project&)>& change);  // scene_edit, stops playback
+    std::string ao_notecard_text(int fmt, std::vector<std::string>* warnings = nullptr);  // 0 Firestorm, 1 ZHAO-II
+    void save_ao_notecard(const std::string& path);  // Save as .txt, the format in ao_format_
+    int ao_format_ = 0;
+    int clip_renaming_ = -1;  // the clip whose name is being typed
+    char clip_name_buf_[64] = {};
 
     // --- groups --- (actors_ui.cpp, spec 08 GR)
     bool show_actors_ = false;
@@ -670,9 +782,12 @@ private:
     void apply_restore(History::Restore r);    // after undo/redo
     void draw_other_actors(const SceneColours& colours);
     int pick_actor(ImVec2 m) const;            // another actor's body under the cursor, or -1
-    void write_sit_note(const std::string& folder, const std::string& stem);
-    // Sit-system lines (GR-2, ui/sit_export_ui.cpp): 0 AVsitter2 AVpos, 1 nPose V4, for every actor.
-    std::string sit_lines(int fmt) const;
+    // lifts: per height variant (HV), each actor's export_hip_lift, listed in the note with the variant's lines.
+    void write_sit_note(const std::string& folder, const std::string& stem,
+                        const std::map<double, std::vector<double>>& lifts = {});
+    // Sit-system lines (GR-2, ui/sit_export_ui.cpp): 0 AVsitter2 AVpos, 1 nPose V4, for every actor. For a height
+    // variant (HV): its file names, each actor raised by lift[actor].
+    std::string sit_lines(int fmt, double height = 0, const std::vector<double>& lift = {}) const;
     void draw_sit_export();                  // the Actors panel's section
     void save_sit_lines(const std::string& path);  // Save as .txt, the format in sit_format_
     int sit_format_ = 0;
@@ -718,6 +833,45 @@ private:
     void draw_loop_seam_mark(ImDrawList* dl, float x_out, float y, bool hovered);
     int loop_blend_ = 0;
     float loop_travel_ = 1.f;
+    // --- Clean Up Foot Sliding (footlock_ui.cpp; spec 07 RT-9, 08 FC) ---
+    void draw_foot_lock_window();
+    bool show_foot_lock_ = false, foot_heel_toe_ = true, foot_to_ground_ = false;
+    Clip foot_measured_;  // the clip foot_ground_ was measured on
+    bool foot_measured_heel_toe_ = true;
+    int foot_measured_legs_ = -1;
+    double foot_ground_ = 0;  // m above the rest floor
+    std::vector<std::string> foot_report_;
+    // --- pinned ghosts (pinned_ghosts_ui.cpp; spec 08 ON-5): a view aid, not saved and not undone ---
+    struct PinnedGhost {
+        std::string label;
+        std::string actor;                // whose frame: an actor's name, "" = the active actor
+        double frame = 0;
+        std::optional<LibraryItem> pose;  // instead: this library pose on the active actor at the current frame
+    };
+    std::vector<PinnedGhost> pinned_ghosts_;
+    void pin_ghost(int actor, double frame);
+    void pin_pose_ghost(const LibraryItem& pose);
+    std::vector<std::vector<Xform>> pinned_ghost_poses();  // in the active actor's space
+    void draw_pinned_ghost_menu();
+    // --- pose-matched insertion and transitions (pose_match_ui.cpp; spec 08 PM) ---
+    void open_match_poses(Clip incoming, const std::string& name);  // offers to join a clip where the poses match
+    void draw_match_poses_window();
+    void draw_transition_window();
+    struct MatchState {
+        Clip incoming;
+        std::string name;
+        MatchOptions o;
+        PoseMatch m;
+        bool stale = true;
+    };
+    MatchState match_;
+    struct TransitionState {
+        int from_pose = 0;  // 0 from a frame, 1 from a library pose
+        int from = 0, to = 10, frames = 10, pose = 0;
+        std::optional<EaseShape> ease = EaseShape::Sine;
+    };
+    TransitionState transition_;
+    bool show_match_ = false, show_transition_ = false;
     // --- loop assists (loop_assist_ui.cpp; spec 08 LP-5..LP-8) ---
     void draw_loop_assist_items();  // the Loop Tools menu's part
     void draw_loop_assist_window();
@@ -732,6 +886,32 @@ private:
     int loop_min_length_ = 20, loop_beats_ = 8;
     std::vector<LoopCandidate> loop_candidates_;
     bool treadmill_on_ = false;
+    // --- dope sheet + motion paths (dope_sheet.cpp, motion_path_ui.cpp; spec 08 DS, MP) ---
+    void draw_dope_panel();
+    bool show_dope_ = true;
+    bool keys_hovered() const { return graph_.hovered() || dope_.hovered(); }  // key commands go to the graph's keys
+    struct MotionPathView {  // a view setting for this session: no undo step, not saved
+        bool on = false, numbers = false;
+        MotionPathSettings s;
+        std::vector<MotionPath> cache;  // the paths as last evaluated, and for what
+        std::vector<int> cache_nodes;
+        MotionPathSettings cache_s;
+        double cache_frame = -1;
+        Clip cache_clip;
+        // Phase 2: dragging a keyed dot of an IK limb's end moves the limb's IK target at that frame.
+        int drag_limb = -1;
+        double drag_frame = 0;
+        Vec3 drag_start;      // the dot where the drag began
+        Xform drag_target;    // the IK target there
+        Clip drag_clip;       // the clip at the press
+        bool hover = false;   // over such a dot this frame
+    };
+    MotionPathView motion_path_;
+    std::vector<int> motion_path_nodes() const;
+    const std::vector<MotionPath>& motion_paths_now();
+    void draw_motion_path_menu();
+    void draw_motion_paths(ImDrawList* dl);
+    bool motion_path_input(bool hovered);  // before viewport_input; true when it took the mouse
     int treadmill_speed_ = 0;  // index into kSlSpeeds; its size = the custom speed
     float treadmill_custom_ = 1.5f;
     double treadmill_frame_ = 0, treadmill_scroll_ = 0;  // metres the ground has moved, modulo its spacing
@@ -757,11 +937,25 @@ private:
     int time_prompt_ = 0, time_prompt_value_ = 10;  // 1 insert, 2 stretch
     bool dragging_audio_ = false;
     double audio_press_offset_ = 0, audio_press_frame_ = 0;
+    // --- retime markers + split dance at beats (retime_ui.cpp; spec 08 TE-5, TE-6) ---
+    void set_retime(bool on);  // off clears the markers
+    // The ruler's markers in Retime mode: drawn, double-click adds, a drag retimes. true while a marker drag has
+    // the strip (the timeline then skips its own press handling).
+    bool retime_timeline(ImDrawList* dl, float x0, float x1, float y0, float y1, int last, bool hovered);
+    void draw_split_dance_window();
+    void export_dance_parts(std::vector<Clip> parts);
+    bool retime_on_ = false, show_split_dance_ = false;
+    std::vector<double> retime_markers_, retime_press_markers_;  // transient: never saved
+    int retime_drag_ = -1, retime_view_last_ = 1;  // the dragged marker; the timeline's scale held while it moves
+    Clip retime_press_clip_;
+    std::string split_dance_confirm_;
     // --- project and animation library (file_library_ui.cpp; spec 08 FL) ---
     void draw_file_library();         // the Inventory's Projects and Animations sections
     void rescan_files();              // after a save or export; the Inventory also rescans on focus
     void save_to_library();           // File > Save to Library...
     void insert_anim_file(const std::string& path, bool mirrored);  // a .anim's keys pasted at the frame
+    void match_anim_file(const std::string& path);  // the same through Match Poses (08 PM-1)
+    Clip library_clip(const LibraryItem& it, bool mirrored) const;  // a clip item alone, from frame 0 (pose_match_ui.cpp)
     // Export's "Also save to Animations library": an exported file, or an upload's bytes, copied in.
     void anim_file_to_library(const std::string& path);
     void anim_to_library(const std::string& file_name, const std::vector<std::uint8_t>& bytes);
@@ -782,6 +976,7 @@ private:
     float tween_pct_ = 50, tween_press_pct_ = 50;
     bool tween_relax_ = false;
     float tween_row_end_ = 0, timeline_row_w_ = 0;  // the timeline bar goes icon-only below timeline_row_w_
+    float timeline_tail_w_ = 0;  // Set Key to Relax: wraps to a row of its own when that does not fit
     Clip tween_base_;
     std::vector<std::string> tween_on_;  // the tracks the running tween keys
     struct PoseBlend {
@@ -791,12 +986,42 @@ private:
         float pct = 100;
     };
     std::optional<PoseBlend> pose_blend_;
+    // --- key tags and blocking mode (key_tags_ui.cpp; spec 08 KT) ---
+    void draw_blocking_button(bool compact);  // the timeline bar's Blocking toggle
+    void draw_key_tag_menu_items();  // Blocking, Convert Blocking to Spline, Tag Keys Here (Edit menu, timeline menu)
+    void blocking_after_edit();      // mark_dirty's hook: with Blocking on, the last step's new keys become Stepped
+    bool blocking_ = false;
+    // --- body picker and selection sets (picker_ui.cpp; spec 08 PK, SS) ---
+    void draw_picker_panel();  // the Picker tab beside Bones
+    void load_library_sets();  // selection_sets.json beside the pose library, read once
+    void save_library_sets();
+    std::vector<SelectionSet> library_sets_;
+    bool library_sets_loaded_ = false;
+    int picker_view_ = 0;  // a PickerView
+    std::string set_name_;
+    bool set_to_library_ = false;
     // --- animation check (lint_ui.cpp; spec 08 CK) ---
     void update_check();       // re-runs the check once the clip is still after an edit (from draw_check_panel)
     void draw_check_panel();   // Tools > Animation Check...; call every frame
     void draw_check_badge();   // the status bar's finding count
+    bool contact_bone(int node) const;  // a self-contact finding names node at this frame: tint it (08 SX)
+    void draw_contact_marks(ImDrawList* dl, float x0, float x1, float y1, int last) const;  // on the timeline strip
     bool show_check_ = false;
     std::shared_ptr<struct CheckUi> check_ui_;  // defined in lint_ui.cpp
+    // --- reference picture (reference_ui.cpp; spec 08 RF) ---
+    void load_reference(const std::string& path, bool sequence);
+    void draw_reference_window();  // View > Reference...
+    // Sends the picture through Host::scene_image when it shows as the backdrop (backdrop) or the scene plane; false
+    // when the host could not draw it.
+    bool draw_reference(bool backdrop, double view_aspect);
+    void draw_reference_overlay(ImDrawList* dl, ImVec2 origin, ImVec2 size);  // the world view: over it, when the host can't
+    ImTextureID reference_texture(int& width, int& height);  // the picture for the playhead, loaded when it changes
+    bool show_reference_ = false, reference_pick_sequence_ = false;
+    std::shared_ptr<struct ReferenceUi> reference_ui_;  // defined in reference_ui.cpp
+    // --- listing media (listing_media_ui.cpp; spec 08 LM) ---
+    void draw_listing_window();  // File > Export Listing Media...
+    bool show_listing_ = false, listing_png_ = false;  // listing_png_: numbered PNG pictures, else a GIF
+    std::shared_ptr<struct ListingUi> listing_ui_;  // defined in listing_media_ui.cpp
     // --- SL preview and upload meter (sl_preview_ui.cpp; spec 08 SP, UM) ---
     // One in-memory export of the active actor, shared by both, remade when the clip's anim_hash changes and nothing
     // is being dragged or typed.

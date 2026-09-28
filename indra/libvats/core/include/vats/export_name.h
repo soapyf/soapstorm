@@ -14,6 +14,8 @@ struct ExportNaming {
     std::string side;     // [SIDE]: "", "Left" or "Right"
     std::string pattern = "[NAME]_[#]_[SIDE]";
     std::string actor;    // [ACTOR] (spec 08 GR-3); when set and the pattern has no [ACTOR], appended as "_<actor>"
+    std::string clip;     // [CLIP] (spec 08 CL-4); when set and the pattern has no [CLIP], appended as "_<clip>" (before
+                          // an appended actor); unset, [CLIP] is left out
 };
 
 // The file name for one export. project_stem may be empty; ext is "anim" or "bvh" (no dot).

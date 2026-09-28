@@ -102,7 +102,7 @@ Json mocap_settings(const MocapUi& ui) {
     j.set("face_head", ui.face_head);
     j.set("neutral_face", map(f.neutral)), j.set("countdown", double(ui.countdown));
     j.set("smooth", c.smooth), j.set("reduce", c.reduce), j.set("reduce_deg", c.rot_deg), j.set("reduce_m", c.pos_m);
-    j.set("edge_blend", c.blend), j.set("foot_lock", c.lock_feet);
+    j.set("edge_blend", c.blend), j.set("foot_lock", c.lock_feet), j.set("foot_heel_toe", c.heel_toe);
     // MC-4a: "filter" is "box" (the old smoothing, radius in "smooth") or a curve filter with its settings.
     static const char* kinds[] = {"one_euro", "savitzky_golay", "butterworth"};
     const FilterSettings& fs = c.filter;
@@ -139,7 +139,7 @@ void load_mocap_settings(MocapUi& ui, const Json& j) {
     num("eye_pitch_max", f.eye_pitch_max, 5, 45), flag("head", f.head), flag("positions", f.positions), map("shape_gains", f.gains);
     map("neutral_face", f.neutral), num("countdown", ui.countdown, 0, 5);
     num("smooth", c.smooth, 0, 5), flag("reduce", c.reduce), num("reduce_deg", c.rot_deg, 0.05, 5);
-    num("reduce_m", c.pos_m, 0.0001, 0.02), num("edge_blend", c.blend, 0, 15), flag("foot_lock", c.lock_feet);
+    num("reduce_m", c.pos_m, 0.0001, 0.02), num("edge_blend", c.blend, 0, 15), flag("foot_lock", c.lock_feet), flag("foot_heel_toe", c.heel_toe);
     // Settings from before MC-4a have no "filter": the box filter, as they had.
     FilterSettings& fs = c.filter;
     if (auto* x = j.find("filter"); x && x->is_string()) {
@@ -749,6 +749,12 @@ void App::draw_mocap_panel() {
     indent();
     ImGui::Checkbox("Clean Up Foot Sliding", &ui.clean.lock_feet);
     ImGui::SetItemTooltip("Holds planted feet still with leg IK where the take had them on the ground.");
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!ui.clean.lock_feet);
+    ImGui::Checkbox("Heel and Toe", &ui.clean.heel_toe);
+    ImGui::SetItemTooltip("Heel and toe land and leave separately (a heel-toe roll); off, the ankle alone. The take's "
+                          "ground and how far the hips were lowered are in the Last take report.");
+    ImGui::EndDisabled();
 
     if (!ui.report.empty()) {
         ImGui::SeparatorText("Last take");

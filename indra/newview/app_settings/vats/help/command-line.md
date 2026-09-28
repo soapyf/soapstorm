@@ -38,6 +38,8 @@ vats walk.vat --frame 12 --select mPelvis
 | `--library-dir <dir>` | Uses `<dir>` for the pose, prop and mesh body libraries and their thumbnails instead of `library/` in the data folder. |
 | `--light <name>` | Lights the view with a preset of the **Light** menu: `noon`, `key` (Three-Quarter Key), `rim`, `dusk`, `night` or `studio`. An unknown name prints `unknown light <name>`. |
 | `--backdrop` | Shows **Light → Plain Backdrop**. |
+| `--reference <file.png>` | Loads a PNG as the [[Reference images|reference image]], as **Load Picture...** in **View → Reference...**, and opens that window. |
+| `--listing <file>` | Once the first frames are drawn, writes [[Listing media]] with the window's first settings (512 x 512, the animation's frame rate, turntable on): an animated GIF, or numbered PNG pictures when `<file>` ends in `.png`. Prints `listing: <n> frames at <w> x <h>` on standard output. |
 | `--preset <name>` | Selects a [[Control presets|control preset]]: `industry`, `blender`, `qavimator` or `secondlife`. An unknown name prints `unknown preset <name>`. |
 | `--body <id>` | Shows a body for this run only: `sl-default`, `sl-default-male`, `female`, `male`, or `none` (also `off`) for the skeleton only. It replaces a mesh body too. The body saved in `settings.json` is kept unless you pick another in **View → Body**. Unknown ids are ignored. |
 | `--frame <n>` | Moves to frame `<n>`, clamped to the animation's length. Fractions are allowed. |
@@ -47,13 +49,16 @@ vats walk.vat --frame 12 --select mPelvis
 | `--pose <slug>` | Applies a starter pose at the current frame, for example `body-sit` or `hand-fist`. An unknown slug prints `no built-in pose <slug>`. |
 | `--tool <name>` | Picks a tool: `select`, `move`, `rotate` or `scale`. Any other value picks `rotate`. |
 | `--focus` | Frames the selection once the first frame is drawn, as **Frame Selected**. |
+| `--view <name>` | Runs a **View** menu command, with the camera already turned: `front`, `back`, `right`, `left`, `top` or `ortho` (**Orthographic**). Repeat it to combine, for example `--view ortho --view top`. An unknown name prints `unknown view <name>`. |
 | `--distance <m>` | Sets the camera's distance from its target, in metres, on the first frame. |
 | `--points` | Shows the attachment points, as **View → Show Attachment Points**. |
 | `--tab <name>` | Brings a left panel to the front: `bones` for **Bones**; `poses` for **Inventory** scrolled to its poses; `actors` opens the **Actors** window instead, `check` the **Animation Check** window, `face` the **Face** window, `export` the **Export SL .anim** dialog, `sl-preview` **View → Preview as SL Plays It**; any other value for **Inventory**. |
 | `--import-prop <file>` | Imports a `.dae` or `.fbx` file as a prop, as **File → Import Prop / Mesh (.dae, .fbx)...**. |
 | `--retarget <file>` | Opens a motion file in the retarget dialog, as **File → Import Animation (Retarget)...**. |
+| `--batch-retarget <folder>` | Opens **File → Batch Retarget Folder...** on the folder and runs it with the default settings, writing into `<folder>/retargeted/`. |
+| `--plan-clip <file>` | Opens **Tools → Priority Planner...** and adds the `.anim` or `.vat` file as a clip; repeat it for more. |
 | `--open-help <page>` | Opens the help at a page, by title or file name; `<page>#<heading>` opens it at a heading. |
-| `--window <name>` | Opens a tool window: `graph`, `mocap` (**Motion Capture**), `actors`, `dynamics`, `ragdoll`, `preferences`, `hands` (the hand poser), `export` (**Export SL .anim**), `controls`, `about`, `help`, `insert-frames` or `stretch-range` (the **Edit → Time** prompts). `properties`, `timeline`, `bones` and `inventory` bring that panel to the front. An unknown name prints `unknown window <name>`. |
+| `--window <name>` | Opens a tool window: `graph`, `mocap` (**Motion Capture**), `actors`, `clips` (**Clips**), `dynamics`, `ragdoll`, `preferences`, `hands` (the hand poser), `export` (**Export SL .anim**), `controls`, `about`, `auto-balance` (**Auto-Balance**), `jump-arc` (**Jump Arc**), `foot-lock` (**Clean Up Foot Sliding**), `quality` (**Motion Quality**), `simplify` (the **Simplify Curves** dialog), `planner` (**Priority Planner**), `batch-retarget` (**Batch Retarget**), `help`, `reference` (**View → Reference...**), `listing-media` (**Export Listing Media**), `insert-frames` or `stretch-range` (the **Edit → Time** prompts), `split-dance` (**Split Dance at Beats**), `transition` (**Tools → Make Transition...**), `match-poses` (**Match Poses**, joining a copy of the open clip onto itself), `motion-path` (ticks **View → Motion Path → Show Motion Path**). `properties`, `timeline`, `bones`, `picker`, `inventory` and `dope-sheet` bring that panel to the front. An unknown name prints `unknown window <name>`. |
 | `--theme <name>` | Uses a colour theme for this run, by its name in **Preferences**: `Dusk` or `"Studio Grey"`. An unknown name prints `unknown theme <name>`. |
 | `--size <W>x<H>` | Opens the window at this size, for example `1200x1000`, instead of maximised. |
 | `--shot-rect <window>` | With `--screenshot`: prints the window's rectangle in the PNG as `shot-rect <x> <y> <w> <h>` (pixels) on standard output, for cropping. `<window>` is its title as shown, for example `Graph` or `Motion Capture`. |

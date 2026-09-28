@@ -21,8 +21,21 @@
 
 namespace vats {
 
-// 2 adds "actors" (spec 08 GR-5). A project with one actor is still written as version 1, unchanged.
-inline constexpr int kProjectVersion = 2;
+// 2 adds "actors" (spec 08 GR-5), 3 adds "clips" (spec 08 CL-3). A project with one actor and one clip is still
+// written as version 1, unchanged; one with several actors and one clip as version 2.
+inline constexpr int kProjectVersion = 3;
+
+// One named clip of a project with several (spec 08 CL-1), such as the stands, walks and sits of an AO set.
+// Clips are takes of the whole scene: every actor has one clip per slot and switching the clip switches every
+// actor, so the actors of a take keep one timing (GR-3). The active actor's clips live here, another actor's in
+// Actor::clips.
+struct ClipSlot {
+    std::string name = "Clip";
+    std::string ao_state;  // the AO state this clip plays in the AO notecards (ao_notecard.h); "" = none
+    Clip clip;             // the active actor's clip of this take; unused for the active take (it is Project::clip)
+    Json extra = Json::object();  // unknown fields of the slot, written back (IO-43)
+    bool operator==(const ClipSlot&) const = default;
+};
 
 // One avatar of a couple or group scene (spec 08 GR-1). Its placement is from the shared origin, the
 // sit target.
@@ -34,6 +47,7 @@ struct Actor {
     double rot_z = 0;  // degrees about Z
     bool hidden = false, locked = false;
     Clip clip;  // unused for the active actor, whose clip is Project::clip
+    std::vector<Clip> clips;  // CL-1: one per Project::clips slot, [active_clip] unused (it is `clip`); unused for the active actor
     Json extra = Json::object();
     Json clip_extra = Json::object();  // unknown fields of this actor's "clip" object, written back (IO-43)
 
@@ -45,6 +59,8 @@ struct Project {
     Clip clip;  // the active actor's clip (the only clip of a single-actor project)
     std::vector<Actor> actors;  // empty = one actor; else at least two, actors[active] describes `clip`
     int active = 0;
+    std::vector<ClipSlot> clips;  // CL-1: empty = one clip, "Clip"; else clips[active_clip] describes `clip`
+    int active_clip = 0;
     Json meta = Json::object();
     Json extra = Json::object();  // unknown top-level fields, written back in their order (IO-43)
 
@@ -57,8 +73,9 @@ struct Project {
 // is recorded in its meta). On failure returns false, sets err and leaves out unchanged.
 bool load_project(std::string_view text, Project& out, std::string& err, std::string_view source_path = {});
 
-// GR-1 helpers. Timing (fps, length, loop) is shared by every actor (GR-3): sync_actor_timing copies
-// the active clip's to the others.
+// GR-1 helpers. Timing (fps, length, loop) is shared by every actor (GR-3): sync_actor_timing copies each take's,
+// from the active actor's clip of that take, to the other actors' (CL-1), and gives an actor added since one clip
+// per take. set_active_actor brings the actor's clips of every take along.
 const Clip& actor_clip(const Project& p, int i);
 Clip& actor_clip(Project& p, int i);
 void set_active_actor(Project& p, int i);

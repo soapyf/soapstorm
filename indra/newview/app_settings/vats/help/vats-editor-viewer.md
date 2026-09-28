@@ -180,6 +180,17 @@ bone or a panel takes the click, not the editor.
   attach, place and move them as in the app. They are on your screen only; nothing is rezzed.
 - **[[Onion skin]]** ghosts are bone lines, blue before the current frame and orange after.
 - **Collision volumes** are three rings each, with **View → Show Collision Volumes** on.
+- **Attachment points.** Hover a point's dot: the label lists what you wear there, by name. When the point
+  is keyed, it also warns that in-world the animation moves what you wear there.
+- **[[Reference images]]** in the scene stand in the world: your avatar and anything in front of the
+  picture hide it. A backdrop picture is drawn over the world, see-through.
+
+**View → Orthographic** (**Numpad 5**): the viewer can't draw a true orthographic view, so the camera
+switches to its longest lens (5 degrees) and backs away until your avatar is framed as before; the draw
+distance grows by as much, so the scenery behind stays. Zooming moves the camera in and out the same way.
+Choose it again, or close the editor, for the viewer's own lens and camera. The long lens is close to
+orthographic, not exact: parts of the body a metre nearer or farther than the focus look a few percent
+larger or smaller.
 
 The view cube (at the view's top left), **Frame Selected** (**F**) and the camera views move the viewer's
 camera.
@@ -210,6 +221,10 @@ next. Each animation appears in your inventory when its upload finishes.
 
 The editor refuses an upload before you log in, and one that breaks Second Life's limits (longer than 60
 seconds, or 250,000 bytes or more), and says why.
+
+The status bar shows the grid you are logged in to, and the Export section says what an upload costs there, as the
+grid reports it. On the Aditi beta grid or an OpenSim grid it says uploads may be free there: a good place to try
+an upload first.
 
 > **Warning:** Uploading costs L$ for each animation and cannot be undone.
 
@@ -253,6 +268,12 @@ The editor takes its colours from the viewer's skin and follows it when the skin
 | Upload | with any viewer's upload window | directly, from the editor |
 | Colours | **Dusk** or **Studio Grey** | the viewer's skin |
 | **Light** menu | lights the editor's own view | a sky on your screen only; the world's own comes back on close |
+| [[Reference images]] | behind the avatar | the scene plane stands in the world, hidden by what is in front of it; the backdrop is over the world, see-through |
+| Orthographic view | a true orthographic view | a 5 degree lens from far back: nearly orthographic |
+| [[Priority planner]]: **Add Running Animations** | not shown | the animations playing on your avatar (AO, scripts, gestures), each joint's priority only |
+| Attachment point labels | the point's name | also what you wear there, and a warning when the point is keyed |
+| Grid and upload price | not shown | the grid in the status bar, the price in the Export section |
+| [[Listing media]] | **File → Export Listing Media...** | not in the menu; the viewer's own snapshots |
 
 Files open and save through the viewer's file picker. A cancelled folder choice leaves the setting as it
 was.

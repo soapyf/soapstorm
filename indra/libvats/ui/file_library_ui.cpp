@@ -230,6 +230,14 @@ void App::draw_file_library() {
         const std::string projects = ".vat";
 #endif
         ImGui::SetItemTooltip("List the %s files of another folder here too", anim ? ".anim" : projects.c_str());
+        if (!anim && ImGui::Button("Add Community Folder...")) {  // 08 CF: a clone of a community content repo
+            host_.open_folder_dialog("", [lib = file_lib_](std::vector<std::string> files) {
+                if (files.empty()) return;
+                std::lock_guard<std::mutex> lock(lib->mutex);
+                for (auto& f : community_folders(files[0])) lib->added.push_back(f);
+            });
+        }
+        if (!anim) ImGui::SetItemTooltip("List a community folder's poses, clips, animations and projects here");
         int remove_folder = -1;
         for (const FileLibUi::Group& g : L.groups[k]) {
             int shown = 0;
@@ -290,6 +298,7 @@ void App::draw_file_library() {
                         if (anim) {
                             if (ImGui::MenuItem("Insert into Current Project at This Frame")) insert_anim_file(f.path, false);
                             if (ImGui::MenuItem("Insert Mirrored")) insert_anim_file(f.path, true);
+                            if (ImGui::MenuItem("Insert, Matching Poses...")) match_anim_file(f.path);  // 08 PM-1
                         }
                         ImGui::Separator();
                         if (ImGui::MenuItem("Rename...", nullptr, false, ours)) {
@@ -346,14 +355,7 @@ void App::draw_file_prompt() {
     FileLibUi& L = *file_lib_;
     {
         std::lock_guard<std::mutex> lock(L.mutex);
-        for (auto& [kind, dir] : L.added) {
-            std::string d = dir;
-            std::replace(d.begin(), d.end(), '\\', '/');
-            if (d.empty()) continue;
-            if (d.back() != '/') d += '/';
-            auto& list = kind == LibKind::Project ? settings_.project_folders : settings_.anim_folders;
-            if (std::find(list.begin(), list.end(), d) == list.end()) list.push_back(d);
-        }
+        for (auto& [kind, dir] : L.added) lib_add_folder(kind == LibKind::Project ? settings_.project_folders : settings_.anim_folders, dir);
         if (!L.added.empty()) save_settings(), L.stale = true;
         L.added.clear();
     }
@@ -420,6 +422,14 @@ void App::insert_anim_file(const std::string& path, bool mirrored) {
         paste_clip(c, skel_, it, at, mirrored, nullptr);  // a whole-body item has no relative IK tracks to warn about
     });
     status("Inserted " + it.name + " at frame " + std::to_string(int(at)) + (mirrored ? " (mirrored)" : ""));
+}
+
+// 08 PM-1: the .anim as a clip of its own, offered to Match Poses to join onto the end of the clip.
+void App::match_anim_file(const std::string& path) {
+    LibraryItem it;
+    std::string err;
+    if (!file_clip(skel_, path, doc_.clip().fps, it, err)) return message("Could not insert " + path.substr(path.find_last_of('/') + 1), err);
+    open_match_poses(library_clip(it, apply_mirrored_), it.name);
 }
 
 void App::anim_file_to_library(const std::string& path) {

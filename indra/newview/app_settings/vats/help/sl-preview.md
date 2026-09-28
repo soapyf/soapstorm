@@ -60,6 +60,10 @@ since import: plays the file as it came in`.
 
 - Differences come from **Reduce keys**. Lower the tolerances where the table shows bones you care about,
   and watch the upload size in **Properties → Export** (see [[Export to Second Life#Check the upload size]]).
+- With **Reduce keys** set to **Anywhere on the body**, the table's **mm** column stays within the distance you
+  set, give or take the file's rounding (under 0.2 mm); see [[Export to Second Life#Reduce keys]].
+- The preview plays the file baked on **Bake shape**. The height files of **Also export for heights** are
+  not previewed (see [[Export to Second Life#Export for other heights]]).
 - Sub-frame keys (after a stretch or a retime) are gone in the export; the table shows what that costs.
 
 ## Troubleshooting

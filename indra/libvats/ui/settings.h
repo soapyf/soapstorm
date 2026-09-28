@@ -53,6 +53,7 @@ struct Settings {
     std::vector<std::string> recent;
     std::vector<std::string> project_folders, anim_folders;  // Inventory folders added with Add Folder... (spec 08 FL)
     std::vector<std::string> check_off;  // Animation Check rules switched off, by id (spec 08 CK)
+    bool mixamo_notice_seen = false;     // 07 RT-14: Batch Retarget showed the Mixamo licence notice once
     Json mocap = Json::object();  // Motion Capture and face-tracking choices, read and written by mocap_ui.cpp
 
     // file: the host's settings.json (ui::Paths::settings; --data-dir puts it there too, IO-53).

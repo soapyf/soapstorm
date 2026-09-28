@@ -12,7 +12,10 @@
 #include "vats/anim_convert.h"
 #include "vats/bvh.h"
 #include "imgui_internal.h"
+#include "vats/clips.h"
 #include "vats/export_name.h"
+#include "vats/height_variant.h"
+#include "vats/world_reduce.h"
 #include "theme.h"
 
 namespace vats {
@@ -377,6 +380,7 @@ void App::draw_export_section() {
     bool both = json_bool(ex, "both"), count_up = json_bool(ex, "count_up"), mirrored = doc_.clip().mirror_export;
     ImGui::SetCursorPosX(label_w);
     if (ImGui::Checkbox("Also export the other side (mirrored)", &both)) set("both", both);
+    draw_height_variants(label_w);  // HV (ui/height_variant_ui.cpp)
     ImGui::SetCursorPosX(label_w);
     if (ImGui::Checkbox("Count the number up after each export", &count_up)) set("count_up", count_up);
     bool to_library = json_bool(ex, "save_to_library");
@@ -405,14 +409,35 @@ void App::draw_export_section() {
     if (const Json* r = ex.find("reduce"); r && r->is_array() && r->arr.size() == 2 && r->arr[0].is_number() && r->arr[1].is_number())
         rot_deg = float(r->arr[0].num), pos_mm = float(r->arr[1].num * 1000);
     label("Reduce keys");
-    const float half = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) / 2;
-    ImGui::SetNextItemWidth(half);
-    bool reduce_changed = ImGui::DragFloat("##erot", &rot_deg, 0.005f, 0, 5, "%.3f deg");
-    ImGui::SetItemTooltip("Rotation tolerance. 0 and 0 keep a key on every frame.");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(half);
-    reduce_changed |= ImGui::DragFloat("##epos", &pos_mm, 0.05f, 0, 50, "%.2f mm");
-    ImGui::SetItemTooltip("Position tolerance. 0 and 0 keep a key on every frame.");
+    // IO-14w (08 WR): per bone, or by the world-space error anywhere on the body ("reduce_mode" "world").
+    const bool world = json_str(ex, "reduce_mode") == "world";
+    int mode = world;
+    const char* modes[] = {"Per bone", "Anywhere on the body"};
+    if (ImGui::Combo("##ermode", &mode, modes, 2)) set("reduce_mode", std::string(mode ? "world" : "bone"));
+    ImGui::SetItemTooltip("Per bone: each bone keeps the keys its own rotation and position need, within the two "
+                          "tolerances. Anywhere on the body: keys go while no point of the body moves further than the "
+                          "distance set, so a finger, which moves little of the body, loses more keys than a shoulder.");
+    ImGui::SetCursorPosX(label_w);
+    bool reduce_changed = false;
+    if (world) {
+        const Json* w = ex.find("reduce_world");
+        float world_mm = float((w && w->is_number() && w->num > 0 ? w->num : kReduceWorldDefault) * 1000);
+        ImGui::SetNextItemWidth(-1);
+        if (ImGui::DragFloat("##eworld", &world_mm, 0.02f, 0.05f, 50, "%.2f mm anywhere on the body",
+                             ImGuiSliderFlags_AlwaysClamp))
+            set("reduce_world", double(world_mm) / 1000);
+        ImGui::SetItemTooltip("The farthest any point of the body may move from your animation where keys are left "
+                              "out. Your keys, the first and last frames and a key every 60 frames are always kept.");
+    } else {
+        const float half = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) / 2;
+        ImGui::SetNextItemWidth(half);
+        reduce_changed = ImGui::DragFloat("##erot", &rot_deg, 0.005f, 0, 5, "%.3f deg");
+        ImGui::SetItemTooltip("Rotation tolerance. 0 and 0 keep a key on every frame.");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(half);
+        reduce_changed |= ImGui::DragFloat("##epos", &pos_mm, 0.05f, 0, 50, "%.2f mm");
+        ImGui::SetItemTooltip("Position tolerance. 0 and 0 keep a key on every frame.");
+    }
     if (reduce_changed) {
         Json a = Json::array();
         a.push(double(std::max(rot_deg, 0.f)));
@@ -426,10 +451,8 @@ void App::draw_export_section() {
     ImGui::SetCursorPosX(label_w);
     if (ImGui::SmallButton("Choose...")) host_.open_folder_dialog(folder, dialog_result(Dialog::ExportFolder));
 
-    ExportNaming naming{json_str(ex, "name"), json_int(ex, "number", 1), json_str(ex, "side"),
-                        json_str(ex, "pattern", "[NAME]_[#]_[SIDE]"), ""};
-    std::string stem = doc_.path.empty() ? "" : doc_.path.substr(doc_.path.find_last_of('/') + 1);
-    stem = stem.substr(0, stem.rfind('.'));
+    ExportNaming naming = export_naming();
+    const std::string stem = export_stem();
     label("Saves as");
     // GR-3: one file per actor, plus a placement note.
     std::vector<std::string> actor_names{""};
@@ -437,13 +460,12 @@ void App::draw_export_section() {
         actor_names.clear();
         for (const Actor& a : doc_.project.actors) actor_names.push_back(a.name);
     }
+    const std::vector<AnimVariant> variants = anim_variants(mirrored, both, export_heights(ex));  // HV-4
     for (size_t k = 0; k < actor_names.size(); ++k) {
         naming.actor = actor_names[k];
-        if (k) ImGui::SetCursorPosX(label_w);
-        ImGui::TextColored(ImVec4(0.5f, 0.85f, 0.55f, 1), "%s", export_file_name(naming, stem, mirrored, "anim").c_str());
-        if (both) {
-            ImGui::SetCursorPosX(label_w);
-            ImGui::TextColored(ImVec4(0.5f, 0.85f, 0.55f, 1), "%s", export_file_name(naming, stem, !mirrored, "anim").c_str());
+        for (size_t v = 0; v < variants.size(); ++v) {
+            if (k || v) ImGui::SetCursorPosX(label_w);
+            ImGui::TextColored(ImVec4(0.5f, 0.85f, 0.55f, 1), "%s", variant_file_name(naming, stem, variants[v], "anim").c_str());
         }
     }
     if (multi_actor()) {
@@ -456,6 +478,7 @@ void App::draw_export_section() {
     if (host_.can_upload()) {
         if (ImGui::Button("Upload Animation...", ImVec2(-1, 0))) upload_now();
         ImGui::SetItemTooltip("Uploads the animation to the grid you are on under the name above; the viewer asks to confirm the price");
+        if (const ui::Host::Grid g = host_.grid(); !g.name.empty()) hint(ui::grid_note(g).c_str());  // spec 09 item 56
     }
     if (ImGui::Button("Export SL .anim", ImVec2(-1, 0))) export_now(false, false);
     ImGui::SetItemTooltip("%s", folder.empty() ? "Asks for a folder the first time" : ("Writes to " + folder).c_str());
@@ -463,53 +486,66 @@ void App::draw_export_section() {
     ImGui::SetItemTooltip("Animated bones only");
     if (ImGui::Button("Export BVH (All Bento Bones)...", ImVec2(-1, 0))) export_now(true, true);
     ImGui::SetItemTooltip("Every Bento bone, keyed or not");
+    if (const int n = clip_count(doc_.project); n > 1) {  // 08 CL-4
+        ImGui::SeparatorText("Every clip");
+        if (ImGui::Button(("Export All " + std::to_string(n) + " Clips (.anim)").c_str(), ImVec2(-1, 0))) export_now(false, false, true);
+        ImGui::SetItemTooltip("Each clip with its own export settings, named with [CLIP], into the folder above");
+        if (host_.can_upload() && ImGui::Button(("Upload All " + std::to_string(n) + " Clips...").c_str(), ImVec2(-1, 0)))
+            upload_now(true);
+    }
     hint("Attachment points and moved bones only survive in .anim.");
 }
 
 // The viewer (spec 09 section 4): every file Export would write (each actor, and the mirrored copy when "both"
-// is on), under the export names, uploaded one after another; the host confirms the price of each.
-void App::upload_now() {
+// is on), under the export names, uploaded one after another; the host confirms the price of each. all_clips (08 CL-4):
+// the same for every clip, each with its own export settings.
+void App::upload_now(bool all_clips) {
     ScratchAside aside(*this);  // PT-2: the document, not a scratch pose
     if (!upload_queue_.empty()) return status("An upload is already waiting for its confirmation");
-    const Json& ex = doc_.clip().export_settings;
-    ExportNaming naming{json_str(ex, "name"), json_int(ex, "number", 1), json_str(ex, "side"),
-                        json_str(ex, "pattern", "[NAME]_[#]_[SIDE]"), ""};
-    std::string stem = doc_.path.empty() ? "" : doc_.path.substr(doc_.path.find_last_of('/') + 1);
-    stem = stem.substr(0, stem.rfind('.'));
-    const bool mirrored = doc_.clip().mirror_export;
-    std::vector<bool> variants{mirrored};
-    if (json_bool(ex, "both")) variants.push_back(!mirrored);
     Project& pr = doc_.project;
-    const int home = pr.active, actors = multi_actor() ? int(pr.actors.size()) : 1;
-    if (actors > 1) export_home_ = home;
+    const int home_clip = pr.active_clip, clips = all_clips ? clip_count(pr) : 1;
     std::deque<std::pair<std::string, std::vector<std::uint8_t>>> queue;
     std::string problems, warnings;
-    for (int a = 0; a < actors && problems.empty(); ++a) {
-        if (actors > 1) {
-            set_active_actor(pr, a);
-            naming.actor = pr.actors[a].name;
-        }
-        for (bool m : variants) {
-            std::string name = export_file_name(naming, stem, m, "anim");
-            name = name.substr(0, name.rfind('.'));
-            const bool saved = doc_.clip().mirror_export;
-            doc_.clip().mirror_export = m;  // anim_bytes reads it
-            AnimExportResult r;
-            std::vector<std::uint8_t> bytes;
-            const int made = anim_bytes(r, bytes);
-            doc_.clip().mirror_export = saved;
-            if (!made) {
-                problems = "-";  // anim_bytes already said why
-                break;
+    for (int k = 0; k < clips && problems.empty(); ++k) {
+        if (all_clips) set_active_clip(pr, k);
+        const Json ex = doc_.clip().export_settings;  // a copy: switching actors moves the clip
+        ExportNaming naming = export_naming();
+        const std::string stem = export_stem();
+        const bool mirrored = doc_.clip().mirror_export;
+        // HV-4: the mirrored copy and the height variants, each baked on its own body.
+        const std::vector<AnimVariant> variants = anim_variants(mirrored, json_bool(ex, "both"), export_heights(ex));
+        const int home = pr.active, actors = multi_actor() ? int(pr.actors.size()) : 1;
+        if (actors > 1) export_home_ = home;
+        for (int a = 0; a < actors && problems.empty(); ++a) {
+            if (actors > 1) {
+                set_active_actor(pr, a);
+                naming.actor = pr.actors[a].name;
             }
-            for (auto& e : validate_anim(r.file, skel_, true)) problems += "- " + name + ": " + e + "\n";  // 60 s, 250000 bytes
-            for (auto& w : r.warnings) warnings += "- " + name + ": " + w + "\n";
-            if (json_bool(ex, "save_to_library")) anim_to_library(name + ".anim", bytes);
-            queue.emplace_back(name, std::move(bytes));
+            for (const AnimVariant& v : variants) {
+                std::string name = variant_file_name(naming, stem, v, "anim");
+                name = name.substr(0, name.rfind('.'));
+                const bool saved = doc_.clip().mirror_export;
+                doc_.clip().mirror_export = v.mirrored;  // anim_bytes reads it
+                set_export_height(v.height);
+                AnimExportResult r;
+                std::vector<std::uint8_t> bytes;
+                const int made = anim_bytes(r, bytes);
+                set_export_height(0);
+                doc_.clip().mirror_export = saved;
+                if (!made) {
+                    problems = "-";  // anim_bytes already said why
+                    break;
+                }
+                for (auto& e : validate_anim(r.file, skel_, true)) problems += "- " + name + ": " + e + "\n";  // 60 s, 250000 bytes
+                for (auto& w : r.warnings) warnings += "- " + name + ": " + w + "\n";
+                if (json_bool(ex, "save_to_library")) anim_to_library(name + ".anim", bytes);
+                queue.emplace_back(name, std::move(bytes));
+            }
         }
+        if (actors > 1) set_active_actor(pr, home);
+        export_home_ = -1;
     }
-    if (actors > 1) set_active_actor(pr, home);
-    export_home_ = -1;
+    if (all_clips) set_active_clip(pr, home_clip);
     if (problems == "-") return;
     if (!problems.empty()) return message("Cannot upload", problems);
     if (!warnings.empty()) message("Uploading with warnings", warnings + "\nCancel at the price question to stop an upload.");
@@ -530,7 +566,28 @@ void App::upload_next() {
     });
 }
 
-void App::export_now(bool bvh, bool all_bones) {
+const Clip& App::active_actor_clip(int k) const {
+    const Project& p = doc_.project;
+    return k < 0 || k == p.active_clip || k >= int(p.clips.size()) ? p.clip : p.clips[k].clip;
+}
+
+ExportNaming App::export_naming(int k) const {
+    const Project& p = doc_.project;
+    if (k < 0) k = p.active_clip;
+    const Json& ex = active_actor_clip(k).export_settings;
+    ExportNaming n{json_str(ex, "name"), json_int(ex, "number", 1), json_str(ex, "side"),
+                   json_str(ex, "pattern", "[NAME]_[#]_[SIDE]"), "", ""};
+    // 08 CL-4: several clips need the clip in the name; a single named clip only where the pattern asks for it.
+    if (p.clips.size() >= 2 || (!p.clips.empty() && n.pattern.find("[CLIP]") != std::string::npos)) n.clip = clip_name(p, k);
+    return n;
+}
+
+std::string App::export_stem() const {
+    std::string stem = doc_.path.empty() ? "" : doc_.path.substr(doc_.path.find_last_of('/') + 1);
+    return stem.substr(0, stem.rfind('.'));
+}
+
+void App::export_now(bool bvh, bool all_bones, bool all_clips) {
     ScratchAside aside(*this);  // PT-2: the document, not a scratch pose
     // BVH: say what the format will lose before anything is written (IO-29).
     if (bvh && !bvh_confirmed_) {
@@ -545,72 +602,83 @@ void App::export_now(bool bvh, bool all_bones) {
             return;
         }
     }
-    Json& ex = doc_.clip().export_settings;
-    std::string folder = json_str(ex, "folder");
-    ExportNaming naming{json_str(ex, "name"), json_int(ex, "number", 1), json_str(ex, "side"),
-                        json_str(ex, "pattern", "[NAME]_[#]_[SIDE]"), ""};
-    std::string stem = doc_.path.empty() ? "" : doc_.path.substr(doc_.path.find_last_of('/') + 1);
-    stem = stem.substr(0, stem.rfind('.'));
-    const bool mirrored = doc_.clip().mirror_export;
+    const std::string folder = json_str(doc_.clip().export_settings, "folder");  // every clip's goes here (CL-4)
     if (std::error_code ec; folder.empty() || !std::filesystem::exists(u8path(folder), ec)) {
         // No folder yet (UI-32): a Save dialog with the pattern name, starting in the project folder. The folder
         // chosen there becomes the export folder (IO-45).
         if (headless_) return status("No export folder set");
         export_after_folder_ = bvh ? (all_bones ? 2 : 1) : 0;
+        export_all_after_folder_ = all_clips;
         std::string dir = doc_.path.empty() ? "" : doc_.path.substr(0, doc_.path.find_last_of('/') + 1);
-        std::string name = dir + export_file_name(naming, stem, mirrored, bvh ? "bvh" : "anim");
+        std::string name = dir + export_file_name(export_naming(), export_stem(), doc_.clip().mirror_export, bvh ? "bvh" : "anim");
         // The Save dialog's folder becomes the export folder.
         host_.save_file_dialog({bvh ? ui::FileFilter{"BVH motion", "bvh"} : ui::FileFilter{"SL animation", "anim"}}, name,
                                dialog_result(Dialog::ExportFolder, true));
         return;
     }
-    std::vector<bool> variants{mirrored};
-    if (json_bool(ex, "both")) variants.push_back(!mirrored);
-    const bool count_up = json_bool(ex, "count_up"), to_library = !bvh && json_bool(ex, "save_to_library");
     int replaced = 0;
     std::string names;
-    // GR-3: one file per actor, all with the active actor's export settings; the actor is switched in turn.
+    bool to_library = false;
     Project& pr = doc_.project;
-    const int home = pr.active, actors = multi_actor() ? int(pr.actors.size()) : 1;
-    if (actors > 1) export_home_ = home;
+    const int home_clip = pr.active_clip, clips = all_clips ? clip_count(pr) : 1;
     bool ok = true;
-    for (int a = 0; a < actors && ok; ++a) {
+    for (int k = 0; k < clips && ok; ++k) {
+        if (all_clips) set_active_clip(pr, k);
+        const Json ex = doc_.clip().export_settings;  // a copy: switching actors moves the clip
+        ExportNaming naming = export_naming();
+        const std::string stem = export_stem();
+        const bool mirrored = doc_.clip().mirror_export;
+        // HV-4: the mirrored copy and, for .anim, the height variants, each baked on its own body.
+        const std::vector<AnimVariant> variants =
+            anim_variants(mirrored, json_bool(ex, "both"), bvh ? std::vector<double>{} : export_heights(ex));
+        std::map<double, std::vector<double>> lifts;  // height -> each actor's hip lift, for the placement note
+        const bool count_up = json_bool(ex, "count_up"), library = !bvh && json_bool(ex, "save_to_library");
+        to_library |= library;
+        // GR-3: one file per actor, all with the active actor's export settings; the actor is switched in turn.
+        const int home = pr.active, actors = multi_actor() ? int(pr.actors.size()) : 1;
+        if (actors > 1) export_home_ = home;
+        for (int a = 0; a < actors && ok; ++a) {
+            if (actors > 1) {
+                set_active_actor(pr, a);
+                naming.actor = pr.actors[a].name;
+            }
+            for (const AnimVariant& v : variants) {
+                std::string path = folder + "/" + variant_file_name(naming, stem, v, bvh ? "bvh" : "anim");
+                std::error_code ec;
+                replaced += std::filesystem::exists(u8path(path), ec);
+                bool saved = doc_.clip().mirror_export;
+                doc_.clip().mirror_export = v.mirrored;  // export_anim/export_bvh read it
+                set_export_height(v.height);
+                if (v.height > 0 && v.mirrored == mirrored) lifts[v.height].push_back(export_hip_lift());
+                ok = bvh ? export_bvh(path, all_bones) : export_anim(path);
+                set_export_height(0);
+                doc_.clip().mirror_export = saved;
+                if (!ok) break;  // the export already explained why
+                if (library) anim_file_to_library(path);
+                names += (names.empty() ? "" : ", ") + path.substr(path.find_last_of('/') + 1);
+            }
+        }
+        export_home_ = -1;
         if (actors > 1) {
-            set_active_actor(pr, a);
-            naming.actor = pr.actors[a].name;
+            set_active_actor(pr, home);
+            if (ok) {
+                ExportNaming base = naming;
+                base.actor.clear();
+                std::string note = export_file_name(base, stem, false, "txt");
+                write_sit_note(folder, note.substr(0, note.size() - 4), lifts);
+            }
         }
-        for (bool m : variants) {
-            std::string path = folder + "/" + export_file_name(naming, stem, m, bvh ? "bvh" : "anim");
-            std::error_code ec;
-            replaced += std::filesystem::exists(u8path(path), ec);
-            bool saved = doc_.clip().mirror_export;
-            doc_.clip().mirror_export = m;  // export_anim/export_bvh read it
-            ok = bvh ? export_bvh(path, all_bones) : export_anim(path);
-            doc_.clip().mirror_export = saved;
-            if (!ok) break;  // the export already explained why
-            if (to_library) anim_file_to_library(path);
-            names += (names.empty() ? "" : ", ") + path.substr(path.find_last_of('/') + 1);
+        if (ok && !bvh && count_up) {
+            Json& ex_home = doc_.clip().export_settings;
+            ex_home.set("number", std::min(json_int(ex_home, "number", 1) + 1, 999));
+            mark_dirty();
         }
     }
-    export_home_ = -1;
-    if (actors > 1) {
-        set_active_actor(pr, home);
-        if (ok) {
-            ExportNaming base = naming;
-            base.actor.clear();
-            std::string note = export_file_name(base, stem, false, "txt");
-            write_sit_note(folder, note.substr(0, note.size() - 4));
-        }
-    }
+    if (all_clips) set_active_clip(pr, home_clip);
     if (!ok) return;
-    if (!bvh && count_up) {
-        Json& ex_home = doc_.clip().export_settings;
-        ex_home.set("number", std::min(json_int(ex_home, "number", 1) + 1, 999));
-        mark_dirty();
-    }
     status("Exported " + names + " to " + folder + (replaced ? " (" + std::to_string(replaced) + " replaced)" : "") +
            (to_library ? ", and to the Animations library" : "") +
-           (export_summary_.empty() ? "" : ": " + export_summary_));  // UI-34
+           (export_summary_.empty() || all_clips ? "" : ": " + export_summary_));  // UI-34
 }
 
 }  // namespace vats
@@ -624,6 +692,8 @@ void App::draw_export_dialog() {
     ImGui::SetNextWindowSize(ImVec2(ImGui::GetFontSize() * 30, 0), ImGuiCond_Appearing);
     if (!ImGui::BeginPopupModal("Export SL .anim", &show_export_dialog_)) return;
     const Clip& c = doc_.clip();
+    if (clip_count(doc_.project) > 1)  // 08 CL: the settings below are this clip's
+        ImGui::TextDisabled("Clip %s (switch in Tools > Clips)", clip_name(doc_.project, doc_.project.active_clip).c_str());
     double seconds = std::max(c.end_frame, 1) / double(c.fps);
     ImGui::TextDisabled("Length %.2f s, priority %d%s, ease %.2f / %.2f s", seconds, c.priority,
                         c.loop ? ", looping" : "", c.ease_in, c.ease_out);
@@ -787,16 +857,26 @@ void App::draw_recovery() {
 
 bool App::show_window(const std::string& name) {
     static const std::map<std::string, bool App::*> windows = {
-        {"graph", &App::show_graph_},       {"mocap", &App::show_mocap_},         {"actors", &App::show_actors_},
+        {"graph", &App::show_graph_},       {"mocap", &App::show_mocap_},         {"actors", &App::show_actors_}, {"clips", &App::show_clips_},
         {"dynamics", &App::show_dynamics_}, {"ragdoll", &App::show_ragdoll_},     {"preferences", &App::show_prefs_},
         {"hands", &App::show_hands_},       {"export", &App::show_export_dialog_}, {"controls", &App::show_help_},
-        {"about", &App::show_about_}};
+        {"about", &App::show_about_},       {"quality", &App::show_quality_},
+        {"split-dance", &App::show_split_dance_}, {"planner", &App::show_planner_},
+        {"batch-retarget", &App::show_batch_retarget_}, {"foot-lock", &App::show_foot_lock_},
+        {"auto-balance", &App::show_auto_balance_}, {"jump-arc", &App::show_jump_arc_},
+        {"reference", &App::show_reference_}, {"listing-media", &App::show_listing_}};
     static const std::map<std::string, const char*> panels = {
-        {"graph", "Graph"}, {"properties", "Properties"}, {"timeline", "Timeline"}, {"bones", "Bones"}, {"inventory", "Inventory"}};
+        {"graph", "Graph"}, {"properties", "Properties"}, {"timeline", "Timeline"}, {"bones", "Bones"}, {"inventory", "Inventory"},
+        {"picker", "Picker"}};
     bool known = false;
     if (auto w = windows.find(name); w != windows.end()) this->*(w->second) = true, known = true;
     if (auto p = panels.find(name); p != panels.end()) pending_tab_ = p->second, known = true;  // docked: to the front
     if (name == "help") open_help(), known = true;
+    if (name == "simplify") open_simplify(), known = true;
+    if (name == "dope-sheet") show_dope_ = true, pending_tab_ = "Dope Sheet", known = true;  // 08 DS
+    if (name == "motion-path") motion_path_.on = true, known = true;                        // 08 MP
+    if (name == "transition") show_transition_ = true, transition_.to = int(std::round(frame_)), known = true;  // 08 PM-3
+    if (name == "match-poses") open_match_poses(doc_.clip(), "a copy of the clip"), known = true;  // 08 PM-1, for screenshots
     if (name == "insert-frames" || name == "stretch-range") time_prompt_ = name == "insert-frames" ? 1 : 2, known = true;
     return known;
 }

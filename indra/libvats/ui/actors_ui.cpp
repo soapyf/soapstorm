@@ -12,6 +12,7 @@
 #include "icon_button.h"
 #include "icons.h"
 #include "theme.h"
+#include "vats/height_variant.h"
 
 namespace vats {
 
@@ -78,7 +79,8 @@ ExternalTarget App::actor_resolver(int self) {
         int bone = skel_.find(pin.target);
         if (t < 0 || t == self || self >= int(p.actors.size()) || bone < 0 || depth > 0) return false;
         ++depth;
-        Evaluation e = vats::evaluate(*rig_, actor_clip(p, t), frame, actor_shape(t));
+        // HV: while a height variant exports, the partner is that height too.
+        Evaluation e = vats::evaluate(*rig_, actor_clip(p, t), frame, height_shape_ ? height_shape_ : actor_shape(t));
         --depth;
         out = p.actors[self].placement().inverse() * p.actors[t].placement() * e.globals[bone];
         return true;
@@ -144,6 +146,7 @@ void App::put_clip_in_actor(const std::string& actor, const std::string& path, C
                 const Actor& cur = pr.actors[pr.active];
                 Actor a = source ? *source : Actor{};
                 a.clip = {};
+                a.clips.clear();  // 08 CL: empty clips for this project's other takes
                 a.hidden = a.locked = false;
                 a.name = unique_name(pr, source ? source->name : file.substr(0, file.rfind('.')));
                 if (!source) {
@@ -192,11 +195,11 @@ void App::scene_edit(const std::string& label, const std::function<void(Project&
     scratch_end(false);  // PT-2: scene steps go in the document's own history
     Project& p = doc_.project;
     Clip clip_before = p.clip;
-    SceneState before{p.actors, p.active};
+    SceneState before{p.actors, p.active, p.clips, p.active_clip};
     change(p);
     if (p.actors.size() == 1) p.actors.clear(), p.active = 0;  // one actor left: a plain project again
     sync_actor_timing(p);
-    doc_.history.record_scene(label, std::move(clip_before), std::move(before), p.clip, {p.actors, p.active});
+    doc_.history.record_scene(label, std::move(clip_before), std::move(before), p.clip, {p.actors, p.active, p.clips, p.active_clip});
     clip_replaced();
     mark_dirty();
 }
@@ -206,6 +209,8 @@ void App::apply_restore(History::Restore r) {
     if (r.scene) {
         p.actors = std::move(r.scene->actors);
         p.active = r.scene->active;
+        p.clips = std::move(r.scene->clips);  // 08 CL: the clip list and which clip was active
+        p.active_clip = r.scene->active_clip;
     } else if (r.actor != p.active && r.actor < int(p.actors.size())) {
         set_active_actor(p, r.actor);  // the step belongs to another actor: go back to it
         clear_selection();
@@ -319,7 +324,8 @@ int App::pick_actor(ImVec2 m) const {
 }
 
 // GR-3: where each actor stands, for the sit-target script. Written next to the exported files.
-void App::write_sit_note(const std::string& folder, const std::string& stem) {
+void App::write_sit_note(const std::string& folder, const std::string& stem,
+                         const std::map<double, std::vector<double>>& lifts) {
     const Project& p = doc_.project;
     std::string t = "Viewport Avatar Toolset: actor placement for \"" + stem + "\"\n\n";
     t += "Each actor's animation plays around that avatar's own position. Seat every avatar at the offset\n"
@@ -343,6 +349,21 @@ void App::write_sit_note(const std::string& folder, const std::string& stem) {
     t += "\nAVsitter2: paste into the AVpos notecard (one [AV]sitA/B pair per actor in the prim)\n\n" + sit_lines(0) +
          "\nnPose V4: paste into a SET card (the .init card needs SEAT_INIT|" + std::to_string(p.actors.size()) + ")\n\n" +
          sit_lines(1);
+    // HV: each height variant's files seat the hips higher (or lower) by what that body adds to them.
+    for (const auto& [height, lift] : lifts) {
+        const std::string tag = height_tag(height);
+        t += "\nHeight variant " + tag + " (the files ending _" + tag + ")\n\n"
+             "On this body the hips stand at a different height than on the bake shape. Seat each actor this much\n"
+             "higher (lower when negative) than above, so hands and feet land where they did in VATs:\n\n";
+        for (size_t a = 0; a < p.actors.size() && a < lift.size(); ++a) {
+            const Actor& ac = p.actors[a];
+            std::snprintf(buf, sizeof buf, "%s\n    lift     %+.3f m\n    offset   <%.3f, %.3f, %.3f>\n", ac.name.c_str(),
+                          lift[a], ac.pos.x, ac.pos.y, ac.pos.z + lift[a]);
+            t += buf;
+        }
+        t += "\nAVsitter2 (" + tag + ")\n\n" + sit_lines(0, height, lift) + "\nnPose V4 (" + tag + ")\n\n" +
+             sit_lines(1, height, lift);
+    }
     std::ofstream(folder + "/" + stem + "_placement.txt", std::ios::binary) << t;
 }
 

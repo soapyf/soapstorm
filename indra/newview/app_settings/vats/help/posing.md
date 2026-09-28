@@ -14,6 +14,7 @@ Posing is setting the rotation (and sometimes the position) of bones at the curr
 - **Esc** clears the selection (in the Second Life preset, **Esc** resets the camera instead).
 - **Up** / **Down**, or **[** / **]**, walk to the parent or child bone (**Select → Select Parent**, **Select Child**). **Select → Next Sibling** and **Previous Sibling** step sideways.
 - In the **Bones** tab, click a name. Picking a bone in the view opens the list at that bone.
+- In the **Picker** tab beside it, click a body part on the avatar outline; **Shift+click** adds one. Save a selection you use often as a selection set there. See [[Picker]].
 - **Select → Select All** (**Ctrl+A** in the Industry preset), **Select Keyed on Frame** (**Ctrl+Shift+A**), **Select All Keyed** and **Select None** select in bulk.
 
 ### Moving and rotating
@@ -137,6 +138,7 @@ The bone has a key there that you did not mean to set: moving a bone always keys
 
 ## See also
 
+- [[Picker]]
 - [[Keys and timeline]]
 - [[Interface]]
 - [[Keyboard shortcuts]]

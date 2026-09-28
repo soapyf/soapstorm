@@ -11,6 +11,7 @@
 #include "app.h"
 #include "theme.h"
 #include "vats/export_name.h"
+#include "vats/height_variant.h"
 #include "vats/sit_export.h"
 
 namespace vats {
@@ -29,31 +30,26 @@ SitRoot read_sit_root(const Project& p) {
     return r;
 }
 
-std::string text_of(const Json& ex, const char* key, const char* fallback) {
-    const Json* v = ex.find(key);
-    return v && v->is_string() ? v->str : fallback;
-}
-
 }  // namespace
 
-// fmt 0: AVsitter2 AVpos lines, 1: nPose V4 XANIM lines, for every actor.
-std::string App::sit_lines(int fmt) const {
+// fmt 0: AVsitter2 AVpos lines, 1: nPose V4 XANIM lines, for every actor. height > 0: that height variant's names,
+// each actor raised by lift[actor] (HV).
+std::string App::sit_lines(int fmt, double height, const std::vector<double>& lift) const {
     const Project& p = doc_.project;
-    const Json& ex = doc_.clip().export_settings;
-    const Json* num = ex.find("number");
-    ExportNaming naming{text_of(ex, "name", ""), num && num->is_number() ? int(num->num) : 1, text_of(ex, "side", ""),
-                        text_of(ex, "pattern", "[NAME]_[#]_[SIDE]"), ""};
-    std::string stem = doc_.path.empty() ? "" : doc_.path.substr(doc_.path.find_last_of('/') + 1);
-    stem = stem.substr(0, stem.rfind('.'));
+    ExportNaming naming = export_naming();  // the active clip's (08 CL-4)
+    const std::string stem = export_stem();
     auto base = [&](bool mirrored) {
-        std::string n = export_file_name(naming, stem, mirrored, "anim");
+        std::string n = variant_file_name(naming, stem, {mirrored, height}, "anim");
         return n.substr(0, n.size() - 5);
     };
     const std::string pose = base(false);  // the placement note's name
     std::vector<Sitter> sitters;
-    for (const Actor& a : p.actors) {
+    for (size_t k = 0; k < p.actors.size(); ++k) {
+        const Actor& a = p.actors[k];
         naming.actor = a.name;
-        sitters.push_back({a.name, base(doc_.clip().mirror_export), a.placement()});
+        Xform place = a.placement();
+        if (k < lift.size()) place.pos.z += lift[k];
+        sitters.push_back({a.name, base(doc_.clip().mirror_export), place});
     }
     const SitRoot root = read_sit_root(p);
     return fmt == 0 ? avsitter_lines(pose, sitters, root) : npose_lines(sitters, root);
