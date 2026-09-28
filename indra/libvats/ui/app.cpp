@@ -16,6 +16,7 @@
 #include <sstream>
 
 #include "icon_button.h"
+#include "icons.h"
 #include "imgui_internal.h"
 #include "vats/anim_convert.h"
 #include "vats/bvh.h"
@@ -1370,7 +1371,7 @@ void App::draw_menus() {
         ImGui::Separator();
         for (const char* id : {"export_anim", "export_bvh", "export_bvh_all", "export_all_clips"}) menu_item(id);
         if (!host_.world_view()) {  // 08 LM, the app only: the viewer renders no thumbnails
-            if (ImGui::MenuItem("Export Listing Media...")) show_listing_ = true;
+            if (menu_item_icon(icon::kListing, "Export Listing Media...")) show_listing_ = true;
             ImGui::SetItemTooltip("The animation as an animated GIF or numbered PNG pictures, for a Marketplace listing");
         }
         if (host_.can_upload()) menu_item("upload"), menu_item("upload_all_clips");
@@ -1399,7 +1400,7 @@ void App::draw_menus() {
         draw_pose_tool_menu_items();  // Scratch Pose, Propagate Pose (PT-2, PT-3)
         ImGui::Separator();
         menu_item("reverse");
-        if (ImGui::MenuItem("Simplify Curves...", nullptr, false, !doc_.history.is_open())) open_simplify();
+        if (menu_item_icon(icon::kSimplify, "Simplify Curves...", nullptr, false, !doc_.history.is_open())) open_simplify();
         ImGui::SetItemTooltip("Fewer keys on the selected bones' curves (or all), within a tolerance");
         ImGui::Separator();
         menu_item("prefs");
@@ -1411,7 +1412,7 @@ void App::draw_menus() {
     }
     if (ImGui::BeginMenu("View")) {  // order of spec 06 section 3.4; Camera Views, zoom and reset are additions
         for (const char* id : {"view_front", "view_back", "view_right", "view_left", "view_top"}) menu_item(id);
-        if (ImGui::MenuItem("Orthographic", key_hint("view_ortho").c_str(), camera_.ortho)) run_action("view_ortho");
+        if (menu_item_icon(icon::kOrtho, "Orthographic", key_hint("view_ortho").c_str(), camera_.ortho)) run_action("view_ortho");
         ImGui::Separator();
         for (const char* id : {"frame_selected", "frame_all", "zoom_in", "zoom_out", "reset_camera"}) menu_item(id);
         if (ImGui::BeginMenu("Camera Views")) {
@@ -1436,22 +1437,22 @@ void App::draw_menus() {
             draw_pinned_ghost_menu();  // 08 ON-5
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Motion Path")) {  // 08 MP
+        if (begin_menu_icon(icon::kMotionPath, "Motion Path")) {  // 08 MP
             draw_motion_path_menu();
             ImGui::EndMenu();
         }
-        ImGui::MenuItem("Reference...", nullptr, &show_reference_);  // 08 RF
+        if (menu_item_icon(icon::kReference, "Reference...", nullptr, show_reference_)) show_reference_ = !show_reference_;  // 08 RF
         ImGui::SetItemTooltip("A picture or picture sequence behind the avatar, to pose or animate over");
-        ImGui::MenuItem("Preview as SL Plays It", nullptr, &sl_preview_);
+        if (menu_item_icon(icon::kSlPreview, "Preview as SL Plays It", nullptr, sl_preview_)) sl_preview_ = !sl_preview_;
         ImGui::SetItemTooltip("Plays the exported .anim as Second Life will, with your animation as a ghost");
-        if (host_.world_view() && ImGui::MenuItem("As It Plays In-World", nullptr, in_world_)) set_in_world(!in_world_);
+        if (host_.world_view() && menu_item_icon(icon::kInWorld, "As It Plays In-World", nullptr, in_world_)) set_in_world(!in_world_);
         if (host_.world_view())
             ImGui::SetItemTooltip("Your AO, the default motions and avatar physics play; your animation at its own priorities "
                                   "on the joints it keys, with a table of who wins each joint");
-        ImGui::MenuItem("Face Cam", nullptr, &face_cam_);
+        if (menu_item_icon(icon::kFaceCam, "Face Cam", nullptr, face_cam_)) face_cam_ = !face_cam_;
         ImGui::SetItemTooltip("A cutout of a face driven by your face tracking, to move and resize anywhere; your avatar "
                               "is not animated by the tracking meanwhile");
-        if (ImGui::BeginMenu("Treadmill")) {  // 08 LP-8
+        if (begin_menu_icon(icon::kTreadmill, "Treadmill")) {  // 08 LP-8
             draw_treadmill_menu();
             ImGui::EndMenu();
         }
@@ -1503,21 +1504,22 @@ void App::draw_menus() {
         ImGui::Separator();
         menu_item("hands");
         ImGui::MenuItem("Dynamics...", nullptr, &show_dynamics_);
-        ImGui::MenuItem("Idle Layer...", nullptr, &show_idle_);
-        ImGui::MenuItem("Overlap...", nullptr, &show_overlap_);
-        ImGui::MenuItem("Auto-Balance...", nullptr, &show_auto_balance_);  // 08 CM-2
-        ImGui::MenuItem("Jump Arc...", nullptr, &show_jump_arc_);          // 08 JA-1
+        if (menu_item_icon(icon::kIdle, "Idle Layer...", nullptr, show_idle_)) show_idle_ = !show_idle_;
+        if (menu_item_icon(icon::kOverlap, "Overlap...", nullptr, show_overlap_)) show_overlap_ = !show_overlap_;
+        if (menu_item_icon(icon::kBalance, "Auto-Balance...", nullptr, show_auto_balance_)) show_auto_balance_ = !show_auto_balance_;  // 08 CM-2
+        if (menu_item_icon(icon::kJumpArc, "Jump Arc...", nullptr, show_jump_arc_)) show_jump_arc_ = !show_jump_arc_; // 08 JA-1
         if (ImGui::MenuItem("Make Transition...", nullptr, &show_transition_)) transition_.to = int(std::round(frame_));  // 08 PM-3
         ImGui::MenuItem("Ragdoll...", nullptr, &show_ragdoll_);
-        ImGui::MenuItem("Face...", nullptr, &show_face_);
+        if (menu_item_icon(icon::kFace, "Face...", nullptr, show_face_)) show_face_ = !show_face_;
         ImGui::MenuItem("Actors (Couples and Groups)...", nullptr, &show_actors_);
-        ImGui::MenuItem("Clips (AO Sets)...", nullptr, &show_clips_);
+        if (menu_item_icon(icon::kClips, "Clips (AO Sets)...", nullptr, show_clips_)) show_clips_ = !show_clips_;
         ImGui::MenuItem("Motion Capture...", nullptr, &show_mocap_);
-        ImGui::MenuItem("Split Dance at Beats...", nullptr, &show_split_dance_);  // 08 TE-6
+        if (menu_item_icon(icon::kSplit, "Split Dance at Beats...", nullptr, show_split_dance_))  // 08 TE-6
+            show_split_dance_ = !show_split_dance_;
         ImGui::Separator();
-        ImGui::MenuItem("Animation Check...", nullptr, &show_check_);
-        ImGui::MenuItem("Motion Quality...", nullptr, &show_quality_);
-        ImGui::MenuItem("Priority Planner...", nullptr, &show_planner_);
+        if (menu_item_icon(icon::kCheck, "Animation Check...", nullptr, show_check_)) show_check_ = !show_check_;
+        if (menu_item_icon(icon::kQuality, "Motion Quality...", nullptr, show_quality_)) show_quality_ = !show_quality_;
+        if (menu_item_icon(icon::kPlanner, "Priority Planner...", nullptr, show_planner_)) show_planner_ = !show_planner_;
         ImGui::EndMenu();
     }
     if (ui::Host::HostUi* h = host_.host_ui()) {  // the viewer's own UI beside the editor (spec 09 U4b)

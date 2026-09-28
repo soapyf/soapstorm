@@ -45,6 +45,12 @@ bool icon_label_button(const char* icon, const char* label, const std::string& t
     return pressed;
 }
 
+bool icon_label_small_button(const char* icon, const char* label, const std::string& tooltip) {
+    bool pressed = ImGui::SmallButton((std::string(icon) + " " + label).c_str());
+    if (!tooltip.empty()) ImGui::SetItemTooltip("%s", tooltip.c_str());
+    return pressed;
+}
+
 bool curve_icon_button(const char* id, CurveIcon shape, const std::string& tooltip) {
     bool pressed = ImGui::Button((std::string("##") + id).c_str(), ImVec2(icon_button_width(), 0));
     ImGui::SetItemTooltip("%s", tooltip.c_str());
@@ -107,12 +113,17 @@ bool menu_item_icon(const char* icon, const char* label, const char* shortcut, b
     return ImGui::MenuItemEx(label, icon, shortcut, selected, enabled);
 }
 
+bool begin_menu_icon(const char* icon, const char* label, bool enabled) {
+    return ImGui::BeginMenuEx(label, icon, enabled);
+}
+
 const char* action_icon(const char* action_id) {
     static const struct {
         const char *id, *icon;
     } icons[] = {{"new", icon::kNew},     {"open", icon::kOpen},          {"save", icon::kSave},
                  {"undo", icon::kUndo},   {"redo", icon::kRedo},          {"export_anim", icon::kExport},
-                 {"upload", icon::kUpload}, {"import_prop", icon::kImport}};
+                 {"upload", icon::kUpload}, {"import_prop", icon::kImport}, {"tween", icon::kTween},
+                 {"batch_retarget", icon::kBatch}, {"dope_sheet", icon::kDopeSheet}, {"foot_lock", icon::kFootLock}};
     for (const auto& i : icons)
         if (std::strcmp(i.id, action_id) == 0) return i.icon;
     return nullptr;

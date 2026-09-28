@@ -12,6 +12,12 @@ Open the window with **Tools → Idle Layer...**. Each layer is listed as **Brea
 number of bones it moves, with **(baked)** after layers that hold a bake. The settings and buttons below
 the list apply to the selected layer.
 
+![The Idle Layer window with a Breath layer on mChest and mTorso selected: Amplitude 1.50 deg, Period 4.0 s, Snapped: 4.00 s, 1 per loop, and the Bake, Unbake, Remove and Bake All buttons](images/idle-layer/idle-window.png)
+*A breath and a sway on a standing loop, not baked yet.*
+
+[Open the example](example:idle-stand.vat): Relaxed Stand held for a 4-second loop with a breath layer and a
+sway layer. Tick **Preview while playing** and play it.
+
 ### Adding a layer
 
 - **Add Breath** adds a breath: `mChest` tilts back a little and `mTorso` rises, then both settle again,

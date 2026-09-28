@@ -172,6 +172,9 @@ Furniture usually seats avatars with AVsitter2 or nPose, which read each sitter'
 a notecard. The **Actors** window has a **Sit systems (furniture)** section, below the placement, with those
 lines for every actor, ready to paste:
 
+![The Sit systems (furniture) section of the Actors window for the handshake example: Sit target and Rotation at 0, the AVsitter2 lines for Lead and Partner, the nPose V4 lines, and Copy and Save as .txt under each](images/couples-and-groups/sit-export.png)
+*The handshake example's lines: Partner sits 0.6 m in front of Lead, turned 180°.*
+
 | Field | Meaning |
 |---|---|
 | **Sit target (m)** | Where the shared sit target is from the furniture's root prim, in metres. Press **Enter** to apply. |

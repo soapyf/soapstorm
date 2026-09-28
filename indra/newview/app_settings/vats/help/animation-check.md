@@ -15,6 +15,9 @@ Choose **Tools → Animation Check...**. The status bar shows **Check: N** while
 the colour of the worst one (red, amber or blue); click it to open the window. With no findings the
 badge is hidden and the window says "No problems found."
 
+![The Animation Check window for the retarget-walk example: two blue findings for the elbows, and amber findings for the feet 8.9 cm below the ground and the hips and legs below priority 4, each with Fix, Select Bones and Go to Frame buttons](images/animation-check/check-window.png)
+*The [[Retargeting]] example's walk: four findings, and **Rules...** at the bottom.*
+
 The check runs by itself: half a second after the last edit, once no drag, field edit or playback is
 running. It runs at once when a project is opened or imported, after a **Fix**, and after a rule is
 switched on or off. It checks the animation as **Export SL .anim** would write it: with IK, pins and the

@@ -791,6 +791,7 @@ private:
     void draw_sit_export();                  // the Actors panel's section
     void save_sit_lines(const std::string& path);  // Save as .txt, the format in sit_format_
     int sit_format_ = 0;
+    bool sit_scroll_ = false;  // --window sit: the Actors window scrolls to the sit section once
     std::vector<std::vector<float>> actor_pick_pos_;  // skinned positions of the other actors (world, active space)
     std::vector<const std::vector<std::uint32_t>*> actor_pick_idx_;
     std::map<std::string, std::unique_ptr<AvatarMesh>> actor_meshes_;  // Linden bodies other actors use
@@ -883,6 +884,7 @@ private:
     bool backdrop_ = false;
     void loop_assist_tick();  // every frame: loop-aware tangents, the treadmill's travel
     bool show_loop_assist_ = false;
+    bool loop_find_now_ = false;  // --window loop-assist: Find as the window opens
     int loop_min_length_ = 20, loop_beats_ = 8;
     std::vector<LoopCandidate> loop_candidates_;
     bool treadmill_on_ = false;
@@ -965,7 +967,7 @@ private:
     std::string inv_filter_;
     std::shared_ptr<struct FileLibUi> file_lib_;  // defined in file_library_ui.cpp
     // --- tween, pose blend and easing (tween_ui.cpp; spec 08 TW) ---
-    void draw_tween_controls();     // the timeline bar's Tween slider, and Blend for a while after a pose
+    void draw_tween_controls(bool compact);  // the timeline bar's Tween slider, and Blend for a while after a pose
     void start_tween();             // the Tween shortcut: a modal drag (Modal::Tween)
     void tween_drag(ImVec2 mouse);  // modal_input's part while Modal::Tween runs
     bool begin_tween();             // opens the undo step; false when nothing selected can be keyed

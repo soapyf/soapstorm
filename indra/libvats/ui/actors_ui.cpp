@@ -688,7 +688,7 @@ void App::draw_actors_panel() {
     ImGui::EndDisabled();
     if (sel <= 0) ImGui::SetItemTooltip("Select the point that should follow, such as a hand");
     hint("Release it later with Release from Here, as for any pin.");
-    if (ImGui::Button("Look at Partner")) look_at_partner(pin_actor_);  // face_ui.cpp (08 FA-8)
+    if (icon_label_button(icon::kLookAt, "Look at Partner")) look_at_partner(pin_actor_);  // face_ui.cpp (08 FA-8)
     ImGui::SetItemTooltip("The head turns half-way and the eyes the rest towards %s's eyes, keyed on every frame",
                           p.actors[pin_actor_].name.c_str());
     ImGui::End();

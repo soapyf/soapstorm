@@ -20,6 +20,8 @@ float icon_button_width();
 // An icon before a text label. The label may carry "###id" to keep the ID when the text changes; tooltip
 // may be empty.
 bool icon_label_button(const char* icon, const char* label, const std::string& tooltip = "", bool active = false);
+// The same as a small button (ImGui::SmallButton), for rows inside lists.
+bool icon_label_small_button(const char* icon, const char* label, const std::string& tooltip = "");
 
 // The graph editor's tangent shapes, drawn rather than taken from the font (no icon font has them).
 enum class CurveIcon { Auto, Spline, Plateau, Linear, Flat, Stepped, Break, Unify };
@@ -29,6 +31,8 @@ bool curve_icon_button(const char* id, CurveIcon shape, const std::string& toolt
 // be null.
 bool menu_item_icon(const char* icon, const char* label, const char* shortcut = nullptr, bool selected = false,
                     bool enabled = true);
+// A sub-menu with an icon in the same column (ImGui::BeginMenu otherwise); EndMenu() as usual.
+bool begin_menu_icon(const char* icon, const char* label, bool enabled = true);
 // The icon of an editor action shown in the menus ("open", "undo"...), or null.
 const char* action_icon(const char* action_id);
 

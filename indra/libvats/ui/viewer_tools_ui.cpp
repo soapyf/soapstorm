@@ -12,6 +12,8 @@
 #include <cstdio>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "imgui.h"
 #include "theme.h"
 #include "vats/loop_assist.h"
@@ -304,7 +306,7 @@ void App::draw_seat_section() {
     ImGui::Text("Offset from its root %.3f, %.3f, %.3f m", s.pos.x, s.pos.y, s.pos.z);
     ImGui::Text("Rotation %.1f, %.1f, %.1f deg", e.x, e.y, e.z);
     ImGui::SetItemTooltip("Your avatar in the furniture root prim's frame, as sit systems place it");
-    if (ImGui::Button("Use as the Sit Target")) {
+    if (icon_label_button(icon::kSeat, "Use as the Sit Target")) {
         // Your actor (the first) lands where you sit now: the sit target is the measured seat less its placement.
         const Xform root = Xform{s.rot, s.pos} * doc_.project.actors.front().placement().inverse();
         const Vec3 re = quat_to_euler(root.rot);
@@ -322,7 +324,7 @@ void App::draw_seat_section() {
     ImGui::SetItemTooltip("The sit target below becomes your seat, so the AVsitter and nPose lines seat your actor where "
                           "you sit now");
     ImGui::BeginDisabled(seat_pick_);
-    if (ImGui::Button(seat_pick_ ? "Click the furniture..." : "Place on Furniture Point")) {
+    if (icon_label_button(icon::kPlace, seat_pick_ ? "Click the furniture...###seat_pick" : "Place on Furniture Point###seat_pick", "", seat_pick_)) {
         seat_pick_ = true;
         status("Click a point on the furniture for the selected bone or IK handle (Esc cancels)");
     }
@@ -331,12 +333,12 @@ void App::draw_seat_section() {
                           "there with a pin. Only the point you click is read, never the furniture's shape.");
     ImGui::SameLine();
     ImGui::BeginDisabled(s.contact != 1 || (selection_.empty() && handles_.empty()));
-    if (ImGui::Button("Settle on Furniture")) settle_on_seat();
+    if (icon_label_button(icon::kSeat, "Settle on Furniture")) settle_on_seat();
     ImGui::EndDisabled();
     ImGui::SetItemTooltip(s.contact == 1 ? "Each selected bone or IK handle drops straight down onto the furniture"
                                          : "Only on furniture you created every part of");
     if (s.contact == 0) {
-        if (ImGui::SmallButton("Check Whether You Made It")) host_.check_seat();
+        if (icon_label_small_button(icon::kCheck, "Check Whether You Made It")) host_.check_seat();
         ImGui::SetItemTooltip("Selects the furniture as the viewer's Edit does, to read who created each part, then "
                               "deselects it");
     } else {

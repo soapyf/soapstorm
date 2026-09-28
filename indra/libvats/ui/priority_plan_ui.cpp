@@ -7,6 +7,8 @@
 #include <mutex>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "imgui.h"
 #include "theme.h"
 #include "vats/priority_plan.h"
@@ -139,7 +141,7 @@ void App::draw_planner_panel() {
     hint("Add the animations yours plays with. Each bone goes to the highest priority; on equal priority, to the one "
          "started last (lowest in the list).");
 
-    if (ImGui::Button("Add Clips...")) {
+    if (icon_label_button(icon::kAdd, "Add Clips...")) {
         host_.open_file_dialog({{"Animation", "anim;vat"}}, true, [p = planner_ui_](std::vector<std::string> files) {
             std::lock_guard<std::mutex> lock(p->mutex);
             for (auto& f : files) p->added.push_back(f);
@@ -148,7 +150,7 @@ void App::draw_planner_panel() {
     ImGui::SetItemTooltip("Your own .anim files or projects: an AO stand, a dance, a furniture pose");
     if (!host_.host_name().empty()) {  // the viewer: what runs on your own avatar (PP-5)
         ImGui::SameLine();
-        if (ImGui::Button("Add Running Animations")) {
+        if (icon_label_button(icon::kRunning, "Add Running Animations")) {
             std::vector<PlanClip> running = host_.running_motions();
             if (running.empty()) status("No animations are running on your avatar");
             for (PlanClip& c : running) {
@@ -193,17 +195,15 @@ void App::draw_planner_panel() {
             if (!c.own) ImGui::SetItemTooltip("An AO stand (the stand rule below)");
             ImGui::TableNextColumn();
             ImGui::BeginDisabled(i == 0);
-            if (ImGui::ArrowButton("##up", ImGuiDir_Up)) move = i, dir = -1;
+            if (icon_small_button("up", icon::kUp, "Started earlier")) move = i, dir = -1;
             ImGui::EndDisabled();
-            ImGui::SetItemTooltip("Started earlier");
             ImGui::SameLine();
             ImGui::BeginDisabled(i + 1 == int(ui.clips.size()));
-            if (ImGui::ArrowButton("##down", ImGuiDir_Down)) move = i, dir = 1;
+            if (icon_small_button("down", icon::kDown, "Started later")) move = i, dir = 1;
             ImGui::EndDisabled();
-            ImGui::SetItemTooltip("Started later");
             if (!c.own) {
                 ImGui::SameLine();
-                if (ImGui::SmallButton("Remove")) remove = i;
+                if (icon_small_button("remove", icon::kDelete, "Remove")) remove = i;
             }
             ImGui::PopID();
         }

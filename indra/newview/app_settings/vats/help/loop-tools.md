@@ -44,6 +44,9 @@ Scrub to the frame that should begin the loop, for example a contact pose, then 
 | **Length** | Frames and seconds, for example "30 (1.00 s)" |
 | **Distance** | How far apart the two poses are, a weighted average in degrees; 0 means the same pose |
 
+![The Loop Assist window for the loop-walk example: Shortest Loop 20 and three candidates, 0 to 30 at distance 5.35, 4 to 30 at 13.72 and 8 to 30 at 22.17, each with a Use button](images/loop-tools/loop-assist.png)
+*The loop walk's best loop points: its own loop, 0 to 30, matches best.*
+
 Press **Use** on a row: **Loop** turns on with those loop points, and VATs asks whether to make the loop seamless as well (**Make Seamless** or **Not Now**). Each is one undo step. The list is from the last **Find**; press it again after editing.
 
 ### Fitting a loop to the beat
@@ -65,6 +68,10 @@ It is saved with the project: on for new projects and imported animations, off f
 ### Walking on a treadmill
 
 **View → Treadmill → Show Treadmill** draws blue lines on the ground around the avatar that scroll backwards at the chosen speed while the animation plays or you scrub, like a treadmill under a walk that stays in place. Choose the speed in the same menu:
+
+![The loop walk seen from the right at frame 8, with the treadmill's lines across the ground under the feet](images/loop-tools/treadmill.png)
+*The loop walk on the treadmill, from the right.*
+
 
 | Speed | m/s |
 |---|---|

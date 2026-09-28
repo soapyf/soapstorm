@@ -5,6 +5,8 @@
 #include <vector>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "imgui.h"
 
 namespace vats {
@@ -13,6 +15,7 @@ namespace {
 // +X is where the avatar faces, +Y its left, Z up. The strengths suit the app's shader; the viewer's sky takes the
 // same colours.
 const char* const kLightIds[] = {"noon", "key", "rim", "dusk", "night"};
+const char* const kLightIcons[] = {icon::kNoon, icon::kKeyLight, icon::kRim, icon::kDusk, icon::kNight};
 const LightPreset kLights[] = {
     {"Flat Noon", {0, 0, 1}, {1.0f, 1.0f, 0.96f}, {0.80f, 0.80f, 0.82f}, false},
     {"Three-Quarter Key", {0.60f, 0.55f, 0.58f}, {1.10f, 1.02f, 0.92f}, {0.35f, 0.37f, 0.42f}, false},
@@ -36,15 +39,16 @@ void App::draw_light_menu() {
     if (!ImGui::BeginMenu("Light")) return;
     const bool world = host_.world_view();
     auto use = [&](int i) { set_light(i < 0 ? "studio" : kLightIds[i]); };
-    if (ImGui::MenuItem(world ? "The World's Own" : "Studio (Default)", nullptr, light_ < 0)) use(-1);
+    if (menu_item_icon(world ? icon::kWorld : icon::kStudio, world ? "The World's Own" : "Studio (Default)", nullptr, light_ < 0))
+        use(-1);
     ImGui::SetItemTooltip(world ? "The sky you had before choosing a preset" : "The editor's usual light");
     ImGui::Separator();
     for (int i = 0; i < int(std::size(kLights)); ++i) {
-        if (ImGui::MenuItem(kLights[i].name, nullptr, light_ == i)) use(i);
+        if (menu_item_icon(kLightIcons[i], kLights[i].name, nullptr, light_ == i)) use(i);
         if (world) ImGui::SetItemTooltip("A sky only you see; your own comes back when the editor closes");
     }
     ImGui::Separator();
-    ImGui::MenuItem("Plain Backdrop", nullptr, &backdrop_);
+    if (menu_item_icon(icon::kBackdrop, "Plain Backdrop", nullptr, backdrop_)) backdrop_ = !backdrop_;
     ImGui::SetItemTooltip("A neutral grey wall and floor behind the actor, turning with the camera");
     ImGui::EndMenu();
 }

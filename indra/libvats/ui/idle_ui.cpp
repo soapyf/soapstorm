@@ -4,6 +4,8 @@
 #include <cmath>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "theme.h"
 #include "imgui.h"
 #include "vats/idle.h"
@@ -37,7 +39,7 @@ void App::draw_idle_panel() {
     ImGui::PopStyleColor();
 
     auto add = [&](const char* label, const char* kind) {
-        if (ImGui::Button(label)) {
+        if (icon_label_button(icon::kAdd, label)) {
             IdleLayer l = idle_preset(kind);
             edit("Add Idle Layer", [&](Clip& c) { c.idle.push_back(l); });
             idle_selected_ = int(clip.idle.size()) - 1;
@@ -127,18 +129,18 @@ void App::draw_idle_panel() {
         ImGui::EndDisabled();
         if (l.baked) ImGui::SetItemTooltip("Unbake before changing the bones");
 
-        if (ImGui::Button(l.baked ? "Re-bake" : "Bake")) {
+        if (icon_label_button(icon::kBake, l.baked ? "Re-bake" : "Bake")) {
             edit("Bake Idle Layer", [&](Clip& c) { bake_idle(c, skel_, i); });
             status("Baked the idle layer to keys");
         }
         ImGui::SetItemTooltip("Write the layer onto its bones' keys (one undo step)");
         ImGui::SameLine();
         ImGui::BeginDisabled(!l.baked);
-        if (ImGui::Button("Unbake")) edit("Unbake Idle Layer", [&](Clip& c) { unbake_idle(c, skel_, i); });
+        if (icon_label_button(icon::kUnbake, "Unbake")) edit("Unbake Idle Layer", [&](Clip& c) { unbake_idle(c, skel_, i); });
         ImGui::SetItemTooltip("Put back the keys the bones had before baking");
         ImGui::EndDisabled();
         ImGui::SameLine();
-        if (ImGui::Button("Remove")) {
+        if (icon_label_button(icon::kDelete, "Remove")) {
             edit("Remove Idle Layer", [&](Clip& c) {
                 unbake_idle(c, skel_, i);
                 c.idle.erase(c.idle.begin() + i);
@@ -147,7 +149,7 @@ void App::draw_idle_panel() {
         }
         ImGui::SetItemTooltip("Remove the layer and put back its pre-bake keys");
     }
-    if (clip.idle.size() > 1 && ImGui::Button("Bake All")) {
+    if (clip.idle.size() > 1 && icon_label_button(icon::kBake, "Bake All")) {
         edit("Bake Idle Layer", [&](Clip& c) { bake_idle(c, skel_); });
         status("Baked " + std::to_string(clip.idle.size()) + " idle layers to keys");
     }

@@ -11,6 +11,8 @@
 #include <map>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "imgui_internal.h"  // FindWindowByName: dock beside the graph the first time
 #include "theme.h"
 
@@ -397,7 +399,7 @@ void DopeSheet::draw(GraphContext& ctx, const std::function<void(const std::vect
                 graph_.edit(ctx, tg.label, [&](Clip& c) { apply_tangent(c, keys, tg.t); });
             }
         ImGui::Separator();
-        if (ImGui::MenuItem("Delete Keys")) graph_.delete_selected(ctx);
+        if (menu_item_icon(icon::kDelete, "Delete Keys")) graph_.delete_selected(ctx);
         ImGui::EndPopup();
     }
     ImGui::EndChild();

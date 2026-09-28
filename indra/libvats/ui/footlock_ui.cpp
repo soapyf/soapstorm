@@ -7,6 +7,8 @@
 #include <string>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "imgui.h"
 #include "vats/footlock.h"
 
@@ -46,7 +48,7 @@ void App::draw_foot_lock_window() {
     ImGui::Checkbox("Put Feet on the Ground", &foot_to_ground_);
     ImGui::SetItemTooltip("First moves the hips so the lowest foot touches the floor: fixes a take that floats or sinks");
 
-    if (ImGui::Button("Clean Up")) {
+    if (icon_label_button(icon::kCleanUp, "Clean Up")) {
         std::vector<std::string> report;
         edit("Clean Up Foot Sliding", [&](Clip& c) { report = lock_feet(c, *rig_, fl); });
         foot_report_ = report;

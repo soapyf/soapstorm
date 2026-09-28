@@ -483,9 +483,9 @@ void App::draw_timeline_panel() {
         if (compact && ImGui::GetContentRegionAvail().x < need) ImGui::NewLine(), wrapped = true;
     };
     wrap_for(2 * button_w);  // Mirror and Retime
-    if (tool_button(icon::kFlipTime, "Mirror", mirror_live_, "Mirror: posing a bone or IK control also keys its other side"))
+    if (tool_button(icon::kMirror, "Mirror", mirror_live_, "Mirror: posing a bone or IK control also keys its other side"))
         mirror_live_ = !mirror_live_;  // PT-1
-    if (tool_button(icon::kPlace, "Retime", retime_on_, "Retime: double-click the ruler to drop a marker; drag a marker to "
+    if (tool_button(icon::kRetime, "Retime", retime_on_, "Retime: double-click the ruler to drop a marker; drag a marker to "
                                                          "stretch the keys since the one before it and move the rest"))
         set_retime(!retime_on_);  // 08 TE-5
     ImGui::SameLine(0, 16);
@@ -494,8 +494,10 @@ void App::draw_timeline_panel() {
     if (tool_button(icon::kSetKey, "Set Key", false, tip("Set Key", "key") + ": key the selected bones, pins and IK controls"))
         run_action("key");
     draw_blocking_button(compact);  // spec 08 KT-2
-    draw_tween_controls();  // spec 08 TW-1, TW-2
-    if (!compact) timeline_row_w_ = tween_row_end_ - ImGui::GetWindowPos().x - ImGui::GetStyle().WindowPadding.x;
+    draw_tween_controls(compact);  // spec 08 TW-1, TW-2
+    // Room is kept for Blend, which comes and goes, so the row does not change mode when a pose goes on.
+    if (!compact)
+        timeline_row_w_ = tween_row_end_ + 16 + ImGui::GetFontSize() * 7 - ImGui::GetWindowPos().x - ImGui::GetStyle().WindowPadding.x;
     timeline_tail_w_ = tween_row_end_ - tail.x;
     // A wrapped row (the tail, or Blend alone) takes this spare row's place, so the strip keeps its height.
     if (!wrapped && ImGui::GetItemRectMin().y < tail.y + 1) ImGui::NewLine();

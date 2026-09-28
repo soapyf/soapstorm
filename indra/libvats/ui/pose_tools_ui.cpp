@@ -5,6 +5,8 @@
 #include <cmath>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "imgui.h"
 #include "vats/pose_tools.h"
 
@@ -92,7 +94,7 @@ void App::draw_scratch_prompt() {
 }
 
 void App::draw_pose_tool_menu_items() {
-    if (ImGui::MenuItem("Scratch Pose", nullptr, scratch_on_)) {
+    if (menu_item_icon(icon::kScratch, "Scratch Pose", nullptr, scratch_on_)) {
         scratch_on_ = !scratch_on_;
         if (scratch_on_) status("Scratch Pose: edits show but key nothing until Set Key");
     }
@@ -101,7 +103,7 @@ void App::draw_pose_tool_menu_items() {
     double a = 0, b = 0;
     const bool range = clip_range(a, b);
     ImGui::BeginDisabled(tracks.empty());
-    if (ImGui::BeginMenu("Propagate Pose")) {
+    if (begin_menu_icon(icon::kPropagate, "Propagate Pose")) {
         auto item = [&](const char* label, PropagateTo to, bool enabled) {
             if (!ImGui::MenuItem(label, nullptr, false, enabled)) return;
             scratch_end(true);  // a scratch pose is the pose to propagate: its keys first, then the propagation

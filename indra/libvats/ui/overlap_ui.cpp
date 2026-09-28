@@ -3,6 +3,8 @@
 #include <algorithm>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "theme.h"
 #include "imgui.h"
 #include "vats/dynamics.h"
@@ -64,7 +66,7 @@ void App::draw_overlap_panel() {
 
     const std::string why = chain.empty() ? "Select a bone with a child" : overlap_refusal(clip, *rig_, chain);
     ImGui::BeginDisabled(!why.empty());
-    if (ImGui::Button("Apply Overlap")) {
+    if (icon_label_button(icon::kApply, "Apply Overlap")) {
         edit("Overlap", [&](Clip& c) { apply_overlap(c, skel_, chain, overlap_); });
         status("Overlap applied down " + std::to_string(chain.size()) + " bones");
     }

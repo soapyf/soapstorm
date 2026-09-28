@@ -10,6 +10,8 @@
 #include <iterator>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "theme.h"
 #include "vats/height_variant.h"
 
@@ -78,14 +80,14 @@ void App::draw_height_variants(float label_w) {
         ImGui::TextDisabled("_%s", height_tag(hs[i]).c_str());
         ImGui::SameLine();
         ImGui::BeginDisabled(hs.size() <= 2);
-        if (ImGui::SmallButton("Remove")) remove = i;
+        if (icon_small_button("remove", icon::kDelete, "Remove this height")) remove = i;
         ImGui::EndDisabled();
         ImGui::PopID();
     }
     if (remove >= 0) hs.erase(hs.begin() + remove), changed = true;
     ImGui::SetCursorPosX(label_w);
     ImGui::BeginDisabled(int(hs.size()) >= kMaxHeights);
-    if (ImGui::SmallButton("Add Height")) {
+    if (icon_label_small_button(icon::kHeights, "Add Height")) {
         double h = kHeightPresets[0];
         for (double p : kHeightPresets)
             if (std::none_of(hs.begin(), hs.end(), [&](double x) { return std::fabs(x - p) < 1e-6; })) {

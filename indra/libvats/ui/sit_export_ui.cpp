@@ -7,8 +7,11 @@
 // "sit_root": [x, y, z, rx, ry, rz] (metres, Euler degrees), so it is the same whichever actor is edited; the first
 // actor that has it wins.
 #include <algorithm>
+#include <utility>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "theme.h"
 #include "vats/export_name.h"
 #include "vats/height_variant.h"
@@ -63,6 +66,7 @@ void App::save_sit_lines(const std::string& path) {
 
 void App::draw_sit_export() {
     if (host_.world_view()) draw_seat_section();  // spec 09 build 20, items 4 and 46
+    if (std::exchange(sit_scroll_, false)) ImGui::SetScrollHereY(0);
     ImGui::SeparatorText("Sit systems (furniture)");
     const SitRoot root = read_sit_root(doc_.project);
     // Typed values apply on Enter, as one undo step for every actor.
@@ -91,12 +95,12 @@ void App::draw_sit_export() {
         ImGui::TextUnformatted(names[fmt]);
         ImGui::InputTextMultiline("##lines", lines.data(), lines.size() + 1,
                                   ImVec2(-1, ImGui::GetTextLineHeight() * (fmt ? 4.5f : 8.5f)), ImGuiInputTextFlags_ReadOnly);
-        if (ImGui::Button("Copy")) {
+        if (icon_label_button(icon::kCopy, "Copy")) {
             ImGui::SetClipboardText(lines.c_str());
             status(std::string("Copied the ") + (fmt ? "nPose" : "AVsitter") + " lines");
         }
         ImGui::SameLine();
-        if (ImGui::Button("Save as .txt...")) sit_format_ = fmt, show_dialog(Dialog::SitLines);
+        if (icon_label_button(icon::kText, "Save as .txt...")) sit_format_ = fmt, show_dialog(Dialog::SitLines);
         ImGui::PopID();
     }
     hint("AVsitter: paste into the AVpos notecard; the prim needs one [AV]sitA/B pair per actor. nPose: paste into a SET "

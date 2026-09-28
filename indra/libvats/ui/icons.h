@@ -62,4 +62,86 @@ inline constexpr char kHidden[] = "\xee\x82\xbb";    // eye-off U+E0BB
 inline constexpr char kLocked[] = "\xee\x84\x8b";    // lock U+E10B
 inline constexpr char kUnlocked[] = "\xee\x84\x8c";  // lock-open U+E10C
 
+// Posing and the timeline bar (spec 08 TW, PT, TE-5)
+inline constexpr char kTween[] = "\xee\x96\x92";         // between-horizontal-start U+E592
+inline constexpr char kRelax[] = "\xee\x8e\x8b";         // spline U+E38B
+inline constexpr char kBlend[] = "\xee\x96\x9c";         // blend U+E59C
+inline constexpr char kMirror[] = "\xee\x8d\x9d";        // flip-horizontal U+E35D
+inline constexpr char kRetime[] = "\xee\x87\xa0";        // timer U+E1E0
+inline constexpr char kScratch[] = "\xee\x96\x96";       // notebook-pen U+E596
+inline constexpr char kPropagate[] = "\xee\x81\xb3";     // chevrons-right U+E073
+
+// Graph editor and dope sheet
+inline constexpr char kEase[] = "\xee\x98\x8d";           // chart-spline U+E60D
+inline constexpr char kFilter[] = "\xee\x83\x9c";         // funnel U+E0DC
+inline constexpr char kSnapshot[] = "\xee\x81\xa4";       // camera U+E064
+inline constexpr char kSwap[] = "\xee\x89\x8a";           // arrow-left-right U+E24A
+inline constexpr char kClear[] = "\xee\x8a\x8f";          // eraser U+E28F
+inline constexpr char kMore[] = "\xee\x82\xb6";           // ellipsis U+E0B6
+inline constexpr char kSimplify[] = "\xee\x97\xa1";       // diamond-minus U+E5E1
+inline constexpr char kDopeSheet[] = "\xee\x98\xa4";      // chart-gantt U+E624
+inline constexpr char kMotionPath[] = "\xee\x94\xbe";     // route U+E53E
+
+// Tool windows and their buttons
+inline constexpr char kCheck[] = "\xee\x87\xbf";         // shield-check U+E1FF
+inline constexpr char kWarning[] = "\xee\x81\xb7";       // circle-alert U+E077
+inline constexpr char kFix[] = "\xee\x86\xb1";           // wrench U+E1B1
+inline constexpr char kGoTo[] = "\xee\x82\xac";          // crosshair U+E0AC
+inline constexpr char kRules[] = "\xee\x87\x90";         // list-checks U+E1D0
+inline constexpr char kRefresh[] = "\xee\x85\x85";       // refresh-cw U+E145
+inline constexpr char kSlPreview[] = "\xee\x88\x8e";     // ghost U+E20E
+inline constexpr char kFit[] = "\xee\x88\xa0";           // shrink U+E220
+inline constexpr char kSplit[] = "\xee\x85\x8e";         // scissors U+E14E
+inline constexpr char kCopy[] = "\xee\x82\x9e";          // copy U+E09E
+inline constexpr char kText[] = "\xee\x83\x8c";          // file-text U+E0CC
+inline constexpr char kFind[] = "\xee\x85\x91";          // search U+E151
+inline constexpr char kApply[] = "\xee\x81\xac";         // check U+E06C
+inline constexpr char kStretch[] = "\xee\x87\x86";       // move-horizontal U+E1C6
+inline constexpr char kTreadmill[] = "\xee\x8e\xb9";     // footprints U+E3B9
+inline constexpr char kIdle[] = "\xee\x86\xb0";          // wind U+E1B0
+inline constexpr char kOverlap[] = "\xee\x8a\x83";       // waves U+E283
+inline constexpr char kAdd[] = "\xee\x84\xbd";           // plus U+E13D
+inline constexpr char kAddLayer[] = "\xee\x9b\xa6";      // layers-plus U+E6E6
+inline constexpr char kBake[] = "\xee\x8e\xbb";          // stamp U+E3BB
+inline constexpr char kUnbake[] = "\xee\x85\x88";        // rotate-ccw U+E148
+inline constexpr char kFace[] = "\xee\x85\xa4";          // smile U+E164
+inline constexpr char kLookAt[] = "\xee\x94\xb6";        // scan-eye U+E536
+inline constexpr char kQuality[] = "\xee\x86\xbf";       // gauge U+E1BF
+inline constexpr char kPlanner[] = "\xee\x87\x91";       // list-ordered U+E1D1
+inline constexpr char kUp[] = "\xee\x81\xb0";            // chevron-up U+E070
+inline constexpr char kDown[] = "\xee\x81\xad";          // chevron-down U+E06D
+inline constexpr char kRunning[] = "\xee\x82\x80";       // circle-play U+E080
+inline constexpr char kBatch[] = "\xee\x8c\xbf";         // folders U+E33F
+inline constexpr char kFootLock[] = "\xee\x80\xbf";      // anchor U+E03F
+inline constexpr char kCleanUp[] = "\xee\x90\x92";       // sparkles U+E412
+
+// View and Light menus
+inline constexpr char kOrtho[] = "\xee\x8a\x91";        // frame U+E291
+inline constexpr char kStudio[] = "\xee\x8b\x98";       // lamp U+E2D8
+inline constexpr char kNoon[] = "\xee\x85\xb8";         // sun U+E178
+inline constexpr char kKeyLight[] = "\xee\x8b\x9a";     // lamp-desk U+E2DA
+inline constexpr char kRim[] = "\xee\x8a\x99";          // sun-dim U+E299
+inline constexpr char kDusk[] = "\xee\x85\xba";         // sunset U+E17A
+inline constexpr char kNight[] = "\xee\x84\x9e";        // moon U+E11E
+inline constexpr char kBackdrop[] = "\xee\x91\x8b";     // wallpaper U+E44B
+
+// Wave 3 and viewer build 20 (spec 08 sections 19-27, spec 09 build 20)
+inline constexpr char kBlocking[] = "\xee\x8d\x87";     // toy-brick U+E347
+inline constexpr char kTags[] = "\xee\x8d\x9c";         // tags U+E35C
+inline constexpr char kPin[] = "\xee\x89\x99";          // pin U+E259
+inline constexpr char kClips[] = "\xee\x8a\x9b";        // clapperboard U+E29B
+inline constexpr char kReference[] = "\xee\x83\xb6";    // image U+E0F6
+inline constexpr char kListing[] = "\xee\x8f\xa4";      // store U+E3E4
+inline constexpr char kBalance[] = "\xee\x88\x92";      // scale U+E212
+inline constexpr char kJumpArc[] = "\xee\x93\xb6";      // rabbit U+E4F6
+inline constexpr char kPull[] = "\xee\x87\xa6";         // hand-grab U+E1E6
+inline constexpr char kExpressionPack[] = "\xee\x84\xa9";  // package U+E129
+inline constexpr char kLipSync[] = "\xee\x95\x9a";      // audio-lines U+E55A
+inline constexpr char kCommunity[] = "\xee\x83\x99";    // folder-plus U+E0D9
+inline constexpr char kHeights[] = "\xee\x85\x8b";      // ruler U+E14B
+inline constexpr char kInWorld[] = "\xee\x87\xb3";      // earth U+E1F3
+inline constexpr char kWalkTest[] = "\xee\x88\x9e";     // person-standing U+E21E
+inline constexpr char kFaceCam[] = "\xee\x88\x85";      // webcam U+E205
+inline constexpr char kSeat[] = "\xee\x8b\x80";         // armchair U+E2C0
+
 }  // namespace vats::icon

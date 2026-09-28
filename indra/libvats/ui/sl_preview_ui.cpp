@@ -8,6 +8,8 @@
 #include <optional>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "imgui.h"
 #include "theme.h"
 #include "vats/retarget.h"
@@ -241,7 +243,7 @@ void App::draw_upload_meter() {
 
     const bool over = x.bytes >= kAnimMaxUploadBytes || x.seconds > kAnimMaxDuration;
     ImGui::BeginDisabled(!over || (!x.has_file && x.seconds <= kAnimMaxDuration));
-    if (ImGui::Button("Fit to 250 KB", ImVec2(-1, 0))) {
+    if (ImGui::Button((std::string(icon::kFit) + " Fit to 250 KB").c_str(), ImVec2(-1, 0))) {
         x.fit = fit_anim_budget(*rig_, anim_export_clip(), anim_export_options());
         x.keep_fit = false;
         const BudgetFit& f = *x.fit;
@@ -279,7 +281,7 @@ void App::draw_upload_meter() {
                               thousands(f.bytes).c_str(), f.world_m > 0 ? "50 mm anywhere on the body" : "5 deg / 50 mm");
                 hint(buf);
             }
-            if (ImGui::Button("Split into Parts...", ImVec2(-1, 0))) {
+            if (ImGui::Button((std::string(icon::kSplit) + " Split into Parts...").c_str(), ImVec2(-1, 0))) {
                 FitOptions fo;
                 fo.shape = export_shape();
                 if (doc_.path.empty()) message("Save the project first", "The parts are saved as projects beside it.");

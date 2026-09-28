@@ -7,6 +7,8 @@
 #include <cmath>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "vats/time_edit.h"
 #include "theme.h"
 
@@ -239,7 +241,7 @@ void App::add_time_actions(const std::function<void(const char*, Action)>& add) 
 }
 
 void App::draw_time_menu_items() {
-    if (ImGui::MenuItem("Retime Markers", nullptr, retime_on_)) set_retime(!retime_on_);  // TE-5 (retime_ui.cpp)
+    if (menu_item_icon(icon::kRetime, "Retime Markers", nullptr, retime_on_)) set_retime(!retime_on_);  // TE-5 (retime_ui.cpp)
     ImGui::SetItemTooltip("Double-click the ruler to drop a marker; drag a marker to retime the keys around it");
     ImGui::Separator();
     for (const char* id : {"insert_frames", "remove_range", "stretch_range"}) menu_item(id);

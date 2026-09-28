@@ -7,6 +7,8 @@
 #include <cmath>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "imgui.h"
 #include "theme.h"
 #include "vats/lint.h"
@@ -112,7 +114,8 @@ void App::draw_check_badge() {
     for (const LintFinding& f : check_ui_->findings) worst = std::min(worst, f.severity);
     ImGui::SameLine(0, 24);
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(severity_colour(worst)));
-    const bool open = ImGui::SmallButton(("Check: " + std::to_string(check_ui_->findings.size()) + "###check_badge").c_str());
+    const bool open = ImGui::SmallButton(
+        (std::string(icon::kWarning) + " Check: " + std::to_string(check_ui_->findings.size()) + "###check_badge").c_str());
     ImGui::PopStyleColor();
     ImGui::SetItemTooltip("Animation Check: problems Second Life will show. Click to see them.");
     if (open) show_check_ = true;
@@ -128,7 +131,7 @@ void App::draw_check_panel() {
     if (ui.due) hint("Checking once the animation is still...");
     else if (ui.findings.empty()) hint("No problems found.");
     else hint("Problems Second Life will show. Fix applies the suggested change as one undo step.");
-    if (ImGui::SmallButton("Check Again")) ui.due = ui.at_once = true;
+    if (icon_label_small_button(icon::kRefresh, "Check Again")) ui.due = ui.at_once = true;
     ImGui::SetItemTooltip("After changing the body, the bake shape or the worn avatar, which the check cannot see change");
     ImGui::Separator();
 
@@ -142,7 +145,7 @@ void App::draw_check_panel() {
         ImGui::TextWrapped("%s", f.message.c_str());
         ImGui::Indent(ImGui::GetFontSize() + ImGui::GetStyle().ItemSpacing.x);
         ImGui::BeginDisabled(!f.fix.apply || ui.due);  // stale until the re-check
-        if (ImGui::SmallButton("Fix")) {
+        if (icon_label_small_button(icon::kFix, "Fix")) {
             edit(f.fix.label, [&](Clip& c) { f.fix.apply(c); });
             status("Animation Check: " + f.fix.label);
             ui.seen = doc_.clip(), ui.due = ui.at_once = true;  // the result shows at once
@@ -154,7 +157,7 @@ void App::draw_check_panel() {
             if (int n = skel_.find(b); n >= 0) nodes.push_back(n);
         if (!nodes.empty()) {
             ImGui::SameLine();
-            if (ImGui::SmallButton("Select Bones")) {
+            if (icon_label_small_button(icon::kSelect, "Select Bones")) {
                 clear_selection();
                 for (int n : nodes) select(n, true);
             }
@@ -165,7 +168,7 @@ void App::draw_check_panel() {
             auto next = std::upper_bound(f.frames.begin(), f.frames.end(), here);
             const int to = next == f.frames.end() ? f.frames.front() : *next;
             ImGui::SameLine();
-            if (ImGui::SmallButton(("Go to Frame " + std::to_string(to)).c_str())) set_frame(to);
+            if (icon_label_small_button(icon::kGoTo, ("Go to Frame " + std::to_string(to) + "###goto").c_str())) set_frame(to);
             if (f.frames.size() > 1) ImGui::SetItemTooltip("%zu frames; click again for the next", f.frames.size());
         }
         ImGui::Unindent(ImGui::GetFontSize() + ImGui::GetStyle().ItemSpacing.x);
@@ -175,7 +178,7 @@ void App::draw_check_panel() {
     ImGui::EndChild();
 
     // Per-rule switches, remembered in the settings.
-    if (ImGui::Button("Rules...")) ImGui::OpenPopup("##check_rules");
+    if (icon_label_button(icon::kRules, "Rules...")) ImGui::OpenPopup("##check_rules");
     if (!settings_.check_off.empty()) {
         ImGui::SameLine();
         ImGui::TextDisabled("%zu switched off", settings_.check_off.size());

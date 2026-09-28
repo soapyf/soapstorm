@@ -6,8 +6,11 @@
 #include <cmath>
 #include <cstdio>
 #include <iterator>
+#include <utility>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "imgui.h"
 #include "vats/loop_assist.h"
 
@@ -36,9 +39,9 @@ void App::loop_assist_tick() {
 
 void App::draw_loop_assist_items() {
     ImGui::Separator();
-    if (ImGui::MenuItem("Find Best Loop Points...")) show_loop_assist_ = true;
+    if (menu_item_icon(icon::kFind, "Find Best Loop Points...")) show_loop_assist_ = true;
     ImGui::SetItemTooltip("Frame pairs whose poses match best, to loop between");
-    if (ImGui::MenuItem("Fit Loop to Beats...")) show_loop_assist_ = true;
+    if (menu_item_icon(icon::kStretch, "Fit Loop to Beats...")) show_loop_assist_ = true;
     ImGui::SetItemTooltip("Stretch the loop to a whole number of the audio track's beats");
     bool on = doc_.clip().loop_tangents;
     if (ImGui::MenuItem("Loop-Aware Tangents", nullptr, &on)) {
@@ -66,7 +69,7 @@ void App::draw_loop_assist_window() {
     ImGui::SetNextItemWidth(em * 7);
     ImGui::InputInt("Shortest Loop (frames)", &loop_min_length_);
     loop_min_length_ = std::clamp(loop_min_length_, 2, 3600);
-    if (ImGui::Button("Find")) {
+    if (icon_label_button(icon::kFind, "Find") || std::exchange(loop_find_now_, false)) {
         loop_candidates_ = find_loop_points(*rig_, clip, loop_min_length_, 8, shape());
         status(loop_candidates_.empty() ? "The animation is shorter than the shortest loop"
                                         : "Found " + std::to_string(loop_candidates_.size()) + " loop candidates");
@@ -91,7 +94,7 @@ void App::draw_loop_assist_window() {
             ImGui::Text("%.2f", k.distance);
             ImGui::TableNextColumn();
             ImGui::PushID(i);
-            if (ImGui::SmallButton("Use")) use = i;
+            if (icon_label_small_button(icon::kApply, "Use")) use = i;
             ImGui::PopID();
         }
         ImGui::EndTable();
@@ -138,7 +141,7 @@ void App::draw_loop_assist_window() {
         else
             ImGui::TextWrapped("No frame rate from 10 to 60 fps puts every beat on a whole frame.");
         ImGui::BeginDisabled(fit.frames == r.out - r.in);
-        if (ImGui::Button(("Stretch to " + std::to_string(fit.frames) + " Frames").c_str())) {
+        if (icon_label_button(icon::kStretch, ("Stretch to " + std::to_string(fit.frames) + " Frames").c_str())) {
             edit("Fit Loop to Beats", [&](Clip& c) { stretch_loop(c, fit.frames); });
             sync_actor_timing(doc_.project);
             status("The " + std::string(clip.loop ? "loop" : "animation") + " is now " + std::to_string(loop_beats_) + " beats long");
@@ -151,7 +154,7 @@ void App::draw_loop_assist_window() {
 
 // LP-8: View > Treadmill.
 void App::draw_treadmill_menu() {
-    ImGui::MenuItem("Show Treadmill", nullptr, &treadmill_on_);
+    if (menu_item_icon(icon::kTreadmill, "Show Treadmill", nullptr, treadmill_on_)) treadmill_on_ = !treadmill_on_;
     ImGui::SetItemTooltip("A ground grid that scrolls under the avatar at the chosen speed, for walking in place");
     ImGui::SeparatorText("Speed");
     char label[64];
@@ -178,7 +181,7 @@ void App::draw_treadmill_menu() {
 
     ImGui::SeparatorText("Match Cycle to Speed");
     ImGui::BeginDisabled(g.speed <= 0 || target <= 0);
-    if (ImGui::MenuItem("Stretch Time")) {
+    if (menu_item_icon(icon::kStretch, "Stretch Time")) {
         int frames = 0;
         edit("Match Cycle to Speed", [&](Clip& c) { frames = match_speed_by_time(c, g, target); });
         sync_actor_timing(doc_.project);

@@ -56,7 +56,7 @@ std::vector<std::vector<Xform>> App::pinned_ghost_poses() {
 void App::draw_pinned_ghost_menu() {
     const Project& p = doc_.project;
     ImGui::SeparatorText("Pinned Ghosts");
-    if (ImGui::MenuItem("Pin Ghost at This Frame")) pin_ghost(p.active, frame_);
+    if (menu_item_icon(icon::kPin, "Pin Ghost at This Frame")) pin_ghost(p.active, frame_);
     ImGui::SetItemTooltip("Keep a violet ghost of this frame's pose in the view while you work elsewhere");
     if (p.actors.size() > 1 && ImGui::BeginMenu("Ghost Other Actor at Frame")) {
         for (int i = 0; i < int(p.actors.size()); ++i)
@@ -72,7 +72,7 @@ void App::draw_pinned_ghost_menu() {
         ImGui::PopID();
     }
     if (remove >= 0) pinned_ghosts_.erase(pinned_ghosts_.begin() + remove);
-    if (pinned_ghosts_.size() > 1 && ImGui::MenuItem("Remove All Pinned Ghosts")) pinned_ghosts_.clear();
+    if (pinned_ghosts_.size() > 1 && menu_item_icon(icon::kDelete, "Remove All Pinned Ghosts")) pinned_ghosts_.clear();
 }
 
 }  // namespace vats

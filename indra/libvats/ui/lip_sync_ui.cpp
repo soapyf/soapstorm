@@ -9,6 +9,8 @@
 #include <sstream>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "imgui.h"
 #include "theme.h"
 #include "vats/lip_sync.h"
@@ -89,7 +91,7 @@ void App::draw_lip_sync(bool positions) {
     ImGui::SetItemTooltip("The loudest moment opens the mouth fully; sound this far below it keeps the mouth shut");
     const bool has_audio = clip.audio && audio_data_.frames() > 0;
     ImGui::BeginDisabled(!has_audio);
-    if (ImGui::Button("Lip Sync from Audio")) {
+    if (icon_label_button(icon::kLipSync, "Lip Sync from Audio")) {
         LipAudioOptions opt;
         opt.from = ui.from, opt.to = ui.to, opt.range_db = ui.range_db;
         LipSync ls = lip_sync_from_audio(audio_data_, clip.audio->offset, clip.fps, clip.end_frame, opt);
@@ -111,7 +113,7 @@ void App::draw_lip_sync(bool positions) {
     if (clip.lip_sync) {
         ImGui::Separator();
         ImGui::Text("%zu mouth shapes on frames %d to %d", clip.lip_sync->cues.size(), clip.lip_sync->from, clip.lip_sync->to);
-        if (ImGui::Button("Remove Lip Sync")) {
+        if (icon_label_button(icon::kDelete, "Remove Lip Sync")) {
             edit("Remove Lip Sync", [&](Clip& c) { remove_lip_sync(c, ui.table, ui.shapes); });
             status("Removed the lip sync: the mouth is as it was before");
         }

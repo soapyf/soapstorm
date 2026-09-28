@@ -7,6 +7,8 @@
 #include <string>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "imgui.h"
 #include "vats/tween.h"
 
@@ -70,14 +72,14 @@ void App::offer_pose_blend(Clip before, double frame) {
                             doc_.project.active, 100};
 }
 
-void App::draw_tween_controls() {
+void App::draw_tween_controls(bool compact) {
     const float em = ImGui::GetFontSize();
     ImGui::SameLine(0, 16);
     const bool none = selection_.empty() && handles_.empty();
     ImGui::BeginDisabled(none && modal_ != Modal::Tween);
     ImGui::SetNextItemWidth(em * 7);
-    const bool changed = ImGui::SliderFloat("##tween", &tween_pct_, float(kTweenMin * 100), float(kTweenMax * 100),
-                                            tween_relax_ ? "Relax %.0f%%" : "Tween %.0f%%");
+    const std::string fmt = tween_relax_ ? std::string(icon::kRelax) + " Relax %.0f%%" : std::string(icon::kTween) + " Tween %.0f%%";
+    const bool changed = ImGui::SliderFloat("##tween", &tween_pct_, float(kTweenMin * 100), float(kTweenMax * 100), fmt.c_str());
     const std::string k = key_hint("tween");
     std::string tip = tween_relax_ ? "Relax: pull the selected items' keys at this frame toward the curve their neighbouring "
                                      "keys make (100% = on it)"
@@ -95,7 +97,7 @@ void App::draw_tween_controls() {
         tween_on_.clear();
     }
     ImGui::SameLine();
-    ImGui::Checkbox("Relax", &tween_relax_);
+    ImGui::Checkbox((std::string(icon::kRelax) + (compact ? "" : " Relax") + "###relax").c_str(), &tween_relax_);  // icon only when narrow
     ImGui::SetItemTooltip("Relax: the slider pulls existing keys toward the curve instead of placing a breakdown");
     ImGui::EndDisabled();
     tween_row_end_ = ImGui::GetItemRectMax().x;  // the timeline bar's width with names, without the passing Blend
@@ -110,7 +112,7 @@ void App::draw_tween_controls() {
     ImGui::SameLine(0, 16);
     if (ImGui::GetContentRegionAvail().x < em * 7) ImGui::NewLine();  // past the panel's edge: the row below
     ImGui::SetNextItemWidth(em * 7);
-    const bool moved = ImGui::SliderFloat("##blend", &b.pct, 0, 150, "Blend %.0f%%");
+    const bool moved = ImGui::SliderFloat("##blend", &b.pct, 0, 150, (std::string(icon::kBlend) + " Blend %.0f%%").c_str());
     ImGui::SetItemTooltip("Blend the pose just applied with the pose before it: 0%% = as before, 100%% = as applied, "
                           "150%% = pushed further");
     if (ImGui::IsItemHovered() || ImGui::IsItemActive()) b.until = ImGui::GetTime() + kBlendSeconds;
@@ -135,12 +137,11 @@ void App::draw_tween_controls() {
 
 // TW-3: the graph toolbar's Ease menu.
 void GraphEditor::draw_ease_menu(GraphContext& ctx) {
-    if (ImGui::Button("Ease")) {
+    if (icon_button("ease", icon::kEase, "Ease: easing presets for the selected keys; shapes the segment after each "
+                                         "selected key, up to the last selected key of a curve")) {
         if (selection_.empty()) ctx.status("Select keys in the graph first");
         else ImGui::OpenPopup("##ease");
     }
-    ImGui::SetItemTooltip("Easing presets for the selected keys: shapes the segment after each selected key, up to the "
-                          "last selected key of a curve");
     if (!ImGui::BeginPopup("##ease")) return;
     static const char* const dirs[] = {"Ease In", "Ease Out", "Ease In-Out"};
     static const char* const shapes[] = {"Quad", "Cubic", "Sine", "Back", "Elastic", "Bounce"};

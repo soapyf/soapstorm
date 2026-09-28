@@ -74,6 +74,9 @@ An orthographic view has no perspective: parts of the body the same size look th
 far from the camera they are, and parallel lines stay parallel. Use it to check symmetry, a pose's
 silhouette, or where a hand is against the body, from **Front**, **Right** or **Top**.
 
+![The waving avatar from the front in an orthographic view, with no floor grid](images/interface/orthographic.png)
+*The [[First steps]] example at frame 10, **Front** and orthographic.*
+
 - **View → Orthographic** or **Num 5** turns it on; the menu item is ticked and the status bar shows
   **Ortho**. The same key or item turns it off. The camera keeps its place and its direction.
 - At the orbit target the view is as tall as the perspective view, so turning it on keeps the framing.
@@ -133,10 +136,12 @@ The play controls are icons only; hover one for its name and key:
 
 The other buttons show an icon and their name: **Select** (an arrow pointer), **Move** (four arrows),
 **Rotate** (a circling arrow), **Scale** (a corner with a dot), the axes button (**Local** with a box,
-**World** with a globe, **Gimbal** with three axes), **IK / FK** (a bone) and **Set Key** (a diamond with
-a plus). Their keys are in the tooltips. The active tool is highlighted. When the **Timeline** panel is too narrow
-for the names (a window about 1200 pixels wide), these buttons show their icons only, so the **Tween** slider and
-**Relax** stay in view.
+**World** with a globe, **Gimbal** with three axes), **IK / FK** (a bone), **Mirror** (two halves either side of
+a dashed line), **Retime** (a stopwatch) and **Set Key** (a diamond with a plus). Their keys are in the tooltips.
+The active tool is highlighted. The **Tween** slider shows a bar between two boxes, or a curve through two points
+while **Relax** is ticked; **Blend** shows two overlapping circles. When the **Timeline** panel is too narrow for
+the names (a window about 1200 pixels wide), these buttons and **Relax** show their icons only, so the **Tween**
+slider and **Blend** stay in view.
 
 ### Menus
 
@@ -150,6 +155,9 @@ for the names (a window about 1200 pixels wide), these buttons show their icons 
 | **Select** | **Select All**, **Select Keyed on Frame**, **Select All Keyed**, **Select None**, parent, child and siblings |
 | **Tools** | the four tools, the axes, IK and pins, **Clean Up Foot Sliding...**, **Loop Tools**, **Hand Poser**, **Dynamics...**, **Idle Layer...**, **Overlap...**, **Auto-Balance...**, **Jump Arc...**, **Ragdoll...**, **Face...**, **Actors (Couples and Groups)...**, **Motion Capture...**, **Split Dance at Beats...**, **Animation Check...**, **Motion Quality...** |
 | **Help** | **Help Contents**, **Controls**, **Welcome**, **About Viewport Avatar Toolset** |
+
+![The waving avatar lit by Light → Dusk, a low warm light, in front of the grey Plain Backdrop wall and floor](images/interface/light-dusk.png)
+*The **Dusk** preset with **Plain Backdrop** on.*
 
 A menu item that cannot be used now is greyed; hover over it to see why. The key shown beside an item
 is the key in the active preset.

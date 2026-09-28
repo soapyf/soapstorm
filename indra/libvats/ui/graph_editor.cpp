@@ -336,17 +336,17 @@ void GraphEditor::draw_toolbar(GraphContext& ctx) {
             edit(ctx, t.label, [&](Clip& c) { apply_tangent(c, sel, t.t); });
         }
     }
-    place(ImGui::CalcTextSize("Ease").x + ImGui::GetStyle().FramePadding.x * 2);
+    place(icon_button_width());
     draw_ease_menu(ctx);
     sep();
     if (button("fit_values", icon::kFitValues, "Fit Values: fit the value range to the visible curves")) fit_values(ctx);
     if (button("delete", icon::kDelete, "Delete (Delete): delete the selected keys")) delete_selected(ctx);
     // The less-used tools in one dropdown, so the toolbar stays one row at 1200 px (08 UI).
     {
-        const float w = ImGui::CalcTextSize("More").x + ImGui::GetFrameHeight() + ImGui::GetStyle().FramePadding.x * 2;
+        const float w = ImGui::CalcTextSize(icon::kMore).x + ImGui::GetFrameHeight() + ImGui::GetStyle().FramePadding.x * 2;
         place(w);
         ImGui::SetNextItemWidth(w);
-        if (ImGui::BeginCombo("##more", "More", ImGuiComboFlags_HeightLargest)) {
+        if (ImGui::BeginCombo("##more", icon::kMore, ImGuiComboFlags_HeightLargest)) {
             if (menu_item_icon(icon::kEulerFilter, "Euler Filter")) {
                 std::vector<std::string> tracks;
                 for (int c : shown_channels())
@@ -363,7 +363,7 @@ void GraphEditor::draw_toolbar(GraphContext& ctx) {
                 }
             }
             ImGui::SetItemTooltip("Euler Filter: remove 360-degree jumps from rotation curves");
-            if (menu_item_icon(nullptr, "Filter Curves...")) open_filter(ctx);
+            if (menu_item_icon(icon::kFilter, "Filter Curves...")) open_filter(ctx);
             ImGui::SetItemTooltip("Filter Curves: calm jitter on the shown curves with One-Euro, Savitzky-Golay or Butterworth, with a live preview");
             ImGui::Separator();
             if (menu_item_icon(icon::kFlipTime, "Flip Time") && need_keys()) {
@@ -381,19 +381,19 @@ void GraphEditor::draw_toolbar(GraphContext& ctx) {
             ImGui::SeparatorText("Tag keys");  // 08 KT-1
             draw_tag_menu_items(ctx);
             ImGui::SeparatorText("Snapshot curves");  // PT-4
-            if (menu_item_icon(nullptr, "Snapshot")) {
+            if (menu_item_icon(icon::kSnapshot, "Snapshot")) {
                 snapshot_curves(ctx.clip);
                 ctx.status("Snapshot taken: the grey curves stay until cleared");
             }
             ImGui::SetItemTooltip("Snapshot Curves: keep a grey copy of every curve to compare against");
-            if (menu_item_icon(nullptr, "Swap", nullptr, false, bool(buffer_.curves)))
+            if (menu_item_icon(icon::kSwap, "Swap", nullptr, false, bool(buffer_.curves)))
                 edit(ctx, "Swap Buffer Curves", [&](Clip& c) { buffer_.swap(c); });
             ImGui::SetItemTooltip("Swap: the grey curves become the live ones, and the live ones grey (one undo step)");
-            if (menu_item_icon(nullptr, "Clear", nullptr, false, bool(buffer_.curves))) buffer_.clear();
+            if (menu_item_icon(icon::kClear, "Clear", nullptr, false, bool(buffer_.curves))) buffer_.clear();
             ImGui::SetItemTooltip("Clear the grey snapshot curves");
             ImGui::EndCombo();
         }
-        ImGui::SetItemTooltip("Euler Filter, Filter Curves, Flip Time and Values, and the snapshot curves");
+        ImGui::SetItemTooltip("More: Euler Filter, Filter Curves, Flip Time and Values, and the snapshot curves");
     }
     sep();
     place(ImGui::GetFontSize() * 6);

@@ -13,6 +13,8 @@
 #include <sstream>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "vats/anim_file.h"
 #include "vats/curve_ops.h"
 #include "vats/file_library.h"
@@ -230,7 +232,7 @@ void App::draw_file_library() {
         const std::string projects = ".vat";
 #endif
         ImGui::SetItemTooltip("List the %s files of another folder here too", anim ? ".anim" : projects.c_str());
-        if (!anim && ImGui::Button("Add Community Folder...")) {  // 08 CF: a clone of a community content repo
+        if (!anim && icon_label_button(icon::kCommunity, "Add Community Folder...")) {  // 08 CF: a clone of a community content repo
             host_.open_folder_dialog("", [lib = file_lib_](std::vector<std::string> files) {
                 if (files.empty()) return;
                 std::lock_guard<std::mutex> lock(lib->mutex);

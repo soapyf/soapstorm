@@ -6,6 +6,8 @@
 #include <optional>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "imgui.h"
 #include "theme.h"
 #include "vats/batch_retarget.h"
@@ -63,7 +65,7 @@ void App::draw_batch_retarget() {
         ImGui::SameLine(label_w);
     };
     label("Folder");
-    if (ImGui::Button("Choose...")) host_.open_folder_dialog(ui.folder, [p = batch_ui_](std::vector<std::string> files) {
+    if (icon_label_button(icon::kOpen, "Choose...")) host_.open_folder_dialog(ui.folder, [p = batch_ui_](std::vector<std::string> files) {
         if (files.empty()) return;
         std::lock_guard<std::mutex> lock(p->mutex);
         p->chosen = files[0];
@@ -91,7 +93,7 @@ void App::draw_batch_retarget() {
     retarget_settings_ui(ui.opt.retarget, ui.opt.fit, ui.opt.lock_feet);
 
     ImGui::BeginDisabled(ui.folder.empty());
-    if (ImGui::Button("Retarget All") || std::exchange(ui.run, false)) guarded(ui.folder, [&] {
+    if (icon_label_button(icon::kBatch, "Retarget All") || std::exchange(ui.run, false)) guarded(ui.folder, [&] {
         ui.opt.retarget.shape = ui.opt.fit.shape = export_shape();
         // ponytail: runs on the UI thread, one file after another; a worker and a progress bar when folders get big.
         ui.report = batch_retarget(skel_, *rig_, ui.folder, ui.opt, [](const std::string& path, const std::string& data, std::string& why) {
@@ -108,7 +110,7 @@ void App::draw_batch_retarget() {
     ImGui::SetItemTooltip("Every .bvh, .fbx, .gltf and .glb in the folder, each into the folder's retargeted/ folder");
     if (ui.report) {
         ImGui::SameLine();
-        if (ImGui::Button("Open Output Folder")) host_.open_url(folder_url(ui.report->out_dir));
+        if (icon_label_button(icon::kOpen, "Open Output Folder")) host_.open_url(folder_url(ui.report->out_dir));
     }
 
     if (ui.mixamo_notice) {  // RT-14: once, never in the way

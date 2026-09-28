@@ -80,10 +80,10 @@ The buttons along the top show icons only; hover one for its name, its key in yo
 | **Frame All** | four corner brackets |
 | **Frame Selected** | four corner brackets round a dot |
 | **Auto**, **Spline**, **Plateau**, **Linear**, **Flat**, **Stepped**, **Break**, **Unify** | a small drawing of each curve shape (see the table in "Shaping curves: tangents" below) |
-| **Ease** | the word **Ease**; opens the easing presets (see "Easing presets" below) |
+| **Ease** | a rising curve on two axes; opens the easing presets (see "Easing presets" below) |
 | **Fit Values** | two arrows pointing away from a line |
 | **Delete** | a bin |
-| **More** | the word **More** and an arrow; a drop-down with **Euler Filter**, **Filter Curves...**, **Flip Time**, **Flip Values**, under **Tag keys** the key tags **Extreme**, **Breakdown**, **Hold** and **No Tag** for the selected keys (see [[Keys and timeline#Blocking and key tags]]) and, under **Snapshot curves**, **Snapshot**, **Swap** and **Clear** (see "Buffer curves" below) |
+| **More** | three dots and an arrow; a drop-down with **Euler Filter**, **Filter Curves...** (a funnel), **Flip Time**, **Flip Values**, under **Tag keys** the key tags **Extreme**, **Breakdown**, **Hold** and **No Tag** for the selected keys (see [[Keys and timeline#Blocking and key tags]]) and, under **Snapshot curves**, **Snapshot** (a camera), **Swap** (two arrows) and **Clear** (an eraser) (see "Buffer curves" below) |
 
 Then **Snap frames** and the **Frame** and **Value** boxes. The toolbar is one row down to a window about 1200 pixels wide; narrower, it wraps.
 

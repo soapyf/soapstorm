@@ -8,6 +8,8 @@
 #include <sstream>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "imgui.h"
 #include "theme.h"
 #include "vats/face_anim.h"
@@ -149,7 +151,7 @@ void App::draw_face_panel() {
     ImGui::SetItemTooltip("The mapping from face shapes to bones. Your own heads are JSON files in the heads folder;\n"
                           "Motion Capture uses the same head.");
     ImGui::BeginDisabled(face_heads_dir().empty());
-    if (ImGui::Button("New Head")) {
+    if (icon_label_button(icon::kAdd, "New Head")) {
         std::error_code ec;
         std::filesystem::create_directories(u8path(face_heads_dir()), ec);
         std::string name = "my head";
@@ -291,7 +293,7 @@ void App::draw_face_panel() {
         ImGui::InputTextWithHint("##facepose", "Pose name", ui.pose_name, sizeof ui.pose_name);
         ImGui::SameLine();
         ImGui::BeginDisabled(!ui.pose_name[0]);
-        if (ImGui::Button("Save Face Pose")) {
+        if (icon_label_button(icon::kAddToLibrary, "Save Face Pose")) {
             LibraryItem it = make_face_pose(clip, ui.table, frame, pos);
             it.name = ui.pose_name;
             store_library_item(std::move(it));
@@ -300,7 +302,7 @@ void App::draw_face_panel() {
         }
         ImGui::EndDisabled();
         ImGui::SetItemTooltip("Keep this frame's face in the pose library; apply it like any pose");
-        if (ImGui::Button("Export Expression Pack...")) ImGui::OpenPopup("Export Expression Pack");
+        if (icon_label_button(icon::kExpressionPack, "Export Expression Pack...")) ImGui::OpenPopup("Export Expression Pack");
         ImGui::SetItemTooltip("One short face-only .anim per expression, for an expression HUD");
         draw_expression_pack(ui.table, pos);  // expression_pack_ui.cpp
     }
@@ -370,7 +372,7 @@ void App::draw_face_panel() {
     if (ImGui::CollapsingHeader("Blinks, Eye Darts and Look-At")) {
         hint("A layer that blinks, darts the eyes and looks at a target, baked onto the eyes, the eyelids and the head.");
         if (!clip.face_layer) {
-            if (ImGui::Button("Add Layer")) edit("Face Layer", [](Clip& c) { c.face_layer = FaceLayer{}; });
+            if (icon_label_button(icon::kAddLayer, "Add Layer")) edit("Face Layer", [](Clip& c) { c.face_layer = FaceLayer{}; });
             ImGui::SetItemTooltip("Off until you add it; nothing changes until you bake");
         } else {
             FaceLayer& L = *clip.face_layer;
@@ -447,7 +449,7 @@ void App::draw_face_panel() {
             ImGui::EndDisabled();
 
             ImGui::Separator();
-            if (ImGui::Button(L.baked ? "Re-bake" : "Bake")) {
+            if (icon_label_button(icon::kBake, L.baked ? "Re-bake" : "Bake")) {
                 const LookTarget look = look_target(L);
                 edit("Bake Face Layer", [&](Clip& c) { bake_face_layer(c, *rig_, export_shape(), ui.table, pos, look); });
                 status(!L.look.empty() && !look ? "Baked the face layer; the look-at target was not found, so it looks ahead"
@@ -481,7 +483,7 @@ void App::draw_face_panel() {
         ImGui::SliderFloat("##lookweight", &ui.tool_weight, 0, 1, "%.2f");
         ImGui::SetItemTooltip("How far from the animation towards the target: 1 looks straight at it");
         ImGui::BeginDisabled(selection_.empty());
-        if (ImGui::Button("Look at Target")) {
+        if (icon_label_button(icon::kLookAt, "Look at Target")) {
             LookAtOptions opt;
             opt.from = ui.tool_from, opt.to = ui.tool_to, opt.max_turn = ui.tool_max, opt.weight = ui.tool_weight;
             const LookTarget look = look_target(t);

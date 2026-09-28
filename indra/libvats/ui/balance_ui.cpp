@@ -6,6 +6,8 @@
 #include <cstdio>
 
 #include "app.h"
+#include "icon_button.h"
+#include "icons.h"
 #include "imgui.h"
 #include "vats/balance.h"
 #include "vats/edit.h"
@@ -91,7 +93,7 @@ void App::draw_auto_balance_panel() {
     ImGui::SetItemTooltip("The hips' correction is averaged over this many frames each side");
     ImGui::Checkbox("Counter-Lean the Torso", &balance_.counter_lean);
     ImGui::SetItemTooltip("mTorso also leans back towards the feet, so the hips move less");
-    if (ImGui::Button("Balance")) {
+    if (icon_label_button(icon::kBalance, "Balance")) {
         AutoBalanceOptions opt = balance_;
         opt.shape = export_shape();
         std::string report;
@@ -142,7 +144,7 @@ void App::draw_jump_arc_panel() {
         const double dz = curve_offset(clip, "mPelvis", jump_.landing).z - curve_offset(clip, "mPelvis", jump_.takeoff).z;
         ImGui::TextDisabled("%.2f s in the air, the hips rise %.1f cm", t, jump_apex(t, dz, jump_.gravity) * 100);
     }
-    if (ImGui::Button("Apply Jump Arc")) {
+    if (icon_label_button(icon::kJumpArc, "Apply Jump Arc")) {
         std::string msg;
         bool ok = false;
         edit("Jump Arc", [&](Clip& c) { ok = jump_arc(c, jump_, msg); });  // a refusal changes nothing: no step
@@ -159,7 +161,7 @@ void App::draw_ik_target_properties(int limb) {
     Clip& clip = doc_.clip();
     float pull = float(ik_pull(clip, l));
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Pull");
+    ImGui::TextUnformatted((std::string(icon::kPull) + " Pull").c_str());
     ImGui::SameLine(ImGui::GetFontSize() * 5.5f);
     ImGui::SetNextItemWidth(-1);
     const bool changed = ImGui::SliderFloat("##ik_pull", &pull, 0.f, 1.f, "%.2f");

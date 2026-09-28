@@ -865,7 +865,11 @@ bool App::show_window(const std::string& name) {
         {"batch-retarget", &App::show_batch_retarget_}, {"foot-lock", &App::show_foot_lock_},
         {"auto-balance", &App::show_auto_balance_}, {"jump-arc", &App::show_jump_arc_},
         {"reference", &App::show_reference_}, {"listing-media", &App::show_listing_},
-        {"face-cam", &App::face_cam_}};
+        {"face-cam", &App::face_cam_},
+
+        {"check", &App::show_check_},      {"idle", &App::show_idle_},           {"overlap", &App::show_overlap_},
+        {"face", &App::show_face_},        {"loop-assist", &App::show_loop_assist_}, {"sl-preview", &App::sl_preview_},
+        {"treadmill", &App::treadmill_on_}};
     static const std::map<std::string, const char*> panels = {
         {"graph", "Graph"}, {"properties", "Properties"}, {"timeline", "Timeline"}, {"bones", "Bones"}, {"inventory", "Inventory"},
         {"picker", "Picker"}};
@@ -878,6 +882,9 @@ bool App::show_window(const std::string& name) {
     if (name == "motion-path") motion_path_.on = true, known = true;                        // 08 MP
     if (name == "transition") show_transition_ = true, transition_.to = int(std::round(frame_)), known = true;  // 08 PM-3
     if (name == "match-poses") open_match_poses(doc_.clip(), "a copy of the clip"), known = true;  // 08 PM-1, for screenshots
+    if (name == "idle") idle_selected_ = 0;  // the first layer, if any, with its settings (clamped when there is none)
+    if (name == "loop-assist") loop_find_now_ = true;  // with Find pressed, so the candidates show
+    if (name == "sit") show_actors_ = sit_scroll_ = true, known = true;  // Actors, scrolled to Sit systems
     if (name == "insert-frames" || name == "stretch-range") time_prompt_ = name == "insert-frames" ? 1 : 2, known = true;
     return known;
 }

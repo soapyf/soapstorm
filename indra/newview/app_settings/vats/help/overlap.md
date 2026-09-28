@@ -18,6 +18,9 @@ once. It edits keys directly, without a simulation; for a simulated swing, use t
 3. Set **Bones**, **Delay** and **Falloff** (see Configuration below).
 4. Press **Apply Overlap**. It is one undo step.
 
+![The Overlap window with mShoulderRight selected: Chain mShoulderRight, mElbowRight, mWristRight, Bones 3, Delay 1.0 frames, Falloff 1.00 and the Apply Overlap button](images/overlap/overlap-window.png)
+*The waving arm of the [[First steps]] example, ready for overlap down its three bones.*
+
 The first bone of the chain keeps its keys. Bone 2 plays **Delay** frames late, bone 3 twice that, and so
 on. A bone with no rotation keys has nothing to delay and is left alone. The delayed bones are sampled on
 every frame and baked as linear keys, thinned to within 0.1 degrees, with at most two seconds between

@@ -13,6 +13,9 @@ expression HUD.
 Open the window with **Tools → Face...**. It has four sections: **Expression**, **Lip Sync** (see [[Lip sync]]),
 **Blinks, Eye Darts and Look-At**, and **Look At**.
 
+![The Face window: the Head list on SL default head with New Head, Folder and Reload, Move face bones, the Expression section with its groups from Eyes to VRM presets and Save Face Pose, and the Blinks, Eye Darts and Look-At and Look At sections closed](images/face-animation/face-window.png)
+*The **Face** window with the SL default head.*
+
 > **Note:** Face bones only show in Second Life on a mesh head rigged to the Bento face bones.
 
 ### Setting an expression

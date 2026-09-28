@@ -62,8 +62,8 @@ void App::blocking_after_edit() {
 void App::draw_blocking_button(bool compact) {
     const std::string tip = "Blocking: new keys are Stepped, so poses hold until the next key. Convert Blocking to "
                             "Spline (right-click the timeline) smooths them when the blocking is done";
-    const bool pressed = compact ? icon_button("Blocking", icon::kStop, tip, blocking_)
-                                 : icon_label_button(icon::kStop, "Blocking", tip, blocking_);
+    const bool pressed = compact ? icon_button("Blocking", icon::kBlocking, tip, blocking_)
+                                 : icon_label_button(icon::kBlocking, "Blocking", tip, blocking_);
     if (pressed) {
         blocking_ = !blocking_;
         status(blocking_ ? "Blocking on: new keys are Stepped" : "Blocking off: new keys follow the key before them");
@@ -83,7 +83,7 @@ void App::draw_key_tag_menu_items() {
     ImGui::SetItemTooltip("Auto tangents on every key (IK switches stay stepped); each pair of Hold keys becomes a "
                           "moving hold that drifts 1\xC2\xB0 towards the next pose. Turns Blocking off");
     const bool none = selection_.empty() && handles_.empty();
-    if (ImGui::BeginMenu("Tag Keys Here", !none)) {
+    if (begin_menu_icon(icon::kTags, "Tag Keys Here", !none)) {
         auto tag_here = [&](KeyTag tag) {
             int n = 0;
             const std::vector<std::string> tracks = selected_tracks();
