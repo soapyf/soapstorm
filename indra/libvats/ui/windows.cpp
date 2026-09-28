@@ -864,7 +864,8 @@ bool App::show_window(const std::string& name) {
         {"split-dance", &App::show_split_dance_}, {"planner", &App::show_planner_},
         {"batch-retarget", &App::show_batch_retarget_}, {"foot-lock", &App::show_foot_lock_},
         {"auto-balance", &App::show_auto_balance_}, {"jump-arc", &App::show_jump_arc_},
-        {"reference", &App::show_reference_}, {"listing-media", &App::show_listing_}};
+        {"reference", &App::show_reference_}, {"listing-media", &App::show_listing_},
+        {"face-cam", &App::face_cam_}};
     static const std::map<std::string, const char*> panels = {
         {"graph", "Graph"}, {"properties", "Properties"}, {"timeline", "Timeline"}, {"bones", "Bones"}, {"inventory", "Inventory"},
         {"picker", "Picker"}};

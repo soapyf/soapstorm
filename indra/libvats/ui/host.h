@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -50,8 +51,9 @@ struct FileFilter {
 // The chosen paths; empty when cancelled or failed.
 using FilesChosen = std::function<void(std::vector<std::string> files)>;
 
-// The two scene targets: the 3D view, and the offscreen picture thumbnails are rendered into.
-enum class SceneTarget { View, Thumbnail };
+// The scene targets: the 3D view, the offscreen picture thumbnails are rendered into, and the face cam's own
+// offscreen picture (spec 09 build 20, item 53), kept apart so a thumbnail in the same frame never overwrites it.
+enum class SceneTarget { View, Thumbnail, FaceCam };
 
 class Host {
 public:
@@ -157,6 +159,45 @@ public:
         int upload_cost = -1;      // L$ per animation upload on this grid, -1 = not known
     };
     virtual Grid grid() const { return {}; }
+
+    // --- Your avatar as the world plays it (the viewer, spec 09 build 20) --------------------------------
+    // Item 47, View > As It Plays In-World: own is what the project claims as it exports (each joint it keys and the
+    // priority it plays at there, plan_clip_from_clip). While set, the host lets the avatar's other motions run (default
+    // motions, the AO, avatar physics) and shows the pose only on those joints, each at its priority, so they blend as
+    // they will in-world. Called again whenever the claims change; null turns it off (the editor's own pose on every
+    // joint again). False: this host has no such mode (the app; its Priority Planner covers files).
+    virtual bool play_in_world(const PlanClip* own) { (void)own; return false; }
+    // Item 48, Tools > Loop Tools > Test as My Walk / Run: 0 off, 1 walk, 2 run. While on, the host lets the avatar go
+    // (no ground sit, movement allowed) and shows the clip, as in play_in_world, whenever the avatar walks (or runs)
+    // instead of the walk its AO or the default motions would play. False: this host cannot.
+    virtual bool test_walk(int state) { (void)state; return false; }
+    struct Locomotion {
+        bool moving = false;  // the tested walk or run is playing now
+        double speed = 0;     // the avatar's ground speed, m/s
+    };
+    virtual Locomotion locomotion() const { return {}; }
+
+    // --- The seat (the viewer, items 4 and 46) --------------------------------------------------------------
+    // Where your avatar sits on an in-world object, in the furniture root prim's frame (the frame sit systems use).
+    struct Seat {
+        bool seated = false;
+        std::string name;   // the object's name
+        Vec3 pos;           // metres
+        Quat rot;
+        int contact = 0;    // automatic contact against its surfaces: 1 you created every part, -1 not, 0 not known yet
+    };
+    virtual Seat seat() const { return {}; }
+    // Finds out whether you created every part of the seat (Seat::contact), through the viewer's own selection.
+    virtual void check_seat() {}
+    // One ray-hit point on the seat's own object, from `from` to `to` in the edited actor's space; never its geometry.
+    // automatic: a ray the editor chose, not a click; the host refuses it unless Seat::contact is 1.
+    virtual bool seat_point(const Vec3& from, const Vec3& to, bool automatic, Vec3& hit) {
+        (void)from, (void)to, (void)automatic, (void)hit;
+        return false;
+    }
+    // Item 53, the face cam: your own avatar's shape sliders (avatar_lad.xml visual param id -> weight), for drawing
+    // your face shape on the Linden body. Shown only, never stored. Empty: the SL default shape (the app).
+    virtual std::map<int, float> shape_params() const { return {}; }
 
     // --- Look (the viewer) -----------------------------------------------------------------------
     // The host's own colours (the viewer's skin), asked every frame: true replaces the colour theme with them,

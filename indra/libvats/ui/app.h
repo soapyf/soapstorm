@@ -1033,6 +1033,28 @@ private:
     std::vector<Xform> sl_ghost_;          // your pose's globals while the preview shows SL's; empty = no preview
     Pose sl_pose_;                         // SL's pose, for Host::drive_avatar while sl_ghost_ is set
     std::shared_ptr<struct SlExport> sl_export_;  // defined in sl_preview_ui.cpp
+    // --- the world tools of the viewer (viewer_tools_ui.cpp; spec 09 build 20, items 47, 48, 4 and 46) ---
+    void viewer_tools_tick();      // from frame(), before evaluate(): the claims sent, the walk test, the armed click
+    void set_in_world(bool on);    // View > As It Plays In-World
+    void start_walk_test(int state);  // 0 stops; 1 walk, 2 run
+    void draw_in_world_window();   // who wins each joint
+    void draw_walk_test_window();
+    void draw_seat_section();      // the Actors panel's sit section: the seat you sit on
+    bool seat_click(ImVec2 m);     // the viewport's click while Place on Furniture Point is armed; true = taken
+    // Moves the selected bone (or IK handle's limb) to p, the edited actor's space: its IK target where it has one, else
+    // held there by a world pin. One undo step per call. False with why when nothing could be placed.
+    bool place_selected_at(const Vec3& p, std::string& why);
+    void settle_on_seat();         // automatic contact: each selected bone straight down onto the seat
+    bool in_world_ = false;
+    std::shared_ptr<struct InWorldUi> in_world_ui_;  // defined in viewer_tools_ui.cpp
+    int walk_test_ = 0;            // 0 off, 1 walk, 2 run
+    bool walk_was_in_world_ = false;
+    bool seat_pick_ = false;       // Place on Furniture Point: the next click on the world picks the point
+    // --- the face cam (face_cam_ui.cpp; spec 09 build 20, item 53) ---
+    void draw_face_cam();
+    bool mocap_live(Clip& live, std::map<std::string, double>& arkit);  // mocap_ui.cpp
+    bool face_cam_ = false;        // View > Face Cam (not saved)
+    std::shared_ptr<struct FaceCamUi> face_cam_ui_;  // defined in face_cam_ui.cpp
     // --- posing assists (pose_tools_ui.cpp; spec 08 PT) ---
     bool mirror_live_ = false;  // PT-1: the timeline's Mirror toggle, off at every start
     void mirror_edit(const std::vector<std::string>& tracks);  // after a gizmo, hand-poser or IK edit keyed tracks

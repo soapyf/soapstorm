@@ -77,6 +77,8 @@ add_library(vats_ui STATIC
     retime_ui.cpp
     batch_retarget_ui.cpp
     priority_plan_ui.cpp
+    viewer_tools_ui.cpp
+    face_cam_ui.cpp
     sl_preview_ui.cpp
     settings.cpp
     theme.cpp

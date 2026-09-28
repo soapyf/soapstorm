@@ -62,6 +62,7 @@ void App::save_sit_lines(const std::string& path) {
 }
 
 void App::draw_sit_export() {
+    if (host_.world_view()) draw_seat_section();  // spec 09 build 20, items 4 and 46
     ImGui::SeparatorText("Sit systems (furniture)");
     const SitRoot root = read_sit_root(doc_.project);
     // Typed values apply on Enter, as one undo step for every actor.

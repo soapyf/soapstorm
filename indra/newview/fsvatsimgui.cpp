@@ -370,9 +370,28 @@ namespace
         }
     }
 
+    // The walk test (build 20, item 48): the viewer's movement keys without Ctrl or Alt (W, A, S, D, Q, E, C, F, the
+    // arrows, Page Up/Down, Home, Space), so you walk with your usual keys; the editor keeps every other key.
+    bool isMovementKey(KEY key, MASK mask)
+    {
+        if (mask & (MASK_CONTROL | MASK_ALT))
+        {
+            return false;
+        }
+        switch (key)
+        {
+            case 'W': case 'A': case 'S': case 'D': case 'Q': case 'E': case 'C': case 'F': case ' ':
+            case KEY_LEFT: case KEY_RIGHT: case KEY_UP: case KEY_DOWN: case KEY_PAGE_UP: case KEY_PAGE_DOWN: case KEY_HOME:
+            case KEY_PAD_LEFT: case KEY_PAD_RIGHT: case KEY_PAD_UP: case KEY_PAD_DOWN: case KEY_PAD_PGUP: case KEY_PAD_PGDN:
+                return true;
+            default:
+                return false;
+        }
+    }
+
     // Keys (see the header): an ImGui text field first; then LLUI's keyboard focus (the chat bar, a floater);
-    // Alt camera keys are the viewer's; the rest go to ImGui while a VATs window holds the keyboard, and all
-    // of them while the editor is open.
+    // Alt camera keys are the viewer's (and, during the walk test, its movement keys); the rest go to ImGui while a
+    // VATs window holds the keyboard, and all of them while the editor is open.
     bool imguiGetsKeys(KEY key, MASK mask)
     {
         if (!sCtx)
@@ -384,7 +403,7 @@ namespace
         {
             return true;
         }
-        if (gFocusMgr.getKeyboardFocus() || isAltCameraKey(key, mask))
+        if (gFocusMgr.getKeyboardFocus() || isAltCameraKey(key, mask) || (FSVATsEditor::walking() && isMovementKey(key, mask)))
         {
             return false;
         }

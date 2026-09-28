@@ -1444,6 +1444,13 @@ void App::draw_menus() {
         ImGui::SetItemTooltip("A picture or picture sequence behind the avatar, to pose or animate over");
         ImGui::MenuItem("Preview as SL Plays It", nullptr, &sl_preview_);
         ImGui::SetItemTooltip("Plays the exported .anim as Second Life will, with your animation as a ghost");
+        if (host_.world_view() && ImGui::MenuItem("As It Plays In-World", nullptr, in_world_)) set_in_world(!in_world_);
+        if (host_.world_view())
+            ImGui::SetItemTooltip("Your AO, the default motions and avatar physics play; your animation at its own priorities "
+                                  "on the joints it keys, with a table of who wins each joint");
+        ImGui::MenuItem("Face Cam", nullptr, &face_cam_);
+        ImGui::SetItemTooltip("A cutout of a face driven by your face tracking, to move and resize anywhere; your avatar "
+                              "is not animated by the tracking meanwhile");
         if (ImGui::BeginMenu("Treadmill")) {  // 08 LP-8
             draw_treadmill_menu();
             ImGui::EndMenu();
@@ -1745,6 +1752,7 @@ bool App::frame() {
 
     scratch_tick();  // PT-2: before the pose is evaluated, so a scrub away from a scratch pose waits on the question
     loop_assist_tick();  // 08 LP-7, LP-8
+    viewer_tools_tick();  // spec 09 build 20: the in-world claims, the walk test, the furniture click
     sl_export_tick();  // the shared in-memory export, refreshed when idle (08 SP, UM)
     { VATS_PROFILE("evaluate"); evaluate(); }
     { VATS_PROFILE("dock+menus"); draw_dockspace(); draw_menus(); }
@@ -1769,6 +1777,9 @@ bool App::frame() {
     draw_check_panel();  // every frame: it re-checks after edits
     draw_quality_panel();
     draw_planner_panel();
+    draw_in_world_window();  // spec 09 build 20
+    draw_walk_test_window();
+    draw_face_cam();
     draw_sl_preview_window();
     draw_split_dance_window();  // 08 TE-6
     draw_reference_window();

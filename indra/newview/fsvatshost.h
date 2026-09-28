@@ -25,6 +25,7 @@
 #define FS_VATSHOST_H
 
 #include "llrect.h"
+#include "lluuid.h"
 #include "stdtypes.h"
 
 // The VATs editor (Avatar > VATs Editor, setting "VATsEditor"): Viewport Avatar Toolset's own editor
@@ -61,6 +62,12 @@ namespace FSVATsEditor
     // no movement input does (only the editor's own return autopilot), and neither does Stand Up while the
     // editor has sat it down (with a "Close the editor to stand up" tip).
     U32 filterControls(U32 flags);
+    // Build 20 (spec 09 §0i, item 48), from LLVOAvatar::startMotion on your own avatar: true while Test as My Walk / Run
+    // plays the editor's clip as that walk or run, so the region's walk (or run) id starts nothing locally, neither the
+    // default motion nor the AO's replacement (which would ask the region for its own).
+    bool takesLocomotion(const LLUUID& id);
+    // True during the walk test: the movement keys are the viewer's again (FSVATsImGui).
+    bool walking();
 }
 
 #endif // FS_VATSHOST_H

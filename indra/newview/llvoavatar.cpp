@@ -7491,6 +7491,7 @@ bool LLVOAvatar::startMotion(const LLUUID& id, F32 time_offset)
     // <FS:Zi> Animation Overrider
     //LLUUID remap_id = remapMotionID(id, getSex());
     LLUUID remap_id;
+    if (isSelf() && FSVATsEditor::takesLocomotion(id)) return true; // VATs editor: its walk test plays this walk
     if (isSelf())
     {
         remap_id = AOEngine::getInstance()->override(id, true);

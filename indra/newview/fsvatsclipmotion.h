@@ -46,6 +46,7 @@ public:
         std::string name;       // viewer joint name
         bool position = false;  // the pose sets its position too: base plus the pose's offset
         LLVector3 base;         // the joint's own position (the worn avatar's), in its parent's frame
+        S32 priority = LLJoint::ADDITIVE_PRIORITY;  // the editor's hold: the top; as it plays in-world: the clip's
     };
     struct Playback
     {
@@ -59,6 +60,9 @@ public:
         LLVector3 pin_pos;                  // agent frame
         LLQuaternion pin_rot;
         LLVector3 root_at_update;           // the root's real position at the last update (for the editor's drawing)
+        // Build 20 (spec 09 §0i, item 47): as it plays in-world, the motion's own priority is the clip's (each joint
+        // state has its own anyway); the editor's hold keeps it at the top.
+        S32 priority = LLJoint::ADDITIVE_PRIORITY;
     };
     static Playback sEditor;
 
@@ -70,7 +74,7 @@ public:
     F32 getDuration() override { return 0.f; }
     F32 getEaseInDuration() override { return 0.f; }
     F32 getEaseOutDuration() override { return 0.f; }
-    LLJoint::JointPriority getPriority() override { return LLJoint::ADDITIVE_PRIORITY; }
+    LLJoint::JointPriority getPriority() override { return LLJoint::JointPriority(sEditor.priority); }
     LLMotionBlendType getBlendType() override { return NORMAL_BLEND; }
     F32 getMinPixelArea() override { return 0.f; }
     LLMotionInitStatus onInitialize(LLCharacter* character) override;

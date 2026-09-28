@@ -211,4 +211,24 @@ bool apply_ifacialmocap(std::string_view p, VmcState& s) {
     return true;
 }
 
+std::vector<std::pair<std::string, float>> linden_head_morphs(const std::map<std::string, double>& arkit) {
+    auto w = [&](const char* a, const char* b = nullptr) {
+        auto get = [&](const char* n) {
+            const auto it = n ? arkit.find(n) : arkit.end();
+            return it == arkit.end() ? 0.0 : it->second;
+        };
+        return b ? (get(a) + get(b)) / 2 : get(a);
+    };
+    // ponytail: one ARKit pair per morph, a first mapping to tune by eye; the other Express_* morphs stay unused.
+    const std::pair<const char*, double> map[] = {
+        {"Blink_Left", w("eyeBlinkLeft")},   {"Blink_Right", w("eyeBlinkRight")},
+        {"Express_Open_Mouth", w("jawOpen")}, {"Express_Smile", w("mouthSmileLeft", "mouthSmileRight")},
+        {"Express_Frown", w("mouthFrownLeft", "mouthFrownRight")}, {"Express_Kiss", w("mouthPucker")},
+    };
+    std::vector<std::pair<std::string, float>> out;
+    for (const auto& [morph, v] : map)
+        if (const float q = float(std::round(std::clamp(v, 0.0, 1.0) * 20) / 20); q > 0) out.emplace_back(morph, q);
+    return out;
+}
+
 }  // namespace vats

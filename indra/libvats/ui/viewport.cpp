@@ -708,6 +708,8 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
         run_action("ik_toggle");
         return;
     }
+    // Place on Furniture Point is armed (spec 09 build 20): the click picks the point, bones or not.
+    if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.KeyAlt && seat_click(m)) return;
     if (preset == Preset::QAvimator && hovered && ImGui::IsMouseClicked(0) && gizmo_hover_ == Gizmo::None) {
         if (hover_bone_ < 0 && hover_handle_ < 0) {  // empty space: orbit, Shift pan, Alt zoom
             if (!host_.world_view()) nav_button = 0, nav_mode = io.KeyShift ? 1 : io.KeyAlt ? 2 : 0, nav_moved = false;

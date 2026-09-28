@@ -73,6 +73,11 @@
 #include "llimagepng.h"
 #include "llsettingsvo.h"
 #include "llkeyframemotion.h"
+#include "fsexportperms.h"
+#include "llselectmgr.h"
+#include "llviewerobjectlist.h"
+#include "llviewervisualparam.h"
+#include "llwearabletype.h"
 #include "pipeline.h"
 
 #include <glm/glm.hpp>
@@ -86,6 +91,7 @@
 #include <fstream>
 #include <memory>
 #include <map>
+#include <optional>
 #include <set>
 
 namespace
@@ -98,7 +104,7 @@ namespace
     bool sameJoints(const std::vector<VATsClipMotion::Joint>& a, const std::vector<VATsClipMotion::Joint>& b)
     {
         return std::equal(a.begin(), a.end(), b.begin(), b.end(), [](const auto& x, const auto& y)
-                          { return x.name == y.name && x.position == y.position && x.base == y.base; });
+                          { return x.name == y.name && x.position == y.position && x.base == y.base && x.priority == y.priority; });
     }
 
     // Build 19 (spec 09 §0e): View > Orthographic as a telephoto near-ortho. The narrowest lens the viewer allows
@@ -111,6 +117,17 @@ namespace
                              AGENT_CONTROL_FAST_UP | AGENT_CONTROL_NUDGE_AT_POS | AGENT_CONTROL_NUDGE_AT_NEG |
                              AGENT_CONTROL_NUDGE_LEFT_POS | AGENT_CONTROL_NUDGE_LEFT_NEG | AGENT_CONTROL_NUDGE_UP_POS |
                              AGENT_CONTROL_NUDGE_UP_NEG | AGENT_CONTROL_TURN_LEFT | AGENT_CONTROL_TURN_RIGHT;
+
+    // Build 20, item 48: the region's walk or run, each spelling the viewer may play it under (remapMotionID: female,
+    // UseNewWalkRun).
+    bool isLocomotion(int state, const LLUUID& id)
+    {
+        if (state == 1)
+            return id == ANIM_AGENT_WALK || id == ANIM_AGENT_FEMALE_WALK || id == ANIM_AGENT_WALK_NEW || id == ANIM_AGENT_FEMALE_WALK_NEW;
+        if (state == 2)
+            return id == ANIM_AGENT_RUN || id == ANIM_AGENT_RUN_NEW || id == ANIM_AGENT_FEMALE_RUN_NEW;
+        return false;
+    }
 
     void tip(const std::string& text, const char* kind = "SystemMessageTip")
     {
@@ -195,7 +212,7 @@ namespace
         void scene_ground(const Vec3&) override {}
         void scene_triangles(const std::vector<vats::Vertex>& verts, const std::vector<std::uint32_t>& indices, bool, float,
                              bool translucent) override;
-        ImTextureID scene_end() override { mSceneOpen = false; return ImTextureID{}; }
+        ImTextureID scene_end() override;
         bool save_thumbnail_png(const std::string&) override { return false; }
         bool scene_image(ImTextureID texture, const std::array<Vec3, 4>& corners, float opacity, bool backdrop) override;
         ImTextureID load_texture(const std::string& png) override;
@@ -268,6 +285,17 @@ namespace
         std::vector<vats::PlanClip> running_motions() const override;
         std::vector<std::string> worn_on(int attach_id) const override;
         Grid grid() const override;
+        // Build 20 (spec 09 §0i): the world as it plays your animation, the walk test, the seat, your shape for the face cam.
+        bool play_in_world(const vats::PlanClip* own) override;
+        bool test_walk(int state) override;
+        Locomotion locomotion() const override;
+        Seat seat() const override;
+        void check_seat() override;
+        bool seat_point(const Vec3& from, const Vec3& to, bool automatic, Vec3& hit) override;
+        std::map<int, float> shape_params() const override;
+        // LLVOAvatar::startMotion: the region's walk (or run) is not started while the walk test plays the clip instead.
+        bool takesLocomotion(const LLUUID& id) const { return mMode == Mode::Walk && holdsAvatar() && isLocomotion(mWalkState, id); }
+        bool walking() const { return mMode == Mode::Walk && holdsAvatar(); }
         void setSkeleton(const vats::Skeleton* skel) { mSkel = skel; }  // before the first frame, so body_shape is ready
         // Spec 09 §5a: the face-positions check without uploading; a line for the log and the status bar.
         std::string faceCheck(const vats::App::FaceCheck& fc);
@@ -312,6 +340,26 @@ namespace
         bool regionKeepsStanding() const { return mRegionKeepsStanding; }
 
     private:
+        // Build 20: what the editor does with your avatar. Hold (U4): sat, every other motion stopped, the editor's pose on
+        // every joint. InWorld (item 47): the other motions run, the pose only on the joints the upload keys, at their
+        // priorities. Walk (item 48): as InWorld, let go (standing, movement allowed), the pose only while walking.
+        enum class Mode { Hold, InWorld, Walk };
+        Mode mMode = Mode::Hold;
+        std::optional<vats::PlanClip> mOwnPlan;  // what the project claims as it exports (play_in_world)
+        int mWalkState = 0;                      // 1 walk, 2 run
+        bool locomoting() const;                 // the region plays the tested walk or run on you now
+        void sitForEditor(LLVOAvatarSelf* avatar);  // the hold's ground sit (not flying, not already seated)
+        S32 restartStopped(LLVOAvatarSelf* avatar);  // the motions isolate stopped that are still wanted, started again
+        LLViewerObject* seatRoot() const;        // the root prim of what your avatar sits on, or null
+        void pollSeatCheck();                    // check_seat's selection: read who made each part once it arrives
+        LLUUID mSeatCheckFor;                    // the seat root checked (contact) or being checked
+        int mSeatContact = 0;
+        std::string mSeatName;
+        LLObjectSelectionHandle mSeatSelection;
+        F64 mSeatCheckUntil = 0;
+        // The face cam's offscreen picture (SceneTarget::FaceCam), drawn at scene_end.
+        bool ensureProgram();                    // the triangles' program (drawScene's)
+        ImTextureID renderOffscreen();
         LLJoint* avatarJoint(int node);
         void isolate(bool reset_joints);  // the avatar belongs to the editor: sit it down once, stop every other motion
         void watchRegion(LLVOAvatarSelf* avatar);  // what the region does meanwhile: stands, teleports, drift
@@ -403,6 +451,14 @@ namespace
             std::vector<U32> indices;
         };
         SceneBatch mScene[2];
+        SceneBatch mOff[2];              // the face cam's, in the UI's space
+        bool mOffOpen = false;
+        int mOffW = 0, mOffH = 0;
+        glm::mat4 mOffMvp{ 1.f };
+        LLVector3 mOffLight;
+        U32 mFbo = 0, mFboTex = 0, mFboDepth = 0;
+        int mFboW = 0, mFboH = 0;
+        void drawBatches(const SceneBatch (&batches)[2]);  // program, VAO and buffers bound: opaque, then translucent
         struct SceneImage  // a reference picture's plane (scene_image): corners in the agent frame, bottom-left first
         {
             GLuint texture = 0;
@@ -472,7 +528,12 @@ namespace
         mSkel = &skel;
         if (!isAgentAvatarValid())
             return stopMotion();
+        if (mMode == Mode::Walk && !locomoting())
+            return stopMotion();  // standing during the walk test: the AO's or the default stand shows
         mPose = pose;
+        // Build 20, item 47: as it plays in-world, only the joints the upload keys, each at its priority there (as the
+        // 6b preview played the clip); the world's own motions keep the rest.
+        const bool in_world = mMode != Mode::Hold && mOwnPlan;
         std::vector<VATsClipMotion::Joint> joints;
         std::vector<bool> drives_pos(skel.size(), false);
         for (int i = 0; i < skel.size() && i < (int)pose.rot.size(); ++i)
@@ -483,9 +544,18 @@ namespace
             const bool moved = pose.offset[i].length() > 1e-6;
             const bool turned = 1.0 - std::fabs(pose.rot[i].w) > 1e-9;
             const bool bone = i < skel.joint_count() && !n.attachment;
-            if ((!bone && !keyed && !moved && !turned) || !avatarJoint(i))
+            S32 priority = LLJoint::ADDITIVE_PRIORITY;
+            if (in_world)
+            {
+                const auto claim = mOwnPlan->joints.find(n.name);
+                if (claim == mOwnPlan->joints.end() || !avatarJoint(i))
+                    continue;
+                priority = llclamp(claim->second, 0, (S32)LLJoint::ADDITIVE_PRIORITY - 1);
+            }
+            else if ((!bone && !keyed && !moved && !turned) || !avatarJoint(i))
                 continue;
-            drives_pos[i] = i == 0 || moved || (keyed && clip.has_channels(n.name, vats::kPosChannels));
+            // The pelvis rests on the editor's frame while it holds the avatar; in-world only a keyed or moved one is set.
+            drives_pos[i] = (i == 0 && !in_world) || moved || (keyed && clip.has_channels(n.name, vats::kPosChannels));
             if (drives_pos[i])
             {
                 // The worn position: a mesh's joint offset when one is active (attachments can rez after the
@@ -502,11 +572,12 @@ namespace
                 else if (!mBase.count(n.name))
                     mBase[n.name] = avatarJoint(i)->getPosition();
             }
-            joints.push_back({ n.name, drives_pos[i], drives_pos[i] ? mBase[n.name] : LLVector3::zero });
+            joints.push_back({ n.name, drives_pos[i], drives_pos[i] ? mBase[n.name] : LLVector3::zero, priority });
         }
         VATsClipMotion::Playback& pb = VATsClipMotion::sEditor;
         pb.skeleton = &skel;
         pb.pose = &mPose;
+        pb.priority = in_world ? llclamp(clip.priority, 0, (S32)LLJoint::ADDITIVE_PRIORITY - 1) : (S32)LLJoint::ADDITIVE_PRIORITY;
         const bool active = mMotionID.notNull() && mMotionOn == gAgentAvatarp.get() && gAgentAvatarp->isMotionActive(mMotionID);
         if (sameJoints(joints, mJoints) && active)
             return;
@@ -523,7 +594,8 @@ namespace
         // Straight to the motion controller: LLVOAvatar::startMotion would offer the id to the AO first.
         gAgentAvatarp->registerMotion(mMotionID, VATsClipMotion::create);
         gAgentAvatarp->getMotionController().startMotion(mMotionID, 0.f);
-        LL_INFOS("VATsEditor") << "driving " << pb.joints.size() << " joints of the avatar" << LL_ENDL;
+        LL_INFOS("VATsEditor") << "driving " << pb.joints.size() << " joints of the avatar"
+                               << (in_world ? " at the animation's own priorities (as it plays in-world)" : "") << LL_ENDL;
     }
 
     void ViewerHost::stopMotion()
@@ -568,6 +640,40 @@ namespace
         if (!mSkel || !isAgentAvatarValid())
             return out;
         LLVOAvatarSelf* avatar = gAgentAvatarp.get();
+        // What a motion claims: each joint state with usage, at its priority (the motion's own for USE_MOTION_PRIORITY).
+        auto claims = [&](LLMotion* motion, vats::PlanClip& clip) {
+            LLPose* pose = motion->getPose();
+            for (LLJointState* state = pose->getFirstJointState(); state; state = pose->getNextJointState())
+            {
+                const int node = state->getUsage() && state->getJoint() ? mSkel->find_viewer(state->getJoint()->getName()) : -1;
+                if (node < 0)
+                    continue;  // a keyless record moves nothing; a joint VATs does not know is left out
+                const LLJoint::JointPriority priority = state->getPriority();
+                clip.joints[(*mSkel)[node].name] = priority == LLJoint::USE_MOTION_PRIORITY ? motion->getPriority() : priority;
+            }
+        };
+        std::set<LLUUID> signaled;
+        for (const auto& [id, sequence] : avatar->mSignaledAnimations)
+            signaled.insert(avatar->remapMotionID(id));
+        // Build 20, item 47: while the editor lets the world play (not holding), the viewer's own motions run too (head
+        // and eye motion, breathing, body noise, physics, hands): listed first, as they start with the avatar.
+        if (mMode != Mode::Hold)
+        {
+            const std::list<LLMotion*>& active = avatar->getMotionController().getActiveMotions();
+            for (auto it = active.rbegin(); it != active.rend(); ++it)  // the controller keeps the newest first
+            {
+                LLMotion* motion = *it;
+                if (!motion || motion->getID() == mMotionID || signaled.count(motion->getID()))
+                    continue;
+                vats::PlanClip clip;
+                claims(motion, clip);
+                if (clip.joints.empty())
+                    continue;
+                const char* builtin = gAnimLibrary.animStateToString(motion->getID());
+                clip.name = builtin ? std::string(builtin) : motion->getName().empty() ? motion->getID().asString() : motion->getName();
+                out.push_back(std::move(clip));
+            }
+        }
         std::vector<std::pair<S32, LLUUID>> started;
         for (const auto& [id, sequence] : avatar->mSignaledAnimations)
             started.emplace_back(sequence, id);
@@ -580,15 +686,7 @@ namespace
             if (!motion || motion->getID() == mMotionID)
                 continue;
             vats::PlanClip clip;
-            LLPose* pose = motion->getPose();
-            for (LLJointState* state = pose->getFirstJointState(); state; state = pose->getNextJointState())
-            {
-                const int node = state->getUsage() && state->getJoint() ? mSkel->find_viewer(state->getJoint()->getName()) : -1;
-                if (node < 0)
-                    continue;  // a keyless record moves nothing; a joint VATs does not know is left out
-                const LLJoint::JointPriority priority = state->getPriority();
-                clip.joints[(*mSkel)[node].name] = priority == LLJoint::USE_MOTION_PRIORITY ? motion->getPriority() : priority;
-            }
+            claims(motion, clip);
             if (clip.joints.empty())
                 continue;  // not loaded yet, or a procedural motion with no joints
             // The name: your inventory item's for this asset, else the built-in animation's, else the id.
@@ -779,25 +877,16 @@ namespace
             mFrameOnOpen = true;  // beforeFrame frames the avatar; the camera then stays put (no longer following it)
             if (!mRevealed)
                 hideChrome();
-            // Not while flying (the viewer's Sit Down is disabled then) or already seated; RLVa may refuse.
-            if (!avatar->isSitting() && !mFlew && !avatar->isEditingAppearance())
-            {
-                gAgent.sitDown();
-                mWeSat = true;
-                LL_INFOS("VATsEditor") << "sitting the avatar down on the ground while the editor is open" << LL_ENDL;
-            }
-            else if (mFlew)
-            {
-                LL_INFOS("VATsEditor") << "flying: the avatar stays in the air, hovering, while the editor is open" << LL_ENDL;
-            }
+            sitForEditor(avatar);
         }
         LLMotionController& controller = avatar->getMotionController();
         std::vector<LLUUID> others;
-        for (LLMotion* motion : controller.getActiveMotions())
-            // The ground sit stays: the viewer takes its motion as the sign the avatar sits (without it,
-            // LLVOAvatar::updateCharacter gets the avatar off the ground locally). The editor's pose covers it.
-            if (motion && motion->getID() != mMotionID && motion->getID() != ANIM_AGENT_SIT_GROUND_CONSTRAINED)
-                others.push_back(motion->getID());
+        if (mMode == Mode::Hold)  // build 20: as it plays in-world or walking, the world's motions run
+            for (LLMotion* motion : controller.getActiveMotions())
+                // The ground sit stays: the viewer takes its motion as the sign the avatar sits (without it,
+                // LLVOAvatar::updateCharacter gets the avatar off the ground locally). The editor's pose covers it.
+                if (motion && motion->getID() != mMotionID && motion->getID() != ANIM_AGENT_SIT_GROUND_CONSTRAINED)
+                    others.push_back(motion->getID());
         for (const LLUUID& id : others)
         {
             controller.stopMotionLocally(id, true);
@@ -817,7 +906,9 @@ namespace
             mBase.clear();  // taken again from the reset skeleton
             LL_INFOS("VATsEditor") << "skeleton reset locally as the editor opens" << LL_ENDL;
         }
-        VATsClipMotion::sEditor.pin = !avatar->getParent();  // seated on an object, it goes where the object goes
+        // Seated on an object, it goes where the object goes; walking (build 20), where you walk it.
+        VATsClipMotion::sEditor.pin = !avatar->getParent() && mMode != Mode::Walk;
+        pollSeatCheck();
         if (mChromeHidden && gFloaterView)
         {
             // A floater that opens meanwhile (a script's map, a new window) stays hidden unless allowed.
@@ -842,6 +933,11 @@ namespace
     {
         VATsClipMotion::Playback& pb = VATsClipMotion::sEditor;
         const F64 now = LLTimer::getTotalSeconds();
+        if (mMode == Mode::Walk)
+        {
+            mRegion = gAgent.getRegion();  // walking: your walks, teleports and the region's moves are yours (build 20)
+            return;
+        }
         if (gAgent.getAutoPilot() && gAgent.getAutoPilotBehaviorName() != AUTOPILOT)
             gAgent.stopAutoPilot(true);  // a walk the viewer's UI started (the minimap's double-click...)
         // A teleport or region crossing: a new place, so a new pin and a sit there that doesn't count as a stand.
@@ -900,8 +996,8 @@ namespace
 
     U32 ViewerHost::filterControls(U32 flags)
     {
-        if (!mIsolatedOn || !isAgentAvatarValid() || mIsolatedOn != gAgentAvatarp.get())
-            return flags;
+        if (!mIsolatedOn || !isAgentAvatarValid() || mIsolatedOn != gAgentAvatarp.get() || mMode == Mode::Walk)
+            return flags;  // the walk test lets the avatar go: your movement and Stand Up reach it (build 20)
         if (!(gAgent.getAutoPilot() && gAgent.getAutoPilotBehaviorName() == AUTOPILOT))
             flags &= ~MOVEMENT;
         if ((flags & AGENT_CONTROL_STAND_UP) && mWeSat)
@@ -930,6 +1026,44 @@ namespace
             return;
         }
         LLVOAvatarSelf* avatar = gAgentAvatarp.get();
+        const size_t stopped = mStopped.size();
+        const S32 restarted = restartStopped(avatar);
+        if (gAgent.getAutoPilot() && gAgent.getAutoPilotBehaviorName() == AUTOPILOT)
+            gAgent.stopAutoPilot();
+        const bool leaving = LLApp::isExiting() || LLAppViewer::instance()->quitRequested() || LLAppViewer::instance()->logoutRequestSent();
+        // Sitting on the ground as the region has it (its ground-sit animation), whatever the local flag says.
+        const bool on_ground = avatar->isSitting() || avatar->mSignaledAnimations.count(ANIM_AGENT_SIT_GROUND_CONSTRAINED);
+        const bool stand = mWeSat && !leaving && on_ground && !avatar->getParent();
+        LL_INFOS("VATsEditor") << "avatar handed back: " << restarted << " of " << stopped
+                                << " stopped motions restarted" << (stand ? ", standing up" : "") << LL_ENDL;
+        mIsolatedOn = nullptr;  // first: filterControls lets the Stand Up through
+        mStopped.clear();
+        mWeSat = mRegionKeepsStanding = false;
+        if (stand)
+            gAgent.standUp();  // the viewer's own Stand Up
+    }
+
+    // The hold's ground sit (U4): the viewer's own Sit Down, not while flying (its Sit Down is disabled then), already
+    // seated or editing appearance; RLVa may refuse.
+    void ViewerHost::sitForEditor(LLVOAvatarSelf* avatar)
+    {
+        if (!avatar->isSitting() && !mFlew && !avatar->isEditingAppearance())
+        {
+            gAgent.sitDown();
+            mWeSat = true;
+            mSatSeen = false;
+            LL_INFOS("VATsEditor") << "sitting the avatar down on the ground while the editor is open" << LL_ENDL;
+        }
+        else if (mFlew)
+        {
+            LL_INFOS("VATsEditor") << "flying: the avatar stays in the air, hovering, while the editor is open" << LL_ENDL;
+        }
+    }
+
+    // The motions isolate stopped that are still wanted start again locally: the default ones, and each animation the
+    // region still signals (the ones it started meanwhile included). The rest stay stopped.
+    S32 ViewerHost::restartStopped(LLVOAvatarSelf* avatar)
+    {
         std::set<LLUUID> wanted{ ANIM_AGENT_HEAD_ROT, ANIM_AGENT_EYE, ANIM_AGENT_BODY_NOISE, ANIM_AGENT_BREATHE_ROT,
                                  ANIM_AGENT_PHYSICS_MOTION, ANIM_AGENT_HAND_MOTION, ANIM_AGENT_PELVIS_FIX };
         for (const auto& signaled : avatar->mSignaledAnimations)
@@ -941,19 +1075,223 @@ namespace
         for (const LLUUID& id : mStopped)
             if (wanted.count(id) && avatar->getMotionController().startMotion(id, 0.f))
                 ++restarted;
-        if (gAgent.getAutoPilot() && gAgent.getAutoPilotBehaviorName() == AUTOPILOT)
-            gAgent.stopAutoPilot();
-        const bool leaving = LLApp::isExiting() || LLAppViewer::instance()->quitRequested() || LLAppViewer::instance()->logoutRequestSent();
-        // Sitting on the ground as the region has it (its ground-sit animation), whatever the local flag says.
-        const bool on_ground = avatar->isSitting() || avatar->mSignaledAnimations.count(ANIM_AGENT_SIT_GROUND_CONSTRAINED);
-        const bool stand = mWeSat && !leaving && on_ground && !avatar->getParent();
-        LL_INFOS("VATsEditor") << "avatar handed back: " << restarted << " of " << mStopped.size()
-                                << " stopped motions restarted" << (stand ? ", standing up" : "") << LL_ENDL;
-        mIsolatedOn = nullptr;  // first: filterControls lets the Stand Up through
         mStopped.clear();
-        mWeSat = mRegionKeepsStanding = false;
-        if (stand)
-            gAgent.standUp();  // the viewer's own Stand Up
+        return restarted;
+    }
+
+    // Build 20, item 47: View > As It Plays In-World. The claims are the UI's (plan_clip_from_clip: the joints the upload
+    // keys, at their priorities); drive_avatar binds only those, and isolate stops nothing, so the AO, the default motions
+    // and avatar physics play with it as they will in-world. The ground sit and the pin stay. Nothing is sent.
+    bool ViewerHost::play_in_world(const vats::PlanClip* own)
+    {
+        if (own)
+            mOwnPlan = *own;
+        else
+            mOwnPlan.reset();
+        const Mode was = mMode;
+        if (mMode != Mode::Walk)
+            mMode = own ? Mode::InWorld : Mode::Hold;
+        if (was == Mode::Hold && mMode == Mode::InWorld)
+        {
+            const S32 restarted = holdsAvatar() ? restartStopped(gAgentAvatarp.get()) : 0;
+            LL_INFOS("VATsEditor") << "as it plays in-world: " << restarted << " stopped motions running again, the animation on "
+                                   << own->joints.size() << " joints at its own priorities" << LL_ENDL;
+        }
+        else if (was == Mode::InWorld && mMode == Mode::Hold)
+        {
+            LL_INFOS("VATsEditor") << "the editor holds the avatar alone again" << LL_ENDL;  // isolate stops the rest
+        }
+        return true;
+    }
+
+    bool ViewerHost::locomoting() const
+    {
+        if (!isAgentAvatarValid())
+            return false;
+        for (const auto& signaled : gAgentAvatarp->mSignaledAnimations)
+            if (isLocomotion(mWalkState, signaled.first))
+                return true;
+        return false;
+    }
+
+    // Build 20, item 48: Test as My Walk / Run. The editor lets the avatar go: it stands up if the editor sat it, every
+    // movement reaches it, the pin is off and the camera follows it again. The region still walks it and signals its walk
+    // (others see the ordinary walk); LLVOAvatar::startMotion asks takesLocomotion and starts neither the default walk nor
+    // the AO's (so the AO requests nothing new), and drive_avatar shows the clip while that walk is signalled. Off: the
+    // hold again (sat down, pinned where it stands, every other motion stopped).
+    bool ViewerHost::test_walk(int state)
+    {
+        if (!holdsAvatar() || (state && !mOwnPlan))
+            return false;
+        LLVOAvatarSelf* avatar = gAgentAvatarp.get();
+        VATsClipMotion::Playback& pb = VATsClipMotion::sEditor;
+        if (state)
+        {
+            if (mMode == Mode::Hold)
+                restartStopped(avatar);
+            mMode = Mode::Walk;
+            mWalkState = state;
+            pb.pin = pb.pinned = false;
+            if (gAgent.getAutoPilot() && gAgent.getAutoPilotBehaviorName() == AUTOPILOT)
+                gAgent.stopAutoPilot();
+            // A walk already playing on your screen gives way to the clip (the AO's own, if one plays, until you stop).
+            for (const auto& signaled : avatar->mSignaledAnimations)
+                if (isLocomotion(1, signaled.first) || isLocomotion(2, signaled.first))
+                    avatar->getMotionController().stopMotionLocally(avatar->remapMotionID(signaled.first), true);
+            const bool on_ground = avatar->isSitting() || avatar->mSignaledAnimations.count(ANIM_AGENT_SIT_GROUND_CONSTRAINED);
+            const bool stand = mWeSat && on_ground && !avatar->getParent();
+            mWeSat = false;
+            mResitAt = -1;
+            if (stand)
+                gAgent.standUp();  // the viewer's own Stand Up; filterControls lets it through while walking
+            gAgentCamera.setFocusOnAvatar(true, true);  // the camera follows you again
+            LL_INFOS("VATsEditor") << "walk test (" << (state == 1 ? "walk" : "run") << "): the avatar is yours to move"
+                                   << (stand ? ", standing up" : "") << LL_ENDL;
+            return true;
+        }
+        if (mMode != Mode::Walk)
+            return true;
+        mMode = mOwnPlan ? Mode::InWorld : Mode::Hold;
+        mWalkState = 0;
+        stopMotion();
+        mFlew = gAgent.getFlying();
+        mRegionStands = 0;
+        mRegionKeepsStanding = false;
+        pb.pinned = false;  // pinned again where it stands now
+        sitForEditor(avatar);
+        LL_INFOS("VATsEditor") << "walk test stopped: the editor holds the avatar again" << LL_ENDL;
+        return true;
+    }
+
+    vats::ui::Host::Locomotion ViewerHost::locomotion() const
+    {
+        Locomotion l;
+        if (!holdsAvatar())
+            return l;
+        LLVector3 v = gAgent.getVelocity();
+        v.mV[VZ] = 0.f;
+        l.speed = v.length();
+        l.moving = mMode == Mode::Walk && locomoting();
+        return l;
+    }
+
+    // Items 4 and 46: the object your avatar sits on, by its root prim (the frame sit systems place avatars in).
+    LLViewerObject* ViewerHost::seatRoot() const
+    {
+        if (!holdsAvatar())
+            return nullptr;
+        LLViewerObject* parent = dynamic_cast<LLViewerObject*>(gAgentAvatarp->getParent());
+        return parent ? parent->getRootEdit() : nullptr;
+    }
+
+    vats::ui::Host::Seat ViewerHost::seat() const
+    {
+        Seat s;
+        LLViewerObject* root = seatRoot();
+        if (!root)
+            return s;
+        s.seated = true;
+        const LLQuaternion inv_root = ~root->getRotationRegion();
+        const LLVector3 pos = (gAgentAvatarp->getPositionAgent() - root->getPositionAgent()) * inv_root;
+        const LLQuaternion rot = gAgentAvatarp->getRotationRegion() * inv_root;
+        s.pos = toVATs(pos);
+        s.rot = vats::Quat{ rot.mQ[VX], rot.mQ[VY], rot.mQ[VZ], rot.mQ[VW] }.normalized();
+        if (root->getID() == mSeatCheckFor)
+        {
+            s.contact = mSeatContact;
+            s.name = mSeatName;
+        }
+        return s;
+    }
+
+    // Whether you created every part: FSExportPermsCheck::canExportNode (the viewer's own export rule: owner and creator
+    // yours in SL, the grid's export policy on OpenSim, sculpt maps and meshes included) needs each part's permissions,
+    // which the region sends for a selection. So the seat is selected as the viewer's Edit selects it, read when its
+    // properties arrive (pollSeatCheck), and deselected. Only on request (the Actors panel's button).
+    void ViewerHost::check_seat()
+    {
+        LLViewerObject* root = seatRoot();
+        if (!root || mSeatSelection)
+            return;
+        mSeatCheckFor = root->getID();
+        mSeatContact = 0;
+        mSeatName.clear();
+        mSeatSelection = LLSelectMgr::getInstance()->selectObjectAndFamily(root);
+        mSeatCheckUntil = LLTimer::getTotalSeconds() + 10.0;
+        LL_INFOS("VATsEditor") << "selecting the seat to read who created its parts" << LL_ENDL;
+    }
+
+    void ViewerHost::pollSeatCheck()
+    {
+        if (!mSeatSelection)
+            return;
+        LLViewerObject* root = gObjectList.findObject(mSeatCheckFor);
+        S32 nodes = 0, valid = 0, yours = 0;
+        for (LLObjectSelection::iterator it = mSeatSelection->begin(); it != mSeatSelection->end(); ++it)
+        {
+            LLSelectNode* node = *it;
+            ++nodes;
+            if (!node->mValid)
+                continue;
+            ++valid;
+            yours += FSExportPermsCheck::canExportNode(node, false) ? 1 : 0;
+            if (node->getObject() == root)
+                mSeatName = node->mName;
+        }
+        const bool done = nodes > 0 && valid == nodes;
+        if (!done && LLTimer::getTotalSeconds() < mSeatCheckUntil && root)
+            return;
+        mSeatContact = done ? (yours == nodes ? 1 : -1) : 0;
+        if (root)
+            LLSelectMgr::getInstance()->deselectObjectAndFamily(root);
+        mSeatSelection = nullptr;
+        LL_INFOS("VATsEditor") << "seat check: " << yours << " of " << nodes << " parts yours"
+                               << (done ? "" : " (not every part answered in time: unknown)") << LL_ENDL;
+    }
+
+    // One ray against the seat's own prims, the nearest hit, in the UI's space: a point, never the geometry. An automatic
+    // ray (the editor's, not your click) only on a seat you created every part of.
+    bool ViewerHost::seat_point(const Vec3& from, const Vec3& to, bool automatic, Vec3& hit)
+    {
+        LLViewerObject* root = seatRoot();
+        if (!root || (automatic && (root->getID() != mSeatCheckFor || mSeatContact != 1)))
+            return false;
+        LLVector4a start, end;
+        start.load3(toAgent(from).mV);
+        end.load3(toAgent(to).mV);
+        std::vector<LLViewerObject*> prims{ root };
+        for (LLViewerObject* child : root->getChildren())
+            if (child && !child->isAvatar())
+                prims.push_back(child);
+        bool found = false;
+        F32 best = 0.f;
+        LLVector3 at;
+        for (LLViewerObject* prim : prims)
+        {
+            LLVector4a p;
+            if (!prim->lineSegmentIntersect(start, end, -1, false, false, true, nullptr, &p))
+                continue;
+            const LLVector3 q(p.getF32ptr());
+            const F32 d = (q - toAgent(from)).lengthSquared();
+            if (!found || d < best)
+                found = true, best = d, at = q;
+        }
+        if (found)
+            hit = fromAgent(at);
+        return found;
+    }
+
+    // Item 53: your shape's sliders for the face cam's Linden head (the shape wearable's visual params), shown only.
+    std::map<int, float> ViewerHost::shape_params() const
+    {
+        std::map<int, float> out;
+        if (!isAgentAvatarValid())
+            return out;
+        for (LLVisualParam* p = gAgentAvatarp->getFirstVisualParam(); p; p = gAgentAvatarp->getNextVisualParam())
+            if (const LLViewerVisualParam* vp = dynamic_cast<const LLViewerVisualParam*>(p);
+                vp && vp->getWearableType() == LLWearableType::WT_SHAPE)
+                out[p->getID()] = p->getWeight();
+        return out;
     }
 
     // The viewer's skin as the editor's colours, read from LLUIColorTable (the colours the skin and its theme
@@ -1268,9 +1606,24 @@ namespace
 
     // --- The world layer's triangles (spec 09 U5) ----------------------------------------------------------
 
-    bool ViewerHost::scene_begin(vats::ui::SceneTarget target, int, int, const vats::Camera&, const vats::SceneColours&,
-                                 const vats::Mat4*)
+    bool ViewerHost::scene_begin(vats::ui::SceneTarget target, int width, int height, const vats::Camera& cam,
+                                 const vats::SceneColours&, const vats::Mat4* projection)
     {
+        if (target == vats::ui::SceneTarget::FaceCam)
+        {
+            // Build 20, item 53: the face cam's own picture, in the UI's space with the UI's camera, drawn at scene_end.
+            // It needs no world, so it works on the login screen too; the world's batches are left alone.
+            mOff[0].verts.clear(), mOff[0].indices.clear();
+            mOff[1].verts.clear(), mOff[1].indices.clear();
+            mOffW = llclamp(width, 1, 2048);
+            mOffH = llclamp(height, 1, 2048);
+            const vats::Mat4 mvp = (projection ? *projection : cam.projection(double(mOffW) / mOffH)) * cam.view();
+            mOffMvp = glm::make_mat4(mvp.m);
+            const Vec3 light = (cam.to_viewer(cam.target) + Vec3{ 0, 0, 0.5 }).normalized();
+            mOffLight = toLL(light);
+            mOffOpen = !mProgramFailed;
+            return mOffOpen;
+        }
         mScene[0].verts.clear(), mScene[0].indices.clear();
         mScene[1].verts.clear(), mScene[1].indices.clear();
         mImages.clear();
@@ -1282,6 +1635,21 @@ namespace
     void ViewerHost::scene_triangles(const std::vector<vats::Vertex>& verts, const std::vector<std::uint32_t>& indices, bool,
                                      float, bool translucent)
     {
+        if (mOffOpen && !verts.empty())  // the face cam's: kept in the UI's space
+        {
+            SceneBatch& b = mOff[translucent ? 1 : 0];
+            const U32 base = U32(b.verts.size() / 10);
+            b.verts.reserve(b.verts.size() + verts.size() * 10);
+            for (const vats::Vertex& v : verts)
+                b.verts.insert(b.verts.end(), { v.p[0], v.p[1], v.p[2], v.n[0], v.n[1], v.n[2], v.c[0], v.c[1], v.c[2], v.c[3] });
+            if (indices.empty())
+                for (U32 i = 0; i < U32(verts.size()); ++i)
+                    b.indices.push_back(base + i);
+            else
+                for (U32 i : indices)
+                    b.indices.push_back(base + i);
+            return;
+        }
         if (!mSceneOpen || verts.empty())
             return;
         SceneBatch& b = mScene[translucent ? 1 : 0];
@@ -1415,10 +1783,9 @@ namespace
     // first frames). The world's own matrices from the end of its render (gGLLast*), the world view as the viewport, and
     // the world's depth (the deferred target's depth texture) sampled per fragment: a fragment behind the world is
     // dropped. Lit by a light at the camera, a little from above. Nothing to draw: nothing is done at all.
-    void ViewerHost::drawScene()
+    // The triangles' program (GLSL 150): the world's depth per fragment when u_use_depth, a light from u_light.
+    bool ViewerHost::ensureProgram()
     {
-        if (mScene[0].indices.empty() && mScene[1].indices.empty() && mImages.empty())
-            return;
         if (!mProgram && !mProgramFailed)
         {
             static const char* vs = "#version 150\n"
@@ -1469,7 +1836,7 @@ namespace
                 glDeleteProgram(mProgram);
                 mProgram = 0;
                 mProgramFailed = true;
-                return;
+                return false;
             }
             mMvpLoc = glGetUniformLocation(mProgram, "u_mvp");
             mLightLoc = glGetUniformLocation(mProgram, "u_light");
@@ -1480,6 +1847,16 @@ namespace
             glGenBuffers(1, &mVbo);
             glGenBuffers(1, &mEbo);
         }
+
+        return mProgram != 0;
+    }
+
+    void ViewerHost::drawScene()
+    {
+        if (mScene[0].indices.empty() && mScene[1].indices.empty() && mImages.empty())
+            return;
+        if (!ensureProgram())
+            return;
 
         GLint program = 0, vao = 0, array_buffer = 0, active = 0, texture = 0, viewport[4] = {}, depth_func = 0;
         GLint blend_src_rgb = 0, blend_dst_rgb = 0, blend_src_a = 0, blend_dst_a = 0;
@@ -1513,15 +1890,6 @@ namespace
         glUniform1i(mUseDepthLoc, world_depth ? 1 : 0);
         glUniform1i(mDepthLoc, 0);
         glBindTexture(GL_TEXTURE_2D, world_depth);
-        glBindVertexArray(mVao);
-        glBindBuffer(GL_ARRAY_BUFFER, mVbo);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mEbo);
-        glEnableVertexAttribArray(0);
-        glEnableVertexAttribArray(1);
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 10 * sizeof(F32), (void*)0);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 10 * sizeof(F32), (void*)(3 * sizeof(F32)));
-        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 10 * sizeof(F32), (void*)(6 * sizeof(F32)));
         glDisable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LEQUAL);
@@ -1529,16 +1897,7 @@ namespace
         glClear(GL_DEPTH_BUFFER_BIT);  // the window's own depth holds nothing of the world any more (renderFinalize)
         glEnable(GL_BLEND);
         glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-        for (int pass = 0; pass < 2; ++pass)
-        {
-            const SceneBatch& b = mScene[pass];
-            if (b.indices.empty())
-                continue;
-            glDepthMask(pass == 0 ? GL_TRUE : GL_FALSE);  // translucent: seen through, writes no depth
-            glBufferData(GL_ARRAY_BUFFER, b.verts.size() * sizeof(F32), b.verts.data(), GL_STREAM_DRAW);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, b.indices.size() * sizeof(U32), b.indices.data(), GL_STREAM_DRAW);
-            glDrawElements(GL_TRIANGLES, GLsizei(b.indices.size()), GL_UNSIGNED_INT, nullptr);
-        }
+        drawBatches(mScene);
         drawImages(mvp, world_depth, world);
 
         glBindVertexArray(vao);  // brings back its element buffer
@@ -1555,12 +1914,145 @@ namespace
         (cull ? glEnable : glDisable)(GL_CULL_FACE);
     }
 
+    void ViewerHost::drawBatches(const SceneBatch (&batches)[2])
+    {
+        glBindVertexArray(mVao);
+        glBindBuffer(GL_ARRAY_BUFFER, mVbo);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mEbo);
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 10 * sizeof(F32), (void*)0);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 10 * sizeof(F32), (void*)(3 * sizeof(F32)));
+        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 10 * sizeof(F32), (void*)(6 * sizeof(F32)));
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            const SceneBatch& b = batches[pass];
+            if (b.indices.empty())
+                continue;
+            glDepthMask(pass == 0 ? GL_TRUE : GL_FALSE);  // translucent: seen through, writes no depth
+            glBufferData(GL_ARRAY_BUFFER, b.verts.size() * sizeof(F32), b.verts.data(), GL_STREAM_DRAW);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, b.indices.size() * sizeof(U32), b.indices.data(), GL_STREAM_DRAW);
+            glDrawElements(GL_TRIANGLES, GLsizei(b.indices.size()), GL_UNSIGNED_INT, nullptr);
+        }
+    }
+
+    ImTextureID ViewerHost::scene_end()
+    {
+        mSceneOpen = false;
+        if (!std::exchange(mOffOpen, false))
+            return ImTextureID{};
+        return renderOffscreen();
+    }
+
+    // Build 20, item 53: the face cam's triangles into a texture of its own (an FBO with a depth buffer, remade when the
+    // size changes), cleared transparent so the picture is a cutout. Drawn while the UI builds its frame; every GL state it
+    // touches is read and put back, the framebuffers and clear colour included, as drawScene does. ImGui draws the texture
+    // by its GL name.
+    ImTextureID ViewerHost::renderOffscreen()
+    {
+        if (!ensureProgram())
+            return ImTextureID{};
+        gGL.flush();
+        GLint program = 0, vao = 0, array_buffer = 0, active = 0, texture = 0, viewport[4] = {}, depth_func = 0, draw_fb = 0, read_fb = 0;
+        GLint blend_src_rgb = 0, blend_dst_rgb = 0, blend_src_a = 0, blend_dst_a = 0;
+        GLfloat clear[4] = {};
+        GLboolean depth_mask = GL_TRUE;
+        glGetIntegerv(GL_CURRENT_PROGRAM, &program);
+        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao);
+        glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_buffer);
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &active);
+        glGetIntegerv(GL_VIEWPORT, viewport);
+        glGetIntegerv(GL_DEPTH_FUNC, &depth_func);
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw_fb);
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read_fb);
+        glGetIntegerv(GL_BLEND_SRC_RGB, &blend_src_rgb);
+        glGetIntegerv(GL_BLEND_DST_RGB, &blend_dst_rgb);
+        glGetIntegerv(GL_BLEND_SRC_ALPHA, &blend_src_a);
+        glGetIntegerv(GL_BLEND_DST_ALPHA, &blend_dst_a);
+        glGetFloatv(GL_COLOR_CLEAR_VALUE, clear);
+        glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_mask);
+        const GLboolean blend = glIsEnabled(GL_BLEND), depth = glIsEnabled(GL_DEPTH_TEST), cull = glIsEnabled(GL_CULL_FACE),
+                        scissor = glIsEnabled(GL_SCISSOR_TEST);
+        glActiveTexture(GL_TEXTURE0);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
+
+        if (!mFbo || mFboW != mOffW || mFboH != mOffH)
+        {
+            if (!mFbo)
+            {
+                glGenFramebuffers(1, &mFbo);
+                glGenTextures(1, &mFboTex);
+                glGenRenderbuffers(1, &mFboDepth);
+            }
+            glBindTexture(GL_TEXTURE_2D, mFboTex);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, mOffW, mOffH, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glBindRenderbuffer(GL_RENDERBUFFER, mFboDepth);
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, mOffW, mOffH);
+            glBindRenderbuffer(GL_RENDERBUFFER, 0);
+            glBindFramebuffer(GL_FRAMEBUFFER, mFbo);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mFboTex, 0);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, mFboDepth);
+            mFboW = mOffW, mFboH = mOffH;
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, mFbo);
+        const bool complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+        if (complete)
+        {
+            glViewport(0, 0, mOffW, mOffH);
+            glDisable(GL_SCISSOR_TEST);
+            glClearColor(0.f, 0.f, 0.f, 0.f);
+            glDepthMask(GL_TRUE);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glUseProgram(mProgram);
+            glUniformMatrix4fv(mMvpLoc, 1, GL_FALSE, glm::value_ptr(mOffMvp));
+            glUniform3f(mLightLoc, mOffLight.mV[VX], mOffLight.mV[VY], mOffLight.mV[VZ]);
+            glUniform4f(mRectLoc, 0.f, 0.f, (F32)mOffW, (F32)mOffH);
+            glUniform1i(mUseDepthLoc, 0);
+            glUniform1i(mDepthLoc, 0);
+            glDisable(GL_CULL_FACE);
+            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(GL_LEQUAL);
+            glEnable(GL_BLEND);
+            glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+            drawBatches(mOff);
+        }
+        else
+        {
+            LL_WARNS_ONCE("VATsEditor") << "the face cam's framebuffer is not complete: nothing drawn" << LL_ENDL;
+        }
+
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw_fb);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fb);
+        glBindVertexArray(vao);
+        glBindBuffer(GL_ARRAY_BUFFER, array_buffer);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glActiveTexture(active);
+        glUseProgram(program);
+        glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+        glDepthFunc(depth_func);
+        glDepthMask(depth_mask);
+        glClearColor(clear[0], clear[1], clear[2], clear[3]);
+        glBlendFuncSeparate(blend_src_rgb, blend_dst_rgb, blend_src_a, blend_dst_a);
+        (blend ? glEnable : glDisable)(GL_BLEND);
+        (depth ? glEnable : glDisable)(GL_DEPTH_TEST);
+        (cull ? glEnable : glDisable)(GL_CULL_FACE);
+        (scissor ? glEnable : glDisable)(GL_SCISSOR_TEST);
+        return complete ? ImTextureID(mFboTex) : ImTextureID{};
+    }
+
     void ViewerHost::releaseGL()
     {
         // The context is going with them (stopGL); new ones are made on the next draw. The help's pictures go too: the
         // help keeps their stale names until its page changes (drawn blank), and free_texture ignores them.
         mProgram = mVao = mVbo = mEbo = 0;
         mImageProgram = mImageVbo = 0;
+        mFbo = mFboTex = mFboDepth = 0;  // the face cam's; remade at its next picture
+        mFboW = mFboH = 0;
         mTextures.clear();
     }
 
@@ -1904,6 +2396,16 @@ namespace
 
     void ViewerHost::close()
     {
+        mMode = Mode::Hold;  // build 20: the in-world play and the walk test end with the editor (restore below)
+        mOwnPlan.reset();
+        mWalkState = 0;
+        if (mSeatSelection)
+        {
+            if (LLViewerObject* root = gObjectList.findObject(mSeatCheckFor))
+                LLSelectMgr::getInstance()->deselectObjectAndFamily(root);
+            mSeatSelection = nullptr;
+        }
+        mOffOpen = false;
         set_orthographic(false);  // the viewer's lens, draw distance and camera distance back
         showChrome();
         mViewRect = LLRect();
@@ -2083,4 +2585,14 @@ bool FSVATsEditor::ownsWorld()
 U32 FSVATsEditor::filterControls(U32 flags)
 {
     return sHost && (flags & (MOVEMENT | AGENT_CONTROL_STAND_UP)) ? sHost->filterControls(flags) : flags;
+}
+
+bool FSVATsEditor::takesLocomotion(const LLUUID& id)
+{
+    return sHost && sApp && sHost->takesLocomotion(id);
+}
+
+bool FSVATsEditor::walking()
+{
+    return sHost && sApp && sHost->walking();
 }

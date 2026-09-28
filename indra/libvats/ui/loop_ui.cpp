@@ -64,6 +64,13 @@ void App::draw_onion_settings() {
 }
 
 void App::draw_loop_tools_menu() {
+    if (host_.world_view()) {  // spec 09 build 20, item 48: the viewer only
+        if (ImGui::MenuItem("Test as My Walk", nullptr, walk_test_ == 1)) start_walk_test(walk_test_ == 1 ? 0 : 1);
+        ImGui::SetItemTooltip("Walk for real: your animation plays as your walk on your screen, with your speed against its "
+                              "stride");
+        if (ImGui::MenuItem("Test as My Run", nullptr, walk_test_ == 2)) start_walk_test(walk_test_ == 2 ? 0 : 2);
+        ImGui::Separator();
+    }
     const LoopRange r = loop_range(doc_.clip());
     ImGui::TextDisabled("Frames %d to %d%s", r.in, r.out, doc_.clip().loop ? " (loop)" : " (whole clip)");
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);

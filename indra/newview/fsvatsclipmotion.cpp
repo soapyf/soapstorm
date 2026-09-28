@@ -59,7 +59,9 @@ LLMotion::LLMotionInitStatus VATsClipMotion::onInitialize(LLCharacter* character
 
         LLPointer<LLJointState> state = new LLJointState(joint);
         state->setUsage(j.position ? LLJointState::ROT | LLJointState::POS : LLJointState::ROT);
-        state->setPriority(LLJoint::ADDITIVE_PRIORITY);  // above any animation, as Black Dragon's poser does
+        // The editor's hold: above any animation, as Black Dragon's poser does. As it plays in-world: the priority the
+        // uploaded animation gives this joint, so it blends with the AO and the rest as it will there.
+        state->setPriority(LLJoint::JointPriority(j.priority));
         addJointState(state);
         mBound.push_back({ node, state, j.position, j.base });
     }

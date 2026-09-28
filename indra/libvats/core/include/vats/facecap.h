@@ -10,6 +10,7 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "vats/clip.h"
@@ -70,6 +71,13 @@ std::map<std::string, double> face_weights(const FaceTable& table, const std::ma
 // sends them (s.has_eyes, or VMC LeftEye/RightEye bones), else the eyeLook shapes; then eye_gain, the
 // limits, and the lids following the pitch.
 void key_face(Clip& clip, const FaceTable& table, const VmcState& s, const FaceSettings& settings, double frame);
+
+// The Linden head's own expression morphs (avatar_head.llm) from ARKit weights, for a face drawn on the system head
+// (the face cam, spec 09 build 20): Blink_Left / Blink_Right (eyeBlink*), Express_Open_Mouth (jawOpen), Express_Smile
+// (mouthSmile*), Express_Frown (mouthFrown*) and Express_Kiss (mouthPucker). The system head is not weighted to the
+// face bones, so these carry the expression there. Weights 0..1 in steps of 1/20, so a caller rebuilds a mesh only
+// when they change; morphs at 0 are left out.
+std::vector<std::pair<std::string, float>> linden_head_morphs(const std::map<std::string, double>& arkit);
 
 // --- iFacialMocap -------------------------------------------------------------------------------
 // Format from the developer page (ifacialmocap.com/for-developer): the PC sends kIFacialMocapHello to

@@ -188,7 +188,9 @@ bool App::mocap_busy() const {  // listening, or waiting on a firewall check or 
 
 void App::apply_mocap_preview(Evaluation& e) {
     MocapUi* ui = mocap_ui_.get();
-    if (!ui || !ui->drive || !ui->have_data || !ui->sock.is_open() || (ui->table.bones.empty() && ui->face.shapes.empty()))
+    // The face cam shows the tracking instead: your avatar is left alone (spec 09 build 20, item 53).
+    if (!ui || !ui->drive || face_cam_ || !ui->have_data || !ui->sock.is_open() ||
+        (ui->table.bones.empty() && ui->face.shapes.empty()))
         return;
     // The live pose replaces the mapped tracks of a copy of the clip; IK and pins would fight it.
     // ponytail: copies the whole clip every frame; keep a scratch clip if big projects stutter.
@@ -202,6 +204,16 @@ void App::apply_mocap_preview(Evaluation& e) {
     for (auto& [name, tr] : live.curves)
         if (!parts || std::find(ui->only.begin(), ui->only.end(), name) != ui->only.end()) overlay.curves[name] = tr;
     e = vats::evaluate(*rig_, overlay, frame_, shape());
+}
+
+// The face cam's input (spec 09 build 20, item 53): this frame's tracking as a pose clip, and its ARKit weights (empty
+// with Face off). False while nothing streams.
+bool App::mocap_live(Clip& live, std::map<std::string, double>& arkit) {
+    MocapUi* ui = mocap_ui_.get();
+    if (!ui || !ui->have_data || !ui->sock.is_open() || (ui->table.bones.empty() && ui->face.shapes.empty())) return false;
+    live = live_pose(skel_, ui->table, ui->rest, ui->state, shape(), ui->face_on ? &ui->face : nullptr, ui->face_settings);
+    arkit = ui->face_on ? face_weights(ui->face, ui->state.blend, ui->face_settings) : std::map<std::string, double>{};
+    return true;
 }
 
 void App::draw_mocap_panel() {
