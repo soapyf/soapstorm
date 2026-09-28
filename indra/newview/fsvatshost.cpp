@@ -87,8 +87,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <deque>
 #include <fstream>
+#include <initializer_list>
+#include <iterator>
 #include <memory>
 #include <map>
 #include <optional>
@@ -117,6 +120,215 @@ namespace
                              AGENT_CONTROL_FAST_UP | AGENT_CONTROL_NUDGE_AT_POS | AGENT_CONTROL_NUDGE_AT_NEG |
                              AGENT_CONTROL_NUDGE_LEFT_POS | AGENT_CONTROL_NUDGE_LEFT_NEG | AGENT_CONTROL_NUDGE_UP_POS |
                              AGENT_CONTROL_NUDGE_UP_NEG | AGENT_CONTROL_TURN_LEFT | AGENT_CONTROL_TURN_RIGHT;
+
+    // Build 26: the GL state the editor's own draws (the thumbnails, the face cam, the world layer's triangles) depend
+    // on, read when made and put back exactly when it goes; with neutral, also set as they need it (what each draw sets
+    // itself, the program, buffers, depth test and function, blending and multisampling, comes after). Logged in, the
+    // viewer leaves state set that the login screen does not: after the world's render its colour mask writes no alpha
+    // (llviewerdisplay.cpp, gGL.setColorMask(true, false)), so in-world thumbnails were written with alpha 0 (build 25)
+    // or whatever the renderbuffer held (build 24). Nothing in the viewer calls glClipControl (Windows only loads it),
+    // so the clip origin and depth mode are always GL's defaults and are left alone.
+    class GLStateGuard
+    {
+    public:
+        // alpha: the colour mask writes alpha (offscreen targets); false for the window, whose alpha the viewer keeps
+        GLStateGuard(bool neutral, bool alpha)
+        {
+            for (GLuint i = 0; i < 8; ++i)
+                glGetBooleani_v(GL_COLOR_WRITEMASK, i, mMask[i]);
+            for (size_t i = 0; i < std::size(kCaps); ++i)
+                mCaps[i] = glIsEnabled(kCaps[i]);
+            glGetIntegerv(GL_CURRENT_PROGRAM, &mProgram);
+            glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &mVao);
+            glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &mArrayBuffer);
+            glGetIntegerv(GL_ACTIVE_TEXTURE, &mActive);
+            glActiveTexture(GL_TEXTURE0);
+            glGetIntegerv(GL_TEXTURE_BINDING_2D, &mTexture);
+            glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &mDrawFb);
+            glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &mReadFb);
+            glGetIntegerv(GL_VIEWPORT, mViewport);
+            glGetIntegerv(GL_SCISSOR_BOX, mScissor);
+            glGetIntegerv(GL_POLYGON_MODE, mPolygon);
+            glGetIntegerv(GL_BLEND_EQUATION_RGB, &mEquation[0]);
+            glGetIntegerv(GL_BLEND_EQUATION_ALPHA, &mEquation[1]);
+            glGetIntegerv(GL_BLEND_SRC_RGB, &mBlend[0]);
+            glGetIntegerv(GL_BLEND_DST_RGB, &mBlend[1]);
+            glGetIntegerv(GL_BLEND_SRC_ALPHA, &mBlend[2]);
+            glGetIntegerv(GL_BLEND_DST_ALPHA, &mBlend[3]);
+            glGetBooleanv(GL_DEPTH_WRITEMASK, &mDepthMask);
+            glGetIntegerv(GL_DEPTH_FUNC, &mDepthFunc);
+            glGetFloatv(GL_DEPTH_RANGE, mDepthRange);
+            glGetFloatv(GL_DEPTH_CLEAR_VALUE, &mClearDepth);
+            glGetFloatv(GL_COLOR_CLEAR_VALUE, mClearColour);
+            glGetIntegerv(GL_STENCIL_FUNC, &mStencil[0]);
+            glGetIntegerv(GL_STENCIL_REF, &mStencil[1]);
+            glGetIntegerv(GL_STENCIL_VALUE_MASK, &mStencil[2]);
+            glGetFloatv(GL_SAMPLE_COVERAGE_VALUE, &mCoverage);
+            glGetBooleanv(GL_SAMPLE_COVERAGE_INVERT, &mCoverageInvert);
+            glGetIntegeri_v(GL_SAMPLE_MASK_VALUE, 0, &mSampleMask);
+            glGetIntegerv(GL_CULL_FACE_MODE, &mCullMode);
+            glGetIntegerv(GL_FRONT_FACE, &mFrontFace);
+            glGetIntegerv(GL_LOGIC_OP_MODE, &mLogicOp);
+            glGetFloatv(GL_POLYGON_OFFSET_FACTOR, &mOffset[0]);
+            glGetFloatv(GL_POLYGON_OFFSET_UNITS, &mOffset[1]);
+            glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &mPackBuffer);
+            for (size_t i = 0; i < std::size(kPack); ++i)
+                glGetIntegerv(kPack[i], &mPack[i]);
+            if (!neutral)
+                return;
+            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, alpha ? GL_TRUE : GL_FALSE);
+            for (GLenum cap : kCaps)
+                if (cap != GL_BLEND && cap != GL_DEPTH_TEST && cap != GL_MULTISAMPLE)  // each draw sets these
+                    glDisable(cap);
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+            glDepthRange(0.0, 1.0);
+            glClearDepth(1.0);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+            for (size_t i = 0; i < std::size(kPack); ++i)
+                glPixelStorei(kPack[i], kPack[i] == GL_PACK_ALIGNMENT ? 4 : 0);
+        }
+
+        ~GLStateGuard()
+        {
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, mDrawFb);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, mReadFb);
+            glBindVertexArray(mVao);  // brings back its element buffer
+            glBindBuffer(GL_ARRAY_BUFFER, mArrayBuffer);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, mTexture);
+            glActiveTexture(mActive);
+            glUseProgram(mProgram);
+            glViewport(mViewport[0], mViewport[1], mViewport[2], mViewport[3]);
+            glScissor(mScissor[0], mScissor[1], mScissor[2], mScissor[3]);
+            for (GLuint i = 0; i < 8; ++i)
+                glColorMaski(i, mMask[i][0], mMask[i][1], mMask[i][2], mMask[i][3]);
+            for (size_t i = 0; i < std::size(kCaps); ++i)
+                (mCaps[i] ? glEnable : glDisable)(kCaps[i]);
+            glPolygonMode(GL_FRONT_AND_BACK, mPolygon[0]);
+            glBlendEquationSeparate(mEquation[0], mEquation[1]);
+            glBlendFuncSeparate(mBlend[0], mBlend[1], mBlend[2], mBlend[3]);
+            glDepthMask(mDepthMask);
+            glDepthFunc(mDepthFunc);
+            glDepthRange(mDepthRange[0], mDepthRange[1]);
+            glClearDepth(mClearDepth);
+            glClearColor(mClearColour[0], mClearColour[1], mClearColour[2], mClearColour[3]);
+            glStencilFunc(mStencil[0], mStencil[1], mStencil[2]);
+            glSampleCoverage(mCoverage, mCoverageInvert);
+            glSampleMaski(0, mSampleMask);
+            glCullFace(mCullMode);
+            glFrontFace(mFrontFace);
+            glLogicOp(mLogicOp);
+            glPolygonOffset(mOffset[0], mOffset[1]);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, mPackBuffer);
+            for (size_t i = 0; i < std::size(kPack); ++i)
+                glPixelStorei(kPack[i], mPack[i]);
+        }
+
+        GLStateGuard(const GLStateGuard&) = delete;
+        GLStateGuard& operator=(const GLStateGuard&) = delete;
+
+    private:
+        static constexpr GLenum kCaps[] = {
+            GL_BLEND, GL_DEPTH_TEST, GL_MULTISAMPLE, GL_CULL_FACE, GL_SCISSOR_TEST, GL_STENCIL_TEST, GL_FRAMEBUFFER_SRGB,
+            GL_SAMPLE_ALPHA_TO_COVERAGE, GL_SAMPLE_ALPHA_TO_ONE, GL_SAMPLE_COVERAGE, GL_SAMPLE_MASK, GL_DEPTH_CLAMP,
+            GL_POLYGON_OFFSET_FILL, GL_COLOR_LOGIC_OP, GL_RASTERIZER_DISCARD, GL_PRIMITIVE_RESTART,
+            GL_CLIP_DISTANCE0, GL_CLIP_DISTANCE1, GL_CLIP_DISTANCE2, GL_CLIP_DISTANCE3,
+            GL_CLIP_DISTANCE4, GL_CLIP_DISTANCE5, GL_CLIP_DISTANCE6, GL_CLIP_DISTANCE7 };
+        static constexpr GLenum kPack[] = { GL_PACK_ALIGNMENT, GL_PACK_ROW_LENGTH, GL_PACK_SKIP_ROWS, GL_PACK_SKIP_PIXELS };
+        GLboolean mMask[8][4] = {}, mCaps[std::size(kCaps)] = {}, mDepthMask = GL_TRUE, mCoverageInvert = GL_FALSE;
+        GLint mProgram = 0, mVao = 0, mArrayBuffer = 0, mActive = GL_TEXTURE0, mTexture = 0, mDrawFb = 0, mReadFb = 0;
+        GLint mViewport[4] = {}, mScissor[4] = {}, mPolygon[2] = { GL_FILL, GL_FILL }, mEquation[2] = {}, mBlend[4] = {};
+        GLint mDepthFunc = GL_LESS, mStencil[3] = {}, mSampleMask = -1, mCullMode = GL_BACK, mFrontFace = GL_CCW;
+        GLint mLogicOp = GL_COPY, mPackBuffer = 0, mPack[std::size(kPack)] = {};
+        GLfloat mDepthRange[2] = { 0.f, 1.f }, mClearDepth = 1.f, mClearColour[4] = {}, mCoverage = 1.f, mOffset[2] = {};
+    };
+
+    // Debug only (spec 09 §0f, build 26): VATS_GL_HOSTILE in the environment sets, before each offscreen picture and its
+    // read-back, what the guard above must undo: "viewer" the one state the logged-in viewer leaves (a colour mask
+    // without alpha), anything else every state the guard covers, set wrong. Put back after. VATS_GL_NO_GUARD draws
+    // without the guard's neutral state, as build 25 did, to show the fault it fixes.
+    class HostileGL
+    {
+    public:
+        explicit HostileGL(std::initializer_list<GLuint> fbos)
+        {
+            static const char* mode = getenv("VATS_GL_HOSTILE");
+            if (!mode || !*mode)
+                return;
+            mKeep.emplace(false, true);
+            if (std::string(mode) == "viewer")
+            {
+                glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
+                return;
+            }
+            for (GLuint fbo : fbos)  // the targets' own draw and read buffers, which each draw sets again
+                if (fbo)
+                {
+                    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+                    glDrawBuffer(GL_NONE);
+                    glReadBuffer(GL_NONE);
+                }
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+            glEnable(GL_STENCIL_TEST);
+            glStencilFunc(GL_NEVER, 1, 0xFF);
+            glEnable(GL_SCISSOR_TEST);
+            glScissor(0, 0, 1, 1);
+            glEnable(GL_FRAMEBUFFER_SRGB);
+            glEnable(GL_SAMPLE_ALPHA_TO_COVERAGE);
+            glEnable(GL_SAMPLE_ALPHA_TO_ONE);
+            glEnable(GL_SAMPLE_COVERAGE);
+            glSampleCoverage(0.f, GL_FALSE);
+            glEnable(GL_SAMPLE_MASK);
+            glSampleMaski(0, 0);
+            glDisable(GL_MULTISAMPLE);
+            glEnable(GL_DEPTH_CLAMP);
+            glEnable(GL_POLYGON_OFFSET_FILL);
+            glPolygonOffset(4.f, 1000.f);
+            glEnable(GL_COLOR_LOGIC_OP);
+            glLogicOp(GL_CLEAR);
+            glEnable(GL_RASTERIZER_DISCARD);
+            glEnable(GL_CLIP_DISTANCE0);  // the shaders write no gl_ClipDistance
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_FRONT_AND_BACK);
+            glFrontFace(GL_CW);
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            glBlendEquationSeparate(GL_FUNC_REVERSE_SUBTRACT, GL_FUNC_REVERSE_SUBTRACT);
+            glBlendFunc(GL_ZERO, GL_ZERO);
+            glDisable(GL_BLEND);
+            glDepthMask(GL_FALSE);
+            glDepthFunc(GL_NEVER);
+            glDepthRange(1.0, 0.0);
+            glClearDepth(0.0);
+            glClearColor(1.f, 0.f, 1.f, 1.f);
+            glViewport(0, 0, 1, 1);
+            glActiveTexture(GL_TEXTURE3);
+            glBindVertexArray(0);
+            glUseProgram(0);
+            if (!sPackBuffer)
+            {
+                glGenBuffers(1, &sPackBuffer);
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, sPackBuffer);
+                glBufferData(GL_PIXEL_PACK_BUFFER, 1 << 20, nullptr, GL_STREAM_READ);
+            }
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, sPackBuffer);
+            glPixelStorei(GL_PACK_ALIGNMENT, 8);
+            glPixelStorei(GL_PACK_ROW_LENGTH, 7);
+            glPixelStorei(GL_PACK_SKIP_ROWS, 3);
+            glPixelStorei(GL_PACK_SKIP_PIXELS, 2);
+        }
+
+        static bool noGuard()
+        {
+            static const bool off = getenv("VATS_GL_NO_GUARD") != nullptr;
+            return off;
+        }
+
+    private:
+        std::optional<GLStateGuard> mKeep;  // the real state, put back when this goes
+        static inline GLuint sPackBuffer = 0;
+    };
 
     // Build 20, item 48: the region's walk or run, each spelling the viewer may play it under (remapMotionID: female,
     // UseNewWalkRun).
@@ -1941,23 +2153,7 @@ namespace
         if (!ensureProgram())
             return;
 
-        GLint program = 0, vao = 0, array_buffer = 0, active = 0, texture = 0, viewport[4] = {}, depth_func = 0;
-        GLint blend_src_rgb = 0, blend_dst_rgb = 0, blend_src_a = 0, blend_dst_a = 0;
-        GLboolean depth_mask = GL_TRUE;
-        glGetIntegerv(GL_CURRENT_PROGRAM, &program);
-        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao);
-        glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_buffer);
-        glGetIntegerv(GL_ACTIVE_TEXTURE, &active);
-        glGetIntegerv(GL_VIEWPORT, viewport);
-        glGetIntegerv(GL_DEPTH_FUNC, &depth_func);
-        glGetIntegerv(GL_BLEND_SRC_RGB, &blend_src_rgb);
-        glGetIntegerv(GL_BLEND_DST_RGB, &blend_dst_rgb);
-        glGetIntegerv(GL_BLEND_SRC_ALPHA, &blend_src_a);
-        glGetIntegerv(GL_BLEND_DST_ALPHA, &blend_dst_a);
-        glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_mask);
-        const GLboolean blend = glIsEnabled(GL_BLEND), depth = glIsEnabled(GL_DEPTH_TEST), cull = glIsEnabled(GL_CULL_FACE);
-        glActiveTexture(GL_TEXTURE0);
-        glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
+        const GLStateGuard guard(true, false);  // into the window: its alpha stays the viewer's
 
         const LLRect world = gViewerWindow->getWorldViewRectRaw();
         glViewport(world.mLeft, world.mBottom, world.getWidth(), world.getHeight());
@@ -1982,19 +2178,6 @@ namespace
         glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
         drawBatches(mScene);
         drawImages(mvp, world_depth, world);
-
-        glBindVertexArray(vao);  // brings back its element buffer
-        glBindBuffer(GL_ARRAY_BUFFER, array_buffer);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glActiveTexture(active);
-        glUseProgram(program);
-        glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
-        glDepthFunc(depth_func);
-        glDepthMask(depth_mask);
-        glBlendFuncSeparate(blend_src_rgb, blend_dst_rgb, blend_src_a, blend_dst_a);
-        (blend ? glEnable : glDisable)(GL_BLEND);
-        (depth ? glEnable : glDisable)(GL_DEPTH_TEST);
-        (cull ? glEnable : glDisable)(GL_CULL_FACE);
     }
 
     void ViewerHost::drawBatches(const SceneBatch (&batches)[2])
@@ -2039,30 +2222,10 @@ namespace
         if (!ensureProgram())
             return ImTextureID{};
         gGL.flush();
-        GLint program = 0, vao = 0, array_buffer = 0, active = 0, texture = 0, viewport[4] = {}, depth_func = 0, draw_fb = 0, read_fb = 0;
-        GLint blend_src_rgb = 0, blend_dst_rgb = 0, blend_src_a = 0, blend_dst_a = 0;
-        GLfloat clear[4] = {};
-        GLboolean depth_mask = GL_TRUE;
-        glGetIntegerv(GL_CURRENT_PROGRAM, &program);
-        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao);
-        glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_buffer);
-        glGetIntegerv(GL_ACTIVE_TEXTURE, &active);
-        glGetIntegerv(GL_VIEWPORT, viewport);
-        glGetIntegerv(GL_DEPTH_FUNC, &depth_func);
-        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw_fb);
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read_fb);
-        glGetIntegerv(GL_BLEND_SRC_RGB, &blend_src_rgb);
-        glGetIntegerv(GL_BLEND_DST_RGB, &blend_dst_rgb);
-        glGetIntegerv(GL_BLEND_SRC_ALPHA, &blend_src_a);
-        glGetIntegerv(GL_BLEND_DST_ALPHA, &blend_dst_a);
-        glGetFloatv(GL_COLOR_CLEAR_VALUE, clear);
-        glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_mask);
-        const GLboolean blend = glIsEnabled(GL_BLEND), depth = glIsEnabled(GL_DEPTH_TEST), cull = glIsEnabled(GL_CULL_FACE),
-                        scissor = glIsEnabled(GL_SCISSOR_TEST), multisample = glIsEnabled(GL_MULTISAMPLE);
-        glActiveTexture(GL_TEXTURE0);
-        glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
-
         Offscreen& o = *mOffTarget;
+        const HostileGL hostile({ o.fbo, o.msFbo });  // debug only
+        const GLStateGuard guard(!HostileGL::noGuard(), true);
+
         if (!o.fbo || o.w != mOffW || o.h != mOffH)
         {
             if (!o.fbo)
@@ -2104,19 +2267,25 @@ namespace
         }
         // Thumbnails: the app's shader and 4x MSAA; either missing, the face cam's way (one sample, its lighting).
         const bool ms = &o == &mThumb && o.msFbo && ensureThumbProgram();
+        // Each target draws into and is read from its one colour attachment (framebuffer state, set here every time).
+        auto bind = [&](GLuint fbo)
+        {
+            glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+            if (!HostileGL::noGuard())
+            {
+                glDrawBuffer(GL_COLOR_ATTACHMENT0);
+                glReadBuffer(GL_COLOR_ATTACHMENT0);
+            }
+            return glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+        };
         bool complete = false;
         if (ms)
         {
-            glBindFramebuffer(GL_FRAMEBUFFER, o.fbo);
-            complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
-            glBindFramebuffer(GL_FRAMEBUFFER, o.msFbo);
-            complete = complete && glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+            complete = bind(o.fbo);
+            complete = bind(o.msFbo) && complete;
         }
         if (!complete)
-        {
-            glBindFramebuffer(GL_FRAMEBUFFER, o.fbo);
-            complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
-        }
+            complete = bind(o.fbo);
         const bool thumb_look = ms && complete;
         if (thumb_look)
             glBindFramebuffer(GL_FRAMEBUFFER, o.msFbo);
@@ -2127,6 +2296,7 @@ namespace
             glClearColor(0.f, 0.f, 0.f, 0.f);
             glDepthMask(GL_TRUE);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glActiveTexture(GL_TEXTURE0);
         }
         if (complete && thumb_look)
         {
@@ -2170,24 +2340,6 @@ namespace
         {
             LL_WARNS_ONCE("VATsEditor") << "an offscreen framebuffer is not complete: nothing drawn" << LL_ENDL;
         }
-
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw_fb);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fb);
-        glBindVertexArray(vao);
-        glBindBuffer(GL_ARRAY_BUFFER, array_buffer);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glActiveTexture(active);
-        glUseProgram(program);
-        glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
-        glDepthFunc(depth_func);
-        glDepthMask(depth_mask);
-        glClearColor(clear[0], clear[1], clear[2], clear[3]);
-        glBlendFuncSeparate(blend_src_rgb, blend_dst_rgb, blend_src_a, blend_dst_a);
-        (blend ? glEnable : glDisable)(GL_BLEND);
-        (depth ? glEnable : glDisable)(GL_DEPTH_TEST);
-        (cull ? glEnable : glDisable)(GL_CULL_FACE);
-        (scissor ? glEnable : glDisable)(GL_SCISSOR_TEST);
-        (multisample ? glEnable : glDisable)(GL_MULTISAMPLE);
         return complete ? ImTextureID(o.tex) : ImTextureID{};
     }
 
@@ -2199,14 +2351,15 @@ namespace
             return false;
         width = mThumb.w, height = mThumb.h;
         px.resize(size_t(width) * height * 4);
-        GLint read_fb = 0, pack = 4;
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read_fb);
-        glGetIntegerv(GL_PACK_ALIGNMENT, &pack);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, mThumb.fbo);
-        glPixelStorei(GL_PACK_ALIGNMENT, 1);
-        glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
-        glPixelStorei(GL_PACK_ALIGNMENT, pack);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fb);
+        {
+            const HostileGL hostile({ mThumb.fbo });  // debug only
+            const GLStateGuard guard(!HostileGL::noGuard(), true);  // no pack buffer, no row length or skips
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, mThumb.fbo);
+            if (!HostileGL::noGuard())
+                glReadBuffer(GL_COLOR_ATTACHMENT0);
+            glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+        }
         for (size_t i = 0; i < px.size(); i += 4)
         {
             std::uint8_t* q = &px[i];
