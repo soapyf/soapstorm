@@ -39,4 +39,8 @@ struct GifImage {
 };
 bool read_gif(const std::uint8_t* data, std::size_t size, GifImage& out);
 
+// True when the bytes are a PNG in which every pixel is fully transparent: a thumbnail that drew nothing (the viewer's
+// build 25 wrote them so), which the Inventory renders again. False for anything that does not decode.
+bool png_blank(const std::uint8_t* data, std::size_t size);
+
 }  // namespace vats

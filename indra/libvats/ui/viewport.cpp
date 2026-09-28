@@ -5,6 +5,7 @@
 
 #include "app.h"
 #include "imgui_internal.h"  // the dockspace's central node (world view)
+#include "box_select.h"
 #include "profile.h"
 #include "vats/edit.h"
 #include "theme.h"
@@ -88,8 +89,8 @@ void App::draw_collision_volumes(std::vector<Vertex>& verts) {
         if (!node_visible(v.node)) continue;
         Vec3 axes = sh ? v.scale.mul(sh->scale[v.joint]) : v.scale;
         bool sel = std::find(selection_.begin(), selection_.end(), v.node) != selection_.end();
-        Rgb c = v.node == primary() ? kSelected : sel ? mix(kSelected, kVolume, 0.45f) : v.node == hover_bone_ ? mix(kVolume, {1, 1, 1}, 0.5f) : kVolume;
-        float a = sel || v.node == hover_bone_ ? 0.32f : 0.2f;
+        Rgb c = v.node == primary() ? kSelected : sel ? mix(kSelected, kVolume, 0.45f) : hot(v.node) ? mix(kVolume, {1, 1, 1}, 0.5f) : kVolume;
+        float a = sel || hot(v.node) ? 0.32f : 0.2f;
         const Xform& g = globals_[v.node];
         for (const Vec3& u : unit_sphere()) {
             Vec3 p = g.apply(u.mul(axes)), n = g.rot.rotate(Vec3{u.x / axes.x, u.y / axes.y, u.z / axes.z}).normalized();
@@ -308,7 +309,7 @@ ImTextureID App::render_scene(int w, int h) {
         if (i == primary()) c = kSelected;
         else if (sel) c = mix(kSelected, c, 0.45f);
         else if (contact_bone(i)) c = kContact;
-        else if (i == hover_bone_) c = mix(c, {1, 1, 1}, 0.5f);
+        else if (hot(i)) c = mix(c, {1, 1, 1}, 0.5f);
         bone_glyph(bones, globals_[i].pos, globals_[i].apply(end), local_axes(i), c);
     }
     host_.scene_triangles(bones, {}, !xray_, 0.25f);
@@ -533,6 +534,71 @@ void App::keyboard_camera() {
     else camera_.orbit(x * px, 0), camera_.zoom(std::exp(-0.005 * y * px));
 }
 
+void App::start_box(ImVec2 m, bool from_b, bool click_clears) {
+    box_ = true, box_moved_ = false, box_from_b_ = from_b, box_click_clears_ = click_clears, box_armed_ = false;
+    box_press_ = m;
+    box_hits_.clear();
+}
+
+// Box selection: the drag, then the release applies it with the preset's modifiers (box_select.h). Like every other
+// selection change it is not an undo step. A click without a drag does what a click on empty space always did.
+bool App::box_input(ImVec2 m, bool hovered) {
+    ImGuiIO& io = ImGui::GetIO();
+    // Blender: B over the view arms a box for the next left press, anywhere. With audio loaded B marks a beat instead.
+    if (!box_ && settings_.preset == Preset::Blender && hovered && !io.WantTextInput && !doc_.clip().audio &&
+        ImGui::IsKeyChordPressed(ImGuiKey_B)) {
+        box_armed_ = true;
+        skip_shortcuts_ = true;
+        status("Box select: drag over the bones   Ctrl: remove   Esc: cancel");
+    }
+    if (box_armed_) {
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) || (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))) {
+            box_armed_ = false;
+            skip_shortcuts_ = true;
+            status("Cancelled");
+            return true;
+        }
+        if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.KeyAlt) start_box(m, true, false);
+        else return false;  // Alt+left still orbits with 3-button emulation
+    }
+    if (!box_) return false;
+    hover_bone_ = hover_handle_ = -1;
+    gizmo_hover_ = Gizmo::None;
+    box_moved_ = box_moved_ || std::hypot(m.x - box_press_.x, m.y - box_press_.y) >= 4;
+    const Shape* sh = shape();
+    if (box_moved_)
+        box_hits_ = points_in_rect(projector_, globals_, box_press_.x, box_press_.y, m.x, m.y, [&](int i) {
+            // What is drawn and could be clicked: visible, and not a zero-length bone (as pick_node).
+            return i < skel_.size() && node_visible(i) && (sh ? skel_[i].end.mul(sh->scale[i]) : skel_[i].end).length() >= 1e-5;
+        });
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+        box_ = false;
+        box_hits_.clear();
+        skip_shortcuts_ = true;
+        status("Cancelled");
+        return true;
+    }
+    if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) return true;
+    box_ = false;
+    last_click_ = ImVec2(-100, -100);
+    if (!box_moved_) {
+        if (box_click_clears_) clear_selection();
+        last_click_ = m;
+        return true;
+    }
+    const size_t before = selection_.size();
+    const BoxMode mode = box_mode(settings_.preset, io.KeyShift, io.KeyCtrl, box_from_b_);
+    if (mode == BoxMode::Replace) handles_.clear();
+    apply_box(selection_, box_hits_, mode);
+    selected_prop_ = -1;  // bones and a prop are never selected together (VP-27)
+    handle_primary_ = selection_.empty() && !handles_.empty();
+    status(selection_.empty() ? std::string("Nothing selected")
+                              : std::to_string(selection_.size()) + " bone(s) selected" +
+                                    (mode == BoxMode::Replace ? "" : " (was " + std::to_string(before) + ")"));
+    box_hits_.clear();
+    return true;
+}
+
 void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered) {
     ImGuiIO& io = ImGui::GetIO();
     ImVec2 m = io.MousePos;
@@ -569,6 +635,7 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
         }
         return;
     }
+    if (box_input(m, hovered)) return;
     if (hovered && io.MouseWheel != 0) camera_.zoom(std::pow(0.9, io.MouseWheel));
     // The viewer's world view: its own camera controls get those clicks (spec 09 U3).
     if (hovered && !dragging_gizmo_ && euler_drag_bone_ < 0 && !host_.world_view()) {
@@ -711,8 +778,9 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
     // Place on Furniture Point is armed (spec 09 build 20): the click picks the point, bones or not.
     if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.KeyAlt && seat_click(m)) return;
     if (preset == Preset::QAvimator && hovered && ImGui::IsMouseClicked(0) && gizmo_hover_ == Gizmo::None) {
-        if (hover_bone_ < 0 && hover_handle_ < 0) {  // empty space: orbit, Shift pan, Alt zoom
-            if (!host_.world_view()) nav_button = 0, nav_mode = io.KeyShift ? 1 : io.KeyAlt ? 2 : 0, nav_moved = false;
+        if (hover_bone_ < 0 && hover_handle_ < 0) {  // empty space: orbit, Shift pan, Alt zoom; Ctrl: a selection box
+            if (io.KeyCtrl && !io.KeyShift && !io.KeyAlt) start_box(m, false, !host_.world_view());
+            else if (!host_.world_view()) nav_button = 0, nav_mode = io.KeyShift ? 1 : io.KeyAlt ? 2 : 0, nav_moved = false;
             return;
         }
         int limb = hover_bone_ >= 0 ? rig_->limb_of_bone(hover_bone_) : -1;
@@ -763,8 +831,9 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
         status(doc_.clip().props[prop].name);
     } else if (int actor = pick_actor(m); actor >= 0) {
         activate_actor(actor);  // clicking another actor's body edits it (GR-1)
-    } else if (!io.KeyShift) {
-        clear_selection();
+    } else {  // empty space: a drag draws a selection box, a click clears the selection (not with Shift)
+        start_box(m, false, !io.KeyShift);
+        return;
     }
     last_click_ = m;
     (void)origin;
@@ -786,10 +855,10 @@ void App::draw_bone_lines(ImDrawList* dl) const {
         if (i == primary()) c = kSelected;
         else if (sel) c = mix(kSelected, c, 0.45f);
         else if (contact_bone(i)) c = kContact;
-        else if (i == hover_bone_) c = mix(c, {1, 1, 1}, 0.5f);
+        else if (hot(i)) c = mix(c, {1, 1, 1}, 0.5f);
         const ImU32 col = IM_COL32(int(c.r * 255), int(c.g * 255), int(c.b * 255), 235);
         const ImVec2 a{float(hx), float(hy)}, b{float(tx), float(ty)};
-        const float width = i == primary() ? 3.5f : sel || i == hover_bone_ ? 3.f : 2.f;
+        const float width = i == primary() ? 3.5f : sel || hot(i) ? 3.f : 2.f;
         dl->AddLine(a, b, IM_COL32(10, 12, 14, 150), width + 2);  // a dark edge keeps them readable on any backdrop
         dl->AddLine(a, b, col, width);
         dl->AddCircleFilled(a, width + 0.5f, col);
@@ -875,8 +944,8 @@ void App::draw_world_extras(ImDrawList* dl) {
         const Vec3 axes = sh ? cv.scale.mul(sh->scale[cv.joint]) : cv.scale;
         const bool sel = std::find(selection_.begin(), selection_.end(), cv.node) != selection_.end();
         const Rgb c = cv.node == primary() ? kSelected : sel ? mix(kSelected, kVolume, 0.45f)
-                      : cv.node == hover_bone_ ? mix(kVolume, {1, 1, 1}, 0.5f) : kVolume;
-        const ImU32 col = IM_COL32(int(c.r * 255), int(c.g * 255), int(c.b * 255), sel || cv.node == hover_bone_ ? 220 : 140);
+                      : hot(cv.node) ? mix(kVolume, {1, 1, 1}, 0.5f) : kVolume;
+        const ImU32 col = IM_COL32(int(c.r * 255), int(c.g * 255), int(c.b * 255), sel || hot(cv.node) ? 220 : 140);
         const Xform& g = globals_[cv.node];
         constexpr int kSegments = 24;
         for (int plane = 0; plane < 3; ++plane)
@@ -970,7 +1039,7 @@ void App::draw_viewport() {
         if (!projector_.to_screen(globals_[i].pos, x, y)) continue;
         bool sel = std::find(selection_.begin(), selection_.end(), i) != selection_.end();
         ImU32 c = i == primary() ? IM_COL32(255, 242, 51, 255) : sel ? IM_COL32(255, 200, 90, 255)
-                  : i == hover_bone_ ? IM_COL32(220, 255, 225, 255) : ui::kAttachment;
+                  : hot(i) ? IM_COL32(220, 255, 225, 255) : ui::kAttachment;
         dl->AddCircleFilled(ImVec2(float(x), float(y)), 4.5f, c);
         dl->AddCircle(ImVec2(float(x), float(y)), 4.5f, IM_COL32(10, 12, 14, 200), 0, 1.2f);
     }
@@ -1000,6 +1069,18 @@ void App::draw_viewport() {
         place_gizmo())
         gizmo_.draw(dl, gizmo_hover_, mirror_live_ ? kMirrorTint : 0);  // PT-1: tinted while Mirror is on
     if (place_actor_gizmo()) actor_gizmo_.draw(dl, actor_gizmo_hover_);  // GR: placing another actor
+    // Box selection: a thin accent rectangle with a faint fill; Blender's B, armed, a crosshair through the pointer.
+    if (box_ && box_moved_) {
+        const ImVec2 m = ImGui::GetIO().MousePos;
+        const ImVec2 a(std::min(m.x, box_press_.x), std::min(m.y, box_press_.y)), b(std::max(m.x, box_press_.x), std::max(m.y, box_press_.y));
+        dl->AddRectFilled(a, b, (accent_colour() & 0x00FFFFFF) | (36u << 24));
+        dl->AddRect(a, b, accent_colour(), 0, 0, 1.f);
+    } else if (box_armed_ && hovered) {
+        const ImVec2 m = ImGui::GetIO().MousePos;
+        const ImU32 c = (accent_colour() & 0x00FFFFFF) | (140u << 24);
+        dl->AddLine(ImVec2(origin.x, m.y), ImVec2(vmax.x, m.y), c);
+        dl->AddLine(ImVec2(m.x, origin.y), ImVec2(m.x, vmax.y), c);
+    }
 
     // Hover label.
     if (hovered && (hover_bone_ >= 0 || hover_handle_ >= 0) && gizmo_hover_ == Gizmo::None && !dragging_gizmo_) {
@@ -1054,7 +1135,7 @@ void App::draw_viewport() {
     draw_context_menu();
     if (!world) return ImGui::End();
     // The world view takes the pointer only over what the editor draws, so every other click reaches the world.
-    const bool taken = dragging_gizmo_ || bone_drag_ >= 0 || euler_drag_bone_ >= 0 || modal_ != Modal::None ||
+    const bool taken = dragging_gizmo_ || bone_drag_ >= 0 || euler_drag_bone_ >= 0 || modal_ != Modal::None || box_ ||
                        motion_path_.drag_limb >= 0 || (hovered && motion_path_.hover) ||
                        actor_dragging_ || cube_drag_ != 0 ||
                        (hovered && (hover_bone_ >= 0 || hover_handle_ >= 0 || gizmo_hover_ != Gizmo::None ||

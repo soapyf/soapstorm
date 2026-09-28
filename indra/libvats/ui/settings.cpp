@@ -97,6 +97,10 @@ void Settings::load(const std::string& file) {
             if (auto* x = c.find("distance")) v.distance = x->num;
         }
     if (auto* m = j.find("mocap"); m && m->is_object()) mocap = *m;
+    if (auto* o = j.find("key_overrides"); o && o->is_object())
+        for (auto& [id, v] : o->obj)
+            if (v.is_array() && v.arr.size() == 2 && v.arr[0].is_string() && v.arr[1].is_string())
+                key_overrides[id] = {v.arr[0].str, v.arr[1].str};
     if (auto* r = j.find("recent"); r && r->is_array())
         for (auto& e : r->arr)
             if (e.is_string() && recent.size() < 10) recent.push_back(e.str);
@@ -154,6 +158,13 @@ void Settings::save(const std::string& file) const {
         j.set(key, a);
     }
     j.set("mocap", mocap);
+    Json keys = Json::object();
+    for (auto& [id, k] : key_overrides) {
+        Json pair = Json::array();
+        pair.push(k[0]), pair.push(k[1]);
+        keys.set(id, pair);
+    }
+    j.set("key_overrides", keys);
     std::string p = file, tmp = p + ".tmp";
     {
         std::ofstream f(tmp, std::ios::binary | std::ios::trunc);

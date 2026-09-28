@@ -11,11 +11,20 @@ Posing is setting the rotation (and sometimes the position) of bones at the curr
 - **Click** a bone in the view to select it. Its name shows in **Properties**.
 - **Click the same spot again** to reach a bone hidden underneath the first.
 - **Shift+click** adds a bone to the selection or removes it. The last bone picked is the *primary* bone: the gizmo sits on it and its keys are drawn brighter on the timeline.
+- **Drag a box** from empty space to select every bone whose joint falls inside it. It works with every tool, as
+  long as the drag starts off the gizmo and off the bones; the bones inside light up while you drag. Only shown
+  bones are taken: groups hidden under **Show** in the **Bones** tab stay out. In the Industry preset **Shift**
+  toggles, **Ctrl** removes and **Ctrl+Shift** adds; the other presets are in [[Control presets#Box selection]].
 - **Esc** clears the selection (in the Second Life preset, **Esc** resets the camera instead).
 - **Up** / **Down**, or **[** / **]**, walk to the parent or child bone (**Select → Select Parent**, **Select Child**). **Select → Next Sibling** and **Previous Sibling** step sideways.
 - In the **Bones** tab, click a name. Picking a bone in the view opens the list at that bone.
 - In the **Picker** tab beside it, click a body part on the avatar outline; **Shift+click** adds one. Save a selection you use often as a selection set there. See [[Picker]].
 - **Select → Select All** (**Ctrl+A** in the Industry preset), **Select Keyed on Frame** (**Ctrl+Shift+A**), **Select All Keyed** and **Select None** select in bulk.
+
+Selecting is not an undo step: **Ctrl+Z** takes back edits, not selections.
+
+![Dragging a box over the hips and legs selects every leg bone at once](images/posing/box-select.gif)
+*A drag from empty space with the Select tool: the bones inside light up, and the release selects them.*
 
 ### Moving and rotating
 

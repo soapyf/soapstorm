@@ -39,7 +39,8 @@ or its **×**, to close it.
 
 The lower part of the window lists the mouse controls and every command of the active preset with its
 keys; `-` marks a command without a key. It is the same list as **Help → Controls**, which
-shows only the commands that have keys. See [[Keyboard shortcuts]].
+shows only the commands that have keys. **Change Shortcuts...** opens **Edit → Keyboard Shortcuts...**
+to change them; see [[Keyboard shortcuts#Changing shortcuts]].
 
 ### Worked example: change the theme and find it on disk
 
@@ -67,6 +68,7 @@ Some choices are saved in the same file from other places in the app:
 | Camera views (`cameras`) | **View → Camera Views → Store Camera View 1** to **4** |
 | Recent files (`recent`, up to 10) | **File → Open Recent**; **Clear Recent** empties it |
 | Motion capture and face tracking (`mocap`) | **Tools → Motion Capture...**; see [[Motion capture]] |
+| Your own keys (`key_overrides`) | **Edit → Keyboard Shortcuts...**; see [[Keyboard shortcuts#Changing shortcuts]] |
 
 ### Settings file
 

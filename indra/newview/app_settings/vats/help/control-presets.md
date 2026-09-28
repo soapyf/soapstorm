@@ -12,7 +12,8 @@ feels like a program you already know. There are four: **Industry (Maya-style)**
 
 Open **Edit → Preferences...** (**Ctrl+,**) and pick one under **Navigation & hotkeys**. The change
 applies at once and is saved. The status bar shows `Controls: <preset>`, and its right end shows the
-mouse controls of the new preset. **Help → Controls** lists the keys of the active preset.
+mouse controls of the new preset. **Help → Controls** lists the keys of the active preset. Keys you
+changed in **Edit → Keyboard Shortcuts...** stay; **Clear** under the preset drops them.
 
 To try a preset for one session, start VATs with `--preset`; see [[Command line]].
 
@@ -46,6 +47,7 @@ To try a preset for one session, start VATs with `--preset`; see [[Command line]
 In every preset:
 
 - Click a bone to select it; click the same spot again for the bone underneath.
+- Drag a box from empty space to select every shown bone inside it; see [[#Box selection]].
 - **Shift+click** adds to the selection, except on an FK bone in QAvimator, where **Shift** + drag turns
   the bone.
 - Double-click a limb bone to switch its limb between IK and FK.
@@ -53,6 +55,31 @@ In every preset:
 - **Esc** or a right-click during a drag cancels it.
 - The mouse wheel zooms.
 - **Num 5** switches the view between perspective and orthographic ([[Interface#Orthographic view]]).
+
+### Box selection
+
+A left drag that starts on empty space (off the gizmo, the bones and the IK controls) draws a thin rectangle in the
+theme's accent colour; the bones whose joints fall inside light up while you drag, and the release selects them. It
+works with the Select, Move, Rotate and Scale tools, in perspective and orthographic views, and takes only the
+bones shown (groups hidden under **Show** in the **Bones** tab stay out). A click without a drag still clears
+the selection, **Esc** or a right-click during the drag cancels it, and it is not an undo step, as no selection is.
+The modifiers count as held when you let go.
+
+| | Industry (Maya-style) | Blender | QAvimator | Second Life |
+|---|---|---|---|---|
+| Box | **Drag** | **Drag**; or **B**, then drag from anywhere | **Ctrl + drag** | **Drag** |
+| Replace the selection | no modifier | no modifier | **Ctrl** only | no modifier |
+| Add | **Ctrl + Shift** | **Shift** (a **B** box adds without it) | **Shift**, pressed once the box is started | **Shift** |
+| Remove | **Ctrl** | **Ctrl** | – | **Ctrl** |
+| Toggle | **Shift** | – | – | – |
+
+- **Blender:** **B** with the pointer over the viewport arms a box: a crosshair follows the pointer and the next
+  left drag draws the box even over a bone or the gizmo. **Esc** or a right-click disarms it. With audio loaded,
+  **B** keeps marking a beat instead ([[Audio track]]).
+- **QAvimator:** a plain drag on empty space still orbits and **Shift** + drag still pans, so the box starts with
+  **Ctrl** alone; press **Shift** during the drag to add instead of replacing.
+- **Second Life:** as the build tools' drag-select. **Ctrl** + drag on empty space removes; on the gizmo, **Ctrl**
+  still turns it into the rotation rings.
 
 ### Industry (Maya-style)
 
@@ -113,7 +140,11 @@ The wheel zooms the graph in every preset. See [[Graph editor]].
 ## Configuration
 
 The preset is stored as `preset` in `settings.json` (`industry`, `blender`, `qavimator` or
-`secondlife`); see [[Preferences#Settings file]]. Keys cannot be rebound one by one.
+`secondlife`); see [[Preferences#Settings file]].
+
+Keys can be changed one by one in **Edit → Keyboard Shortcuts...**, with a search that finds every
+number pad key; see [[Keyboard shortcuts#Changing shortcuts]]. Your keys stay over whichever preset is
+active; the mouse controls always follow the preset.
 
 ## Troubleshooting
 

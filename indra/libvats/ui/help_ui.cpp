@@ -101,6 +101,14 @@ constexpr ImU32 kBroken = IM_COL32(232, 104, 92, 255);
 
 ImU32 with_alpha(ImU32 c, int a) { return (c & ~IM_COL32_A_MASK) | (ImU32(a) << IM_COL32_A_SHIFT); }
 
+// Spans laid out within width w at scale x the font size, as draw_spans draws them.
+wiki::Layout lay_out(const std::vector<wiki::Span>& spans, float w, float scale, bool bold) {
+    const float size = ImGui::GetFontSize() * scale;
+    return wiki::lay_out(spans, w, size * 0.15f, size * 0.6f, size * 0.3f, [&](const wiki::Span& s, std::string_view t) {
+        return (s.bold || bold ? bold_font() : ImGui::GetFont())->CalcTextSizeA(size, FLT_MAX, 0, t.data(), t.data() + t.size()).x;
+    });
+}
+
 // Word-wrapped runs from the cursor within width w, at scale x the font size. Returns the clicked link.
 const wiki::Span* draw_spans(HelpUi& ui, const std::vector<wiki::Span>& spans, float w, float scale = 1,
                              bool bold = false, const char* prefix = nullptr, ImU32 colour = 0) {
@@ -109,66 +117,63 @@ const wiki::Span* draw_spans(HelpUi& ui, const std::vector<wiki::Span>& spans, f
     const float size = ImGui::GetFontSize() * scale, line_h = size * 1.35f;
     const ImVec2 start = ImGui::GetCursorScreenPos();
     const ImU32 text = colour ? colour : ImGui::GetColorU32(ImGuiCol_Text);
-    float x = start.x, y = start.y, right = start.x;
+    // A prefix lays out as a bold span of its own before the others.
+    std::vector<wiki::Span> with_prefix;
+    if (prefix) {
+        with_prefix.resize(1), with_prefix[0].text = prefix, with_prefix[0].bold = true;
+        with_prefix.insert(with_prefix.end(), spans.begin(), spans.end());
+    }
+    const std::vector<wiki::Span>& all = prefix ? with_prefix : spans;
+    auto font_of = [&](const wiki::Span& s) { return s.bold || bold ? bold_font() : ImGui::GetFont(); };
+    const float button_pad = size * 0.6f;
+    const wiki::Layout lay = lay_out(all, w, scale, bold);
+    const float text_dy = (line_h - size) * 0.5f;
+    // Code backgrounds first, so no text is drawn over; each covers its words on a line and pads them.
+    for (const wiki::Layout::Box& bx : lay.boxes) {
+        const float y = start.y + float(bx.line) * line_h + text_dy;
+        dl->AddRectFilled(ImVec2(start.x + bx.x0, y - 1), ImVec2(start.x + bx.x1, y + size + 1), ImGui::GetColorU32(ImGuiCol_FrameBg), 3);
+    }
     const wiki::Span* clicked = nullptr;
-    wiki::Span lead;
-    if (prefix) lead.text = prefix, lead.bold = true;
-    for (size_t i = prefix ? 0 : 1; i <= spans.size(); ++i) {
-        const wiki::Span& s = i == 0 ? lead : spans[i - 1];
-        ImFont* font = s.bold || bold ? bold_font() : ImGui::GetFont();
-        if (s.example) {  // a button, never split across lines
-            const float pad = size * 0.6f, bw = font->CalcTextSizeA(size, FLT_MAX, 0, s.text.c_str()).x + pad * 2;
-            if (x > start.x) x += size * 0.3f;
-            if (x + bw > start.x + w && x > start.x) x = start.x, y += line_h;
-            const ImRect bb(ImVec2(x, y + 1), ImVec2(x + bw, y + line_h - 1));
-            const ImGuiID id = win->GetID(&s);
+    for (const wiki::Layout::Piece& pc : lay.pieces) {
+        const size_t i = prefix ? pc.span : pc.span + 1;  // spans[i - 1]; 0 is the prefix
+        const wiki::Span& s = i == 0 ? all[0] : spans[i - 1];
+        ImFont* font = font_of(s);
+        const char *p = s.text.c_str() + pc.begin, *q = s.text.c_str() + pc.end;
+        const float x = start.x + pc.x, y = start.y + float(pc.line) * line_h;
+        ImGui::PushID(int(i));
+        const ImGuiID id = win->GetID(int(pc.begin));
+        ImGui::PopID();
+        if (s.example) {  // a button
+            const ImRect bb(ImVec2(x, y + 1), ImVec2(x + pc.width, y + line_h - 1));
             ImGui::ItemAdd(bb, id);
             bool hov = false, held = false;
-            if (ImGui::ButtonBehavior(bb, id, &hov, &held) && i > 0) clicked = &spans[i - 1];
+            if (ImGui::ButtonBehavior(bb, id, &hov, &held) && i > 0) clicked = &s;
             dl->AddRectFilled(bb.Min, bb.Max, ImGui::GetColorU32(held ? ImGuiCol_ButtonActive : hov ? ImGuiCol_ButtonHovered : ImGuiCol_Button),
                               ImGui::GetStyle().FrameRounding);
-            dl->AddText(font, size, ImVec2(x + pad, y + (line_h - size) * 0.5f), text, s.text.c_str());
+            dl->AddText(font, size, ImVec2(x + button_pad, y + text_dy), text, p, q);
             if (hov) ImGui::SetTooltip("Opens %s as a new, untitled project", s.target.c_str());
-            x = bb.Max.x, right = std::max(right, x);
             continue;
         }
         const bool broken = s.link && !s.external && !s.target.empty() && !ui.lib.find(s.target);
         const ImU32 col = s.link ? (broken ? kBroken : ImGui::GetColorU32(ImGuiCol_TextLink))
                         : s.italic ? ImGui::GetColorU32(ImGuiCol_TextDisabled) : text;
-        for (const char *p = s.text.c_str(), *end = p + s.text.size(); p < end;) {
-            const char* q = p;
-            while (q < end && *q == ' ') ++q;  // a word carries the spaces before it
-            while (q < end && *q != ' ') ++q;
-            if (x == start.x)
-                while (p < q && *p == ' ') ++p;
-            ImVec2 sz = font->CalcTextSizeA(size, FLT_MAX, 0, p, q);
-            if (x + sz.x > start.x + w && x > start.x) {  // wrap, dropping the spaces
-                x = start.x, y += line_h;
-                while (p < q && *p == ' ') ++p;
-                sz = font->CalcTextSizeA(size, FLT_MAX, 0, p, q);
+        const ImVec2 a(x, y + text_dy), b(x + pc.width, a.y + size);
+        dl->AddText(font, size, a, col, p, q);
+        if (s.link) {
+            const ImRect bb(a, b);
+            ImGui::ItemAdd(bb, id);
+            bool hov = false, held = false;
+            if (ImGui::ButtonBehavior(bb, id, &hov, &held) && i > 0) clicked = &s;  // the prefix is never a link
+            if (hov) {
+                ui.hovering = &s;
+                ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                if (s.external) ImGui::SetTooltip("%s", s.target.c_str());
+                else if (broken) ImGui::SetTooltip("No help page named \"%s\"", s.target.c_str());
             }
-            const ImVec2 a(x, y + (line_h - size) * 0.5f), b(x + sz.x, a.y + size);
-            if (s.code) dl->AddRectFilled(ImVec2(a.x - 2, a.y - 1), ImVec2(b.x + 2, b.y + 1), ImGui::GetColorU32(ImGuiCol_FrameBg), 3);
-            dl->AddText(font, size, a, col, p, q);
-            if (s.link) {
-                const ImRect bb(a, b);
-                const ImGuiID id = win->GetID(p);
-                ImGui::ItemAdd(bb, id);
-                bool hov = false, held = false;
-                if (ImGui::ButtonBehavior(bb, id, &hov, &held) && i > 0) clicked = &spans[i - 1];  // the prefix is never a link
-                if (hov) {
-                    ui.hovering = &s;
-                    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-                    if (s.external) ImGui::SetTooltip("%s", s.target.c_str());
-                    else if (broken) ImGui::SetTooltip("No help page named \"%s\"", s.target.c_str());
-                }
-                if (ui.hovered == &s) dl->AddLine(ImVec2(a.x, b.y), b, col);
-            }
-            x += sz.x, p = q;
-            right = std::max(right, x);
+            if (ui.hovered == &s) dl->AddLine(ImVec2(a.x, b.y), b, col);
         }
     }
-    ImGui::Dummy(ImVec2(right - start.x, y + line_h - start.y));
+    ImGui::Dummy(ImVec2(lay.right, float(lay.lines) * line_h));
     return clicked;
 }
 
@@ -348,18 +353,27 @@ void draw_page(HelpUi& ui, const wiki::Page& page) {
         case wiki::Block::Table: {
             int cols = 0;
             for (auto& r : b.rows) cols = std::max(cols, int(r.size()));
-            // Columns fit their text; the last one takes the rest of the width and wraps.
-            // ponytail: only the last column wraps, so a long middle column pushes the table wider.
+            // Columns fit their text, the last one taking the rest of the width; when the text is too wide for that,
+            // every column wraps, narrowed in proportion to how wide it would be (wiki::column_widths).
+            std::vector<float> natural(static_cast<size_t>(cols)), least(static_cast<size_t>(cols));
+            for (size_t r = 0; r < b.rows.size(); ++r)
+                for (size_t c = 0; c < b.rows[r].size(); ++c) {
+                    const wiki::Layout lay = lay_out(b.rows[r][c], FLT_MAX, 1, r == 0);
+                    natural[c] = std::max(natural[c], lay.right + 1);  // + 1: never wraps at its own width
+                    for (const wiki::Layout::Piece& pc : lay.pieces) least[c] = std::max(least[c], pc.width + fs * 0.3f);
+                }
+            const float cell_pad = ImGui::GetStyle().CellPadding.x * 2 + 1;  // either side, and a border
+            const std::vector<float> widths = wiki::column_widths(natural, least, w - float(cols) * cell_pad - 1);
             if (cols && ImGui::BeginTable("table", cols, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg, ImVec2(w, 0))) {
                 for (int c = 0; c < cols; ++c)
-                    ImGui::TableSetupColumn(nullptr, c + 1 < cols ? ImGuiTableColumnFlags_WidthFixed : ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableSetupColumn(nullptr, c + 1 < cols ? ImGuiTableColumnFlags_WidthFixed : ImGuiTableColumnFlags_WidthStretch,
+                                            c + 1 < cols ? widths[size_t(c)] : 0);
                 for (size_t r = 0; r < b.rows.size(); ++r) {
                     ImGui::TableNextRow();  // not a Headers row: those don't count towards fitting the columns
                     if (r == 0) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(ImGuiCol_TableHeaderBg));
                     for (size_t c = 0; c < b.rows[r].size(); ++c) {
                         ImGui::TableSetColumnIndex(int(c));
-                        const float cw = int(c) + 1 < cols ? FLT_MAX : ImGui::GetContentRegionAvail().x;
-                        take(draw_spans(ui, b.rows[r][c], cw, 1, r == 0));
+                        take(draw_spans(ui, b.rows[r][c], ImGui::GetContentRegionAvail().x, 1, r == 0));
                     }
                 }
                 ImGui::EndTable();

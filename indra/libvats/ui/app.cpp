@@ -1135,6 +1135,7 @@ void App::build_actions() {
                                                             : "Select the bone to follow, then Shift-click the bone or point that follows it";
                           }});
     add("about", {"About Viewport Avatar Toolset", 0, 0, false, [this] { show_about_ = true; }, {}});
+    add("shortcuts", {"Keyboard Shortcuts...", 0, 0, false, [this] { show_shortcuts_ = !show_shortcuts_; }, {}});
     add("prefs", {"Preferences...", ctrl | ImGuiKey_Comma, 0, false, [this] { show_prefs_ = !show_prefs_; }, {}});
     add("help_contents", {"Help Contents", ImGuiKey_F1, 0, false, [this] { open_help(); }, {}});
     add("tutorials", {"Tutorials", 0, 0, false, [this] { open_help("tutorials"); }, {}});
@@ -1249,8 +1250,10 @@ void App::apply_preset() {
                                                                      : nullptr;
         if (table)
             if (auto it = table->find(id); it != table->end()) k = it->second;
-        a.key = k.first;
-        a.key2 = k.second;
+        preset_keys_[id] = {k.first, k.second};
+        const KeyPair keys = effective_keys(settings_.key_overrides, id, preset_keys_[id]);  // Edit > Keyboard Shortcuts
+        a.key = keys[0];
+        a.key2 = keys[1];
     }
 }
 
@@ -1404,6 +1407,7 @@ void App::draw_menus() {
         if (menu_item_icon(icon::kSimplify, "Simplify Curves...", nullptr, false, !doc_.history.is_open())) open_simplify();
         ImGui::SetItemTooltip("Fewer keys on the selected bones' curves (or all), within a tolerance");
         ImGui::Separator();
+        menu_item("shortcuts");
         menu_item("prefs");
         ImGui::EndMenu();
     }
@@ -1815,6 +1819,7 @@ bool App::frame() {
     draw_retarget_dialog();
     draw_batch_retarget();
     draw_controls_help();
+    draw_shortcuts();
     draw_welcome();
     draw_help_browser();
     draw_recovery();

@@ -163,7 +163,7 @@ project are your own project's actors (below).
 |---|---|
 | A click, the wheel or typing in a viewer window that shows (the Chat pane, a notification, a question), even over an editor panel | the viewer, as usual |
 | A click on an editor panel, menu or popup where no viewer window covers it | the editor |
-| A click on the world | the editor: a bone selects it, a gizmo or IK handle drags, empty space clears the selection. Objects, click-to-walk and pie menus are off |
+| A click on the world | the editor: a bone selects it, a gizmo or IK handle drags, a drag from empty space draws a selection box ([[Control presets#Box selection]]), a click there clears the selection. Objects, click-to-walk and pie menus are off |
 | **Alt**+drag, **Ctrl+Alt**+drag, **Ctrl+Alt+Shift**+drag | the viewer's camera |
 | The mouse wheel over the world | the viewer's camera zoom |
 | The viewer's camera keys: **Alt** (or **Ctrl+Alt**, **Ctrl+Alt+Shift**) with the arrows, **Page Up**, **Page Down**, **A**, **D**, **W**, **S**, **E** or **C** | the viewer's camera |

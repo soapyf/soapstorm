@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <numeric>
 #include <sstream>
 
 namespace vats::wiki {
@@ -33,16 +34,19 @@ std::string spans_text(const std::vector<Span>& spans) {
     return out;
 }
 
-// Cells of one "| a | b |" table row.
+// Cells of one "| a | b |" table row. The | of a [[Page|label]] link stays in its cell.
 std::vector<std::string> cells(std::string_view line) {
     std::string t = trim(line);
     if (!t.empty() && t.front() == '|') t.erase(0, 1);
     if (!t.empty() && t.back() == '|') t.pop_back();
     std::vector<std::string> out;
     std::string cur;
+    bool in_link = false;
     for (size_t i = 0; i < t.size(); ++i) {
+        if (starts(std::string_view(t).substr(i), "[[")) in_link = true;
+        else if (starts(std::string_view(t).substr(i), "]]")) in_link = false;
         if (t[i] == '\\' && i + 1 < t.size() && t[i + 1] == '|') cur += '|', ++i;
-        else if (t[i] == '|') out.push_back(trim(cur)), cur.clear();
+        else if (t[i] == '|' && !in_link) out.push_back(trim(cur)), cur.clear();
         else cur += t[i];
     }
     out.push_back(trim(cur));
@@ -77,6 +81,110 @@ bool gif_size(const std::string& path, int& width, int& height) {
         return false;
     width = h[6] | h[7] << 8, height = h[8] | h[9] << 8;
     return width > 0 && height > 0;
+}
+
+Layout lay_out(const std::vector<Span>& spans, float w, float pad, float button_pad, float gap,
+               const std::function<float(const Span&, std::string_view)>& measure) {
+    Layout out;
+    float x = 0;
+    int line = 0;
+    float box = -1;  // the open code background's left edge on this line; < 0: none
+    auto end_box = [&](float x1) {
+        if (box >= 0) out.boxes.push_back({line, box, x1});
+        box = -1;
+    };
+    for (size_t i = 0; i < spans.size(); ++i) {
+        const Span& s = spans[i];
+        const std::string_view t = s.text;
+        if (s.example) {  // a button, never split across lines
+            const float bw = measure(s, t) + button_pad * 2;
+            if (x > 0) x += gap;
+            if (x + bw > w && x > 0) x = 0, ++line;
+            out.pieces.push_back({i, 0, t.size(), x, bw, line});
+            x += bw, out.right = std::max(out.right, x);
+            continue;
+        }
+        for (size_t p = 0; p < t.size();) {
+            size_t q = p;
+            while (q < t.size() && t[q] == ' ') ++q;
+            while (q < t.size() && t[q] != ' ') ++q;
+            if (x == 0)
+                while (p < q && t[p] == ' ') ++p;
+            // Room the word needs besides its text: code's pad before it on a fresh line, and always the pad after
+            // it, so a line's code background can end wherever the line does.
+            float extra = s.code ? (box < 0 ? pad : 0) + pad : 0;
+            float ww = measure(s, t.substr(p, q - p));
+            // A span's last word goes to the next line with the start of the spans after it when no space parts
+            // them, so "`code`," or "(**Ctrl+Q**)" never leaves punctuation alone at either end of a line.
+            float glue = 0;
+            for (size_t j = i + 1; q == t.size() && t.back() != ' ' && j < spans.size() && !spans[j].example; ++j) {
+                const Span& n = spans[j];
+                const size_t g = std::min(n.text.find(' '), n.text.size());
+                if (g == 0) break;
+                glue += measure(n, std::string_view(n.text).substr(0, g)) + (n.code ? pad * 2 : 0);
+                if (g < n.text.size()) break;
+            }
+            if (x + ww + extra + glue > w && x > 0) {  // wrap, dropping the spaces
+                end_box(x + pad);
+                x = 0, ++line;
+                while (p < q && t[p] == ' ') ++p;
+                extra = s.code ? pad * 2 : 0;
+                ww = measure(s, t.substr(p, q - p));
+            }
+            if (x == 0 && ww + extra > w && q - p > 1) {  // wider than a line: break it
+                size_t fit = p;
+                for (size_t e = p + 1; e <= q; ++e) {
+                    if (e < q && (static_cast<unsigned char>(t[e]) & 0xC0) == 0x80) continue;  // inside a UTF-8 character
+                    if (measure(s, t.substr(p, e - p)) + extra > w) break;
+                    fit = e;
+                }
+                if (fit == p) {  // not even one character: take one anyway
+                    fit = p + 1;
+                    while (fit < q && (static_cast<unsigned char>(t[fit]) & 0xC0) == 0x80) ++fit;
+                }
+                for (size_t e = fit; fit < q && e > p + 1; --e)
+                    if (std::string_view("/\\_-.").find(t[e - 1]) != std::string_view::npos) {
+                        fit = e;
+                        break;
+                    }
+                q = fit;
+                ww = measure(s, t.substr(p, q - p));
+            }
+            if (p < q) {
+                if (s.code && box < 0) box = x, x += pad;
+                out.pieces.push_back({i, p, q, x, ww, line});
+                x += ww;
+            }
+            p = q;
+        }
+        if (box >= 0) x += pad, end_box(x);
+        out.right = std::max(out.right, x);
+    }
+    out.lines = line + 1;
+    return out;
+}
+
+std::vector<float> column_widths(const std::vector<float>& natural, const std::vector<float>& least, float avail) {
+    float nat = 0, lo = 0;
+    std::vector<float> out(natural.size());
+    for (size_t c = 0; c < natural.size(); ++c) {
+        out[c] = std::min(c < least.size() ? least[c] : 0.f, natural[c]);
+        nat += natural[c], lo += out[c];
+    }
+    if (nat <= avail) return natural;
+    if (lo >= avail) {  // columns with short words keep them; the rest share what is left alike and break words
+        std::vector<size_t> by(out.size());
+        std::iota(by.begin(), by.end(), size_t(0));
+        std::sort(by.begin(), by.end(), [&](size_t a, size_t b) { return out[a] < out[b]; });
+        float left = std::max(avail, 0.f);
+        for (size_t k = 0; k < by.size(); ++k) {
+            out[by[k]] = std::min(out[by[k]], left / float(by.size() - k));
+            left -= out[by[k]];
+        }
+        return out;
+    }
+    for (size_t c = 0; c < out.size(); ++c) out[c] += (natural[c] - out[c]) * (avail - lo) / (nat - lo);
+    return out;
 }
 
 std::string anchor_key(std::string_view heading) {

@@ -6,11 +6,13 @@
 #include <cmath>
 #include <fstream>
 #include <functional>
+#include <iterator>
 #include <sstream>
 
 #include "app.h"
 #include "imgui_internal.h"  // BeginDragDropTargetCustom
 #include "vats/fbx.h"
+#include "vats/gif.h"
 #include "vats/pose_presets.h"
 
 namespace vats {
@@ -296,12 +298,12 @@ std::string App::add_to_prop_library(const Prop& p) {
         it.prop.rigged = p.rigged;
         forget_thumbnail(it.id);
         prop_models_.erase(p.path);  // the file changed: read it again for the new thumbnail
-        render_thumbnail(it.prop, library_dir() + it.id + ".png");  // now, not when the Inventory is next shown
+        render_thumbnail(it.prop, thumb_png(library_dir() + it.id));  // now, not when the Inventory is next shown
         save_prop_library();
         return it.id;
     }
     prop_library_.push_back({new_library_id(), stored});
-    render_thumbnail(stored, library_dir() + prop_library_.back().id + ".png");
+    render_thumbnail(stored, thumb_png(library_dir() + prop_library_.back().id));
     save_prop_library();
     return prop_library_.back().id;
 }
@@ -335,6 +337,13 @@ void App::add_library_prop(const PropLibraryItem& it, const std::string& bone, c
 namespace {
 
 constexpr int kThumbSize = 128;
+
+// The thumbnail format and renderer version, in every thumbnail's file name ("starter-mug.t2.png"). Bump it when
+// thumbnails already written are wrong, and each renders once more under the new name. The one older file of the same
+// thumbnail (the name without the version, or with an older one) is the app's own and is removed once the new one is
+// written; nothing else in the library folder is touched. Hash-named ones (pose-, file-) whose item has gone stay, as
+// before. t2: the viewer's in-world thumbnails had alpha 0 (its build 25) or leftover alpha (build 24).
+constexpr int kThumbVersion = 2;
 
 // Frames a sphere from a front, slightly-high three-quarter direction through a 30 degree lens (VP-90).
 Mat4 frame_sphere(Camera& cam, const Vec3& centre, double radius, double yaw) {
@@ -401,8 +410,11 @@ bool App::render_pose_thumbnail(const LibraryItem& it, const std::string& png) {
     return host_.save_thumbnail_png(png);
 }
 
+std::string App::thumb_png(const std::string& stem) { return stem + ".t" + std::to_string(kThumbVersion) + ".png"; }
+
 // VP-90 queue: loads and renders share ~20 ms a frame; the rest wait for the next frame, which the pushed
-// event brings even while the app idles. 0 = not yet, or it cannot be made (then it is not retried).
+// event brings even while the app idles. 0 = not yet, or it cannot be made (then it is not retried). A cached
+// picture that is fully transparent drew nothing and is rendered again.
 ImTextureID App::thumbnail(const std::string& key, const std::string& png, const std::function<bool()>& render) {
     if (auto t = thumbs_.find(key); t != thumbs_.end()) return t->second;
     static int frame = -1;
@@ -413,8 +425,15 @@ ImTextureID App::thumbnail(const std::string& key, const std::string& png, const
         host_.wake();
         return 0;
     }
-    ImTextureID tex = host_.load_texture(png);
-    if (!tex && render()) tex = host_.load_texture(png);
+    std::ifstream f(u8path(png), std::ios::binary);
+    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    ImTextureID tex = bytes.empty() || vats::png_blank(bytes.data(), bytes.size()) ? 0 : host_.load_texture(png);
+    if (!tex && render()) {
+        tex = host_.load_texture(png);
+        const std::string stem = png.substr(0, png.size() - thumb_png("").size());
+        for (int v = 1; v < kThumbVersion; ++v)  // v1 had no version in the name
+            std::remove((v == 1 ? stem + ".png" : stem + ".t" + std::to_string(v) + ".png").c_str());
+    }
     return thumbs_[key] = tex;
 }
 
@@ -426,7 +445,8 @@ void App::forget_thumbnail(const std::string& key) {
 }
 
 ImTextureID App::prop_thumbnail(const PropLibraryItem& it) {
-    return thumbnail(it.id, library_dir() + it.id + ".png", [&] { return render_thumbnail(it.prop, library_dir() + it.id + ".png"); });
+    const std::string png = thumb_png(library_dir() + it.id);
+    return thumbnail(it.id, png, [&] { return render_thumbnail(it.prop, png); });
 }
 
 // Cached by content (VP-I12): the item as saved plus the body, so an edited built-in pose renders afresh.
@@ -437,8 +457,8 @@ ImTextureID App::pose_thumbnail(const LibraryItem& it) {
     one.items[0].id.clear(), one.items[0].name.clear();
     size_t h = std::hash<std::string>{}(vats::save_library(one) + kBodyIds[int(body_)]);
     char name[40];
-    std::snprintf(name, sizeof name, "pose-%016zx.png", h);
-    std::string png = library_dir() + name;
+    std::snprintf(name, sizeof name, "pose-%016zx", h);
+    std::string png = thumb_png(library_dir() + name);
     return thumbnail(name, png, [&] { return render_pose_thumbnail(it, png); });
 }
 

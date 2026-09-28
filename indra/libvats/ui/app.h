@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <deque>
@@ -18,6 +19,7 @@
 #include "graph_editor.h"
 #include "host.h"
 #include "imgui.h"
+#include "keymap.h"
 #include "settings.h"
 #include "vats/anim_convert.h"
 #include "vats/audio.h"
@@ -287,6 +289,8 @@ private:
     void draw_prop_section();
     void draw_preferences();
     void draw_controls_help();
+    void draw_shortcuts();  // Edit > Keyboard Shortcuts... (shortcuts_ui.cpp)
+    void set_action_keys(const std::string& id, const KeyPair& keys);  // records an override, saved at once
     void draw_welcome();
     void draw_help_browser();
     void help_button(const char* page);  // "?" in a tool window's title bar, opens its help page
@@ -538,6 +542,13 @@ private:
     bool show_graph_ = true;
     std::vector<std::pair<std::string, Action>> actions_;
     std::map<std::string, std::pair<ImGuiKeyChord, ImGuiKeyChord>> industry_keys_;
+    std::map<std::string, KeyPair> preset_keys_;  // the active preset's keys, before the user's overrides
+    // Keyboard Shortcuts: the search text, and the key cell waiting for a key (capture_slot_ -1: none).
+    bool show_shortcuts_ = false;
+    char shortcut_search_[64] = {};
+    std::string capture_id_, conflict_with_;
+    int capture_slot_ = -1, conflict_slot_ = -1;
+    ImGuiKeyChord conflict_chord_ = 0;
     Settings settings_;
     std::string assets_dir_;
     float display_scale_ = 1;
@@ -593,6 +604,16 @@ private:
     int bone_drag_ = -1;
     bool bone_drag_started_ = false;
     ImVec2 bone_drag_press_;
+    // Box selection (ui/box_select.h): a left drag from empty space, or Blender's B then a drag. box_hits_ are the
+    // nodes inside while it runs, highlighted live.
+    bool box_ = false, box_moved_ = false, box_from_b_ = false, box_click_clears_ = false, box_armed_ = false;
+    ImVec2 box_press_;
+    std::vector<int> box_hits_;
+    void start_box(ImVec2 m, bool from_b, bool click_clears);
+    bool box_input(ImVec2 m, bool hovered);  // true while the box (or B, armed) owns the mouse this frame
+    bool hot(int node) const {  // hovered, or inside a running box
+        return node == hover_bone_ || std::find(box_hits_.begin(), box_hits_.end(), node) != box_hits_.end();
+    }
     // The Local gizmo frame of a bone: its global rotation x the display bone frame (SK-21).
     Quat local_axes(int node) const { return globals_[node].rot * skel_.bone_frame(node); }
     void draw_collision_volumes(std::vector<Vertex>& verts);  // VP-10, SK-I5
@@ -608,6 +629,7 @@ private:
     // Thumbnails: props (VP-90) and poses (VP-I12), queued a few per frame, cached as PNGs in the library folder.
     bool render_pose_thumbnail(const LibraryItem& it, const std::string& png);
     ImTextureID thumbnail(const std::string& key, const std::string& png, const std::function<bool()>& render);
+    static std::string thumb_png(const std::string& stem);  // stem + the thumbnail version + ".png"
     void forget_thumbnail(const std::string& key);
     ImTextureID pose_thumbnail(const LibraryItem& it);  // 0 until ready or when there is no body
     void draw_library_icon(ImDrawList* dl, ImVec2 at, float size, const LibraryItem& it);  // VP-91 / VP-I12

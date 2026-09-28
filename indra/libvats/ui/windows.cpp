@@ -105,6 +105,22 @@ void App::draw_preferences() {
         save_settings();
         status(std::string("Controls: ") + presets[preset]);
     }
+    if (!settings_.key_overrides.empty()) {  // your own keys stay over any preset (Edit > Keyboard Shortcuts...)
+        ImGui::SetCursorPosX(label_w);
+        ImGui::AlignTextToFramePadding();
+        const size_t n = settings_.key_overrides.size();
+        ImGui::TextDisabled("%zu %s your own keys, over any preset", n, n == 1 ? "command keeps" : "commands keep");
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Edit...")) show_shortcuts_ = true;
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Clear")) {
+            settings_.key_overrides.clear();
+            apply_preset();
+            save_settings();
+            status("Keyboard shortcuts: the preset's keys");
+        }
+        ImGui::SetItemTooltip("Every command back to this preset's keys");
+    }
     if (settings_.preset == Preset::Blender) {
         ImGui::SetCursorPosX(label_w);
         if (ImGui::Checkbox("Emulate 3-button mouse (Alt + left-drag = middle-drag)", &settings_.emulate_3_button))
@@ -196,7 +212,10 @@ void App::draw_preferences() {
     }
 
     ImGui::Separator();
+    ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Hotkeys for this preset");
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Change Shortcuts...")) show_shortcuts_ = true;
     ImGui::BeginChild("##keys", ImVec2(0, 0), ImGuiChildFlags_Borders);
     ImGui::TextWrapped("Mouse: %s", nav_hint().c_str());
     if (ImGui::BeginTable("##keytable", 2, ImGuiTableFlags_RowBg)) {
@@ -229,6 +248,8 @@ void App::draw_controls_help() {
                                    "and down, Ctrl+Alt+Shift+arrows pan."
                                  : "Hold Ctrl while dragging the gizmo to snap.");
     ImGui::TextWrapped("%s", graph_nav_hint().c_str());
+    if (ImGui::Button("Change Shortcuts...")) show_shortcuts_ = true;
+    ImGui::SetItemTooltip("Edit > Keyboard Shortcuts...: give any command keys of your own");
     ImGui::Separator();
     for (auto& [id, a] : actions_) {
         if (!a.key) continue;
@@ -865,7 +886,7 @@ bool App::show_window(const std::string& name) {
         {"batch-retarget", &App::show_batch_retarget_}, {"foot-lock", &App::show_foot_lock_},
         {"auto-balance", &App::show_auto_balance_}, {"jump-arc", &App::show_jump_arc_},
         {"reference", &App::show_reference_}, {"listing-media", &App::show_listing_},
-        {"face-cam", &App::face_cam_},
+        {"face-cam", &App::face_cam_},      {"keys", &App::show_shortcuts_},
 
         {"check", &App::show_check_},      {"idle", &App::show_idle_},           {"overlap", &App::show_overlap_},
         {"face", &App::show_face_},        {"loop-assist", &App::show_loop_assist_}, {"sl-preview", &App::sl_preview_},

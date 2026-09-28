@@ -72,6 +72,8 @@ add_library(vats_ui STATIC
     lip_sync_ui.cpp
     tween_ui.cpp
     key_tags_ui.cpp
+    keymap.cpp
+    shortcuts_ui.cpp
     picker_ui.cpp
     retarget_ui.cpp
     retime_ui.cpp

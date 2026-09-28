@@ -266,10 +266,10 @@ void App::draw_file_library() {
                     ImTextureID tex = 0;
                     if (f.error.empty()) {  // the pose library's thumbnails: the middle frame on the current body
                         char name[40];
-                        std::snprintf(name, sizeof name, "file-%016zx.png",
+                        std::snprintf(name, sizeof name, "file-%016zx",
                                       std::hash<std::string>{}(f.path + "|" + std::to_string(f.size) + "|" + std::to_string(f.mtime) +
                                                                kBodyIds[int(body_)]));
-                        const std::string png = lib + name, path = f.path;
+                        const std::string png = thumb_png(lib + name), path = f.path;
                         tex = thumbnail(name, png, [&] {
                             LibraryItem it;
                             std::string err;

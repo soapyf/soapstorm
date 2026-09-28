@@ -29,5 +29,12 @@ No animation experience needed.
 
 - [[Melee: a sword swing]]: anticipation, a fast strike on an arc, follow-through, overlap on the free arm, weight
   shift over planted feet, and a non-looping export at priority 4. *Craft: anticipation, arcs, follow-through.*
+- [[A hug for two]]: two actors on one timeline, the self-contact check, hands bound to the partner, and both
+  sides exported with the AVsitter and nPose lines. *Craft: contact, heads turned aside.*
+- [[Dance to the beat]]: the audio track and beat grid, a loop fitted to four beats, overlap and dynamics, and a
+  long dance split at the beats. *Craft: timing to music, overlapping action, follow-through.*
+- [[The polish pass]]: blocking to spline, retiming in the dope sheet, a breakdown, motion paths, the Animation
+  Check's fixes, Preview as SL Plays It, cleaning a captured take and Fit to 250 KB. *Craft: timing, slow in and
+  slow out, arcs, finishing.*
 
 Category: Getting started

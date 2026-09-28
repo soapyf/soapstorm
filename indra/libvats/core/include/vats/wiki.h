@@ -8,6 +8,7 @@
 // ([text](example:<file>.vat), a project in examples/) and a closing "Category: ..." line. No UI here: the app (ImGui) and the viewer (LLUI) draw the same blocks.
 #pragma once
 
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -51,6 +52,35 @@ std::vector<Span> parse_inline(std::string_view text);
 bool png_size(const std::string& path, int& width, int& height);
 // The same for a GIF (its logical screen), from the header alone.
 bool gif_size(const std::string& path, int& width, int& height);
+
+// Word-wrapping of a run of spans, apart from any font or drawing: x runs from 0 to the width, lines count from 0.
+struct Layout {
+    struct Piece {  // text[begin, end) of spans[span], at x on its line, width wide
+        size_t span = 0, begin = 0, end = 0;
+        float x = 0, width = 0;
+        int line = 0;
+    };
+    struct Box {  // the background behind a code span's words on one line
+        int line = 0;
+        float x0 = 0, x1 = 0;
+    };
+    std::vector<Piece> pieces;
+    std::vector<Box> boxes;
+    int lines = 1;
+    float right = 0;  // the widest line's end
+};
+// Lays spans out within width w; measure gives the width of some text in a span's font. A word carries the spaces
+// before it and a line drops its leading spaces. Code keeps `pad` of its background on either side of its text on
+// every line, inside the width. An example link is one button, its text `button_pad` in from either side and `gap`
+// after the text before it. A word wider than a whole line breaks after the last / \ _ - or . that fits, else after
+// the last character that fits.
+Layout lay_out(const std::vector<Span>& spans, float w, float pad, float button_pad, float gap,
+               const std::function<float(const Span&, std::string_view)>& measure);
+// Table column widths that fit avail: each column's natural (unwrapped) width when they all fit; else each gets at
+// least its widest word (least) and the rest of the room is shared in proportion to how much wider each column would
+// like to be. When even the widest words do not fit, the columns with the shortest keep theirs and the others share
+// what is left alike.
+std::vector<float> column_widths(const std::vector<float>& natural, const std::vector<float>& least, float avail);
 
 // Normalises heading text for anchor matching: lower case, runs of spaces/hyphens/underscores as one "-".
 std::string anchor_key(std::string_view heading);

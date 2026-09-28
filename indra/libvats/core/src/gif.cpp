@@ -218,4 +218,15 @@ bool read_gif(const std::uint8_t* data, std::size_t size, GifImage& out) {
     return ok;
 }
 
+bool png_blank(const std::uint8_t* data, std::size_t size) {
+    static const std::uint8_t sig[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};  // not a GIF, which stb reads too
+    if (!data || size < 8 || size > std::size_t(INT_MAX) || !std::equal(sig, sig + 8, data)) return false;
+    int w = 0, h = 0, comp = 0;
+    stbi_uc* px = stbi_load_from_memory(data, int(size), &w, &h, &comp, 4);
+    bool blank = px && w > 0 && h > 0;
+    for (std::size_t i = 3; blank && i < std::size_t(w) * std::size_t(h) * 4; i += 4) blank = px[i] == 0;
+    stbi_image_free(px);
+    return blank;
+}
+
 }  // namespace vats

@@ -190,7 +190,7 @@ void App::draw_prop_grid(std::vector<PropLibraryItem>& items, bool user) {
                     Prop q = scene[selected_prop_];
                     q.lib_id.clear(), q.visible = true, q.name = p.name;
                     it.prop = q;
-                    std::remove((library_dir() + it.id + ".png").c_str());  // the scale may have changed
+                    std::remove(thumb_png(library_dir() + it.id).c_str());  // the scale may have changed
                     forget_thumbnail(it.id);
                     save_prop_library();
                     status("Saved " + p.name + " from the selected prop");
@@ -229,7 +229,7 @@ void App::draw_prop_grid(std::vector<PropLibraryItem>& items, bool user) {
         v.prop.name = items[variant].prop.name + " variant";
         // VP-90: the variant starts with the source's picture.
         std::error_code ec;  // no source picture yet: the queue renders one
-        std::filesystem::copy_file(library_dir() + items[variant].id + ".png", library_dir() + v.id + ".png",
+        std::filesystem::copy_file(thumb_png(library_dir() + items[variant].id), thumb_png(library_dir() + v.id),
                                    std::filesystem::copy_options::overwrite_existing, ec);
         prop_library_.push_back(std::move(v));
         save_prop_library();
@@ -242,7 +242,7 @@ void App::draw_prop_grid(std::vector<PropLibraryItem>& items, bool user) {
         host_.ask("Viewport Avatar Toolset", text, {"Delete", "Cancel"}, [this, list = &items, name, id](int choice) {
             auto it = std::find_if(list->begin(), list->end(), [&](const PropLibraryItem& x) { return x.id == id; });
             if (choice != 0 || it == list->end()) return;
-            std::remove((library_dir() + id + ".png").c_str());
+            std::remove(thumb_png(library_dir() + id).c_str());
             forget_thumbnail(id);
             list->erase(it);
             save_prop_library();
