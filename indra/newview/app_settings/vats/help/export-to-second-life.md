@@ -19,8 +19,10 @@ with the [[VATs Editor (viewer)]].
 
 The first export asks for a folder when none is set (**Folder** shows `(asks the first time)`). After
 that, **Export SL .anim** writes straight to the folder; **Choose...** changes it. The status bar reports
-the files written, how many were replaced, and a summary of bones, length, priority, bytes, and any
-attachment points that move or rotate.
+the files written, how many were replaced, and a summary of bones, length, priority, bytes, any
+attachment points that move or rotate, how many unmoving position channels were left out (see
+[[Export to Second Life#Positions that do not move]]), and, with **Leave out bones that don't move** on, how
+many bones were left out.
 
 The export settings are saved with the project, and each change to them is an undo step.
 
@@ -51,9 +53,50 @@ trims separators from the ends, so an empty side leaves no stray underscore: `Wa
 IK, pins and dynamics are baked into plain keys at export. **Bake shape** sets the body they are baked
 against, whatever the view shows:
 
+- **Your avatar** (the [[VATs Editor (viewer)]] only): positions fitted to the head and body you wear now; other
+  heads may look different. See [[Export to Second Life#Your avatar]];
 - **SL Default** and **SL Default (Male)**;
 - **Mesh body:** and the body name, for each body in the inventory. A mesh body uses the joint positions it was
   rigged to (see [[Mesh bodies]]).
+
+### Your avatar
+
+In SL, a position key in an animation replaces the bone's position, including the position a mesh head or
+body gives that bone. With **SL Default**, a moved bone is written at the default avatar's position plus the
+move, so a mesh head with its own face (a furry muzzle) is pulled towards the default face. With **Your
+avatar**, each bone that moves is written at the position it has on the avatar you wear, mesh joint positions
+included, plus the move.
+
+- In the viewer, **Your avatar** is the default while the avatar you wear has mesh joint positions, unless the
+  project has chosen another shape.
+- Only bones whose position moves are written with your avatar's positions. Other bones get no position keys,
+  scales are not written, and IK and pins are baked on **SL Default**.
+- The positions are read from the viewer at each export and upload. The project saves only the choice
+  **Your avatar**, never the positions.
+- The animation fits the head and body you wore when you exported it. On another head, bones that move are
+  placed where they sit on yours.
+- In the standalone app, **Your avatar** is not offered. A project that chose it exports as **SL Default**, and
+  **Bake shape** shows `Your avatar (viewer only: SL Default here)`.
+- In a [[Couples and groups|couple or group]], **Your avatar** is for the actor you are editing, the one your
+  avatar shows. Another actor whose **Bake shape** is **Your avatar** bakes on **SL Default** instead, unless **Use
+  Your avatar for every actor** (the viewer only, under **Bake shape**) is on; then every actor bakes against your
+  worn avatar.
+
+### Positions that do not move
+
+A bone other than the hip whose position stays within the position tolerance of **Reduce keys** (default
+`0.50 mm`; exactly zero when it is `0`) on every frame gets no position keys. Such keys would move nothing
+on the default avatar, but in SL they pin the bone to the exported position and override a mesh head's or
+body's own joint positions. A bone keyed only by such positions is left out of the file. The hip keeps its
+position keys; they are an offset from standing. BVH export applies the same rule with the default tolerance.
+
+### Bones that don't move
+
+With **Leave out bones that don't move** on, a bone other than the hip whose rotation stays within the rotation
+tolerance of **Reduce keys** (default `0.050 deg`) of its rest on every frame gets no rotation keys, so other
+animations still move it: a face take then leaves the blinks of your AO or face HUD alone on the bones it didn't
+move. A bone left with nothing to write is left out of the file. Off (the default), every bone you keyed is
+written, holding it where the animation has it. BVH export is not affected.
 
 ### Reduce keys
 
@@ -84,7 +127,9 @@ every file Export would write, each with the viewer's price confirmation.
 |---|---|---|
 | Pattern | `[NAME]_[#]_[SIDE]` | **Properties → Export** |
 | Number | `1` | **Properties → Export** |
-| Bake shape | **SL Default** | **Properties → Export** |
+| Bake shape | **SL Default**; in the viewer **Your avatar** while you wear mesh joint positions | **Properties → Export** |
+| Use Your avatar for every actor | off (the viewer only) | **Properties → Export** |
+| Leave out bones that don't move | off | **Properties → Export** |
 | Reduce keys | `0.05` degrees, `0.5` mm | **Properties → Export** |
 | BVH: include bone positions | off | **Properties → Export** |
 
@@ -109,7 +154,15 @@ capture, [[Retargeting#Fit SL's limits]] can split the clip into parts.
 
 The file is written, and the message lists what the viewer may do differently. Examples: `loop in is
 after loop out`, `some positions are further than 5 m and were clamped`, and `track "X" matches no bone
-and is not exported`.
+and is not exported`. **Upload Animation...** shows the same warnings as **Uploading with warnings**;
+cancel at the price question to stop an upload.
+
+### The face of a mesh head is pulled out of shape in-world
+
+Face bones carry position keys made on the default head. In the viewer the export warns `N face bones carry
+position keys while a mesh head is worn; they will pull it towards the default face (set Bake shape to Your
+avatar)`. Set **Bake shape** to **Your avatar** and export or upload again, or record the face with **Move face
+bones** off (see [[Face tracking]]).
 
 ### A bone does not play in-world
 

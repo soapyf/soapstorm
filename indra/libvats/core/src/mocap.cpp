@@ -573,6 +573,19 @@ std::vector<std::string> merge_recording(Clip& clip, const Skeleton& skel, const
             }
             key_face(res.clip, *face, f, face_settings, double(i));
         }
+        // key_face keys every table bone's offset, at rest too. A bone no shape moved in this take gets no
+        // position channel, so an exported .anim leaves a mesh head's own face joints alone (IO-11a); where the
+        // clip already has one, the take overwrites it with rest as before.
+        for (const std::string& bone : face->bones()) {
+            auto t = res.clip.curves.find(bone);
+            if (t == res.clip.curves.end() || clip.has_channels(bone, kPosChannels)) continue;
+            bool moved = false;
+            for (const char* ch : kPosChannels)
+                if (auto c = t->second.find(ch); c != t->second.end())
+                    for (const Key& k : c->second.keys) moved = moved || k.value != 0;
+            if (!moved)
+                for (const char* ch : kPosChannels) t->second.erase(ch);
+        }
     }
     if (cleanup.reduce) reduce_clip_keys(res.clip, cleanup.rot_deg, cleanup.pos_m);
 

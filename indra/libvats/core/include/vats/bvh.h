@@ -18,11 +18,13 @@ struct BvhExportOptions {
     bool joint_positions = false;  // 6 channels for non-hip joints with position keys (off by default)
     const Shape* shape = nullptr;  // body IK and pins are baked against (IO-13); null = no shape
     ExternalTarget external;       // cross-actor pin targets (GR-4); empty = those pins are skipped
+    const Shape* positions = nullptr;  // as AnimExportOptions::positions, for joint_positions channels
 };
 
 struct BvhExportResult {
     std::string text;
     std::vector<std::string> lost;  // what this BVH cannot carry (see spec IO-29)
+    int static_positions = 0;       // joints below the hip whose position channels moved nothing (IO-11a)
 };
 
 // IK and pins are baked into the rotations (IO-29); pin via bones count as having position keys.

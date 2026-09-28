@@ -52,7 +52,9 @@ struct FaceSettings {
     double gain = 1;                     // on every shape
     std::map<std::string, double> gains;  // per ARKit shape, times gain
     std::map<std::string, double> neutral;  // calibration: the performer's resting weights
-    bool positions = true;  // key the table's bone offsets; off for mesh heads with their own face joint positions
+    // Key the table's bone offsets. Off by default: most SL heads are mesh heads with their own face joint
+    // positions, which the table's offsets (made for the SL default head) pull out of shape.
+    bool positions = false;
     bool head = true;  // iFacialMocap: key mHead from its head rotation (VMC senders send the head as a bone)
     double eye_gain = 1;                         // on the gaze, whatever it comes from
     double eye_yaw_max = 25, eye_pitch_max = 20;  // degrees either way

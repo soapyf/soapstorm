@@ -77,6 +77,10 @@ The Second Life upload server refuses files of 250,000 bytes or more.
   frames and the frames where you set keys.
 - Rotations in parent space, including the bone's rest rotation. The quaternion is normalised and
   negated when `w < 0`.
+- Position keys only for bones whose position moves: a bone other than the hip whose position stays
+  within the position tolerance is written without them (see
+  [[Export to Second Life#Positions that do not move]]). A non-hip position is the bone's default
+  position plus the move, or with **Your avatar** the position on the avatar you wear plus the move.
 - Positions further than 5 m are clamped, with a warning.
 - Values quantised exactly as the viewer does it: floor rounding, encoded twice, in 32-bit float
   arithmetic, so the values the viewer decodes match VATs' preview.

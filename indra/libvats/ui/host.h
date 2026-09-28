@@ -101,6 +101,9 @@ public:
     // With world_view: the proportions of the body the host shows (the worn avatar), which the view's
     // evaluation uses instead of the UI's own body; null = the UI's own.
     virtual const Shape* body_shape() const { return nullptr; }
+    // The joints whose position a worn mesh overrides (its joint positions, e.g. a mesh head's face bones),
+    // by skeleton name; empty = none or unknown. Only names: export warns with it, and never writes the positions.
+    virtual std::vector<std::string> joint_overrides() const { return {}; }
 
     // --- Look (the viewer) -----------------------------------------------------------------------
     // The host's own colours (the viewer's skin), asked every frame: true replaces the colour theme with them,
@@ -122,6 +125,7 @@ public:
         virtual void toggle_notices() = 0;       // shows or hides the host's notification window
         // The host's full UI, shown over the editor until turned off again ("Show Firestorm UI").
         virtual const char* reveal_label() const = 0;
+        virtual const char* reveal_shortcut() const { return nullptr; }  // shown beside it in the menu
         virtual bool revealed() const = 0;
         virtual void reveal(bool on) = 0;
     };

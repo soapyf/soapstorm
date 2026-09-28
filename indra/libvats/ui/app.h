@@ -69,6 +69,18 @@ public:
     // when there is nowhere to write it; the editor then stays open.
     bool quit_to_quicksave();
     bool viewer_reset_joints() const { return settings_.viewer_reset_joints; }  // the viewer's Preferences toggle
+    const Skeleton& skeleton() const { return skel_; }
+    // The viewer's face-positions check (spec 09 §5a): the bytes an upload of the active actor sends, the same with
+    // Bake shape SL Default (the negative control), and the pose at each sampled frame (0, the face tracks' keys, the
+    // last; at most 40) as the preview shows it without live previews. False with the reason when nothing exports.
+    struct FaceCheck {
+        std::vector<std::uint8_t> bytes, control;
+        double fps = 30;
+        std::vector<double> frames;
+        std::vector<Pose> poses;
+    };
+    bool face_check(FaceCheck& out, std::string& why);
+    void show_status(const std::string& s) { status(s); }
     void open_path(const std::string& path);  // command line and drag-and-drop
     // Command-line helpers for scripted checks: apply a built-in pose ("builtin:<slug>" or its slug) at
     // frame 0 (hand poses on both hands), and frame the selection.
@@ -261,6 +273,8 @@ private:
     void draw_bone_lines(ImDrawList* dl) const;  // the world view's bones: the host draws no scene (spec 09 U3)
     // The world view's other actors, ghosts and collision volumes as lines (spec 09 U4).
     void draw_world_extras(ImDrawList* dl);
+    // The world view's triangles (spec 09 U5): the props, which the host draws with the world.
+    void render_world_scene();
     ImGuiID dockspace_id_ = 0;
     void draw_message_popup();
 
@@ -338,6 +352,17 @@ private:
     void draw_handles(ImDrawList* dl) const;
     const Shape* shape() const;  // the view's body; a mesh body's own proportions when one is shown (BD-3)
     const Shape* export_shape() const;  // IK and pins bake against this, not the viewport body (IO-13)
+    // The joint positions position keys are written from: the worn avatar's with "Your avatar", read live from the
+    // host and never stored; else null (IO-11).
+    const Shape* export_positions() const;
+    // The export settings' "shape", or the default: "avatar" in the viewer while the worn avatar has mesh joint
+    // positions, else "sl-default".
+    // yours = false (another actor than your avatar, unless "Use Your avatar for every actor"): never "avatar".
+    std::string bake_shape_key(const Json& export_settings, bool yours = true) const;
+    // During a multi-actor export or upload: the actor the user was editing (your avatar in the viewer); -1 otherwise.
+    int export_home_ = -1;
+    const Json& export_home_settings() const;  // that actor's export settings (the active one's when not exporting)
+    bool exporting_yours() const;               // the actor being exported may use Your avatar
     std::string bake_shape_label(const std::string& key) const;  // "SL Default", "Mesh body: <name>", ...
     int limb_for_action() const;  // the limb of the primary handle or bone, or -1
     std::vector<std::string> selected_tracks() const;  // bones, their pin: tracks, selected handles' ik. tracks

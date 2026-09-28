@@ -102,6 +102,18 @@ std::vector<int> reduce_position_keys(const std::vector<Vec3>& s, double tol_m, 
     });
 }
 
+bool static_position(const std::vector<Pose>& frames, int node, double tol) {
+    for (const Pose& p : frames)
+        if (p.offset[node].length() > tol) return false;
+    return true;
+}
+
+bool static_rotation(const std::vector<Pose>& frames, int node, double tol_deg) {
+    for (const Pose& p : frames)
+        if (p.rot[node].angle() > tol_deg * kDegToRad) return false;
+    return true;
+}
+
 AnimExportResult export_anim(const Skeleton& skel, const Clip& clip, const AnimExportOptions& opt) {
     AnimExportResult res;
     AnimFile& f = res.file;
@@ -140,8 +152,8 @@ AnimExportResult export_anim(const Skeleton& skel, const Clip& clip, const AnimE
     f.ease_in = static_cast<float>(clip.ease_in);
     f.ease_out = static_cast<float>(clip.ease_out);
 
-    // Which nodes have keyed rotation / position channels.
-    std::vector<char> animated(skel.size(), 0), has_pos(skel.size(), 0);
+    // Which nodes have keyed rotation / position channels; turns = needs a record even without positions.
+    std::vector<char> animated(skel.size(), 0), has_pos(skel.size(), 0), turns(skel.size(), 0);
     std::vector<const Track*> tracks(skel.size(), nullptr);
     for (auto& [name, track] : clip.curves) {
         if (name.rfind("ik.", 0) == 0 || name.rfind("pin:", 0) == 0) continue;  // baked in a later stage
@@ -151,7 +163,11 @@ AnimExportResult export_anim(const Skeleton& skel, const Clip& clip, const AnimE
             continue;
         }
         bool any = false;
-        for (auto& [ch, curve] : track) any = any || !curve.empty();
+        for (auto& [ch, curve] : track) {
+            any = any || !curve.empty();
+            if (!curve.empty() && std::find(std::begin(kPosChannels), std::end(kPosChannels), ch) == std::end(kPosChannels))
+                turns[i] = 1;
+        }
         animated[i] = animated[i] || any;
         if (any) tracks[i] = &track;
         has_pos[i] = has_pos[i] || clip.has_channels(name, kPosChannels);
@@ -164,17 +180,18 @@ AnimExportResult export_anim(const Skeleton& skel, const Clip& clip, const AnimE
     for (auto& l : rig.limbs()) {
         if (!uses_ik(clip, l)) continue;
         baked = true;
-        animated[l.root] = animated[l.mid] = 1;
-        if (!l.spine) animated[l.end] = 1;
+        animated[l.root] = animated[l.mid] = turns[l.root] = turns[l.mid] = 1;
+        if (!l.spine) animated[l.end] = turns[l.end] = 1;
     }
     for (auto& p : clip.pins) {
         if (int l = pin_limb(rig, p); l >= 0) {  // held through the limb's IK: rotations only
             const LimbInfo& limb = rig.limbs()[l];
             animated[limb.root] = animated[limb.mid] = animated[limb.end] = 1;
+            turns[limb.root] = turns[limb.mid] = turns[limb.end] = 1;
             continue;
         }
         int v = skel.find(p.via);
-        if (v >= 0) animated[v] = has_pos[v] = 1;
+        if (v >= 0) animated[v] = has_pos[v] = turns[v] = 1;
     }
 
     // Sample every integer frame once.
@@ -183,6 +200,24 @@ AnimExportResult export_anim(const Skeleton& skel, const Clip& clip, const AnimE
     frames.reserve(n);
     for (int fr = 0; fr < n; ++fr)
         frames.push_back(baked ? evaluate(rig, clip, fr, opt.shape).pose : evaluate_curves(skel, clip, fr));
+
+    // IO-11a: position channels that move nothing are left out (the pelvis keeps its own); a joint keyed only
+    // by them gets no record at all.
+    for (int i = 1; i < skel.size(); ++i) {
+        if (!has_pos[i] || !static_position(frames, i, opt.reduce_pos_m)) continue;
+        has_pos[i] = 0;
+        ++res.static_positions;
+        if (!turns[i]) animated[i] = 0;
+    }
+    // IO-11b, when asked: rotations that never leave rest are left out too (the pelvis keeps its own).
+    std::vector<char> rot_out(skel.size(), 1);
+    if (opt.leave_out_static_rotations)
+        for (int i = 1; i < skel.size(); ++i) {
+            if (!animated[i] || !static_rotation(frames, i, opt.reduce_rot_deg)) continue;
+            rot_out[i] = 0;
+            ++res.static_rotations;
+            if (!has_pos[i]) animated[i] = 0;
+        }
 
     bool clamped = false;
     for (int i = 0; i < skel.size(); ++i) {
@@ -197,14 +232,17 @@ AnimExportResult export_anim(const Skeleton& skel, const Clip& clip, const AnimE
         for (int fr = 0; fr < n; ++fr) rot[fr] = (node.rest * frames[fr].rot[i]).normalized();
         static const Track kNoTrack;
         const Track& track = tracks[i] ? *tracks[i] : kNoTrack;
-        for (int k : reduce_rotation_keys(rot, opt.reduce_rot_deg, opt.max_gap, key_frames(track, kRotChannels, n))) {
+        for (int k : rot_out[i] ? reduce_rotation_keys(rot, opt.reduce_rot_deg, opt.max_gap, key_frames(track, kRotChannels, n))
+                                : std::vector<int>{}) {
             auto c = encode_rotation(rot[k]);
             j.rot.push_back({time_code(k, fps, f.duration), c[0], c[1], c[2]});
         }
         if (has_pos[i]) {
+            Vec3 base = node.pos;
+            if (opt.positions && i < int(opt.positions->offset.size())) base += opt.positions->offset[i];
             std::vector<Vec3> pos(n);
             for (int fr = 0; fr < n; ++fr) {
-                Vec3 p = frames[fr].offset[i] + (i == 0 ? Vec3{} : node.pos);  // pelvis: offset only
+                Vec3 p = frames[fr].offset[i] + (i == 0 ? Vec3{} : base);  // pelvis: offset only
                 for (int a = 0; a < 3; ++a) {
                     if (std::fabs(p[a]) > kAnimMaxOffset) clamped = true;
                     p[a] = std::clamp(p[a], -double(kAnimMaxOffset), double(kAnimMaxOffset));
@@ -219,6 +257,17 @@ AnimExportResult export_anim(const Skeleton& skel, const Clip& clip, const AnimE
         f.joints.push_back(std::move(j));
     }
     if (clamped) res.warnings.push_back("some positions are further than 5 m and were clamped");
+    if (!opt.positions && !opt.worn_overrides.empty()) {
+        int pinned = 0;
+        for (const AnimJoint& j : f.joints) {
+            const int i = skel.find(j.name);
+            pinned += i >= 0 && skel[i].category == Category::Face && !j.pos.empty() &&
+                      std::find(opt.worn_overrides.begin(), opt.worn_overrides.end(), skel[i].name) != opt.worn_overrides.end();
+        }
+        if (pinned)
+            res.warnings.push_back(std::to_string(pinned) + " face bones carry position keys while a mesh head is worn; "
+                                   "they will pull it towards the default face (set Bake shape to Your avatar)");
+    }
 
     for (auto& o : clip.orphans) {
         AnimJoint j;

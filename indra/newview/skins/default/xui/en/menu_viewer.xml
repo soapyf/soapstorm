@@ -636,6 +636,7 @@
         </menu_item_check>
 <!-- /FS:AR FIRE-30873 -->
         <menu_item_check label="VATs Editor" name="VATs Editor"><menu_item_check.on_check function="CheckControl" parameter="VATsEditor" /><menu_item_check.on_click function="ToggleControl" parameter="VATsEditor" /></menu_item_check>
+        <menu_item_check label="Show Firestorm UI over VATs Editor" name="VATs Show Viewer UI" shortcut="alt|shift|U" visibility_control="VATsEditor" enabled_control="VATsEditor"><menu_item_check.on_check function="CheckControl" parameter="VATsShowViewerUI" /><menu_item_check.on_click function="ToggleControl" parameter="VATsShowViewerUI" /></menu_item_check>
 
         <menu_item_separator/>
 
@@ -3990,6 +3991,7 @@
      tear_off="true"
      visible="false">
         <menu_item_check label="VATs UI test (ImGui demo)" name="VATs UI test"><menu_item_check.on_check function="CheckControl" parameter="VATsImGuiTest" /><menu_item_check.on_click function="ToggleControl" parameter="VATsImGuiTest" /></menu_item_check>
+        <menu_item_call label="VATs: Check Face Positions" name="VATs Face Check" enabled_control="VATsEditor"><menu_item_call.on_click function="ToggleControl" parameter="VATsFaceCheck" /></menu_item_call>
         <menu
          create_jump_keys="true"
          label="Consoles"

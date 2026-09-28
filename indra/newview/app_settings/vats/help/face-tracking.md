@@ -54,13 +54,25 @@ over the animation already there. See [[Motion capture#Recording a take]].
 | **Eye Limit** Side | 5–45° | 25° | the farthest the eyes turn left or right |
 | **Eye Limit** Up/Down | 5–45° | 20° | the farthest the eyes turn up or down |
 | **Shape Strengths** | 0–2 per shape | 1 | scales one shape, for example `jawOpen` |
-| **Move face bones** | on or off | on | moves face bones as well as turning them; see [[Face tracking#A mesh head is pulled out of shape]] |
+| **Move face bones** | on or off | off | moves face bones as well as turning them; see [[Face tracking#Moving face bones]] |
 
 The presets: **Natural** is strength 1; **Subtle** is 0.6; **Expressive** is 1.35, with `jawOpen` held at
 1.1. After strengths are applied, each shape weight is limited to 0–1.5.
 
 The face settings, the neutral face included, are saved in `settings.json` and come back at the next
-start.
+start. A saved **Move face bones** keeps its saved value.
+
+### Moving face bones
+
+**Move face bones** is off by default, because most SL heads are mesh heads with their own face joint
+positions. Off, a take turns the face bones only (jaw, eyes, eyelids and the other turning shapes); the smiles,
+brows, cheeks and most lip shapes, which move bones, are lost. On, a take moves face bones as well, by the
+table's amounts. Only bones a shape moved during the take get position keys; the others keep rotations only,
+so the mesh head keeps its own positions there.
+
+To upload moving face bones for a mesh head, export from the [[VATs Editor (viewer)]] with **Bake shape** set
+to **Your avatar**: the moved bones are written at your head's own positions plus the moves (see
+[[Export to Second Life#Your avatar]]).
 
 ### Eyes and eyelids
 
@@ -102,10 +114,11 @@ The resting face records as an expression. Press **Capture Neutral Face** with a
 
 ### A mesh head is pulled out of shape
 
-The smiles, brows, cheeks and most lip shapes move face bones, and those moves are made for the Second
-Life default head. A mesh head with its own face joint positions, such as a furry or stylised head, is
-pulled towards the default head's face. Untick **Move face bones**: the jaw, eyes, eyelids and the other
-turning shapes still work, and the head keeps its shape. The smiles, brows and lip shapes are then lost.
+With **Move face bones** on, the smiles, brows, cheeks and most lip shapes move face bones. Exported with
+**Bake shape** at **SL Default**, those bones are placed on the Second Life default head's face, so a mesh head
+with its own face joint positions, such as a furry or stylised head, is pulled towards it in-world. Export from
+the viewer with **Bake shape** set to **Your avatar**, or record with **Move face bones** off: the jaw, eyes,
+eyelids and the other turning shapes still work, and the head keeps its shape.
 
 ### The window shows "data/retarget/face-arkit.json is missing"
 

@@ -44,8 +44,14 @@ you close the editor or choose **Viewer → Show Firestorm UI**.
   your IMs, with its usual tabs and chat box. It moves and resizes with the pane, and hides when the pane is
   closed or another tab of its dock is in front. **Viewer → Chat** shows or hides it.
 - **Viewer menu.** **Chat**; **Notifications** opens or closes the viewer's Notifications window (the menu
-  and a button in the status bar show how many are unread); **Show Firestorm UI** shows all of the viewer's
-  UI over the editor until you choose it again; **Close Editor**.
+  and a button in the status bar show how many are unread); **Show Firestorm UI** (**Alt+Shift+U**); **Close
+  Editor**.
+- **Show Firestorm UI** shows all of the viewer's UI over the editor: its menu bar, navigation bar, toolbars,
+  chat bar and windows. The editor's menu bar, panels and status bar move in so the viewer's bars don't cover
+  them. Put it away with **Viewer → Show Firestorm UI** again, with the viewer's own **Avatar → Show Firestorm
+  UI over VATs Editor**, or with **Alt+Shift+U** from anywhere (the viewer's own Show User Interface keys,
+  which do this while the editor is open). Closing the editor leaves the viewer's UI as it was before you
+  opened it, whichever way it was showing.
 
 ### Your avatar while the editor is open
 
@@ -56,7 +62,7 @@ The avatar belongs to the editor until you close it:
   you edit your appearance, or when RLVa forbids sitting.
 - **Flying, it stays in the air.** The viewer's **Sit Down** is off while flying, and a sit in the air
   brings the avatar down to the ground, so the editor doesn't sit it: the avatar keeps flying and hovers
-  where it is.
+  where it is. The flying wind sound fades out while the editor is open; other sounds stay.
 - **No movement reaches it.** Keys go to the editor, and movement from anywhere else (the movement
   buttons, a joystick, a walk to a spot) is dropped until you close the editor.
 - **It stays where it was, on your screen.** Your avatar is drawn exactly where it was when the editor
@@ -75,8 +81,9 @@ The avatar belongs to the editor until you close it:
   opens**.
 - **Your mesh keeps its shape.** Bone positions the editor sets (the hip, and bones your animation or the
   face tracking moves) are added to your avatar's own bone positions, including your mesh head's or body's
-  joint offsets, so a mesh face isn't pulled to the default face. For a mesh head with its own face joint
-  positions, turn off **Move face bones** in [[Face tracking]]. Closing the editor puts every bone back.
+  joint offsets, so a mesh face isn't pulled to the default face. Uploads keep this with **Bake shape** at
+  **Your avatar**, the default while you wear mesh joint positions (see [[Export to Second Life#Your avatar]]).
+  Closing the editor puts every bone back.
 - **Only the editor's pose shows.** Every other animation on your avatar is stopped on your screen: your AO,
   animations from the region and from scripts, stands and walks, look-at, eye and head motion, breathing
   and expressions. Animations that start while the editor is open are stopped as they arrive. Nothing
@@ -99,6 +106,7 @@ yours only until you upload the animation and play it.
 | **Alt**+drag, **Ctrl+Alt**+drag, **Ctrl+Alt+Shift**+drag | the viewer's camera |
 | The mouse wheel over the world | the viewer's camera zoom |
 | The viewer's camera keys: **Alt** (or **Ctrl+Alt**, **Ctrl+Alt+Shift**) with the arrows, **Page Up**, **Page Down**, **A**, **D**, **W**, **S**, **E** or **C** | the viewer's camera |
+| **Alt+Shift+U** | **Show Firestorm UI**, on or off, whatever has the keys |
 | Any other key | the editor's shortcuts (see [[Keyboard shortcuts]]) |
 | Typing while a viewer text field has the focus | that field |
 
@@ -122,6 +130,8 @@ bone or a panel takes the click, not the editor.
 - **Other actors** of a couple or group project (see [[Couples and groups]]) are drawn as skeletons at
   their place around your avatar, tinted with their colour. Click one of their bones to edit that actor;
   your avatar then shows it.
+- **[[Props]]** are drawn with the world, lit simply and hidden where the world is in front of them: add,
+  attach, place and move them as in the app. They are on your screen only; nothing is rezzed.
 - **[[Onion skin]]** ghosts are bone lines, blue before the current frame and orange after.
 - **Collision volumes** are three rings each, with **View → Show Collision Volumes** on.
 
@@ -150,7 +160,7 @@ The editor takes its colours from the viewer's skin and follows it when the skin
 | Feature | App | Viewer |
 |---|---|---|
 | Body | VATs' avatar, or a [[Mesh bodies|devkit mesh body]] | your own avatar and the mesh body you wear |
-| [[Props]] | imported `.dae` props | none: in-world objects and worn attachments instead |
+| [[Props]] | imported `.dae` and `.fbx` props and the starter props | the same, on your screen only |
 | 3D view | its own, with its own camera controls per preset | the world, with the viewer's camera controls |
 | Other actors | each with its own body | skeletons |
 | Pose and prop thumbnails | pictures | plain icons |
@@ -196,8 +206,8 @@ then type.
 
 ### A viewer window I need is hidden
 
-Choose **Viewer → Show Firestorm UI**: all of the viewer's UI shows over the editor until you choose it
-again.
+Choose **Viewer → Show Firestorm UI** or press **Alt+Shift+U**: all of the viewer's UI shows over the
+editor until you choose it again or press **Alt+Shift+U** again.
 
 ## See also
 

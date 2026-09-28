@@ -6,8 +6,8 @@ will play on. Props are saved in the project but are not part of the exported an
 
 > Related articles: [[Mesh bodies]], [[Pose library]], [[Projects and files]], [[Export to Second Life]]
 
-> **Note:** The [[VATs Editor (viewer)]] has no imported props. In the viewer, the objects you wear
-> and the objects rezzed in-world are the props, and attachment-point keys move what you wear.
+> **Note:** In the [[VATs Editor (viewer)]] props work the same and are drawn with the world, on your
+> screen only; nothing is rezzed. Attachment-point keys also move what you wear.
 
 ## Usage
 

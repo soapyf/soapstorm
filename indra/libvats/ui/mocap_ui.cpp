@@ -576,8 +576,8 @@ void App::draw_mocap_panel() {
     label("");
     ImGui::Checkbox("Move face bones", &ui.face_settings.positions);
     ImGui::SetItemTooltip("Moves face bones as well as turning them: smiles, brows, cheeks and lip shapes. The moves are "
-                          "made for the Second Life default head. Untick it for a mesh head with its own face shape "
-                          "(a furry or stylised head), which moving bones would pull out of shape.");
+                          "made for the Second Life default head. Off by default: leave it off for a mesh head with its own face "
+                          "shape (a furry or stylised head), which moving bones would pull out of shape.");
     if (ImGui::TreeNode("Shape Strengths")) {
         for (auto& [shape, motions] : ui.face.shapes) {
             float g = float(ui.face_settings.gains.count(shape) ? ui.face_settings.gains[shape] : 1.0);

@@ -357,6 +357,9 @@ int App::anim_bytes(AnimExportResult& r, std::vector<std::uint8_t>& bytes) {
         }
     AnimExportOptions opt;
     opt.shape = export_shape();
+    opt.positions = export_positions();
+    opt.worn_overrides = host_.joint_overrides();  // the viewer: warns when face positions would pin a mesh head
+    if (const Json* v = export_home_settings().find("leave_static"); v && v->is_bool()) opt.leave_out_static_rotations = v->b;  // IO-11b
     if (multi_actor()) opt.external = actor_resolver(doc_.project.active);
     // IO-14: the project's key-reduction tolerances, [rotation degrees, position metres].
     if (const Json* reduce = doc_.clip().export_settings.find("reduce"); reduce && reduce->is_array() && reduce->arr.size() == 2 &&
@@ -372,6 +375,35 @@ int App::anim_bytes(AnimExportResult& r, std::vector<std::uint8_t>& bytes) {
     }
     bytes = write_anim(r.file);
     return 1;
+}
+
+bool App::face_check(FaceCheck& out, std::string& why) {
+    AnimExportResult r;
+    if (!anim_bytes(r, out.bytes)) return why = "nothing to export", false;
+    Json& ex = doc_.clip().export_settings;
+    const Json saved = ex;  // the control: the same export on SL Default; put back as it was, no undo step
+    if (!ex.is_object()) ex = Json::object();
+    ex.set("shape", std::string("sl-default"));
+    const int made = anim_bytes(r, out.control);
+    ex = saved;
+    if (!made) return why = "the SL Default export failed", false;
+    const Clip& c = doc_.clip();
+    out.fps = std::max(c.fps, 1);
+    std::vector<double> keys{0, double(c.end_frame)};
+    for (auto& [name, track] : c.curves) {
+        const int n = skel_.find(name);
+        if (n < 0 || skel_[n].category != Category::Face) continue;
+        for (auto& [ch, curve] : track)
+            for (const Key& k : curve.keys) keys.push_back(std::clamp(std::round(k.frame), 0.0, double(c.end_frame)));
+    }
+    std::sort(keys.begin(), keys.end());
+    keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+    const size_t step = (keys.size() + 39) / 40;  // at most 40 samples, the first and last kept
+    for (size_t i = 0; i < keys.size(); i += step) out.frames.push_back(keys[i]);
+    if (out.frames.back() != keys.back()) out.frames.push_back(keys.back());
+    rig_->external = multi_actor() ? actor_resolver(doc_.project.active) : ExternalTarget{};
+    for (double f : out.frames) out.poses.push_back(vats::evaluate(*rig_, c, f, shape()).pose);
+    return true;
 }
 
 bool App::export_anim(const std::string& path) {
@@ -402,6 +434,10 @@ bool App::export_anim(const std::string& path) {
         points += (points.empty() ? "" : ", ") + skel_[n].name + (moves && turns ? " (moves, rotates)" : moves ? " (moves)" : " (rotates)");
     }
     if (!points.empty()) export_summary_ += "; points: " + points;
+    if (r.static_positions)  // IO-11a
+        export_summary_ += "; " + std::to_string(r.static_positions) + " unmoving position channels left out";
+    if (r.static_rotations)  // IO-11b
+        export_summary_ += "; " + std::to_string(r.static_rotations) + " bones that don't move left out";
     if (r.file.duration > 60) export_summary_ += "; over SL's 60 s limit";
     status("Exported " + file_name(path) + ": " + export_summary_);
     if (!r.warnings.empty()) {
@@ -418,6 +454,7 @@ bool App::export_bvh(const std::string& path, bool all_bones) {
     const Json* positions = doc_.clip().export_settings.find("bvh_positions");
     opt.joint_positions = positions && positions->is_bool() && positions->b;
     opt.shape = export_shape();
+    opt.positions = export_positions();
     if (multi_actor()) opt.external = actor_resolver(doc_.project.active);
     Clip clip = doc_.clip().mirror_export ? mirrored_clip(skel_, doc_.clip()) : doc_.clip();
     auto r = vats::export_bvh(skel_, clip, opt);
@@ -431,6 +468,7 @@ bool App::export_bvh(const std::string& path, bool all_bones) {
         int n = skel_.find(track);
         moved += n >= 0 && track != "mPelvis" && !skel_[n].attachment && clip.has_channels(track, kPosChannels);
     }
+    moved = std::max(moved - r.static_positions, 0);  // positions that move nothing are not written (IO-11a)
     export_summary_ = moved == 0 ? std::string()
                       : std::to_string(moved) + (opt.joint_positions ? " moved bones below the hip written with positions"
                                                                      : " moved bones below the hip kept rotation only");
@@ -1280,7 +1318,7 @@ void App::draw_menus() {
         if (ImGui::BeginMenu(("Viewer" + count + "###host_menu").c_str())) {
             ImGui::MenuItem(h->pane_title(), nullptr, &show_host_pane_);
             if (ImGui::MenuItem(("Notifications" + count).c_str())) h->toggle_notices();
-            if (ImGui::MenuItem(h->reveal_label(), nullptr, h->revealed())) h->reveal(!h->revealed());
+            if (ImGui::MenuItem(h->reveal_label(), h->reveal_shortcut(), h->revealed())) h->reveal(!h->revealed());
             ImGui::Separator();
             menu_item("quit");
             ImGui::EndMenu();

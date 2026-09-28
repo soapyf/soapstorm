@@ -253,7 +253,24 @@ void App::draw_welcome() {
 // ---------------------------------------------------------------------------------------------
 // Export settings and immediate export
 
+std::string App::bake_shape_key(const Json& ex, bool yours) const {
+    const bool fitted = host_.body_shape() && !host_.joint_overrides().empty();
+    const std::string key = json_str(ex, "shape", fitted ? "avatar" : "sl-default");
+    return key == "avatar" && !yours ? "sl-default" : key;  // Your avatar belongs to the actor that is your avatar
+}
+
+const Json& App::export_home_settings() const {
+    const Project& p = doc_.project;
+    return export_home_ >= 0 && export_home_ < int(p.actors.size()) ? actor_clip(p, export_home_).export_settings
+                                                                      : doc_.clip().export_settings;
+}
+
+bool App::exporting_yours() const {
+    return export_home_ < 0 || doc_.project.active == export_home_ || json_bool(export_home_settings(), "avatar_all");
+}
+
 std::string App::bake_shape_label(const std::string& key) const {
+    if (key == "avatar") return host_.body_shape() ? "Your avatar" : "Your avatar (viewer only: SL Default here)";
     if (key.rfind("mesh:", 0) == 0) {
         const MeshBody* b = find_mesh_body(key.substr(5));
         return b ? "Mesh body: " + b->name : "Mesh body (missing)";
@@ -262,11 +279,18 @@ std::string App::bake_shape_label(const std::string& key) const {
 }
 
 const Shape* App::export_shape() const {
-    const std::string key = json_str(doc_.clip().export_settings, "shape", "sl-default");
+    // "avatar": IK and pins bake on SL Default; only the moving joints' positions come from the worn avatar
+    // (export_positions), so nothing else of it (scales, other joints) reaches the file.
+    const std::string key = bake_shape_key(doc_.clip().export_settings, exporting_yours());
     const Shape* female = &mesh_.sl_default(false).shape;
     if (key.rfind("mesh:", 0) == 0)  // BD-3: a mesh body's joints over the SL default
         if (const MeshBody* b = find_mesh_body(key.substr(5))) return mesh_body_shape(*b, female);
     return key == "sl-default-male" ? &mesh_.sl_default(true).shape : female;
+}
+
+// Read live from the host at each export or upload; the project keeps only the choice "avatar".
+const Shape* App::export_positions() const {
+    return bake_shape_key(doc_.clip().export_settings, exporting_yours()) == "avatar" ? host_.body_shape() : nullptr;
 }
 
 void App::draw_export_section() {
@@ -301,12 +325,13 @@ void App::draw_export_section() {
     if (ImGui::InputTextWithHint("##epat", "[NAME]_[#]_[SIDE]", buf, sizeof buf)) set("pattern", std::string(buf));
     label("Bake shape");
     {
-        const std::string key = json_str(ex, "shape", "sl-default");
+        const std::string key = bake_shape_key(ex);
         const std::string current = bake_shape_label(key);
         if (ImGui::BeginCombo("##eshape", current.c_str())) {
             auto pick = [&](const std::string& id, const std::string& text) {
                 if (ImGui::Selectable(text.c_str(), key == id) && key != id) set("shape", id);
             };
+            if (host_.body_shape()) pick("avatar", "Your avatar");  // the viewer: the worn avatar
             pick("sl-default", "SL Default");
             pick("sl-default-male", "SL Default (Male)");
             for (int k = 0; k < int(bodies_.size()); ++k) {  // two bodies may share a name
@@ -317,7 +342,17 @@ void App::draw_export_section() {
             ImGui::EndCombo();
         }
         ImGui::SetItemTooltip("IK and pins are baked against this body, whatever the view shows. A mesh body uses the "
-                              "joint positions it was rigged to.");
+                              "joint positions it was rigged to.%s",
+                              host_.body_shape() ? "\nYour avatar: positions fitted to the head and body you wear now; "
+                                                   "other heads may look different. Only bones that move get positions; "
+                                                   "IK and pins bake on SL Default." : "");
+    }
+    if (host_.world_view()) {  // the viewer: Your avatar is for the actor that is your avatar, unless this is on
+        bool every = json_bool(ex, "avatar_all");
+        ImGui::SetCursorPosX(label_w);
+        if (ImGui::Checkbox("Use Your avatar for every actor", &every)) set("avatar_all", every);
+        ImGui::SetItemTooltip("Off: only the actor you are editing (your avatar) bakes on Your avatar; the other actors of a "
+                              "couple or group use SL Default instead. On: every actor bakes against your worn avatar.");
     }
     bool both = json_bool(ex, "both"), count_up = json_bool(ex, "count_up"), mirrored = doc_.clip().mirror_export;
     ImGui::SetCursorPosX(label_w);
@@ -334,6 +369,12 @@ void App::draw_export_section() {
         edit("Export Mirrored", [&](Clip& c) { c.mirror_export = mirrored; });
     }
     ImGui::SetItemTooltip("Swaps the sides in the exported file only; the project is unchanged");
+    bool leave_static = json_bool(ex, "leave_static");
+    ImGui::SetCursorPosX(label_w);
+    if (ImGui::Checkbox("Leave out bones that don't move", &leave_static)) set("leave_static", leave_static);
+    ImGui::SetItemTooltip("The .anim gets no rotation keys for bones (other than the hip) that stay at rest all through, "
+                          "within the rotation tolerance below, so other animations, such as an AO's blinks, still move "
+                          "them. Off: every keyed bone is written.");
     bool bvh_positions = json_bool(ex, "bvh_positions");
     ImGui::SetCursorPosX(label_w);
     if (ImGui::Checkbox("BVH: include bone positions", &bvh_positions)) set("bvh_positions", bvh_positions);
@@ -418,8 +459,9 @@ void App::upload_now() {
     if (json_bool(ex, "both")) variants.push_back(!mirrored);
     Project& pr = doc_.project;
     const int home = pr.active, actors = multi_actor() ? int(pr.actors.size()) : 1;
+    if (actors > 1) export_home_ = home;
     std::deque<std::pair<std::string, std::vector<std::uint8_t>>> queue;
-    std::string problems;
+    std::string problems, warnings;
     for (int a = 0; a < actors && problems.empty(); ++a) {
         if (actors > 1) {
             set_active_actor(pr, a);
@@ -439,13 +481,16 @@ void App::upload_now() {
                 break;
             }
             for (auto& e : validate_anim(r.file, skel_, true)) problems += "- " + name + ": " + e + "\n";  // 60 s, 250000 bytes
+            for (auto& w : r.warnings) warnings += "- " + name + ": " + w + "\n";
             if (json_bool(ex, "save_to_library")) anim_to_library(name + ".anim", bytes);
             queue.emplace_back(name, std::move(bytes));
         }
     }
     if (actors > 1) set_active_actor(pr, home);
+    export_home_ = -1;
     if (problems == "-") return;
     if (!problems.empty()) return message("Cannot upload", problems);
+    if (!warnings.empty()) message("Uploading with warnings", warnings + "\nCancel at the price question to stop an upload.");
     upload_queue_ = std::move(queue);
     upload_next();
 }
@@ -504,6 +549,7 @@ void App::export_now(bool bvh, bool all_bones) {
     // GR-3: one file per actor, all with the active actor's export settings; the actor is switched in turn.
     Project& pr = doc_.project;
     const int home = pr.active, actors = multi_actor() ? int(pr.actors.size()) : 1;
+    if (actors > 1) export_home_ = home;
     bool ok = true;
     for (int a = 0; a < actors && ok; ++a) {
         if (actors > 1) {
@@ -523,6 +569,7 @@ void App::export_now(bool bvh, bool all_bones) {
             names += (names.empty() ? "" : ", ") + path.substr(path.find_last_of('/') + 1);
         }
     }
+    export_home_ = -1;
     if (actors > 1) {
         set_active_actor(pr, home);
         if (ok) {
@@ -564,7 +611,7 @@ void App::draw_export_dialog() {
         for (int k = 0; k < int(pr.actors.size()); ++k) {
             const Json& ek = actor_clip(pr, k).export_settings;
             ImGui::BulletText("%s%s: bakes on %s", pr.actors[k].name.c_str(), k == pr.active ? " (settings below)" : "",
-                              bake_shape_label(json_str(ek, "shape", "sl-default")).c_str());
+                              bake_shape_label(bake_shape_key(ek, k == pr.active || json_bool(doc_.clip().export_settings, "avatar_all"))).c_str());
         }
         hint("Each actor keeps its own bake shape and key reduction; select an actor to change them. Naming, the folder "
              "and the mirrored copy come from the actor you export from.");

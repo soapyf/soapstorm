@@ -80,6 +80,18 @@ BvhExportResult export_bvh(const Skeleton& skel, const Clip& clip, const BvhExpo
         int v = skel.find(p.via);
         if (v >= 0) animated[v] = has_pos[v] = 1;
     }
+    // Clip frames 0..last, sampled once.
+    const int last = std::max(clip.end_frame, 1);
+    std::vector<Pose> frames;
+    frames.reserve(last + 1);
+    for (int fr = 0; fr <= last; ++fr)
+        frames.push_back(baked ? evaluate(rig, clip, fr, opt.shape).pose : evaluate_curves(skel, clip, fr));
+    // IO-11a: positions that move nothing are not positions (the default key-reduction tolerance, 0.5 mm).
+    for (int i = 1; i < skel.size(); ++i)
+        if (has_pos[i] && static_position(frames, i, AnimExportOptions{}.reduce_pos_m)) {
+            has_pos[i] = 0;
+            res.static_positions += !skel[i].attachment;
+        }
     for (int i = 0; i < skel.size(); ++i) {
         if (!animated[i]) continue;
         if (skel[i].attachment) {
@@ -124,7 +136,6 @@ BvhExportResult export_bvh(const Skeleton& skel, const Clip& clip, const BvhExpo
     };
     write(0, 0);
 
-    const int last = std::max(clip.end_frame, 1);
     const int fps = std::clamp(clip.fps, 1, 120);
     char buf[64];
     std::snprintf(buf, sizeof buf, "MOTION\nFrames: %d\nFrame Time: %.6f\n", last + 2, 1.0 / fps);
@@ -132,13 +143,13 @@ BvhExportResult export_bvh(const Skeleton& skel, const Clip& clip, const BvhExpo
 
     // Frame 0 is the reference: rest position, zero rotation. Then clip frames 0..last.
     for (int fr = -1; fr <= last; ++fr) {
-        Pose pose = fr < 0 ? Pose(skel.size())
-                    : baked ? evaluate(rig, clip, fr, opt.shape).pose
-                            : evaluate_curves(skel, clip, fr);
+        const Pose pose = fr < 0 ? Pose(skel.size()) : frames[fr];
         std::string line;
         for (int i : order) {
             if (six(i)) {
-                Vec3 p = sl_to_bvh(skel[i].pos + pose.offset[i]) * kInchesPerMetre;
+                Vec3 base = skel[i].pos;
+                if (i != 0 && opt.positions && i < int(opt.positions->offset.size())) base += opt.positions->offset[i];
+                Vec3 p = sl_to_bvh(base + pose.offset[i]) * kInchesPerMetre;
                 appendf(line, "%.6f %.6f %.6f ", p.x, p.y, p.z);
             }
             Vec3 r = decompose_zxy(sl_to_bvh(pose.rot[i]));

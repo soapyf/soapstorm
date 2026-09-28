@@ -761,6 +761,16 @@ void App::draw_bone_lines(ImDrawList* dl) const {
     }
 }
 
+// The world view (the viewer): the props, as triangles the host draws with the world (spec 09 U5), placed as in the
+// app. The avatar is the viewer's own, so no body, ground or bone glyphs.
+void App::render_world_scene() {
+    if (!host_.scene_begin(ui::SceneTarget::View, 1, 1, camera_, scene_colours())) return;
+    static std::vector<Vertex> verts;
+    static std::vector<std::uint32_t> indices;
+    draw_props(verts, indices);
+    host_.scene_end();
+}
+
 // The world view's other actors, onion ghosts and collision volumes (spec 09 U4): the host draws no scene, so
 // they are lines over the world like the bones. Other actors are skeletons at their place around the active
 // actor (your avatar); ghosts are bone lines, cool before the frame and warm after, as the viewer's 6g layer drew
@@ -871,11 +881,23 @@ void App::draw_viewport() {
     ImVec2 mp = ImGui::GetIO().MousePos;
     bool over_cube = mp.x >= vmax.x - 8 - cube && mp.x <= vmax.x - 8 && mp.y >= origin.y + 8 && mp.y <= origin.y + 8 + cube;
     { VATS_PROFILE("vp input"); viewport_input(origin, size, hovered && !over_cube && cube_drag_ == 0); }
-    viewport_drop_target(origin, size);  // props agent: Inventory drops (VP-83); after hover, before the highlight
+    if (world && ImGui::GetDragDropPayload()) {
+        // The world view has no window of its own to drop onto: an empty one over it while something is dragged.
+        ImGui::SetNextWindowPos(origin);
+        ImGui::SetNextWindowSize(size);
+        ImGui::Begin("##world_drop", nullptr,
+                     ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings |
+                         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking);
+        viewport_drop_target(origin, size);
+        ImGui::End();
+    } else {
+        viewport_drop_target(origin, size);  // props agent: Inventory drops (VP-83); after hover, before the highlight
+    }
     projector_ = host_.projector(origin, size);  // input may have moved the camera
 
     ImTextureID scene = 0;
     if (!world) { VATS_PROFILE("vp render_scene"); scene = render_scene(w, h); }
+    else render_world_scene();
     ImDrawList* dl = world ? ImGui::GetBackgroundDrawList() : ImGui::GetWindowDrawList();  // world: behind every panel
     if (scene) dl->AddImage(scene, origin, ImVec2(origin.x + size.x, origin.y + size.y), ImVec2(0, 1), ImVec2(1, 0));
 

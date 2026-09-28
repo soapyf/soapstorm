@@ -48,6 +48,7 @@
 #include "llstreamingaudio.h"
 
 #include "llvoavatarself.h"
+#include "fsvatshost.h" // VATs editor
 
 /////////////////////////////////////////////////////////
 const U32 FMODEX_DECODE_BUFFER_SIZE = 1000; // in milliseconds
@@ -666,7 +667,8 @@ void audio_update_wind(bool force_update)
         // mute wind when not flying
         // <FS:Ansarriel> FIRE-12819: Disable wind sounds while under water
         //if (gAgent.getFlying())
-        if (gAgent.getFlying() && isAgentAvatarValid() && !gAgentAvatarp->mBelowWater)
+        if (gAgent.getFlying() && isAgentAvatarValid() && !gAgentAvatarp->mBelowWater
+            && !FSVATsEditor::holdsAvatar()) // VATs editor: no flight wind while it holds the avatar in the air
         // </FS:Ansariel>
         {
             // volume increases by volume_delta, up to no more than max_wind_volume

@@ -34,6 +34,7 @@
 #include "llgl.h"
 #include "llglslshader.h"
 #include "llrender.h"
+#include "llrootview.h"
 #include "lltimer.h"
 #include "llviewercontrol.h"
 #include "llviewerwindow.h"
@@ -66,6 +67,7 @@ namespace
     U32 sCapturedButtons = 0;           // buttons whose press ImGui consumed, so their release goes to ImGui too
     bool sHadTextInput = false;
     int sGLChecksLeft = 0;              // frames left to verify GL state is restored around ImGui's draw
+    ImVec4 sInsets;                     // the viewer's UI over the world view (left, top, right, bottom), see viewerUiInsets
 
     ImVec2 toImGui(LLCoordGL pos)
     {
@@ -217,6 +219,37 @@ namespace
         }
     }
 
+    // Where the viewer's own UI covers the world view while it shows (the editor's Show Firestorm UI, or before the editor
+    // hides it): its toolbars, chat bar and Stand button (everything outside the floater snap region) and the navigation
+    // bar. The editor's work area (menu bar, dockspace, status bar) keeps clear of it; the world layer still spans the
+    // whole world view, which is what LLViewerCamera projects onto.
+    ImVec4 viewerUiInsets()
+    {
+        if (!FSVATsEditor::ownsWorld() || !gViewerWindow->getUIVisibility() || !gFloaterView)
+        {
+            return ImVec4(0.f, 0.f, 0.f, 0.f);
+        }
+        const LLRect world = gViewerWindow->getWorldViewRectScaled();
+        LLRect free_rect;
+        gFloaterView->localRectToScreen(gFloaterView->getSnapRect(), &free_rect);
+        F32 top = (F32)(world.mTop - free_rect.mTop);
+        if (LLView* nav = gViewerWindow->getRootView()->findChildView("navigation_bar", true); nav && nav->isInVisibleChain())
+        {
+            const LLRect bar = nav->calcScreenRect();
+            if (bar.mBottom < world.mTop && bar.mTop > world.mBottom)
+            {
+                top = llmax(top, (F32)(world.mTop - bar.mBottom));
+            }
+        }
+        return ImVec4(llmax((F32)(free_rect.mLeft - world.mLeft), 0.f), llmax(top, 0.f),
+                      llmax((F32)(world.mRight - free_rect.mRight), 0.f), llmax((F32)(free_rect.mBottom - world.mBottom), 0.f));
+    }
+
+    ImVec4 workAreaInsets(ImGuiViewport*)
+    {
+        return sInsets;
+    }
+
     const char* getClipboard(ImGuiContext*)
     {
         LLWString text;
@@ -244,6 +277,7 @@ namespace
         ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
         pio.Platform_GetClipboardTextFn = getClipboard;
         pio.Platform_SetClipboardTextFn = setClipboard;
+        pio.Platform_GetWindowWorkAreaInsets = workAreaInsets;
         ImGui::StyleColorsDark();
         sFrameTimer.reset();
         sCapturedButtons = 0;
@@ -371,6 +405,7 @@ namespace
         {
             before.read();
         }
+        FSVATsEditor::drawScene();  // the editor's triangles (props), under ImGui's lines
         ImGui_ImplOpenGL3_RenderDrawData(data);
         if (sGLChecksLeft > 0)
         {
@@ -401,6 +436,7 @@ void FSVATsImGui::destroyGL()
     {
         ImGui::SetCurrentContext(sCtx);
         ImGui_ImplOpenGL3_Shutdown();
+        FSVATsEditor::releaseGL();
         sGLReady = false;
     }
 }
@@ -469,6 +505,7 @@ static bool buildFrame()
     const LLVector2& scale = gViewerWindow->getDisplayScale();
     io.DisplayFramebufferScale = ImVec2(scale.mV[VX], scale.mV[VY]);
     io.DeltaTime = llmax((F32)sFrameTimer.getElapsedTimeAndResetF32(), 1e-4f);
+    sInsets = viewerUiInsets();
     // The pointer only where no viewer window is over it (they are drawn over the panels).
     const ImVec2 mouse = pointerForImGui() ? toImGui(sMousePos) : ImVec2(-FLT_MAX, -FLT_MAX);
     io.AddMousePosEvent(mouse.x, mouse.y);
@@ -646,6 +683,13 @@ bool FSVATsImGui::scrollWheel(S32 clicks, bool horizontal)
 
 bool FSVATsImGui::keyDown(KEY key, MASK mask)
 {
+    // Alt+Shift+U, the viewer's own Show User Interface chord: while the editor is open it shows or hides the viewer's UI
+    // over the editor (Show Firestorm UI), from anywhere.
+    if (sCtx && FSVATsEditor::ownsWorld() && key == 'U' && (mask & MASK_NORMALKEYS) == (MASK_ALT | MASK_SHIFT))
+    {
+        gSavedSettings.setBOOL("VATsShowViewerUI", !gSavedSettings.getBOOL("VATsShowViewerUI"));
+        return true;
+    }
     if (!imguiGetsKeys(key, mask))
     {
         return false;

@@ -61,6 +61,13 @@
 #include "llviewerwindow.h"
 #include "llvoavatarself.h"
 #include "llweb.h"
+#include "llworld.h"
+#include "lldatapacker.h"
+#include "llkeyframemotion.h"
+#include "pipeline.h"
+
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include "imgui.h"
 
@@ -168,12 +175,14 @@ namespace
 
         const vats::ui::Paths& paths() const override { return mPaths; }
 
-        // The world is the view: no scene is built. Thumbnails too: the UI shows its plain icons instead.
-        bool scene_begin(vats::ui::SceneTarget, int, int, const vats::Camera&, const vats::SceneColours&,
-                         const vats::Mat4*) override { return false; }
+        // The world is the view. The UI sends only what the world lacks (the props; spec 09 U5), kept as
+        // agent-frame triangles for drawScene. Thumbnails: none, the UI shows its plain icons.
+        bool scene_begin(vats::ui::SceneTarget target, int, int, const vats::Camera&, const vats::SceneColours&,
+                         const vats::Mat4*) override;
         void scene_ground(const Vec3&) override {}
-        void scene_triangles(const std::vector<vats::Vertex>&, const std::vector<std::uint32_t>&, bool, float, bool) override {}
-        ImTextureID scene_end() override { return ImTextureID{}; }
+        void scene_triangles(const std::vector<vats::Vertex>& verts, const std::vector<std::uint32_t>& indices, bool, float,
+                             bool translucent) override;
+        ImTextureID scene_end() override { mSceneOpen = false; return ImTextureID{}; }
         bool save_thumbnail_png(const std::string&) override { return false; }
         ImTextureID load_texture(const std::string&) override { return ImTextureID{}; }
         void free_texture(ImTextureID) override {}
@@ -238,6 +247,10 @@ namespace
         bool world_view() const override { return true; }
         bool pointer_on_world() const override { return FSVATsImGui::pointerOnWorld(); }
         const vats::Shape* body_shape() const override { return mHaveShape ? &mShape : nullptr; }
+        std::vector<std::string> joint_overrides() const override;
+        void setSkeleton(const vats::Skeleton* skel) { mSkel = skel; }  // before the first frame, so body_shape is ready
+        // Spec 09 §5a: the face-positions check without uploading; a line for the log and the status bar.
+        std::string faceCheck(const vats::App::FaceCheck& fc);
 
         bool skin_colours(vats::HostColours& out) const override;
         std::string host_name() const override { return LLVersionInfo::instance().getChannel(); }
@@ -252,12 +265,16 @@ namespace
         int unread_notices() const override;
         void toggle_notices() override { LLFloaterReg::toggleInstanceOrBringToFront("notification_well_window"); }
         const char* reveal_label() const override { return "Show Firestorm UI"; }
+        const char* reveal_shortcut() const override { return "Alt+Shift+U"; }
         bool revealed() const override { return mRevealed; }
         void reveal(bool on) override;
         void upload_anim(const std::vector<std::uint8_t>& bytes, const std::string& name,
                          std::function<void(const std::string&)> done) override;
 
+        void drawScene();    // with the world layer, before ImGui's draw: the triangles the UI sent this frame
+        void releaseGL();    // the GL context is going
         void beforeFrame(bool reset_joints);  // outside the ImGui frame: the world's frame, the worn body, the camera
+        bool holdsAvatar() const { return mIsolatedOn && isAgentAvatarValid() && mIsolatedOn == gAgentAvatarp.get(); }
         void afterFrame();   // inside it, after the UI's frame: questions, camera edits
         void close();        // the editor is going: stop driving the avatar and the sound, drop its callbacks
         U32 filterControls(U32 flags);
@@ -272,6 +289,7 @@ namespace
         void watchRegion(LLVOAvatarSelf* avatar);  // what the region does meanwhile: stands, teleports, drift
         void restore();      // everything back as it was: motions still wanted, and stand up if we sat
         void updateShape();
+        void checkFrame();   // logs the drawn body against the editor's frame (spec 09 §5a)
         void stopMotion();
         void drawQuestion();
         void pushCamera();
@@ -319,6 +337,10 @@ namespace
         bool mFrameOnOpen = false;       // frame the avatar from the front on the next frame (once per open)
         F64 mReturnAt = 0;               // the earliest time for the next return autopilot
         F64 mToldAt = 0;                 // the earliest time for the next "Close the editor to stand up"
+        F64 mCheckAt = -1;               // checkFrame: the next log line (-1: start over), how many so far, sitting then
+        int mChecks = 0;
+        bool mCheckSitting = false;
+        vats::Quat mCheckFinger;
         // The viewer's UI while the editor is open (U4b).
         bool mChromeHidden = false;      // hidden by the editor
         bool mUiWasVisible = true;       // the viewer's UI was showing before (its own Show UI toggle)
@@ -330,6 +352,18 @@ namespace
             LLRect rect;
             bool visible = false, drag = true, close = true, resize = true, minimize = true, minimized = false, docked = false;
         } mPane;                         // the conversations floater as it was before it filled the Chat pane
+
+        // The world layer's triangles (spec 09 U5): x y z, normal, rgba per vertex, in the agent frame; opaque, then translucent.
+        struct SceneBatch
+        {
+            std::vector<F32> verts;
+            std::vector<U32> indices;
+        };
+        SceneBatch mScene[2];
+        bool mSceneOpen = false;
+        U32 mProgram = 0, mVao = 0, mVbo = 0, mEbo = 0;
+        S32 mMvpLoc = -1, mLightLoc = -1, mRectLoc = -1, mUseDepthLoc = -1, mDepthLoc = -1;
+        bool mProgramFailed = false;
 
         struct Question
         {
@@ -398,7 +432,12 @@ namespace
                 // editor opens), else the joint's position before the editor first drove it.
                 LLVector3 mesh_pos;
                 LLUUID mesh_id;
-                if (avatarJoint(i)->hasAttachmentPosOverride(mesh_pos, mesh_id))
+                // The pelvis rests on mRoot (SL-315; the viewer's pelvis_fix motion holds it at zero). What it holds
+                // after a skeleton reset (avatar_skeleton.xml's 1.067 m) is not its own position: taking that as the
+                // base drew the body raised above the frame the editor draws its bones in.
+                if (i == 0)
+                    mBase[n.name] = LLVector3::zero;
+                else if (avatarJoint(i)->hasAttachmentPosOverride(mesh_pos, mesh_id))
                     mBase[n.name] = mesh_pos;
                 else if (!mBase.count(n.name))
                     mBase[n.name] = avatarJoint(i)->getPosition();
@@ -442,6 +481,114 @@ namespace
         mMotionID.setNull();
         mMotionOn = nullptr;
         mJoints.clear();
+    }
+
+    // Spec 09 §0e: the joints whose position a worn mesh overrides, by skeleton name (names only).
+    std::vector<std::string> ViewerHost::joint_overrides() const
+    {
+        std::vector<std::string> out;
+        if (!mSkel || !isAgentAvatarValid())
+            return out;
+        ViewerHost* self = const_cast<ViewerHost*>(this);  // ponytail: the joint cache is the only state touched
+        LLVector3 pos;
+        LLUUID mesh_id;
+        for (int i = 0; i < mSkel->size(); ++i)
+            if (LLJoint* joint = self->avatarJoint(i); joint && joint->hasAttachmentPosOverride(pos, mesh_id))
+                out.push_back((*mSkel)[i].name);
+        return out;
+    }
+
+    // Spec 09 §5a, "Face positions check without uploading", as one step: the exact upload bytes are decoded by the
+    // viewer's own LLKeyframeMotion (a local instance, never started or signalled, no asset request) and sampled at
+    // each frame; every face joint's position relative to mHead is compared with the editor's preview of the same
+    // frame (rotations rest x pose, positions the joint's own plus the pose's offset, as VATsClipMotion sets them).
+    // The same with Bake shape SL Default is the negative control: on a mesh head with its own face positions it must
+    // be centimetres off, or the check isn't measuring the bytes.
+    std::string ViewerHost::faceCheck(const vats::App::FaceCheck& fc)
+    {
+        if (!mSkel || !isAgentAvatarValid() || fc.poses.size() != fc.frames.size())
+            return "Face positions check: log in with the editor open";
+        LLVOAvatarSelf* avatar = gAgentAvatarp.get();
+        const vats::Skeleton& skel = *mSkel;
+        const int head = skel.find("mHead");
+        std::vector<std::vector<int>> chains;  // mHead's descendants down to each face joint
+        for (int i = 0; i < skel.size(); ++i)
+        {
+            if (skel[i].category != vats::Category::Face || !avatarJoint(i))
+                continue;
+            std::vector<int> chain;
+            int k = i;
+            for (; k >= 0 && k != head; k = skel[k].parent)
+                chain.insert(chain.begin(), k);
+            if (k == head)
+                chains.push_back(std::move(chain));
+        }
+        auto base = [&](int n) {
+            const auto it = mBase.find(skel[n].name);  // a joint the editor drives: its own position before
+            return it != mBase.end() ? it->second : avatarJoint(n)->getPosition();
+        };
+        auto quat = [](const vats::Quat& q) { return LLQuaternion(F32(q.x), F32(q.y), F32(q.z), F32(q.w)); };
+        auto measure = [&](const std::vector<std::uint8_t>& bytes, F32& worst, std::string& where) {
+            worst = 0.f;
+            const LLUUID id = LLUUID::generateNewID();
+            auto motion = std::make_unique<LLKeyframeMotion>(id);
+            motion->onInitialize(avatar);  // no data yet: it only takes the avatar (nothing is requested until a second call)
+            std::vector<U8> copy(bytes.begin(), bytes.end());
+            LLDataPackerBinaryBuffer dp(copy.data(), S32(copy.size()));
+            void* hand_pose = avatar->getAnimationData("Hand Pose");  // onUpdate sets these; put back below
+            void* hand_priority = avatar->getAnimationData("Hand Pose Priority");
+            const bool ok = motion->deserialize(dp, id, false);
+            std::vector<U8> mask(LL_CHARACTER_MAX_ANIMATED_JOINTS, 0);
+            for (size_t s = 0; ok && s < fc.frames.size(); ++s)
+            {
+                motion->onUpdate(F32(fc.frames[s] / fc.fps), mask.data());
+                const vats::Pose& pose = fc.poses[s];
+                for (const std::vector<int>& chain : chains)
+                {
+                    LLVector3 pa, pb;
+                    LLQuaternion ra, rb;
+                    for (int n : chain)
+                    {
+                        const LLQuaternion la = quat((skel[n].rest * pose.rot[n]).normalized());
+                        const LLVector3 lpa = base(n) + toLL(pose.offset[n]);
+                        LLJointState* st = motion->getPose()->findJointState(avatarJoint(n));
+                        const bool rot = st && (st->getUsage() & LLJointState::ROT), pos = st && (st->getUsage() & LLJointState::POS);
+                        const LLQuaternion lb = rot ? st->getRotation() : quat(skel[n].rest.normalized());
+                        const LLVector3 lpb = pos ? st->getPosition() : base(n);
+                        pa += lpa * ra, ra = la * ra;
+                        pb += lpb * rb, rb = lb * rb;
+                    }
+                    if (const F32 d = (pa - pb).length(); d > worst)
+                    {
+                        worst = d;
+                        where = skel[chain.back()].name + " at frame " + std::to_string(int(fc.frames[s]));
+                    }
+                }
+            }
+            if (hand_pose)
+                avatar->setAnimationData("Hand Pose", hand_pose);
+            else
+                avatar->removeAnimationData("Hand Pose");
+            if (hand_priority)
+                avatar->setAnimationData("Hand Pose Priority", hand_priority);
+            else
+                avatar->removeAnimationData("Hand Pose Priority");
+            motion.reset();
+            LLKeyframeDataCache::removeKeyframeData(id);
+            return ok;
+        };
+        F32 upload = 0.f, control = 0.f;
+        std::string at_upload, at_control;
+        if (!measure(fc.bytes, upload, at_upload) || !measure(fc.control, control, at_control))
+            return "Face positions check: the viewer could not read the exported bytes";
+        const bool pass = upload <= 0.001f;
+        const bool control_differs = control >= 0.01f;
+        return llformat("Face positions check: %s. The upload bytes play within %.2f mm of the preview (%d face joints, "
+                        "%d frames%s%s). SL Default control: %.1f cm off%s%s.",
+                        pass ? "PASS" : "FAIL", upload * 1000.f, int(chains.size()), int(fc.frames.size()),
+                        pass ? "" : "; worst ", pass ? "" : at_upload.c_str(), control * 100.f,
+                        control_differs ? " at " : " (no worn face positions to tell apart: inconclusive)",
+                        control_differs ? at_control.c_str() : "");
     }
 
     // The worn avatar's proportions in VATs' terms (skeleton.h Shape): each bone's scale, and its position
@@ -492,6 +639,7 @@ namespace
             mRegion = gAgent.getRegion();
             mFlew = gAgent.getFlying();
             VATsClipMotion::sEditor.pinned = false;
+            mCheckAt = -1;         // checkFrame logs the frame again
             mFrameOnOpen = true;  // beforeFrame frames the avatar; the camera then stays put (no longer following it)
             if (!mRevealed)
                 hideChrome();
@@ -525,6 +673,10 @@ namespace
             // joint positions left by stopped animations go; mesh joint offsets are cleared and put back.
             stopMotion();  // restarted by the next drive_avatar
             avatar->resetSkeleton(false);
+            // resetSkeleton rebuilds the pelvis at avatar_skeleton.xml's 1.067 m and leaves pelvis_fix (stopped
+            // above) to put it back on mRoot; do that here, as LLVOAvatar::clearAttachmentOverrides does.
+            if (avatar->mPelvisp)
+                avatar->mPelvisp->setPosition(LLVector3::zero);
             mCacheFor = nullptr;
             mBase.clear();  // taken again from the reset skeleton
             LL_INFOS("VATsEditor") << "skeleton reset locally as the editor opens" << LL_ENDL;
@@ -691,6 +843,9 @@ namespace
 
     void ViewerHost::beforeFrame(bool reset_joints)
     {
+        static LLCachedControl<bool> show_ui(gSavedSettings, "VATsShowViewerUI", false);
+        if (show_ui != mRevealed)
+            reveal(show_ui);
         isolate(reset_joints);
         LLViewerCamera* cam = LLViewerCamera::getInstance();
         if (isAgentAvatarValid() && gAgentAvatarp->getRootJoint())
@@ -717,6 +872,7 @@ namespace
             mRot.setAngleAxis(atan2f(-at.mV[VY], -at.mV[VX]), 0.f, 0.f, 1.f);
         }
         updateShape();
+        checkFrame();
 
         // The viewer's camera is the view: the UI's camera follows it every frame (in VATs' space), and
         // the projection is LLViewerCamera's own, so markers and gizmos sit on the world.
@@ -745,6 +901,50 @@ namespace
 
         if (mPlayAt >= 0 && LLTimer::getTotalSeconds() >= mPlayAt)
             startSound();
+    }
+
+    // Spec 09 §5a: the body as drawn against the editor's frame, logged 1, 3 and 6 s after the editor takes the avatar
+    // and again after each change between sitting and standing. The editor's pose and shape this frame are the ones
+    // the avatar was drawn with (VATsClipMotion updates before the render), so each pair should agree to a millimetre.
+    void ViewerHost::checkFrame()
+    {
+        if (!mIsolatedOn || !isAgentAvatarValid() || !mSkel || mPose.rot.size() != (size_t)mSkel->size())
+            return;
+        LLVOAvatarSelf* avatar = gAgentAvatarp.get();
+        const F64 now = LLTimer::getTotalSeconds();
+        const bool sitting = avatar->isSitting();
+        if (mCheckAt < 0 || sitting != mCheckSitting)
+        {
+            mCheckSitting = sitting;
+            mChecks = 0;
+            mCheckAt = now + 1.0;
+        }
+        // A hand pose applied later (Inventory > Starter poses) logs once more, to show the finger joints follow.
+        const int finger = mSkel->find("mHandIndex2Left");
+        if (finger >= 0 && mChecks >= 3 && std::fabs(mPose.rot[finger].dot(mCheckFinger)) < 0.999)
+            mChecks = 2, mCheckAt = now + 0.5;
+        if (mChecks >= 3 || now < mCheckAt)
+            return;
+        if (finger >= 0)
+            mCheckFinger = mPose.rot[finger];
+        mCheckAt = now + (++mChecks == 1 ? 2.0 : 3.0);
+        const std::vector<vats::Xform> g = mSkel->global_pose(mPose, mHaveShape ? &mShape : nullptr);
+        std::string line;
+        for (const char* name : { "mPelvis", "mFootLeft", "mHead", "mHandIndex2Left" })
+        {
+            const int node = mSkel->find(name);
+            LLJoint* joint = node >= 0 ? avatarJoint(node) : nullptr;
+            if (!joint)
+                continue;
+            const LLVector3 drawn = joint->getWorldPosition(), editor = toAgent(g[node].pos);
+            line += llformat(" %s drawn <%.3f %.3f %.3f> editor <%.3f %.3f %.3f> off %.3f m;", name, drawn.mV[VX], drawn.mV[VY],
+                             drawn.mV[VZ], editor.mV[VX], editor.mV[VY], editor.mV[VZ], (drawn - editor).length());
+        }
+        LLJoint* foot = avatar->getJoint("mFootLeft");
+        const F32 ground = foot ? LLWorld::getInstance()->resolveLandHeightAgent(foot->getWorldPosition()) : 0.f;
+        LL_INFOS("VATsEditor") << "frame check (" << (sitting ? "sitting" : "not sitting") << (avatar->getParent() ? " on an object" : "")
+                                << (gAgent.getFlying() ? ", flying" : "") << ", pin " << (VATsClipMotion::sEditor.pinned ? "on" : "off")
+                                << "):" << line << " ground under the left foot " << ground << LL_ENDL;
     }
 
     void ViewerHost::afterFrame()
@@ -844,6 +1044,189 @@ namespace
         });
     }
 
+    // --- The world layer's triangles (spec 09 U5) ----------------------------------------------------------
+
+    bool ViewerHost::scene_begin(vats::ui::SceneTarget target, int, int, const vats::Camera&, const vats::SceneColours&,
+                                 const vats::Mat4*)
+    {
+        mScene[0].verts.clear(), mScene[0].indices.clear();
+        mScene[1].verts.clear(), mScene[1].indices.clear();
+        // Only logged in: before that the login page covers the world view, and there is no world depth to test against.
+        mSceneOpen = target == vats::ui::SceneTarget::View && LLStartUp::getStartupState() >= STATE_STARTED && !mProgramFailed;
+        return mSceneOpen;
+    }
+
+    void ViewerHost::scene_triangles(const std::vector<vats::Vertex>& verts, const std::vector<std::uint32_t>& indices, bool,
+                                     float, bool translucent)
+    {
+        if (!mSceneOpen || verts.empty())
+            return;
+        SceneBatch& b = mScene[translucent ? 1 : 0];
+        const U32 base = U32(b.verts.size() / 10);
+        b.verts.reserve(b.verts.size() + verts.size() * 10);
+        for (const vats::Vertex& v : verts)
+        {
+            const LLVector3 p = toAgent(Vec3{ v.p[0], v.p[1], v.p[2] });
+            const LLVector3 n = LLVector3(v.n[0], v.n[1], v.n[2]) * mRot;
+            b.verts.insert(b.verts.end(), { p.mV[VX], p.mV[VY], p.mV[VZ], n.mV[VX], n.mV[VY], n.mV[VZ], v.c[0], v.c[1], v.c[2], v.c[3] });
+        }
+        if (indices.empty())
+            for (U32 i = 0; i < U32(verts.size()); ++i)
+                b.indices.push_back(base + i);
+        else
+            for (U32 i : indices)
+                b.indices.push_back(base + i);
+    }
+
+    // Plain GL, every state it touches put back (FSVATsImGui checks GL and LLRender's caches around the whole draw on the
+    // first frames). The world's own matrices from the end of its render (gGLLast*), the world view as the viewport, and
+    // the world's depth (the deferred target's depth texture) sampled per fragment: a fragment behind the world is
+    // dropped. Lit by a light at the camera, a little from above. Nothing to draw: nothing is done at all.
+    void ViewerHost::drawScene()
+    {
+        if (mScene[0].indices.empty() && mScene[1].indices.empty())
+            return;
+        if (!mProgram && !mProgramFailed)
+        {
+            static const char* vs = "#version 150\n"
+                "uniform mat4 u_mvp; in vec3 a_pos; in vec3 a_nrm; in vec4 a_col; out vec3 v_nrm; out vec4 v_col;\n"
+                "void main() { gl_Position = u_mvp * vec4(a_pos, 1.0); v_nrm = a_nrm; v_col = a_col; }\n";
+            static const char* fs = "#version 150\n"
+                "uniform sampler2D u_depth; uniform vec4 u_rect; uniform int u_use_depth; uniform vec3 u_light;\n"
+                "in vec3 v_nrm; in vec4 v_col; out vec4 o_col;\n"
+                "void main() {\n"
+                "  if (u_use_depth != 0) {\n"
+                "    ivec2 size = textureSize(u_depth, 0);\n"
+                "    ivec2 at = clamp(ivec2((gl_FragCoord.xy - u_rect.xy) / u_rect.zw * vec2(size)), ivec2(0), size - 1);\n"
+                "    if (gl_FragCoord.z > texelFetch(u_depth, at, 0).r) discard;\n"
+                "  }\n"
+                "  float lit = 0.35 + 0.65 * abs(dot(normalize(v_nrm), u_light));\n"
+                "  o_col = vec4(v_col.rgb * lit, v_col.a);\n"
+                "}\n";
+            auto compile = [](GLenum kind, const char* src) {
+                const GLuint sh = glCreateShader(kind);
+                glShaderSource(sh, 1, &src, nullptr);
+                glCompileShader(sh);
+                GLint ok = 0;
+                glGetShaderiv(sh, GL_COMPILE_STATUS, &ok);
+                if (!ok)
+                {
+                    char log[1024] = "";
+                    glGetShaderInfoLog(sh, sizeof log, nullptr, log);
+                    LL_WARNS("VATsEditor") << "scene shader: " << log << LL_ENDL;
+                }
+                return sh;
+            };
+            const GLuint v = compile(GL_VERTEX_SHADER, vs), f = compile(GL_FRAGMENT_SHADER, fs);
+            mProgram = glCreateProgram();
+            glAttachShader(mProgram, v);
+            glAttachShader(mProgram, f);
+            glBindAttribLocation(mProgram, 0, "a_pos");
+            glBindAttribLocation(mProgram, 1, "a_nrm");
+            glBindAttribLocation(mProgram, 2, "a_col");
+            glBindFragDataLocation(mProgram, 0, "o_col");
+            glLinkProgram(mProgram);
+            glDeleteShader(v);
+            glDeleteShader(f);
+            GLint linked = 0;
+            glGetProgramiv(mProgram, GL_LINK_STATUS, &linked);
+            if (!linked)
+            {
+                LL_WARNS("VATsEditor") << "the scene shader did not link: props are not drawn" << LL_ENDL;
+                glDeleteProgram(mProgram);
+                mProgram = 0;
+                mProgramFailed = true;
+                return;
+            }
+            mMvpLoc = glGetUniformLocation(mProgram, "u_mvp");
+            mLightLoc = glGetUniformLocation(mProgram, "u_light");
+            mRectLoc = glGetUniformLocation(mProgram, "u_rect");
+            mUseDepthLoc = glGetUniformLocation(mProgram, "u_use_depth");
+            mDepthLoc = glGetUniformLocation(mProgram, "u_depth");
+            glGenVertexArrays(1, &mVao);
+            glGenBuffers(1, &mVbo);
+            glGenBuffers(1, &mEbo);
+        }
+
+        GLint program = 0, vao = 0, array_buffer = 0, active = 0, texture = 0, viewport[4] = {}, depth_func = 0;
+        GLint blend_src_rgb = 0, blend_dst_rgb = 0, blend_src_a = 0, blend_dst_a = 0;
+        GLboolean depth_mask = GL_TRUE;
+        glGetIntegerv(GL_CURRENT_PROGRAM, &program);
+        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao);
+        glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_buffer);
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &active);
+        glGetIntegerv(GL_VIEWPORT, viewport);
+        glGetIntegerv(GL_DEPTH_FUNC, &depth_func);
+        glGetIntegerv(GL_BLEND_SRC_RGB, &blend_src_rgb);
+        glGetIntegerv(GL_BLEND_DST_RGB, &blend_dst_rgb);
+        glGetIntegerv(GL_BLEND_SRC_ALPHA, &blend_src_a);
+        glGetIntegerv(GL_BLEND_DST_ALPHA, &blend_dst_a);
+        glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_mask);
+        const GLboolean blend = glIsEnabled(GL_BLEND), depth = glIsEnabled(GL_DEPTH_TEST), cull = glIsEnabled(GL_CULL_FACE);
+        glActiveTexture(GL_TEXTURE0);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
+
+        const LLRect world = gViewerWindow->getWorldViewRectRaw();
+        glViewport(world.mLeft, world.mBottom, world.getWidth(), world.getHeight());
+        const glm::mat4 mvp = glm::make_mat4(gGLLastProjection) * glm::make_mat4(gGLLastModelView);
+        const U32 world_depth = gPipeline.mRT ? gPipeline.mRT->deferredScreen.getDepth() : 0;
+        LLVector3 light = -LLViewerCamera::getInstance()->getAtAxis() + LLVector3(0.f, 0.f, 0.5f);
+        light.normVec();
+
+        glUseProgram(mProgram);
+        glUniformMatrix4fv(mMvpLoc, 1, GL_FALSE, glm::value_ptr(mvp));
+        glUniform3f(mLightLoc, light.mV[VX], light.mV[VY], light.mV[VZ]);
+        glUniform4f(mRectLoc, (F32)world.mLeft, (F32)world.mBottom, (F32)llmax(world.getWidth(), 1), (F32)llmax(world.getHeight(), 1));
+        glUniform1i(mUseDepthLoc, world_depth ? 1 : 0);
+        glUniform1i(mDepthLoc, 0);
+        glBindTexture(GL_TEXTURE_2D, world_depth);
+        glBindVertexArray(mVao);
+        glBindBuffer(GL_ARRAY_BUFFER, mVbo);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mEbo);
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 10 * sizeof(F32), (void*)0);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 10 * sizeof(F32), (void*)(3 * sizeof(F32)));
+        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 10 * sizeof(F32), (void*)(6 * sizeof(F32)));
+        glDisable(GL_CULL_FACE);
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LEQUAL);
+        glDepthMask(GL_TRUE);
+        glClear(GL_DEPTH_BUFFER_BIT);  // the window's own depth holds nothing of the world any more (renderFinalize)
+        glEnable(GL_BLEND);
+        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            const SceneBatch& b = mScene[pass];
+            if (b.indices.empty())
+                continue;
+            glDepthMask(pass == 0 ? GL_TRUE : GL_FALSE);  // translucent: seen through, writes no depth
+            glBufferData(GL_ARRAY_BUFFER, b.verts.size() * sizeof(F32), b.verts.data(), GL_STREAM_DRAW);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, b.indices.size() * sizeof(U32), b.indices.data(), GL_STREAM_DRAW);
+            glDrawElements(GL_TRIANGLES, GLsizei(b.indices.size()), GL_UNSIGNED_INT, nullptr);
+        }
+
+        glBindVertexArray(vao);  // brings back its element buffer
+        glBindBuffer(GL_ARRAY_BUFFER, array_buffer);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glActiveTexture(active);
+        glUseProgram(program);
+        glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+        glDepthFunc(depth_func);
+        glDepthMask(depth_mask);
+        glBlendFuncSeparate(blend_src_rgb, blend_dst_rgb, blend_src_a, blend_dst_a);
+        (blend ? glEnable : glDisable)(GL_BLEND);
+        (depth ? glEnable : glDisable)(GL_DEPTH_TEST);
+        (cull ? glEnable : glDisable)(GL_CULL_FACE);
+    }
+
+    void ViewerHost::releaseGL()
+    {
+        // The context is going with them (stopGL); new ones are made on the next draw.
+        mProgram = mVao = mVbo = mEbo = 0;
+    }
+
     // --- The viewer's UI beside the editor (spec 09 U4b) -------------------------------------------------
 
     // The viewer's own hide-UI (its Show UI toggle: toolbars, navigation and status bars, chiclets, floaters),
@@ -881,8 +1264,13 @@ namespace
         LL_INFOS("VATsEditor") << "viewer UI shown again" << LL_ENDL;
     }
 
+    // The editor's Viewer menu, the Avatar menu's item or Alt+Shift+U (both through the setting VATsShowViewerUI).
     void ViewerHost::reveal(bool on)
     {
+        if (gSavedSettings.getBOOL("VATsShowViewerUI") != on)
+            gSavedSettings.setBOOL("VATsShowViewerUI", on);
+        if (mRevealed != on)
+            LL_INFOS("VATsEditor") << "Show Firestorm UI " << (on ? "on" : "off") << LL_ENDL;
         mRevealed = on;
         if (on)
             showChrome();
@@ -1052,6 +1440,7 @@ namespace
     {
         showChrome();
         mRevealed = false;
+        gSavedSettings.setBOOL("VATsShowViewerUI", false);
         stopMotion();
         mBase.clear();
         restore();
@@ -1094,9 +1483,24 @@ namespace
                 return;
             }
             LL_INFOS("VATsEditor") << "editor open, user data in " << sHost->paths().user << LL_ENDL;
+            sHost->setSkeleton(&sApp->skeleton());
         }
         if (sApp)
+        {
             sHost->beforeFrame(sApp->viewer_reset_joints());
+            static LLCachedControl<bool> face_check(gSavedSettings, "VATsFaceCheck", false);
+            if (face_check)
+            {
+                // Developer > VATs: Check Face Positions (spec 09 §5a): one run, then the item is ready again.
+                gSavedSettings.setBOOL("VATsFaceCheck", false);
+                vats::App::FaceCheck fc;
+                std::string why;
+                const std::string line = sApp->face_check(fc, why) ? sHost->faceCheck(fc) : "Face positions check: " + why;
+                LL_INFOS("VATsEditor") << line << LL_ENDL;
+                sApp->show_status(line);
+                tip(line);
+            }
+        }
     }
 
     void editorDraw()
@@ -1165,6 +1569,23 @@ void FSVATsEditor::update(bool want_open)
     {
         sClosing = false;
     }
+}
+
+void FSVATsEditor::drawScene()
+{
+    if (sHost && sApp)
+        sHost->drawScene();
+}
+
+void FSVATsEditor::releaseGL()
+{
+    if (sHost)
+        sHost->releaseGL();
+}
+
+bool FSVATsEditor::holdsAvatar()
+{
+    return sHost && sHost->holdsAvatar();
 }
 
 bool FSVATsEditor::ownsWorld()
