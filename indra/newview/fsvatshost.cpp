@@ -206,14 +206,15 @@ namespace
         const vats::ui::Paths& paths() const override { return mPaths; }
 
         // The world is the view. The UI sends only what the world lacks (other actors' bodies, props; spec 09 U5), kept as
-        // agent-frame triangles for drawScene. Thumbnails: none, the UI shows its plain icons.
+        // agent-frame triangles for drawScene. Thumbnails and the face cam draw offscreen, each into its own FBO.
         bool scene_begin(vats::ui::SceneTarget target, int, int, const vats::Camera&, const vats::SceneColours&,
                          const vats::Mat4*) override;
         void scene_ground(const Vec3&) override {}
         void scene_triangles(const std::vector<vats::Vertex>& verts, const std::vector<std::uint32_t>& indices, bool, float,
                              bool translucent) override;
         ImTextureID scene_end() override;
-        bool save_thumbnail_png(const std::string&) override { return false; }
+        bool save_thumbnail_png(const std::string& png) override;
+        bool thumbnail_pixels(std::vector<std::uint8_t>& rgba, int& width, int& height) override;
         bool scene_image(ImTextureID texture, const std::array<Vec3, 4>& corners, float opacity, bool backdrop) override;
         ImTextureID load_texture(const std::string& png) override;
         void free_texture(ImTextureID texture) override;
@@ -357,9 +358,10 @@ namespace
         std::string mSeatName;
         LLObjectSelectionHandle mSeatSelection;
         F64 mSeatCheckUntil = 0;
-        // The face cam's offscreen picture (SceneTarget::FaceCam), drawn at scene_end.
+        // The offscreen pictures (SceneTarget::FaceCam and Thumbnail), drawn at scene_end.
         bool ensureProgram();                    // the triangles' program (drawScene's)
         ImTextureID renderOffscreen();
+        bool readThumbnail(std::vector<std::uint8_t>& px, int& width, int& height);  // bottom row first, straight alpha
         LLJoint* avatarJoint(int node);
         void isolate(bool reset_joints);  // the avatar belongs to the editor: sit it down once, stop every other motion
         void watchRegion(LLVOAvatarSelf* avatar);  // what the region does meanwhile: stands, teleports, drift
@@ -451,13 +453,18 @@ namespace
             std::vector<U32> indices;
         };
         SceneBatch mScene[2];
-        SceneBatch mOff[2];              // the face cam's, in the UI's space
+        SceneBatch mOff[2];              // the face cam's or a thumbnail's, in the UI's space
         bool mOffOpen = false;
         int mOffW = 0, mOffH = 0;
         glm::mat4 mOffMvp{ 1.f };
         LLVector3 mOffLight;
-        U32 mFbo = 0, mFboTex = 0, mFboDepth = 0;
-        int mFboW = 0, mFboH = 0;
+        struct Offscreen  // an FBO with a depth buffer, remade when the size changes
+        {
+            U32 fbo = 0, tex = 0, depth = 0;
+            int w = 0, h = 0;
+        };
+        Offscreen mFace, mThumb;         // apart, so a thumbnail never overwrites the face cam's picture (ui/host.h)
+        Offscreen* mOffTarget = &mFace;
         void drawBatches(const SceneBatch (&batches)[2]);  // program, VAO and buffers bound: opaque, then translucent
         struct SceneImage  // a reference picture's plane (scene_image): corners in the agent frame, bottom-left first
         {
@@ -1609,8 +1616,10 @@ namespace
     bool ViewerHost::scene_begin(vats::ui::SceneTarget target, int width, int height, const vats::Camera& cam,
                                  const vats::SceneColours&, const vats::Mat4* projection)
     {
-        if (target == vats::ui::SceneTarget::FaceCam)
+        if (target == vats::ui::SceneTarget::FaceCam || target == vats::ui::SceneTarget::Thumbnail)
         {
+            // Thumbnails (props, poses, listing media) go the same way, into their own framebuffer.
+            mOffTarget = target == vats::ui::SceneTarget::FaceCam ? &mFace : &mThumb;
             // Build 20, item 53: the face cam's own picture, in the UI's space with the UI's camera, drawn at scene_end.
             // It needs no world, so it works on the login screen too; the world's batches are left alone.
             mOff[0].verts.clear(), mOff[0].indices.clear();
@@ -1977,29 +1986,30 @@ namespace
         glActiveTexture(GL_TEXTURE0);
         glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
 
-        if (!mFbo || mFboW != mOffW || mFboH != mOffH)
+        Offscreen& o = *mOffTarget;
+        if (!o.fbo || o.w != mOffW || o.h != mOffH)
         {
-            if (!mFbo)
+            if (!o.fbo)
             {
-                glGenFramebuffers(1, &mFbo);
-                glGenTextures(1, &mFboTex);
-                glGenRenderbuffers(1, &mFboDepth);
+                glGenFramebuffers(1, &o.fbo);
+                glGenTextures(1, &o.tex);
+                glGenRenderbuffers(1, &o.depth);
             }
-            glBindTexture(GL_TEXTURE_2D, mFboTex);
+            glBindTexture(GL_TEXTURE_2D, o.tex);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, mOffW, mOffH, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glBindRenderbuffer(GL_RENDERBUFFER, mFboDepth);
+            glBindRenderbuffer(GL_RENDERBUFFER, o.depth);
             glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, mOffW, mOffH);
             glBindRenderbuffer(GL_RENDERBUFFER, 0);
-            glBindFramebuffer(GL_FRAMEBUFFER, mFbo);
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mFboTex, 0);
-            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, mFboDepth);
-            mFboW = mOffW, mFboH = mOffH;
+            glBindFramebuffer(GL_FRAMEBUFFER, o.fbo);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, o.tex, 0);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, o.depth);
+            o.w = mOffW, o.h = mOffH;
         }
-        glBindFramebuffer(GL_FRAMEBUFFER, mFbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, o.fbo);
         const bool complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
         if (complete)
         {
@@ -2023,7 +2033,7 @@ namespace
         }
         else
         {
-            LL_WARNS_ONCE("VATsEditor") << "the face cam's framebuffer is not complete: nothing drawn" << LL_ENDL;
+            LL_WARNS_ONCE("VATsEditor") << "an offscreen framebuffer is not complete: nothing drawn" << LL_ENDL;
         }
 
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw_fb);
@@ -2042,7 +2052,56 @@ namespace
         (depth ? glEnable : glDisable)(GL_DEPTH_TEST);
         (cull ? glEnable : glDisable)(GL_CULL_FACE);
         (scissor ? glEnable : glDisable)(GL_SCISSOR_TEST);
-        return complete ? ImTextureID(mFboTex) : ImTextureID{};
+        return complete ? ImTextureID(o.tex) : ImTextureID{};
+    }
+
+    // The last thumbnail read back as straight alpha: blending over the transparent clear leaves the colour
+    // premultiplied, as the app's MSAA resolve does. Rows bottom first, as GL and LLImageRaw keep them.
+    bool ViewerHost::readThumbnail(std::vector<std::uint8_t>& px, int& width, int& height)
+    {
+        if (!mThumb.fbo)
+            return false;
+        width = mThumb.w, height = mThumb.h;
+        px.resize(size_t(width) * height * 4);
+        GLint read_fb = 0, pack = 4;
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read_fb);
+        glGetIntegerv(GL_PACK_ALIGNMENT, &pack);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, mThumb.fbo);
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+        glPixelStorei(GL_PACK_ALIGNMENT, pack);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fb);
+        for (size_t i = 0; i < px.size(); i += 4)
+        {
+            std::uint8_t* q = &px[i];
+            if (q[3] && q[3] < 255)
+                for (int c = 0; c < 3; ++c)
+                    q[c] = std::uint8_t(std::min(255, q[c] * 255 / q[3]));
+        }
+        return true;
+    }
+
+    // Top row first, as the UI wants (the listing media's GIF).
+    bool ViewerHost::thumbnail_pixels(std::vector<std::uint8_t>& px, int& width, int& height)
+    {
+        if (!readThumbnail(px, width, height))
+            return false;
+        const size_t row = size_t(width) * 4;
+        for (int y = 0; y < height / 2; ++y)
+            std::swap_ranges(px.begin() + long(y * row), px.begin() + long((y + 1) * row), px.begin() + long((height - 1 - y) * row));
+        return true;
+    }
+
+    // LLPngWrapper writes an LLImageRaw's rows last first, so GL's bottom-up rows go in as they are.
+    bool ViewerHost::save_thumbnail_png(const std::string& png)
+    {
+        std::vector<std::uint8_t> px;
+        int w = 0, h = 0;
+        if (!readThumbnail(px, w, h))
+            return false;
+        LLPointer<LLImageRaw> raw = new LLImageRaw(px.data(), U16(w), U16(h), 4);
+        LLPointer<LLImagePNG> out = new LLImagePNG();
+        return out->encode(raw, 0.f) && out->save(png);
     }
 
     void ViewerHost::releaseGL()
@@ -2051,8 +2110,7 @@ namespace
         // help keeps their stale names until its page changes (drawn blank), and free_texture ignores them.
         mProgram = mVao = mVbo = mEbo = 0;
         mImageProgram = mImageVbo = 0;
-        mFbo = mFboTex = mFboDepth = 0;  // the face cam's; remade at its next picture
-        mFboW = mFboH = 0;
+        mFace = mThumb = Offscreen();  // the face cam's and the thumbnails'; remade at their next picture
         mTextures.clear();
     }
 
