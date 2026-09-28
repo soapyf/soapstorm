@@ -97,6 +97,7 @@ void App::activate_actor(int i) {
     if (i == p.active || i < 0 || i >= int(p.actors.size())) return;
     if (p.actors[i].locked) return status(p.actors[i].name + " is locked");
     if (doc_.history.is_open() || scene_busy()) return status("Finish the current edit first");
+    scratch_end(false);  // PT-2: a scratch pose belongs to the actor it was made on
     // Keep the camera on the same spot of the scene: old active space -> new active space. The world view's camera is the
     // host's, which follows the change itself (Host::set_view_frame).
     if (!host_.world_view()) {
@@ -188,6 +189,7 @@ void App::actor_file_menu(int i, bool load) {
 
 void App::scene_edit(const std::string& label, const std::function<void(Project&)>& change) {
     if (doc_.history.is_open()) return status("Finish the current edit first");
+    scratch_end(false);  // PT-2: scene steps go in the document's own history
     Project& p = doc_.project;
     Clip clip_before = p.clip;
     SceneState before{p.actors, p.active};
@@ -337,6 +339,10 @@ void App::write_sit_note(const std::string& folder, const std::string& stem) {
          "- SL does not seat an avatar exactly at the sit target: sit scripts usually correct the height, often by\n"
          "  about 0.4 m. The right value depends on the avatar and the script: verify in-world and adjust Z.\n"
          "- Keep all actors' animations started together; their lengths and loop points already match.\n";
+    // GR-2: the same placement for the sit systems, from the furniture root (Actors panel, Sit systems).
+    t += "\nAVsitter2: paste into the AVpos notecard (one [AV]sitA/B pair per actor in the prim)\n\n" + sit_lines(0) +
+         "\nnPose V4: paste into a SET card (the .init card needs SEAT_INIT|" + std::to_string(p.actors.size()) + ")\n\n" +
+         sit_lines(1);
     std::ofstream(folder + "/" + stem + "_placement.txt", std::ios::binary) << t;
 }
 
@@ -430,7 +436,7 @@ void App::draw_actors_panel() {
     if (scene_busy() && !actor_dragging_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::GetIO().WantTextInput)
         finish_scene_drags();
     if (!show_actors_) return;
-    ImGui::SetNextWindowSize(window_size(22, 26), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(window_size(22, 45), ImGuiCond_FirstUseEver);  // tall enough for every section
     place_tool_window(2);
     if (!ImGui::Begin("Actors", &show_actors_)) return ImGui::End();
     help_button("couples-and-groups");
@@ -612,7 +618,7 @@ void App::draw_actors_panel() {
         }
         ImGui::EndCombo();
     }
-    ImGui::TextDisabled("None: nothing (its bones while edited), Ruth: the SL default body.");
+    hint("None: nothing (its bones while edited), Ruth: the SL default body.");
 
     // Placement: drag the fields; one undo step per drag.
     ImGui::SeparatorText("Placement from the sit target");
@@ -631,6 +637,7 @@ void App::draw_actors_panel() {
         cur.rot_z = rz;
     }
     if (done) finish_scene_drags();
+    draw_sit_export();
 
     // GR-4: bind a point of this actor to a bone of another.
     ImGui::SeparatorText("Contact with another actor");
@@ -660,6 +667,9 @@ void App::draw_actors_panel() {
     ImGui::EndDisabled();
     if (sel <= 0) ImGui::SetItemTooltip("Select the point that should follow, such as a hand");
     hint("Release it later with Release from Here, as for any pin.");
+    if (ImGui::Button("Look at Partner")) look_at_partner(pin_actor_);  // face_ui.cpp (08 FA-8)
+    ImGui::SetItemTooltip("The head turns half-way and the eyes the rest towards %s's eyes, keyed on every frame",
+                          p.actors[pin_actor_].name.c_str());
     ImGui::End();
 }
 

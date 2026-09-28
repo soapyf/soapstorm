@@ -19,10 +19,16 @@ and buttons below the list apply to the selected chain.
 2. Click **Add Chain from Selected Bone**. VATs picks a preset from the bone's name: **Jiggle** for a
    collision volume, **Ears** for a bone with `Ear` in its name, otherwise **Tail**. The chain starts
    with every bone down the first-child path from the selected bone.
-3. Adjust the settings (see Configuration below), or press **Tail**, **Ears** or **Jiggle** to load
-   another preset. A preset changes the physical settings and keeps **Bones**.
+3. Adjust the settings (see Configuration below), or press **Tail**, **Ears**, **Jiggle** or **Overlap**
+   to load another preset. A preset changes the physical settings and keeps **Bones**.
 
 The button is disabled until a joint or a collision volume is selected. Attachment points cannot swing.
+
+**Overlap** suits follow-through on a limb or the spine: the chain lags behind and settles with little
+swing back and no droop. To delay a chain's own keys instead of simulating it, see [[Overlap]].
+
+![The Dynamics window listing one chain, mTail1 +5, not yet baked](images/dynamics/dynamics-window.png)
+*A six-bone tail chain. Click it in the list to see its settings and buttons.*
 
 ### Soft-body jiggle
 
@@ -50,18 +56,36 @@ keys.
 
 ## Configuration
 
-| Setting | Range | Default | Tail | Ears | Jiggle | Effect |
-|---|---|---|---|---|---|---|
-| **Bones** | 1 to the chain's depth | whole chain | | | 1 | how many bones down the chain are simulated |
-| **Stiffness** | 0–1 | 0.25 | 0.08 | 0.2 | 0.12 | how hard the chain pulls back to the animated pose |
-| **Damping** | 0–1 | 0.2 | 0.12 | 0.25 | 0.08 | how quickly swinging calms down |
-| **Drag** | 0–0.5 | 0.02 | 0.03 | 0.02 | 0 | air resistance: slows all motion, not only the swing |
-| **Gravity** | 0–3 g | 0 | 0.3 | 0.1 | 0 | pull downwards, in multiples of Earth's gravity |
-| **Radius** | 0–0.15 m | 0.02 | 0.03 | 0.01 | 0 | how far the chain keeps from the body's collision volumes |
+| Setting | Range | Default | Tail | Ears | Jiggle | Overlap | Effect |
+|---|---|---|---|---|---|---|---|
+| **Bones** | 1 to the chain's depth | whole chain | | | 1 | | how many bones down the chain are simulated |
+| **Stiffness** | 0–1 | 0.25 | 0.08 | 0.2 | 0.12 | 0.3 | how hard the chain pulls back to the animated pose |
+| **Damping** | 0–1 | 0.2 | 0.12 | 0.25 | 0.08 | 0.35 | how quickly swinging calms down |
+| **Drag** | 0–0.5 | 0.02 | 0.03 | 0.02 | 0 | 0.02 | air resistance: slows all motion, not only the swing |
+| **Gravity** | 0–3 g | 0 | 0.3 | 0.1 | 0 | 0 | pull downwards, in multiples of Earth's gravity |
+| **Radius** | 0–0.15 m | 0.02 | 0.03 | 0.01 | 0 | 0.02 | how far the chain keeps from the body's collision volumes |
 
 The simulation runs at 120 steps per second, whatever the clip's frame rate. A looping clip (see
 [[Loop tools]]) is simulated around the loop twice before recording, so the end of the baked loop matches
 its start.
+
+## Worked example: a tail that swings
+
+[Open the example](example:dynamics-tail.vat): a four-second loop in which the hips turn 35° to each
+side, with a **Tail** chain already added on `mTail1` and not yet baked.
+
+1. Choose **View → Show Tail Bones**, so the tail is drawn, then **Tools → Dynamics...**. The list shows
+   `mTail1 +5`: the chain runs from `mTail1` through five more bones to `mTail6`. Click it: the settings
+   read the Tail preset, **Stiffness** 0.08, **Damping** 0.12, **Drag** 0.03, **Gravity** 0.3 g,
+   **Radius** 0.03 m, with **Bones** at 6.
+2. Tick **Preview while playing** and play. The tail lags behind each turn of the hips and swings back
+   through the middle; stop, and it snaps to the keyed pose.
+3. Press **Bake**. The status bar says "Baked mTail1 to keys", the list reads `mTail1 +5  (baked)` and
+   the button now reads **Re-bake**. Scrub: the tail keeps swinging without the preview, because the
+   motion is keys now. Select `mTail1` at frame 0: **Properties → Bone** says "Keyed at this frame".
+4. Change a setting, for example **Stiffness** to 0.02, and press **Re-bake**. The bake starts again from
+   the unkeyed tail, so settings can be tried as often as you like. **Unbake** puts the unkeyed tail
+   back.
 
 ## Tips and tricks
 
@@ -90,6 +114,8 @@ The loop points changed after baking. Re-bake the chain.
 
 - [[Ragdoll]]
 - [[Loop tools]]
+- [[Overlap]]
+- [[Idle layer]]
 - [[Project file format#dynamics]]
 
 Category: Motion

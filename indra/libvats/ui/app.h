@@ -23,8 +23,11 @@
 #include "vats/avatar_mesh.h"
 #include "vats/dae.h"
 #include "vats/dynamics.h"
+#include "vats/face_anim.h"
 #include "vats/history.h"
+#include "vats/loop_assist.h"
 #include "vats/onion.h"
+#include "vats/overlap.h"
 #include "vats/pose_ops.h"
 #include "vats/project.h"
 #include "vats/rig.h"
@@ -34,7 +37,10 @@
 
 namespace vats {
 
+struct FitOptions;
+
 std::string key_label(ImGuiKeyChord chord);  // "Ctrl+Up", "]": shortcut text for menus and tooltips
+std::string folder_url(const std::string& dir);  // a file:// URL of a folder for Host::open_url (file_library_ui.cpp)
 
 // Settings ids and menu names, indexed by Body.
 inline constexpr int kBodyCount = 5;
@@ -105,9 +111,24 @@ public:
         clear_selection();
         selected_prop_ = index;
     }
-    void show_tab(const std::string& tab) {  // library = Inventory; actors opens the Actors window
+    // library = Inventory; poses = Inventory at Poses; actors, check open the Actors, Animation Check windows,
+    // face the Face window, export the Export dialog, sl-preview the SL preview
+    void show_tab(const std::string& tab) {
         if (tab == "actors") show_actors_ = true;
+        else if (tab == "check") show_check_ = true;
+        else if (tab == "face") show_face_ = true;
+        else if (tab == "export") show_export_dialog_ = true;
+        else if (tab == "sl-preview") sl_preview_ = true;
         else pending_tab_ = tab == "bones" ? "Bones" : "Inventory";
+        inv_scroll_poses_ = tab == "poses";
+    }
+    // --window: opens a tool window or brings a panel to the front, by its --window name; false when unknown.
+    bool show_window(const std::string& name);
+    bool set_theme(const std::string& name) {  // --theme: by its name in Preferences; false when unknown
+        if (find_theme(name) == 0 && name != theme_name(0)) return false;
+        settings_.theme = name;
+        apply_look();
+        return true;
     }
     bool set_preset(const std::string& name) {
         if (!preset_from_name(name, settings_.preset)) return false;
@@ -120,12 +141,15 @@ public:
         graph_.frame_all(g);
     }
     void show_points() { show_category_[7] = true; }
+    // --light <noon|key|rim|dusk|night|studio> and --backdrop (08 LT): the Light menu from the command line.
+    bool set_light(const std::string& id);
+    void show_backdrop() { backdrop_ = true; }
     void select_by_name(const std::string& name) {
         int i = skel_.find(name);
         if (i >= 0) select(i, false);
     }
     // True while something animates on its own, so the main loop must not sleep.
-    bool busy() const { return playing_ || dragging_gizmo_ || modal_ != Modal::None || cam_anim_t_ >= 0 || cam_keys_held_ || mocap_busy() || cube_alpha_ != (cube_hover_ ? 1.f : 0.5f); }
+    bool busy() const { return playing_ || dragging_gizmo_ || modal_ != Modal::None || pose_blend_ || cam_anim_t_ >= 0 || cam_keys_held_ || mocap_busy() || cube_alpha_ != (cube_hover_ ? 1.f : 0.5f); }
 
 private:
     // Document
@@ -147,9 +171,13 @@ private:
     void update_title();
     void new_document();
     bool save(const std::string& path);
-    void load_project_file(const std::string& path);
+    // example: a help page's example project, opened as an untitled copy that is not added to the recent files.
+    void load_project_file(const std::string& path, bool example = false);
     void import_file(const std::string& path);
     int anim_bytes(AnimExportResult& r, std::vector<std::uint8_t>& bytes);
+    int export_in_memory(AnimExportResult& r, std::vector<std::uint8_t>& bytes);  // anim_bytes without a message
+    AnimExportOptions anim_export_options();  // the active actor's, as every .anim export uses them
+    Clip anim_export_clip() const;            // the active clip as it exports: mirrored with Export mirrored
     bool export_anim(const std::string& path);
     void upload_now();  // the viewer's direct upload (Host::can_upload): every file Export would write
     void upload_next();  // the next queued upload, after the previous one's confirmation
@@ -160,7 +188,7 @@ private:
 
     // File dialogs run asynchronously; results come back through this queue.
     enum class Dialog { Open, SaveAs, ImportAnim, ImportBvh, ImportProp, ImportBody, ImportRetarget, LoadAudio, ExportFolder,
-                        LoadActor, SaveActor, ExportActor };  // the *Actor ones act on file_actor_
+                        LoadActor, SaveActor, ExportActor, SitLines };  // the *Actor ones act on file_actor_; SitLines on sit_format_
     // A dialog's answer, queued for the next frame (hosts may answer on another thread). Several files
     // (body parts) arrive joined with newlines; "" = cancelled.
     ui::FilesChosen dialog_result(Dialog kind, bool folder_of_file = false);
@@ -262,6 +290,7 @@ private:
     bool clip_range(double& a, double& b) const;
     void clip_replaced() {
         graph_.clip_replaced();
+        pose_blend_.reset();  // its before and after belong to the old clip
         doc_.history.set_actor(doc_.project.active);
         sync_active_body();
     }
@@ -281,7 +310,7 @@ private:
     // The world view's triangles (spec 09 U5): other actors' bodies and props, which the host draws with the world.
     void render_world_scene();
     ImGuiID dockspace_id_ = 0;
-    void draw_message_popup();
+    void draw_message_popup(bool in_export_dialog = false);  // inside the Export dialog while it is open
 
     // Viewport
     void evaluate();
@@ -298,7 +327,6 @@ private:
     // First-open position of a tool window (windows.cpp); with a size in font units, also its first-open size,
     // kept on screen below the window's top.
     void place_tool_window(int slot, float w_em = 0, float h_em = 0);
-    // IO-54: one-time import from the reference app (migrate.cpp).
     // Mesh bodies from devkits (bodies.cpp, spec 08 BD).
     struct MeshBody {
         std::string id, name;
@@ -317,19 +345,22 @@ private:
     const Shape* mesh_body_shape(const MeshBody& b, const Shape* base) const;
     mutable std::map<std::pair<std::string, const Shape*>, std::optional<Shape>> body_shapes_;
     void draw_bodies_section();
-    void offer_migration(bool first_run);
     void apply_settings();
+#ifdef VATS_LEGACY_IMPORT
+    // IO-54: the first-run legacy import (migrate.cpp).
+    void offer_migration(bool first_run);
     std::string migrate_reference_data();  // returns a list of what was imported
     void draw_migration_prompt();
     std::string migration_dir_;
-    bool show_migration_ = false;
+#endif
+    bool show_migration_ = false;  // the first-run import offer is up (only with VATS_LEGACY_IMPORT)
     void keyboard_camera();  // Second Life preset: Alt + arrow keys
     bool cam_keys_held_ = false;
     void apply_gizmo_drag(ImVec2 mouse, bool snap);
     void capture_edit_start();
     void apply_delta(const Quat& r, const Vec3& t, int gimbal_axis = -1, double gimbal_angle = 0);
     // Blender preset: G / R over the view start a transform without clicking (spec 04 VP-51).
-    enum class Modal { None, Move, Rotate, Trackball };
+    enum class Modal { None, Move, Rotate, Trackball, Tween };  // Tween: spec 08 TW-1's key drag
     void start_modal(Modal kind);
     bool modal_input(ImVec2 mouse);  // true while a modal transform consumed the frame
     void end_modal(bool confirm);
@@ -483,13 +514,14 @@ private:
     bool quit_ = false;
     bool skip_shortcuts_ = false;
     std::string pending_tab_;           // --tab: focused once the panels exist
+    bool inv_scroll_poses_ = false;     // --tab poses: scroll the Inventory to its Poses section once laid out
     // Undo/Redo pressed in a text field: the field is released first and commits its own step (UI-15).
     const char* deferred_action_ = nullptr;
     int deferred_frames_ = 0;
     bool headless_ = false;  // a key already handled this frame (e.g. Esc cancelling a drag)
     bool first_frame_ = true;
 
-    // --- props agent ---
+    // --- props ---
     // Prop library (06 section 4.2, 03 section 3.6), thumbnails (04 VP-90) and Inventory drops (VP-83).
     std::string library_dir() const;  // the folder of library_path(), with a trailing '/'
     void load_prop_libraries();  // from load_library()
@@ -510,7 +542,7 @@ private:
     std::vector<PropLibraryItem> prop_library_, starter_props_;
     std::map<std::string, ImTextureID> thumbs_;  // item id -> texture
 
-    // --- viewport agent ---
+    // --- viewport ---
     // The Scale tool (VP-40, props only). ponytail: stands in for Tool::Scale until the enum gains it.
     Tool last_effective_tool_ = Tool::Rotate;  // shows the "bones never scale" hint on the switch to Scale
     // VP-26: pressing a bone with the Rotate tool, then dragging, turns it about the view axis.
@@ -521,7 +553,7 @@ private:
     Quat local_axes(int node) const { return globals_[node].rot * skel_.bone_frame(node); }
     void draw_collision_volumes(std::vector<Vertex>& verts);  // VP-10, SK-I5
 
-    // --- formats/viewport agent ---
+    // --- formats/viewport ---
     // VP-84 / VP-85: Copy / Paste with a static prop selected; true when they handled it.
     bool prop_sl_copy();
     bool prop_sl_paste();
@@ -544,7 +576,7 @@ public:
     void free_thumbnails();  // the host's textures, before the host goes (App::shutdown)
 
 private:
-    // --- dynamics agent ---
+    // --- dynamics ---
     // Spec 08 DY: the Dynamics window and the live preview while playing (dynamics_ui.cpp).
     void draw_dynamics_panel();
     void apply_dynamics_preview(Evaluation& e);  // from evaluate(), before e is moved
@@ -555,15 +587,32 @@ private:
     std::vector<DynChain> dyn_chains_;  // the chains dyn_sim_ was built for
     double dyn_last_frame_ = 0;
 
-    // --- retarget agent ---
+    // --- idle / overlap ---
+    // Spec 08 IL: Tools > Idle Layer... and its live preview while playing (idle_ui.cpp); spec 08 OV:
+    // Tools > Overlap... (overlap_ui.cpp).
+    void draw_idle_panel();
+    void apply_idle_preview(Evaluation& e);  // from evaluate(), before the dynamics preview
+    bool show_idle_ = false;
+    bool idle_preview_ = true;
+    int idle_selected_ = -1;
+    void draw_overlap_panel();
+    bool show_overlap_ = false;
+    int overlap_length_ = 3;  // bones in the chain from the selected one
+    OverlapSettings overlap_;
+
+    // --- retarget ---
     // Spec 07: File > Import Animation (Retarget)... and its mapping/report dialog (retarget_ui.cpp).
-    void open_retarget(const std::string& path);  // reads the file, guesses the rig, opens the dialog
+public:
+    void open_retarget(const std::string& path);  // reads the file, guesses the rig, opens the dialog (also --retarget)
+private:
     void draw_retarget_dialog();
     void draw_retarget_split(struct RetargetUi& ui);  // RT-10.4 split / trim
+    void split_into_parts(const Clip& clip, const std::string& source, const FitOptions& fit, bool overwrite,
+                          std::string& confirm, const std::string& advice);  // RT-10.4, also Fit to 250 KB's fallback
     std::shared_ptr<struct RetargetUi> retarget_ui_;  // defined in retarget_ui.cpp
     std::shared_ptr<struct HelpUi> help_ui_;          // defined in help_ui.cpp
 
-    // --- mocap agent ---
+    // --- mocap ---
     // Spec 08 MC: Tools > Motion Capture... (VMC over UDP, mocap_ui.cpp).
     void draw_mocap_panel();                  // also polls the socket and records: call every frame
     void apply_mocap_preview(Evaluation& e);  // from evaluate(), after the dynamics preview
@@ -571,7 +620,7 @@ private:
     bool show_mocap_ = false;
     std::shared_ptr<struct MocapUi> mocap_ui_;  // defined in mocap_ui.cpp
 
-    // --- ragdoll agent ---
+    // --- ragdoll ---
     // Spec 08 RD: Tools > Ragdoll... (ragdoll_ui.cpp): settings, a simulated preview to scrub, bake.
     void draw_ragdoll_panel();
     void apply_ragdoll_preview(Evaluation& e);  // from evaluate(): shows the simulated preview frames
@@ -579,7 +628,24 @@ private:
     std::vector<Pose> rd_frames_;               // the last simulated preview, frames 0..end
     std::optional<Ragdoll> rd_for_;             // the settings and tracks that preview was made from
     std::map<std::string, Track> rd_curves_for_;
-    // --- groups agent --- (actors_ui.cpp, spec 08 GR)
+    // --- face --- (face_ui.cpp, spec 08 FA)
+    // Tools > Face...: expression sliders, the blink/saccade/look-at layer and the look-at tool.
+    void draw_face_panel();
+    bool show_face_ = false;
+    std::shared_ptr<struct FaceUi> face_ui_;  // defined in face_ui.cpp
+    std::string face_heads_dir() const;       // <user>faces/, where per-head tables live; "" = none
+    // The face table of a head: "" = the default head (data/retarget/face-arkit.json), else <heads dir><head>.json.
+    bool load_face_table(const std::string& head, FaceTable& out, std::string& err) const;
+    // Shared with Motion Capture (mocap_ui.cpp keeps them in its settings): Move face bones and the head.
+    bool face_positions();
+    void set_face_positions(bool on);
+    std::string face_head();
+    void set_face_head(const std::string& head);
+    // Where a look-at target is at each frame, in the active actor's space; empty when it cannot be found.
+    LookTarget look_target(const FaceLayer& target);
+    void look_at_partner(int actor);  // Actors: the head and eyes look at another actor's eyes, the whole clip
+
+    // --- groups --- (actors_ui.cpp, spec 08 GR)
     bool show_actors_ = false;
     void draw_actors_panel();
     bool multi_actor() const { return doc_.project.actors.size() >= 2; }
@@ -605,6 +671,11 @@ private:
     void draw_other_actors(const SceneColours& colours);
     int pick_actor(ImVec2 m) const;            // another actor's body under the cursor, or -1
     void write_sit_note(const std::string& folder, const std::string& stem);
+    // Sit-system lines (GR-2, ui/sit_export_ui.cpp): 0 AVsitter2 AVpos, 1 nPose V4, for every actor.
+    std::string sit_lines(int fmt) const;
+    void draw_sit_export();                  // the Actors panel's section
+    void save_sit_lines(const std::string& path);  // Save as .txt, the format in sit_format_
+    int sit_format_ = 0;
     std::vector<std::vector<float>> actor_pick_pos_;  // skinned positions of the other actors (world, active space)
     std::vector<const std::vector<std::uint32_t>*> actor_pick_idx_;
     std::map<std::string, std::unique_ptr<AvatarMesh>> actor_meshes_;  // Linden bodies other actors use
@@ -641,10 +712,29 @@ private:
     void set_onion_view(const OnionView& v);
     void draw_onion_settings();
     void draw_onion(const SceneColours& colours);
+    std::vector<OnionGhost> ghost_poses();  // onion ghosts plus the Filter Curves pre-filter pose (viewport.cpp)
+    void draw_ghost(const std::vector<Xform>& globals, const Rgb& colour, float alpha, bool bones);
     void draw_loop_tools_menu();
     void draw_loop_seam_mark(ImDrawList* dl, float x_out, float y, bool hovered);
     int loop_blend_ = 0;
     float loop_travel_ = 1.f;
+    // --- loop assists (loop_assist_ui.cpp; spec 08 LP-5..LP-8) ---
+    void draw_loop_assist_items();  // the Loop Tools menu's part
+    void draw_loop_assist_window();
+    void draw_treadmill_menu();
+    void draw_treadmill();  // the scrolling grid, through scene_triangles (the app and the viewer)
+    void draw_light_menu();  // 08 LT-1, light_ui.cpp
+    void draw_backdrop();    // 08 LT-2: a plain wall and floor behind the actor, through scene_triangles
+    int light_ = -1;         // the Light menu's preset; -1 = the host's own lighting
+    bool backdrop_ = false;
+    void loop_assist_tick();  // every frame: loop-aware tangents, the treadmill's travel
+    bool show_loop_assist_ = false;
+    int loop_min_length_ = 20, loop_beats_ = 8;
+    std::vector<LoopCandidate> loop_candidates_;
+    bool treadmill_on_ = false;
+    int treadmill_speed_ = 0;  // index into kSlSpeeds; its size = the custom speed
+    float treadmill_custom_ = 1.5f;
+    double treadmill_frame_ = 0, treadmill_scroll_ = 0;  // metres the ground has moved, modulo its spacing
     // --- audio track + time editing (audio_track.cpp; spec 08 AU, TE) ---
     void load_audio(const std::string& path);
     void sync_audio_data();
@@ -680,6 +770,75 @@ private:
     bool inv_match(const std::string& name) const;  // the Inventory's filter box
     std::string inv_filter_;
     std::shared_ptr<struct FileLibUi> file_lib_;  // defined in file_library_ui.cpp
+    // --- tween, pose blend and easing (tween_ui.cpp; spec 08 TW) ---
+    void draw_tween_controls();     // the timeline bar's Tween slider, and Blend for a while after a pose
+    void start_tween();             // the Tween shortcut: a modal drag (Modal::Tween)
+    void tween_drag(ImVec2 mouse);  // modal_input's part while Modal::Tween runs
+    bool begin_tween();             // opens the undo step; false when nothing selected can be keyed
+    void apply_tween();             // re-keys from tween_base_ at tween_pct_
+    // After a library pose, hand pose or Paste Pose changed the clip (before = the clip until then): shows
+    // the Blend slider (TW-2).
+    void offer_pose_blend(Clip before, double frame);
+    float tween_pct_ = 50, tween_press_pct_ = 50;
+    bool tween_relax_ = false;
+    float tween_row_end_ = 0, timeline_row_w_ = 0;  // the timeline bar goes icon-only below timeline_row_w_
+    Clip tween_base_;
+    std::vector<std::string> tween_on_;  // the tracks the running tween keys
+    struct PoseBlend {
+        Clip before, after, shown;  // shown: the clip as the last blend left it
+        double frame = 0, until = 0;  // until: ImGui time the slider hides at
+        int actor = 0;
+        float pct = 100;
+    };
+    std::optional<PoseBlend> pose_blend_;
+    // --- animation check (lint_ui.cpp; spec 08 CK) ---
+    void update_check();       // re-runs the check once the clip is still after an edit (from draw_check_panel)
+    void draw_check_panel();   // Tools > Animation Check...; call every frame
+    void draw_check_badge();   // the status bar's finding count
+    bool show_check_ = false;
+    std::shared_ptr<struct CheckUi> check_ui_;  // defined in lint_ui.cpp
+    // --- SL preview and upload meter (sl_preview_ui.cpp; spec 08 SP, UM) ---
+    // One in-memory export of the active actor, shared by both, remade when the clip's anim_hash changes and nothing
+    // is being dragged or typed.
+    void sl_export_tick();                 // from frame(), before evaluate()
+    void apply_sl_preview(Evaluation& e);  // from evaluate(), last: SL's playback is shown, e's globals the ghost
+    void draw_sl_preview_window();         // "As SL Plays It": the deviation table
+    void draw_upload_meter();              // Properties > Export
+    bool sl_preview_ = false;              // View > Preview as SL Plays It (not saved)
+    std::vector<Xform> sl_ghost_;          // your pose's globals while the preview shows SL's; empty = no preview
+    Pose sl_pose_;                         // SL's pose, for Host::drive_avatar while sl_ghost_ is set
+    std::shared_ptr<struct SlExport> sl_export_;  // defined in sl_preview_ui.cpp
+    // --- posing assists (pose_tools_ui.cpp; spec 08 PT) ---
+    bool mirror_live_ = false;  // PT-1: the timeline's Mirror toggle, off at every start
+    void mirror_edit(const std::vector<std::string>& tracks);  // after a gizmo, hand-poser or IK edit keyed tracks
+    // PT-2: while a scratch session runs, doc_.clip() is the working pose and base the document's; edits record in the
+    // session's own history, swapped in for it, so undo steps through the scratch edits.
+    struct Scratch {
+        Clip base;
+        History history;
+        double frame = 0;
+    };
+    bool scratch_on_ = false;           // Edit > Scratch Pose
+    std::optional<Scratch> scratch_;
+    std::vector<std::string> scratch_marks_;  // the tracks the Bones list marks "(scratch)"
+    bool scratch_prompt_ = false, scratch_dont_ask_ = false;
+    double scratch_target_ = 0;         // where the scrub waiting on the prompt was going
+    bool scratch_changed() const { return !scratch_marks_.empty() || (scratch_ && !(scratch_->base == doc_.clip())); }
+    void scratch_tick();                // before evaluate(): sessions follow the toggle, a scrub away asks
+    void scratch_end(bool keep);        // keep: the scratch pose's keys as one undo step; else back to the base
+    void draw_scratch_prompt();
+    void draw_pose_tool_menu_items();   // Edit > Scratch Pose, Propagate Pose
+    // Save, export and autosave write the document, never a scratch pose: the base is swapped in for the scope.
+    int scratch_aside_ = 0;
+    struct ScratchAside {
+        App& app;
+        explicit ScratchAside(App& a) : app(a) {
+            if (app.scratch_aside_++ == 0 && app.scratch_) std::swap(app.doc_.clip(), app.scratch_->base);
+        }
+        ~ScratchAside() {
+            if (--app.scratch_aside_ == 0 && app.scratch_) std::swap(app.doc_.clip(), app.scratch_->base);
+        }
+    };
 };
 
 }  // namespace vats

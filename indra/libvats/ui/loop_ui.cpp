@@ -71,6 +71,7 @@ void App::draw_loop_tools_menu() {
     ImGui::SetItemTooltip("Ease the last frames into the start pose instead of only changing the end key");
     if (ImGui::MenuItem("Make Loop Seamless")) {
         int n = 0;
+        graph_.snapshot_curves(doc_.clip());  // PT-4
         edit("Make Loop Seamless", [&](Clip& c) { n = make_loop_seamless(c, loop_blend_); });
         status(n ? "Loop made seamless on " + std::to_string(n) + (n == 1 ? " channel" : " channels")
                  : "The loop was already seamless");
@@ -79,6 +80,7 @@ void App::draw_loop_tools_menu() {
     ImGui::Separator();
     if (ImGui::MenuItem("Remove Hip Travel (In Place)")) {
         Travel t;
+        graph_.snapshot_curves(doc_.clip());  // PT-4
         edit("Remove Hip Travel", [&](Clip& c) { t = remove_travel(c); });
         char buf[160];
         std::snprintf(buf, sizeof buf, "Removed hip travel: %.2f m/s forward, %.2f m/s sideways (%.2f m/s)", t.vx, t.vy,
@@ -91,6 +93,7 @@ void App::draw_loop_tools_menu() {
     ImGui::SameLine();
     if (ImGui::SmallButton("Add Travel Forward")) {
         const float v = loop_travel_;
+        graph_.snapshot_curves(doc_.clip());  // PT-4
         edit("Add Hip Travel", [&](Clip& c) { add_travel(c, {v, 0}); });
         status("Hips now travel forward at " + std::to_string(v).substr(0, 4) + " m/s");
     }
@@ -98,11 +101,13 @@ void App::draw_loop_tools_menu() {
     const int here = int(std::lround(frame_));
     ImGui::BeginDisabled(here <= r.in || here >= r.out);
     if (ImGui::MenuItem(("Start Cycle at Frame " + std::to_string(here)).c_str())) {
+        graph_.snapshot_curves(doc_.clip());  // PT-4
         edit("Start Cycle Here", [&](Clip& c) { cycle_offset(c, here); });
         status("The cycle now starts with what was frame " + std::to_string(here));
     }
     ImGui::EndDisabled();
     ImGui::SetItemTooltip("Rotates the loop in time so it starts on this pose (make it seamless first)");
+    draw_loop_assist_items();  // loop_assist_ui.cpp (LP-5..LP-7)
 }
 
 // LP-2: a red tick at loop-out when channels jump at the seam, listed on hover.

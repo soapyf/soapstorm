@@ -1,6 +1,7 @@
 // Viewport Avatar Toolset - the help browser: the shipped wiki (docs/wiki, vats/wiki.h) drawn with ImGui.
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 #include <cfloat>
+#include <functional>
 #include <map>
 
 #include "app.h"
@@ -13,7 +14,8 @@ namespace vats {
 struct HelpUi {
     wiki::Library lib;
     std::string dir;
-    ui::Host* host = nullptr;  // opens web links
+    ui::Host* host = nullptr;  // opens web links, loads images
+    std::function<void(const std::string&)> open_example;  // an example link's project file, in <dir>/examples
     bool loaded = false, open = false, focus = false;
     bool modal = false;  // opened from a modal dialog: drawn as a nested modal there, not as a window
     std::vector<std::pair<std::string, std::string>> history;  // page file, heading
@@ -25,6 +27,20 @@ struct HelpUi {
     std::vector<wiki::Hit> hits;
     const void* hovered = nullptr;  // the link span under the mouse last frame, so all its words underline
     const void* hovering = nullptr;
+    // The shown page's images by path, loaded as first drawn and freed when another page shows.
+    struct Image {
+        ImTextureID tex = 0;
+        int w = 0, h = 0;
+    };
+    std::map<std::string, Image> images;
+    std::string images_page;
+
+    ~HelpUi() { free_images(); }  // App::shutdown drops the help before the host's GL context goes
+    void free_images() {
+        for (auto& [path, im] : images)
+            if (im.tex) host->free_texture(im.tex);
+        images.clear();
+    }
 
     void load() {
         if (loaded) return;
@@ -69,6 +85,22 @@ const wiki::Span* draw_spans(HelpUi& ui, const std::vector<wiki::Span>& spans, f
     for (size_t i = prefix ? 0 : 1; i <= spans.size(); ++i) {
         const wiki::Span& s = i == 0 ? lead : spans[i - 1];
         ImFont* font = s.bold || bold ? bold_font() : ImGui::GetFont();
+        if (s.example) {  // a button, never split across lines
+            const float pad = size * 0.6f, bw = font->CalcTextSizeA(size, FLT_MAX, 0, s.text.c_str()).x + pad * 2;
+            if (x > start.x) x += size * 0.3f;
+            if (x + bw > start.x + w && x > start.x) x = start.x, y += line_h;
+            const ImRect bb(ImVec2(x, y + 1), ImVec2(x + bw, y + line_h - 1));
+            const ImGuiID id = win->GetID(&s);
+            ImGui::ItemAdd(bb, id);
+            bool hov = false, held = false;
+            if (ImGui::ButtonBehavior(bb, id, &hov, &held) && i > 0) clicked = &spans[i - 1];
+            dl->AddRectFilled(bb.Min, bb.Max, ImGui::GetColorU32(held ? ImGuiCol_ButtonActive : hov ? ImGuiCol_ButtonHovered : ImGuiCol_Button),
+                              ImGui::GetStyle().FrameRounding);
+            dl->AddText(font, size, ImVec2(x + pad, y + (line_h - size) * 0.5f), text, s.text.c_str());
+            if (hov) ImGui::SetTooltip("Opens %s as a new, untitled project", s.target.c_str());
+            x = bb.Max.x, right = std::max(right, x);
+            continue;
+        }
         const bool broken = s.link && !s.external && !s.target.empty() && !ui.lib.find(s.target);
         const ImU32 col = s.link ? (broken ? kBroken : ImGui::GetColorU32(ImGuiCol_TextLink))
                         : s.italic ? ImGui::GetColorU32(ImGuiCol_TextDisabled) : text;
@@ -130,6 +162,36 @@ const wiki::Span* draw_box(HelpUi& ui, const wiki::Block& b, float w) {
     ImGui::SetCursorScreenPos(p0);
     ImGui::Dummy(ImVec2(w, p1.y - p0.y));
     return clicked;
+}
+
+// An image scaled down to the column width, or its alt text in a frame when the file is missing; then its caption.
+const wiki::Span* draw_image(HelpUi& ui, const wiki::Page& page, const wiki::Block& b, float w) {
+    if (ui.images_page != page.file) ui.free_images(), ui.images_page = page.file;
+    auto [it, fresh] = ui.images.try_emplace(b.image);
+    HelpUi::Image& im = it->second;
+    const bool inside = !b.image.empty() && b.image[0] != '/' && b.image.find("..") == std::string::npos;
+    if (fresh && inside && wiki::png_size(ui.dir + "/" + b.image, im.w, im.h)) im.tex = ui.host->load_texture(ui.dir + "/" + b.image);
+    const ImU32 border = ImGui::GetColorU32(ImGuiCol_Border);
+    if (im.tex) {
+        const float dw = std::min(w, float(im.w) * ImGui::GetFontSize() / 15.f);  // shots are at 100%: 15 px text (load_fonts)
+        const ImVec2 p = ImGui::GetCursorScreenPos(), sz(dw, dw * float(im.h) / float(im.w));
+        ImGui::Image(im.tex, sz);
+        ImGui::GetWindowDrawList()->AddRect(p, ImVec2(p.x + sz.x, p.y + sz.y), border);
+        if (!b.alt.empty()) ImGui::SetItemTooltip("%s", b.alt.c_str());
+    } else {
+        const float pad = ImGui::GetFontSize() * 0.8f;
+        const ImVec2 p0 = ImGui::GetCursorScreenPos();
+        ImGui::SetCursorScreenPos(ImVec2(p0.x + pad, p0.y + pad));
+        std::vector<wiki::Span> alt(1);
+        alt[0].text = b.alt.empty() ? b.image : b.alt;
+        draw_spans(ui, alt, w - pad * 2, 1, false, nullptr, ImGui::GetColorU32(ImGuiCol_TextDisabled));
+        const ImVec2 p1(p0.x + w, ImGui::GetItemRectMax().y + pad);
+        ImGui::GetWindowDrawList()->AddRect(p0, p1, border, 3);
+        ImGui::SetCursorScreenPos(p0);
+        ImGui::Dummy(ImVec2(w, p1.y - p0.y));
+        ImGui::SetItemTooltip("Missing image %s", b.image.c_str());
+    }
+    return b.spans.empty() ? nullptr : draw_spans(ui, b.spans, w);
 }
 
 void draw_page(HelpUi& ui, const wiki::Page& page) {
@@ -208,6 +270,9 @@ void draw_page(HelpUi& ui, const wiki::Page& page) {
             }
             break;
         }
+        case wiki::Block::Image:
+            take(draw_image(ui, page, b, w));
+            break;
         default:  // Note, Tip, Warning, Quote, Related
             take(draw_box(ui, b, w));
             break;
@@ -230,7 +295,9 @@ void draw_page(HelpUi& ui, const wiki::Page& page) {
         ui.scroll = false;
     }
     if (clicked) {
-        if (clicked->external) {
+        if (clicked->example) {
+            if (ui.open_example) ui.open_example(clicked->target);
+        } else if (clicked->external) {
             // Only web pages leave the app, never file: or other schemes.
             if (clicked->target.rfind("https://", 0) == 0 || clicked->target.rfind("http://", 0) == 0)
                 ui.host->open_url(clicked->target);
@@ -300,6 +367,13 @@ void draw_help(HelpUi& ui) {
 void App::open_help(const std::string& page, const std::string& anchor) {
     if (!help_ui_) help_ui_ = std::make_shared<HelpUi>(), help_ui_->dir = host_.paths().help, help_ui_->host = &host_;
     HelpUi& ui = *help_ui_;
+    // An example opens as File > Open would, as an untitled copy: Save asks for a new name, so the shipped file
+    // is never written.
+    ui.open_example = [this](const std::string& file) {
+        if (file.empty() || file.find_first_of("/\\") != std::string::npos || file.find("..") != std::string::npos) return;
+        const std::string path = host_.paths().help + "/examples/" + file;
+        guard_unsaved([this, path] { guarded(path, [&] { load_project_file(path, true); }); });
+    };
     ui.load();
     const wiki::Page* p = page.empty() ? ui.home() : ui.lib.find(page);
     if (!p) p = ui.home();

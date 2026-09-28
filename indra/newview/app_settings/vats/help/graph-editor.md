@@ -17,6 +17,11 @@ Every animated bone has up to six curves, one per channel. Each curve is a list 
 
 The graph draws X in red, Y in green and Z in blue; the pole curves use lighter shades of the same colours, and **IK / FK Blend** is white. The frame axis runs along the top. Frames before 0 and after the last frame are shaded, and a loop range is tinted.
 
+![The Graph panel showing the Rotate X, Y and Z curves of mElbowRight during a three-beat wave](images/graph-editor/graph-panel.png)
+*The elbow in the arm-wave example at frame 22: Rotate Z (blue) dips to 60° three times between frames 15 and 57.*
+
+[Open the example](example:graph-basics.vat) to explore these curves: the right arm rises, waves three times from the elbow, and comes down. Select **mElbowRight** to see them.
+
 ### Posing writes keys to the curves
 
 Rotating a bone in the viewport keys all three rotation channels on the current frame. VATs turns the new rotation into the three angles closest to the curve's current values. This keeps the curves continuous, so a bone turned past 180° reads 190°, not −170°.
@@ -36,6 +41,8 @@ Each key sets how the curve runs to the next key:
 Before the first key a curve holds the first key's value, and after the last key it holds the last key's value.
 
 **Auto**, **Spline**, **Plateau**, **Linear** and **Flat** handles are automatic: VATs recalculates them whenever a neighbouring key moves, is added or is deleted. Dragging a handle freezes it where you leave it. Normally the other handle turns to stay in line; after **Break**, each handle moves on its own. **Unify** lines a broken pair up again and keeps both frozen. To make a frozen handle automatic again, press one of the automatic tangent buttons.
+
+With **Tools → Loop Tools → Loop-Aware Tangents** on and **Loop** on, the **Auto**, **Spline** and **Plateau** keys at **Loop in** and **Loop out** take their slope across the seam, and each curve's loop is drawn again, faintly, before **Loop in** and after **Loop out**; see [[Loop tools#Loop-aware tangents]].
 
 ### What reaches Second Life
 
@@ -73,13 +80,12 @@ The buttons along the top show icons only; hover one for its name, its key in yo
 | **Frame All** | four corner brackets |
 | **Frame Selected** | four corner brackets round a dot |
 | **Auto**, **Spline**, **Plateau**, **Linear**, **Flat**, **Stepped**, **Break**, **Unify** | a small drawing of each curve shape (see the table in "Shaping curves: tangents" below) |
+| **Ease** | the word **Ease**; opens the easing presets (see "Easing presets" below) |
 | **Fit Values** | two arrows pointing away from a line |
-| **Euler Filter** | an arrow turning back on itself |
-| **Flip Time** | two triangles mirrored left and right |
-| **Flip Values** | two triangles mirrored up and down |
 | **Delete** | a bin |
+| **More** | the word **More** and an arrow; a drop-down with **Euler Filter**, **Filter Curves...**, **Flip Time**, **Flip Values** and, under **Snapshot curves**, **Snapshot**, **Swap** and **Clear** (see "Buffer curves" below) |
 
-Then **Snap frames** and the **Frame** and **Value** boxes.
+Then **Snap frames** and the **Frame** and **Value** boxes. The toolbar is one row down to a window about 1200 pixels wide; narrower, it wraps.
 
 ### Selecting and moving keys
 
@@ -115,11 +121,83 @@ A selected key shows its handles; drag them to shape the curve. The eight button
 | **Break** | a key with two handles in a V | Lets each handle move on its own |
 | **Unify** | a key with both handles in one slanted line | Lines both handles up again |
 
+### Easing presets
+
+**Ease**, after the tangent buttons, shapes the curve between selected keys with a standard easing curve. Pick **Ease In** (starts slowly), **Ease Out** (ends slowly) or **Ease In-Out** (both), then a shape.
+
+Which part of each curve changes: the segment after each selected key, up to the next key. When a curve has more than one key selected, its last selected key only ends a segment, so selecting two neighbouring keys eases the span between them. A selected key with no key after it changes nothing.
+
+| Shape | How it is made | What it looks like |
+|---|---|---|
+| **Quad**, **Cubic** | Handles | The value follows t² or t³ (the Out and In-Out versions mirrored) |
+| **Sine** | Handles | A quarter of a sine wave |
+| **Back** | Baked | Pulls 10% the other way before it goes (In), or overshoots by 10% and settles (Out) |
+| **Elastic** | Baked | Wobbles three times around the end value, shrinking, like a spring |
+| **Bounce** | Baked | Lands on the end value and bounces three times, each bounce a quarter of the height of the one before |
+
+- **Handles**: the segment's two facing handles become **Break** handles placed to draw the shape; no keys are added and you can still drag the handles. **Ease In** and **Ease Out** of **Quad** and **Cubic** are exact; **Sine** and every **Ease In-Out** are a close fit (within about 1% of the change for **Sine**).
+- **Baked**: these shapes can't be drawn with one curve segment, so VATs keys every whole frame inside the segment with **Linear** keys and makes the first key Linear too. Second Life samples every frame, so it plays exactly this shape.
+
+Each use is one undo step, named after the preset (for example **Ease Out Bounce**). The keys you selected stay selected; baked keys are not added to the selection.
+
 ### Fixing and flipping curves
+
+These are in the toolbar's **More** drop-down.
 
 - **Euler Filter** removes 360-degree jumps from the rotation curves shown. When there is nothing to fix, the status bar says "Rotation curves are already clean".
 - **Flip Time** mirrors the selected keys in time.
 - **Flip Values** mirrors the selected keys across zero.
+
+### Filtering curves
+
+**Filter Curves...** (in **More**) calms jitter, such as tracker noise in motion capture, on the curves shown (the rows
+selected in the channel list, or all of the selected bones' curves). It opens a dialog in the bottom right
+corner:
+
+| Setting | Effect |
+|---|---|
+| **Filter** | **One-Euro**, **Savitzky-Golay** or **Butterworth** |
+| **From** ... **to** | the frames to filter; starts as the selected keys' span, else the loop range when the animation loops, else the whole animation |
+| **Frame** | moves the current frame while the dialog is open |
+
+Each filter has its own settings:
+
+| Filter | Setting | Default | Effect |
+|---|---|---|---|
+| **One-Euro** | **Min cutoff** | `1.50` Hz | the cutoff while a joint is still: lower calms more jitter and lags more |
+| | **Speed** | `0.020` per deg/s | how fast the cutoff rises with rotation speed: higher follows quick moves with less lag |
+| | **Speed (position)** | `10.0` per m/s | the same for position curves, in metres |
+| | **Speed cutoff** | `1.00` Hz | smooths the speed estimate |
+| **Savitzky-Golay** | **Window** | ±3 frames | frames fitted either side of each frame |
+| | **Degree** | 2 | the fitted polynomial's degree: higher keeps peaks sharper and calms less |
+| **Butterworth** | **Cutoff** | `6.0` Hz | motion faster than this is removed |
+| | **Sections** | 1 | second-order sections per pass: more cut off more sharply |
+
+- **One-Euro** is a low-pass filter whose cutoff rises with speed: still poses are calmed hard, quick moves
+  come through with little lag. It runs forward in time only, so it lags a little.
+- **Savitzky-Golay** fits a polynomial over a sliding window; it keeps peaks better than an average.
+- **Butterworth** runs forward and then backward, so nothing lags. The cutoff is kept below 0.45 × the
+  frame rate.
+
+While the dialog is open the curves, the graph and the 3D view show the result, and a grey ghost shows the
+pose before filtering at the current frame (drawn like [[Onion skin|onion-skin]] ghosts, with or without
+onion skin on). The table lists each bone's shake before and after: the RMS of the jerk (the third
+difference of its curves), in deg/s³, and in m/s³ for position curves. **OK** (or **Enter**) applies the
+filter as one undo step (**Filter Curves**); **Cancel** (or **Esc**) puts the curves back.
+
+Each curve is sampled once per frame, and its keys between **From** and **to** are replaced by one key per
+frame. The curve outside the range keeps its shape. The ends of the range are padded by reflection, so a
+curve heading somewhere keeps heading there. When the animation loops and the range lies inside the loop,
+the whole loop is filtered as one cycle, so the loop's end still meets its start (a whole turn or the
+hips' travel per cycle is kept).
+
+> **Tip:** Filtering leaves a key on every frame. Export's **Reduce keys** leaves out the ones the motion does not need; see [[Export to Second Life#Reduce keys]].
+
+### Buffer curves
+
+**Snapshot** keeps a copy of every curve of the animation and draws it in grey under the live curves, for the channels shown, until **Clear**. **Swap** exchanges the live curves and the grey ones, as one undo step, so you can go back and forth between two versions. A new snapshot replaces the old one; **New** and **Open** clear it, and it is not saved with the project.
+
+**Euler Filter**, **Bake** and **Re-bake** in the [[Dynamics]] window, and the [[Loop tools]] (**Make Loop Seamless**, **Remove Hip Travel (In Place)**, **Add Travel Forward**, **Start Cycle at Frame**) take a snapshot before they change the curves, so the curves as they were stay in view.
 
 ### Navigating
 
@@ -145,6 +223,7 @@ A [[Hold and bind|pin]] shows as a band over the frames it covers. Drag its star
 - Block out a performance with **Stepped** keys, then select them all and press **Auto** once the timing is right.
 - Use **Plateau** on keys where a limb must stop without drifting past its pose.
 - A bone that suddenly spins between two keys usually has a 360° jump: run **Euler Filter**.
+- Run **Euler Filter** before **Filter Curves...** on imported motion: filtering across a 360° jump bends the curve through it.
 - **All animated bones** with **Frame All** is a quick way to see the timing of the whole animation.
 
 ## Troubleshooting

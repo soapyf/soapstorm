@@ -1,10 +1,12 @@
-// Viewport Avatar Toolset - project files: the native .vat format and .hxanim migration.
+// Viewport Avatar Toolset - project files: the native .vat format.
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 #include "vats/project.h"
 #include "vats/curve_ops.h"
 #include "vats/prop.h"
-#include "vats/legacy.h"
 #include "guard.h"
+#ifdef VATS_LEGACY_IMPORT
+#include "vats/legacy_import.h"
+#endif
 
 #include <algorithm>
 #include <climits>
@@ -16,15 +18,15 @@ namespace vats {
 namespace {
 
 constexpr const char* kVATsFormat = "vats-project";
-constexpr const char* kHextonFormat = "hexton-sl-anim";
 constexpr const char* kEulerOrder = "xyz-extrinsic";
 
-// .hxanim fields (03 section 3.4); the native format adds kVATsFields (section 3.5).
-constexpr const char* kHextonFields[] = {"format", "version", "fps", "end_frame", "loop", "loop_in", "loop_out",
+// The clip fields (03 section 3.4); the native format adds kVATsFields (section 3.5).
+constexpr const char* kBaseFields[] = {"format", "version", "fps", "end_frame", "loop", "loop_in", "loop_out",
                                          "priority", "ease_in", "ease_out", "hand_pose", "emote", "mirror_export",
                                          "export", "curves", "props", "anchors"};
 constexpr const char* kVATsFields[] = {"euler_order", "joint_priority", "constraints", "orphans", "ik_solve",
-                                        "meta", "dynamics", "ragdoll", "actors", "active", "audio"};
+                                        "meta", "dynamics", "ragdoll", "actors", "active", "audio", "loop_tangents",
+                                        "idle", "face_layer"};
 
 Json list(std::initializer_list<Json> items) {
     Json r = Json::array();
@@ -33,7 +35,7 @@ Json list(std::initializer_list<Json> items) {
 }
 
 bool known(std::string_view key, bool vats) {
-    for (const char* k : kHextonFields)
+    for (const char* k : kBaseFields)
         if (key == k) return true;
     if (vats)
         for (const char* k : kVATsFields)
@@ -217,6 +219,39 @@ struct Loader {
         return true;
     }
 
+    // Spec 08 IL: [{kind, amplitude, period, seed, bones, baked, source}]; unknown fields are kept.
+    bool idle(const Json& v, Clip& clip) {
+        if (!expect(v, Json::Type::Array, "idle")) return false;
+        static constexpr const char* known_keys[] = {"kind", "amplitude", "period", "seed", "bones", "baked", "source"};
+        for (size_t n = 0; n < v.arr.size(); ++n) {
+            std::string w = "idle[" + std::to_string(n) + "]";
+            const Json& e = v.arr[n];
+            if (!expect(e, Json::Type::Object, w)) return false;
+            IdleLayer l;
+            if (!get(e, "kind", l.kind) || !get(e, "amplitude", l.amplitude) || !get(e, "period", l.period) ||
+                !get(e, "seed", l.seed, INT_MIN, INT_MAX) || !get(e, "baked", l.baked))
+                return fail(w + "." + err);
+            if (!std::isfinite(l.amplitude) || !std::isfinite(l.period)) return fail(w + ": a number is not finite");
+            if (const Json* b = e.find("bones")) {
+                if (!expect(*b, Json::Type::Array, w + ".bones")) return false;
+                for (const Json& x : b->arr) {
+                    if (!expect(x, Json::Type::String, w + ".bones")) return false;
+                    l.bones.push_back(x.str);
+                }
+            }
+            if (const Json* s = e.find("source")) {
+                Clip tmp;
+                if (!curves(*s, tmp)) return fail(w + ".source." + err);
+                l.source = std::move(tmp.curves);
+            }
+            for (auto& [k, x] : e.obj)
+                if (std::find(std::begin(known_keys), std::end(known_keys), k) == std::end(known_keys))
+                    l.extra.obj.emplace_back(k, x);
+            clip.idle.push_back(std::move(l));
+        }
+        return true;
+    }
+
     // Spec 08 RD: {whole_body, bones, start, frames, blend_in, blend_out, gravity, stiffness, friction, baked,
     // source}; unknown fields are kept.
     bool ragdoll(const Json& e, Clip& clip) {
@@ -244,6 +279,42 @@ struct Loader {
         for (auto& [k, x] : e.obj)
             if (std::find(std::begin(known_keys), std::end(known_keys), k) == std::end(known_keys)) r.extra.obj.emplace_back(k, x);
         clip.ragdoll = std::move(r);
+        return true;
+    }
+
+    // Spec 08 FA-5: {seed, blinks, blink_min, blink_max, blink_length, saccades, saccade_interval, eye_limit, look,
+    // point, prop, actor, bone, head_share, head_max, baked, head_baked, source}; unknown fields are kept.
+    bool face_layer(const Json& e, Clip& clip) {
+        if (!expect(e, Json::Type::Object, "face_layer")) return false;
+        static constexpr const char* known_keys[] = {"seed", "blinks", "blink_min", "blink_max", "blink_length",
+                                                     "saccades", "saccade_interval", "eye_limit", "look", "point",
+                                                     "prop", "actor", "bone", "head_share", "head_max", "baked", "head_baked",
+                                                     "source"};
+        FaceLayer f;
+        int seed = 1;
+        if (!get(e, "seed", seed, 0, 0x7fffffff) || !get(e, "blinks", f.blinks) || !get(e, "blink_min", f.blink_min) ||
+            !get(e, "blink_max", f.blink_max) || !get(e, "blink_length", f.blink_length) ||
+            !get(e, "saccades", f.saccades) || !get(e, "saccade_interval", f.saccade_interval) ||
+            !get(e, "eye_limit", f.eye_limit) || !get(e, "look", f.look) || !get(e, "prop", f.prop) ||
+            !get(e, "actor", f.actor) || !get(e, "bone", f.bone) || !get(e, "head_share", f.head_share) ||
+            !get(e, "head_max", f.head_max) || !get(e, "baked", f.baked) || !get(e, "head_baked", f.head_baked))
+            return fail("face_layer." + err);
+        f.seed = std::uint32_t(seed);
+        for (double* x : {&f.blink_min, &f.blink_max, &f.blink_length, &f.saccade_interval, &f.eye_limit, &f.head_share,
+                          &f.head_max})
+            if (!std::isfinite(*x)) return fail("face_layer: a number is not finite");
+        if (const Json* v = e.find("point")) {
+            if (!numbers(*v, 3, "face_layer.point")) return false;
+            f.point = {v->arr[0].num, v->arr[1].num, v->arr[2].num};
+        }
+        if (const Json* s = e.find("source")) {
+            Clip tmp;
+            if (!curves(*s, tmp)) return fail("face_layer.source." + err);
+            f.source = std::move(tmp.curves);
+        }
+        for (auto& [k, x] : e.obj)
+            if (std::find(std::begin(known_keys), std::end(known_keys), k) == std::end(known_keys)) f.extra.obj.emplace_back(k, x);
+        clip.face_layer = std::move(f);
         return true;
     }
 
@@ -321,12 +392,12 @@ struct Loader {
 
 // The clip's own fields: shared by the top level and each actor entry (GR-5).
 bool read_clip(Loader& L, const Json& doc, Clip& c, bool vats, bool read_only) {
-    // .hxanim limbs pose as the reference app posed them (02 section 3.7).
+    // A converted (non-native) project poses its limbs with the literal solve (02 section 3.7).
     std::string ik = vats ? "vats" : "literal";
     if (vats && !L.get(doc, "ik_solve", ik)) return false;
     if (ik == "literal")
         c.ik_solve = IkSolve::Literal;
-    else if (ik != "vats" && ik != legacy_name() && !read_only)
+    else if (ik != "vats" && !read_only)
         return L.fail("unsupported ik_solve \"" + ik + "\"");
 
     // loop_out defaults to end_frame (03 section 3.4).
@@ -342,12 +413,15 @@ bool read_clip(Loader& L, const Json& doc, Clip& c, bool vats, bool read_only) {
     if (const Json* v = doc.find("curves"); ok && v) ok = L.curves(*v, c);
     if (const Json* v = doc.find("anchors"); ok && v) ok = L.pins(*v, c);
     if (vats) {
+        ok = ok && L.get(doc, "loop_tangents", c.loop_tangents);  // absent (older projects): off (08 LP-7)
         if (const Json* v = doc.find("joint_priority"); ok && v) ok = L.joint_priority(*v, c);
         if (const Json* v = doc.find("constraints"); ok && v) ok = L.constraints(*v, c);
         if (const Json* v = doc.find("orphans"); ok && v) ok = L.orphans(*v, c);
         if (const Json* v = doc.find("dynamics"); ok && v) ok = L.dynamics(*v, c);
         if (const Json* v = doc.find("ragdoll"); ok && v) ok = L.ragdoll(*v, c);
+        if (const Json* v = doc.find("idle"); ok && v) ok = L.idle(*v, c);
         if (const Json* v = doc.find("audio"); ok && v) ok = L.audio(*v, c);
+        if (const Json* v = doc.find("face_layer"); ok && v) ok = L.face_layer(*v, c);
     }
     return ok;
 }
@@ -396,9 +470,12 @@ static bool load_project_text(std::string_view text, Project& out, std::string& 
     if (!doc.is_object()) return done(L.fail("not a JSON object"));
 
     const Json* format = doc.find("format");
-    bool vats = format && format->is_string() && (format->str == kVATsFormat || format->str == legacy_name("-project"));
-    if (!vats && !(format && format->is_string() && format->str == kHextonFormat))
-        return done(L.fail("not a VATs or Hexton project (format is missing or unknown)"));
+    const bool vats = format && format->is_string() && format->str == kVATsFormat;
+    bool foreign = false;  // another app's project, converted on load (Project::migrated)
+#ifdef VATS_LEGACY_IMPORT
+    foreign = !vats && format && format->is_string() && format->str == legacy_import::kProjectFormat;
+#endif
+    if (!vats && !foreign) return done(L.fail("not a VATs project (format is missing or unknown)"));
 
     Project p;
     Clip& c = p.clip;
@@ -406,7 +483,7 @@ static bool load_project_text(std::string_view text, Project& out, std::string& 
     if (!L.get(doc, "version", version, INT_MIN, INT_MAX)) return done(false);
     if (version < 1) return done(L.fail("unsupported version " + std::to_string(version)));
     p.read_only = version > kProjectVersion;
-    p.migrated = !vats;
+    p.migrated = foreign;
 
     std::string euler = kEulerOrder;
     if (vats && !L.get(doc, "euler_order", euler)) return done(false);
@@ -427,12 +504,12 @@ static bool load_project_text(std::string_view text, Project& out, std::string& 
     Json unknown = Json::object();
     for (auto& [k, v] : doc.obj)
         if (!known(k, vats)) unknown.obj.emplace_back(k, v);
-    if (vats) {
+#ifdef VATS_LEGACY_IMPORT
+    if (foreign) legacy_import::keep_unknown(p.meta, std::move(unknown), source_path);
+    else
+#endif
         p.extra = std::move(unknown);
-    } else {
-        if (!source_path.empty()) p.meta.set("migrated_from", std::string(source_path));
-        if (!unknown.obj.empty()) p.meta.set("hexton_extra", std::move(unknown));
-    }
+    (void)source_path;  // only a converted project records where it came from
     out = std::move(p);
     return true;
 }
@@ -459,6 +536,7 @@ static void write_clip(Json& j, const Clip& c) {
     j.set("loop", c.loop);
     j.set("loop_in", c.loop_in);
     j.set("loop_out", c.loop_out);
+    if (c.loop_tangents) j.set("loop_tangents", true);
     j.set("priority", c.priority);
     j.set("ease_in", c.ease_in);
     j.set("ease_out", c.ease_out);
@@ -534,6 +612,23 @@ static void write_clip(Json& j, const Clip& c) {
             ds.push(std::move(e));
         }
     }
+    if (!c.idle.empty()) {
+        Json& ls = j.set("idle", Json::array());
+        for (auto& l : c.idle) {
+            Json e = Json::object();
+            e.set("kind", l.kind);
+            e.set("amplitude", l.amplitude);
+            e.set("period", l.period);
+            e.set("seed", l.seed);
+            Json& bones = e.set("bones", Json::array());
+            for (auto& b : l.bones) bones.push(b);
+            e.set("baked", l.baked);
+            if (l.baked) e.set("source", curves_to_json(l.source));
+            for (auto& [k, x] : l.extra.obj)
+                if (!e.find(k)) e.obj.emplace_back(k, x);
+            ls.push(std::move(e));
+        }
+    }
     if (c.ragdoll) {
         const Ragdoll& r = *c.ragdoll;
         Json e = Json::object();
@@ -567,6 +662,31 @@ static void write_clip(Json& j, const Clip& c) {
         for (auto& [k, x] : a.extra.obj)
             if (!e.find(k)) e.obj.emplace_back(k, x);
         j.set("audio", std::move(e));
+    }
+    if (c.face_layer) {
+        const FaceLayer& f = *c.face_layer;
+        Json e = Json::object();
+        e.set("seed", double(f.seed));
+        e.set("blinks", f.blinks);
+        e.set("blink_min", f.blink_min);
+        e.set("blink_max", f.blink_max);
+        e.set("blink_length", f.blink_length);
+        e.set("saccades", f.saccades);
+        e.set("saccade_interval", f.saccade_interval);
+        e.set("eye_limit", f.eye_limit);
+        e.set("look", f.look);
+        e.set("point", list({f.point.x, f.point.y, f.point.z}));
+        e.set("prop", f.prop);
+        e.set("actor", f.actor);
+        e.set("bone", f.bone);
+        e.set("head_share", f.head_share);
+        e.set("head_max", f.head_max);
+        e.set("baked", f.baked);
+        e.set("head_baked", f.head_baked);
+        if (f.baked) e.set("source", curves_to_json(f.source));
+        for (auto& [k, x] : f.extra.obj)
+            if (!e.find(k)) e.obj.emplace_back(k, x);
+        j.set("face_layer", std::move(e));
     }
     if (c.ik_solve == IkSolve::Literal) j.set("ik_solve", "literal");
 }
@@ -632,7 +752,7 @@ void sync_actor_timing(Project& p) {
         if (i == p.active) continue;
         Clip& c = p.actors[i].clip;
         c.fps = p.clip.fps, c.end_frame = p.clip.end_frame, c.loop = p.clip.loop;
-        c.loop_in = p.clip.loop_in, c.loop_out = p.clip.loop_out;
+        c.loop_in = p.clip.loop_in, c.loop_out = p.clip.loop_out, c.loop_tangents = p.clip.loop_tangents;
     }
 }
 
@@ -656,6 +776,7 @@ ActorLoad load_into_actor(Project& p, int i, Clip clip) {
     clip.export_settings = std::move(to.export_settings);
     clip.mirror_export = to.mirror_export;
     clip.loop = scene.loop, clip.loop_in = scene.loop_in, clip.loop_out = scene.loop_out;
+    clip.loop_tangents = scene.loop_tangents;
     to = std::move(clip);
     p.clip.end_frame = r.scene_now;
     sync_actor_timing(p);

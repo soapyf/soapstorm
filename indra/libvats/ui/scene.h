@@ -14,6 +14,16 @@ struct Rgb {
     float r, g, b;
 };
 
+// A lighting preset (08 LT-1, the Light menu): a key light and an even fill, in the edited actor's space (+X where the
+// avatar faces, +Y its left, Z up). The host lights its view with it (ui::Host::set_light).
+struct LightPreset {
+    const char* name;
+    float key[3];  // towards the key light, unit length
+    Rgb colour;    // the key light's colour and strength
+    Rgb ambient;   // the fill from everywhere
+    bool night;    // the viewer shows a night sky, the key being the moon
+};
+
 // Colours of the 3D scene; part of the UI theme.
 struct SceneColours {
     Rgb backdrop_top{0.23f, 0.24f, 0.27f}, backdrop_bottom{0.09f, 0.09f, 0.11f};

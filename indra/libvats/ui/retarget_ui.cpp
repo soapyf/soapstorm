@@ -75,35 +75,43 @@ void App::open_retarget(const std::string& path) {
     retarget_ui_ = ui;
 }
 
+// RT-10.4: clip in consecutive parts that each fit SL's limits (split_to_fit), saved as projects <stem>_part<N>.vat
+// beside source. Parts from an earlier split may hold edits: when some exist they are listed in confirm and nothing
+// is written until this runs again with overwrite. advice follows "Even two-second parts are over SL's limits."
+void App::split_into_parts(const Clip& clip, const std::string& source, const FitOptions& fit, bool overwrite,
+                           std::string& confirm, const std::string& advice) {
+    std::vector<FitReport> reps;
+    std::vector<Clip> parts = split_to_fit(skel_, clip, fit, &reps);
+    if (parts.empty()) return message("Cannot split", "Even two-second parts are over SL's limits." + advice);
+    const std::string stem = source.substr(0, source.find_last_of('.'));
+    auto part_path = [&](size_t i) { return stem + "_part" + std::to_string(i + 1) + ".vat"; };
+    if (!overwrite) {
+        std::string existing;
+        for (size_t i = 0; i < parts.size(); ++i)
+            if (std::error_code ec; std::filesystem::exists(u8path(part_path(i)), ec)) existing += "- " + base_name(part_path(i)) + "\n";
+        if (!existing.empty()) {
+            confirm = existing;
+            return;
+        }
+    }
+    std::string written, why;
+    for (size_t i = 0; i < parts.size(); ++i) {
+        Project p;
+        p.clip = std::move(parts[i]);
+        if (!write_text(part_path(i), save_project(p), true, why))
+            return message("Could not save the parts", "Could not write " + part_path(i) + "\n\n" + why +
+                                                             (written.empty() ? "" : "\n\nAlready saved:\n" + written));
+        written += "- " + base_name(part_path(i)) + "\n";
+    }
+    message("Split into " + std::to_string(reps.size()) + " parts",
+            "Each part fits SL's limits and starts where the previous one ends. Saved beside the source file:\n" + written);
+}
+
 // RT-10.4: a clip that still does not fit is split into parts saved beside the source, or trimmed.
 void App::draw_retarget_split(RetargetUi& ui) {
     ImGui::SeparatorText("Too long or too big for one upload");
     auto split = [&](bool overwrite) {
-        std::vector<FitReport> reps;
-        std::vector<Clip> parts = split_to_fit(skel_, ui.raw, ui.fit, &reps);
-        if (parts.empty()) return message("Cannot split", "Even two-second parts are over SL's limits. Allow more trades, or trim.");
-        const std::string stem = ui.path.substr(0, ui.path.find_last_of('.'));
-        auto part_path = [&](size_t i) { return stem + "_part" + std::to_string(i + 1) + ".vat"; };
-        if (!overwrite) {  // parts from an earlier split may hold edits: ask first
-            std::string existing;
-            for (size_t i = 0; i < parts.size(); ++i)
-                if (std::error_code ec; std::filesystem::exists(u8path(part_path(i)), ec)) existing += "- " + base_name(part_path(i)) + "\n";
-            if (!existing.empty()) {
-                ui.confirm_split = existing;
-                return;
-            }
-        }
-        std::string written, why;
-        for (size_t i = 0; i < parts.size(); ++i) {
-            Project p;
-            p.clip = std::move(parts[i]);
-            if (!write_text(part_path(i), save_project(p), true, why))
-                return message("Could not save the parts", "Could not write " + part_path(i) + "\n\n" + why +
-                                                                 (written.empty() ? "" : "\n\nAlready saved:\n" + written));
-            written += "- " + base_name(part_path(i)) + "\n";
-        }
-        message("Split into " + std::to_string(reps.size()) + " parts",
-                "Each part fits SL's limits and starts where the previous one ends. Saved beside the source file:\n" + written);
+        split_into_parts(ui.raw, ui.path, ui.fit, overwrite, ui.confirm_split, " Allow more trades, or trim.");
     };
     if (ImGui::Button("Split into Parts...")) guarded(ui.path, [&] { split(false); });
     if (!ui.confirm_split.empty()) {

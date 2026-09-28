@@ -21,9 +21,11 @@
 #include "vats/bvh.h"
 #include "vats/edit.h"
 #include "vats/footlock.h"
-#include "vats/legacy.h"
 #include "vats/pose_presets.h"
 #include "theme.h"
+#ifdef VATS_LEGACY_IMPORT
+#include "vats/legacy_import.h"
+#endif
 
 namespace vats {
 namespace {
@@ -123,10 +125,12 @@ bool App::init(float display_scale, std::string& err) {
     assets_dir_ = host_.paths().assets;
     display_scale_ = display_scale;
     std::error_code ec;
-    const bool first_run = !std::filesystem::exists(u8path(host_.paths().settings), ec);
+    [[maybe_unused]] const bool first_run = !std::filesystem::exists(u8path(host_.paths().settings), ec);
     settings_.load(host_.paths().settings);
     apply_look();
+#ifdef VATS_LEGACY_IMPORT
     offer_migration(first_run);
+#endif
     apply_settings();
     const std::string character = host_.paths().character.empty() ? data_dir + "/character" : host_.paths().character;
     if (!skel_.load_dir(character, err)) return false;
@@ -146,6 +150,7 @@ void App::shutdown() {
     host_.audio_stop();
     if (!keep_autosave_) clear_autosave();  // a clean exit: whatever was unsaved was discarded on purpose
     free_thumbnails();
+    help_ui_.reset();  // frees the help's images while the host can still free textures
 }
 
 void App::set_body(int b, bool remember) {
@@ -161,10 +166,12 @@ void App::set_body(int b, bool remember) {
 bool App::apply_builtin_pose(const std::string& slug) {
     for (const LibraryItem& it : builtin_poses(skel_)) {
         if (it.id != slug && it.id != "builtin:" + slug) continue;
+        Clip before = doc_.clip();
         edit("Apply Pose", [&](Clip& c) {
             apply_pose(c, skel_, it, frame_, false);
             if (it.kind == "hand") apply_pose(c, skel_, it, frame_, true);  // the right hand, mirrored
         });
+        offer_pose_blend(std::move(before), frame_);
         evaluate();
         return true;
     }
@@ -236,6 +243,9 @@ void App::new_document() {
     clear_autosave();
     raw_import_.reset();
     doc_ = Document();
+    graph_.clear_snapshot();  // PT-4
+    scratch_.reset(), scratch_marks_.clear();  // PT-2: the scratch pose and its history were the old document's
+    doc_.clip().loop_tangents = true;  // 08 LP-7: on for new projects (opened ones keep their own)
     clip_replaced();
     clear_selection();
     frame_ = 0;
@@ -244,6 +254,7 @@ void App::new_document() {
 }
 
 bool App::save(const std::string& path) {
+    ScratchAside aside(*this);  // PT-2: the document, not a scratch pose
     // Prop paths are written relative to the project where possible (IO-42); in memory they stay absolute.
     Project copy = doc_.project;
     const std::string dir = path.substr(0, path.find_last_of('/'));
@@ -265,7 +276,7 @@ bool App::save(const std::string& path) {
     return true;
 }
 
-void App::load_project_file(const std::string& path) {
+void App::load_project_file(const std::string& path, bool example) {
     std::string text, err;
     Project p;
     if (!read_file(path, text) || !load_project(text, p, err, path)) {
@@ -276,18 +287,28 @@ void App::load_project_file(const std::string& path) {
     doc_.project = std::move(p);
     clip_replaced();  // history and body follow the file's active actor, not the empty document's
     const std::string dir = path.substr(0, path.find_last_of('/'));
-    for (Prop& prop : doc_.clip().props) prop.path = prop_path_from_stored(prop.path, dir);
+    for (Prop& prop : doc_.clip().props) {
+        prop.path = prop_path_from_stored(prop.path, dir);
+        // A starter prop saved on another computer (or by the help's examples): this installation's copy.
+        if (prop.lib_id.rfind("starter-", 0) == 0 && !prop_model(prop.path))
+            if (const PropLibraryItem* it = find_prop_item(prop.lib_id)) prop.path = it->prop.path;
+    }
     if (doc_.clip().audio) doc_.clip().audio->path = prop_path_from_stored(doc_.clip().audio->path, dir);
     if (auto miss = missing_prop_meshes(); !miss.empty()) {  // IO-42: placeholders, never a failed load
         std::string t;
         for (auto& m : miss) t += "- " + m + "\n";
         message("Some prop meshes are missing", t + "\nThey show as orange boxes until the files are back.");
     }
-    // A migrated Hexton project or a newer file is saved under a new name, never over the original.
-    doc_.path = doc_.project.migrated || doc_.project.read_only ? "" : path;
-    if (!headless_) settings_.add_recent(path), save_settings();
+    // A converted project or a newer file is saved under a new name, never over the original.
+    doc_.path = doc_.project.migrated || doc_.project.read_only || example ? "" : path;
+    if (!headless_ && !example) settings_.add_recent(path), save_settings();
     update_title();
-    status("Opened " + file_name(path) + (doc_.project.migrated ? " (converted from Hexton; Save As to keep it)" : ""));
+    std::string opened = "Opened " + file_name(path);
+#ifdef VATS_LEGACY_IMPORT
+    if (doc_.project.migrated) opened += legacy_import::kConvertedNote;
+#endif
+    if (example) opened += " (an example: Save As to keep your changes)";
+    status(opened);
     if (doc_.project.read_only)
         message("Newer project file", "This project was saved by a newer version of VATs. Some parts may be missing; "
                                       "save it under a new name to keep the original.");
@@ -333,6 +354,7 @@ void App::import_file(const std::string& path) {
     new_document();
     raw_import_ = std::move(raw);
     doc_.clip() = std::move(clip);
+    doc_.clip().loop_tangents = true;  // a new project (08 LP-7)
     doc_.clip().props = std::move(props);
     doc_.dirty = true;
     update_title();
@@ -382,6 +404,7 @@ void App::load_actor_file(const std::string& actor, const std::string& path) {
 // One actor alone: as a project of its own (its clip, props and export settings), or its .anim as Export writes it
 // with its own bake shape and settings.
 void App::save_actor(const std::string& actor, const std::string& path, bool anim) {
+    ScratchAside aside(*this);  // PT-2: the document, not a scratch pose
     const int i = actor_index(actor);
     if (i < 0) return status(actor + " is no longer in the project");
     if (doc_.history.is_open() || scene_busy()) return status("Finish the current edit first");
@@ -404,15 +427,9 @@ void App::save_actor(const std::string& actor, const std::string& path, bool ani
     status("Saved " + actor + " as " + file_name(path));
 }
 
-// The .anim bytes the project exports: 0 when it cannot (after saying why), 1 exported, 2 an imported .anim
-// nobody has edited, going back out exactly as it came in (IO-22).
-int App::anim_bytes(AnimExportResult& r, std::vector<std::uint8_t>& bytes) {
-    if (raw_import_ && !doc_.clip().mirror_export)
-        if (const AnimFile* same = raw_reexport(*raw_import_, doc_.clip())) {
-            r.file = *same;
-            bytes = write_anim(*same);
-            return 2;
-        }
+// The options every .anim export of the active actor uses: bake shape (IO-13), positions (IO-11), the key-reduction
+// tolerances (IO-14) and cross-actor pins (GR-4).
+AnimExportOptions App::anim_export_options() {
     AnimExportOptions opt;
     opt.shape = export_shape();
     opt.positions = export_positions();
@@ -423,19 +440,43 @@ int App::anim_bytes(AnimExportResult& r, std::vector<std::uint8_t>& bytes) {
     if (const Json* reduce = doc_.clip().export_settings.find("reduce"); reduce && reduce->is_array() && reduce->arr.size() == 2 &&
                                                                           reduce->arr[0].is_number() && reduce->arr[1].is_number())
         opt.reduce_rot_deg = reduce->arr[0].num, opt.reduce_pos_m = reduce->arr[1].num;
-    Clip clip = doc_.clip().mirror_export ? mirrored_clip(skel_, doc_.clip()) : doc_.clip();
-    r = vats::export_anim(skel_, clip, opt);
+    return opt;
+}
+
+Clip App::anim_export_clip() const {
+    return doc_.clip().mirror_export ? mirrored_clip(skel_, doc_.clip()) : doc_.clip();
+}
+
+// The .anim the project exports, made in memory and saying nothing: 1 exported, 2 an imported .anim nobody has
+// edited, going back out exactly as it came in (IO-22). r.errors non-empty = it must not be written; bytes still
+// hold whatever file there is (the upload meter and the SL preview show an oversize one too).
+int App::export_in_memory(AnimExportResult& r, std::vector<std::uint8_t>& bytes) {
+    ScratchAside aside(*this);  // PT-2: the document, not a scratch pose
+    if (raw_import_ && !doc_.clip().mirror_export)
+        if (const AnimFile* same = raw_reexport(*raw_import_, doc_.clip())) {
+            r.file = *same;
+            bytes = write_anim(*same);
+            return 2;
+        }
+    r = vats::export_anim(skel_, anim_export_clip(), anim_export_options());
+    bytes = write_anim(r.file);
+    return 1;
+}
+
+// The .anim bytes the project exports: 0 when it cannot (after saying why), else as export_in_memory.
+int App::anim_bytes(AnimExportResult& r, std::vector<std::uint8_t>& bytes) {
+    const int made = export_in_memory(r, bytes);
     if (!r.errors.empty()) {
         std::string t;
         for (auto& e : r.errors) t += "- " + e + "\n";
         message("Cannot export", t);
         return 0;
     }
-    bytes = write_anim(r.file);
-    return 1;
+    return made;
 }
 
 bool App::face_check(FaceCheck& out, std::string& why) {
+    ScratchAside aside(*this);  // PT-2: the document, not a scratch pose
     AnimExportResult r;
     if (!anim_bytes(r, out.bytes)) return why = "nothing to export", false;
     Json& ex = doc_.clip().export_settings;
@@ -465,6 +506,7 @@ bool App::face_check(FaceCheck& out, std::string& why) {
 }
 
 bool App::export_anim(const std::string& path) {
+    ScratchAside aside(*this);  // PT-2: the document, not a scratch pose
     AnimExportResult r;
     std::vector<std::uint8_t> bytes;
     const int made = anim_bytes(r, bytes);
@@ -507,6 +549,7 @@ bool App::export_anim(const std::string& path) {
 }
 
 bool App::export_bvh(const std::string& path, bool all_bones) {
+    ScratchAside aside(*this);  // PT-2: the document, not a scratch pose
     BvhExportOptions opt;
     opt.all_bones = all_bones;
     const Json* positions = doc_.clip().export_settings.find("bvh_positions");
@@ -584,10 +627,14 @@ void App::show_dialog(Dialog kind, std::function<void()> after_save) {
     const std::string dir = doc_.path.empty() ? "" : doc_.path.substr(0, doc_.path.find_last_of('/') + 1);
     const ui::FileFilter mesh{"Mesh", "dae;fbx"};
     std::string stem = doc_.path.empty() ? "Animation" : file_name(doc_.path).substr(0, file_name(doc_.path).rfind('.'));
+    std::vector<ui::FileFilter> projects = {{"VATs project", "vat"}};
+    std::string animations = "anim;bvh;vat";
+#ifdef VATS_LEGACY_IMPORT
+    projects.push_back({legacy_import::kFilterName, legacy_import::kFilterExtensions});
+    animations += std::string(";") + legacy_import::kFilterExtensions;
+#endif
     switch (kind) {
-        case Dialog::Open:
-            host_.open_file_dialog({{"VATs project", "vat;" + legacy_name()}, {"Hexton project", "hxanim"}}, false, dialog_result(kind));
-            break;
+        case Dialog::Open: host_.open_file_dialog(projects, false, dialog_result(kind)); break;
         case Dialog::SaveAs: host_.save_file_dialog({{"VATs project", "vat"}}, dir + stem + ".vat", dialog_result(kind)); break;
         case Dialog::ImportAnim: host_.open_file_dialog({{"SL animation", "anim"}}, false, dialog_result(kind)); break;
         case Dialog::ImportBvh: host_.open_file_dialog({{"BVH motion", "bvh"}}, false, dialog_result(kind)); break;
@@ -599,13 +646,16 @@ void App::show_dialog(Dialog kind, std::function<void()> after_save) {
         case Dialog::ImportBody: host_.open_file_dialog({mesh}, true, dialog_result(kind)); break;
         case Dialog::ExportFolder: host_.open_folder_dialog("", dialog_result(kind)); break;
         case Dialog::LoadActor:
-            host_.open_file_dialog({{"Animation", "anim;bvh;vat;hxanim"}}, false, dialog_result(kind));
+            host_.open_file_dialog({{"Animation", animations}}, false, dialog_result(kind));
             break;
         case Dialog::SaveActor:
             host_.save_file_dialog({{"VATs project", "vat"}}, dir + stem + "_" + file_actor_ + ".vat", dialog_result(kind));
             break;
         case Dialog::ExportActor:
             host_.save_file_dialog({{"SL animation", "anim"}}, dir + stem + "_" + file_actor_ + ".anim", dialog_result(kind));
+            break;
+        case Dialog::SitLines:
+            host_.save_file_dialog({{"Text", "txt"}}, dir + stem + (sit_format_ ? "_nPose.txt" : "_AVpos.txt"), dialog_result(kind));
             break;
     }
 }
@@ -676,6 +726,7 @@ void App::build_actions() {
                  }});
     add("key", {"Set Key", ImGuiKey_S, 0, false,
                 [this] {
+                    if (scratch_changed()) return scratch_end(true);  // PT-2: Set Key keeps a scratch pose
                     edit("Set Key", [&](Clip& c) {
                         for (int n : selection_) {
                             key_current(c, skel_, n, frame_);
@@ -694,7 +745,12 @@ void App::build_actions() {
                     status("Keyed " + std::to_string(selection_.size() + handles_.size()) + " item(s) at frame " +
                            std::to_string(int(frame_)));
                 },
-                [this]() -> const char* { return selection_.empty() && handles_.empty() ? "Select a bone first" : nullptr; }});
+                [this]() -> const char* {
+                    return selection_.empty() && handles_.empty() && !scratch_changed() ? "Select a bone first" : nullptr;
+                }});
+    // Spec 08 TW-1: a modal drag, like Blender's breakdowner; the timeline bar has the same as a slider.
+    add("tween", {"Tween (Breakdown)", shift | ImGuiKey_E, 0, false, [this] { start_tween(); },
+                  [this]() -> const char* { return selection_.empty() && handles_.empty() ? "Select a bone first" : nullptr; }});
     add("key_all", {"Set Key on All Visible Bones", shift | ImGuiKey_S, 0, false,
                     [this] {
                         int n = 0;
@@ -855,7 +911,9 @@ void App::build_actions() {
                       std::vector<std::string> tracks;
                       for (int s : selection_) tracks.push_back(skel_[s].name);
                       for (auto& h : handles_) tracks.push_back("ik." + rig_->limbs()[h.limb].name);
+                      Clip before = doc_.clip();
                       edit("Paste Pose", [&](Clip& c) { paste_pose(c, pose_clipboard_, frame_, tracks); });
+                      offer_pose_blend(std::move(before), frame_);
                       status("Pasted the pose at frame " + std::to_string(int(frame_)));
                   },
                   [this]() -> const char* {
@@ -1288,7 +1346,7 @@ void App::draw_menus() {
         menu_item("undo");
         menu_item("redo");
         ImGui::Separator();
-        for (const char* id : {"key", "key_all", "delete_key", "delete_frame"}) menu_item(id);
+        for (const char* id : {"key", "key_all", "tween", "delete_key", "delete_frame"}) menu_item(id);
         ImGui::Separator();
         for (const char* id : {"reset_bone", "reset_hip", "reset_pose"}) menu_item(id);
         ImGui::Separator();
@@ -1299,6 +1357,8 @@ void App::draw_menus() {
         }
         ImGui::Separator();
         for (const char* id : {"mirror_l2r", "mirror_r2l", "flip_pose", "mirror_bone"}) menu_item(id);
+        ImGui::Separator();
+        draw_pose_tool_menu_items();  // Scratch Pose, Propagate Pose (PT-2, PT-3)
         ImGui::Separator();
         menu_item("reverse");
         ImGui::Separator();
@@ -1331,6 +1391,12 @@ void App::draw_menus() {
             draw_onion_settings();
             ImGui::EndMenu();
         }
+        ImGui::MenuItem("Preview as SL Plays It", nullptr, &sl_preview_);
+        ImGui::SetItemTooltip("Plays the exported .anim as Second Life will, with your animation as a ghost");
+        if (ImGui::BeginMenu("Treadmill")) {  // 08 LP-8
+            draw_treadmill_menu();
+            ImGui::EndMenu();
+        }
         ImGui::Separator();
         if (ImGui::BeginMenu("Body")) {
             // SL defaults first: they are what people see in-world.
@@ -1359,6 +1425,7 @@ void App::draw_menus() {
         }
         ImGui::EndMenu();
     }
+    draw_light_menu();
     if (ImGui::BeginMenu("Select")) {
         for (const char* id : {"select_all", "select_keyed_frame", "select_all_keyed", "select_none"}) menu_item(id);
         ImGui::Separator();
@@ -1378,9 +1445,14 @@ void App::draw_menus() {
         ImGui::Separator();
         menu_item("hands");
         ImGui::MenuItem("Dynamics...", nullptr, &show_dynamics_);
+        ImGui::MenuItem("Idle Layer...", nullptr, &show_idle_);
+        ImGui::MenuItem("Overlap...", nullptr, &show_overlap_);
         ImGui::MenuItem("Ragdoll...", nullptr, &show_ragdoll_);
+        ImGui::MenuItem("Face...", nullptr, &show_face_);
         ImGui::MenuItem("Actors (Couples and Groups)...", nullptr, &show_actors_);
         ImGui::MenuItem("Motion Capture...", nullptr, &show_mocap_);
+        ImGui::Separator();
+        ImGui::MenuItem("Animation Check...", nullptr, &show_check_);
         ImGui::EndMenu();
     }
     if (ui::Host::HostUi* h = host_.host_ui()) {  // the viewer's own UI beside the editor (spec 09 U4b)
@@ -1485,7 +1557,10 @@ void App::message(const std::string& title, const std::string& text) {
     message_text_ = text;
 }
 
-void App::draw_message_popup() {
+void App::draw_message_popup(bool in_export_dialog) {
+    // Opened beside the Export dialog (a modal) each popup would close the other, so while it is open the message
+    // opens inside it.
+    if (show_export_dialog_ != in_export_dialog) return;
     if (!message_title_.empty() && !ImGui::IsPopupOpen("##message")) ImGui::OpenPopup("##message");
     ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSizeConstraints(ImVec2(360, 0), ImVec2(640, 600));
@@ -1579,6 +1654,7 @@ bool App::frame() {
                 case Dialog::LoadActor: guarded(path, [&] { load_actor_file(file_actor_, path); }); break;
                 case Dialog::SaveActor: save_actor(file_actor_, with_extension(path, "vat"), false); break;
                 case Dialog::ExportActor: save_actor(file_actor_, with_extension(path, "anim"), true); break;
+                case Dialog::SitLines: save_sit_lines(with_extension(path, "txt")); break;
                 case Dialog::ExportFolder:
                     doc_.clip().export_settings.set("folder", path);
                     mark_dirty();
@@ -1601,15 +1677,24 @@ bool App::frame() {
     update_camera_animation(double(now - last_tick_) * 1e-9);
     last_tick_ = now;
 
+    scratch_tick();  // PT-2: before the pose is evaluated, so a scrub away from a scratch pose waits on the question
+    loop_assist_tick();  // 08 LP-7, LP-8
+    sl_export_tick();  // the shared in-memory export, refreshed when idle (08 SP, UM)
     { VATS_PROFILE("evaluate"); evaluate(); }
     { VATS_PROFILE("dock+menus"); draw_dockspace(); draw_menus(); }
     { VATS_PROFILE("panel bones"); draw_bones_panel(); }
     { VATS_PROFILE("panel inventory"); draw_inventory_panel(); }
     { VATS_PROFILE("panel properties"); draw_properties_panel(); }
     draw_dynamics_panel();
+    draw_idle_panel();
+    draw_overlap_panel();
     draw_ragdoll_panel();
+    draw_face_panel();
+    draw_loop_assist_window();
     draw_actors_panel();
     draw_mocap_panel();  // every frame: it polls the socket while listening
+    draw_check_panel();  // every frame: it re-checks after edits
+    draw_sl_preview_window();
     { VATS_PROFILE("panel timeline"); draw_timeline_panel(); }
     if (!pending_tab_.empty() && ImGui::GetFrameCount() > 2)  // once the dock layout exists
         ImGui::SetWindowFocus(std::exchange(pending_tab_, "").c_str());
@@ -1627,8 +1712,11 @@ bool App::frame() {
     draw_follow_dialog();
     draw_about();
     draw_bvh_prompt();
+    draw_scratch_prompt();
     draw_body_prompt();
+#ifdef VATS_LEGACY_IMPORT
     draw_migration_prompt();
+#endif
     draw_retarget_dialog();
     draw_controls_help();
     draw_welcome();
@@ -1644,8 +1732,10 @@ void App::evaluate() {
     Evaluation e = [&] { VATS_PROFILE("eval rig"); return vats::evaluate(*rig_, doc_.clip(), frame_, shape()); }();
     VATS_PROFILE("eval previews");
     apply_ragdoll_preview(e);
+    apply_idle_preview(e);
     apply_dynamics_preview(e);
     apply_mocap_preview(e);
+    apply_sl_preview(e);
     pose_ = std::move(e.pose);
     globals_ = std::move(e.globals);
     limb_states_ = std::move(e.limbs);
@@ -1656,7 +1746,7 @@ void App::evaluate() {
         host_.drive_avatar(skel_, yours.pose, actor_clip(p, 0), frame_);
         host_.set_view_frame(p.actors[0].placement().inverse() * p.actors[p.active].placement());
     } else {
-        host_.drive_avatar(skel_, pose_, doc_.clip(), frame_);
+        host_.drive_avatar(skel_, sl_ghost_.empty() ? pose_ : sl_pose_, doc_.clip(), frame_);  // SL preview (08 SP-1)
         host_.set_view_frame({});
     }
     // Handles of limbs that lost their IK data at this frame drop out of the selection (VP-27).
@@ -1692,6 +1782,7 @@ void App::autosave_tick() {
 }
 
 bool App::write_autosave() {
+    ScratchAside aside(*this);  // PT-2: the document, not a scratch pose
     if (session_id_.empty()) session_id_ = std::to_string(std::random_device{}()) + std::to_string(host_.ticks_ns() / 1000000);
     const std::string base = autosave_base();
     if (base.empty()) return false;
@@ -1716,6 +1807,7 @@ std::string App::quicksave_base() const {
 }
 
 bool App::quit_to_quicksave() {
+    ScratchAside aside(*this);  // PT-2: the document, not a scratch pose
     const std::string base = quicksave_base();
     const std::string text = save_project(doc_.project);
     const std::string state = (doc_.dirty ? "1" : "0") + doc_.path;  // unsaved flag, then the path ("" = Untitled)

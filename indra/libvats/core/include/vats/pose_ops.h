@@ -72,6 +72,7 @@ struct LibraryItem {
     std::string id, name, kind, side;   // kind: pose, arm, leg, hand, wing, hindleg, tail, head, selection
     std::map<std::string, Vec3> bones;  // pose items: Euler degrees
     std::optional<Vec3> hip;            // whole-body poses
+    std::map<std::string, Vec3> offsets;  // pose items: position offsets from rest (face poses, 08 FA-4)
     bool clip = false;                  // clip items:
     double length = 0;
     std::map<std::string, Track> curves;
@@ -84,7 +85,7 @@ struct Library {
 
 // A random UUID for a new item.
 std::string new_item_id();
-// Reads a vats-pose-library or hexton-pose-library document.
+// Reads a vats-pose-library document (and, with VATS_LEGACY_IMPORT, a legacy one).
 bool load_library(std::string_view json_text, Library& out, std::string& err);
 // Writes a vats-pose-library document.
 std::string save_library(const Library& lib);
@@ -92,7 +93,8 @@ std::string save_library(const Library& lib);
 // Save pose (AM-91): the displayed local rotations of bones, and the hip offset when with_hip.
 LibraryItem make_pose(const Skeleton& skel, const Pose& displayed, const std::vector<int>& bones,
                       const std::string& kind, const std::string& side, bool with_hip);
-// Apply pose at a frame (AM-92). Mirrored sends each bone to its counterpart and negates the hip's Y. The caller
+// Apply pose at a frame (AM-92). Mirrored sends each bone to its counterpart and negates the hip's Y (and each
+// offset's Y). The caller
 // mirrors a region pose when its side differs from the clicked part's.
 void apply_pose(Clip& clip, const Skeleton& skel, const LibraryItem& pose, double frame, bool mirrored);
 // Save clip over [a, b] (AM-93/94). tracks are the part's or selection's track names.

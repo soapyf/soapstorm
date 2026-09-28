@@ -18,6 +18,9 @@ avatar from the front, as **Frame All** does; after that it stays where you put 
 asks **Save changes?** first; **Cancel** keeps it open. Quitting or logging out closes it without asking
 and keeps the unsaved work as an autosave.
 
+> **Note:** Screenshot to come: the editor just opened in-world, with your avatar sat on the ground, its
+> bones drawn over it, and the editor's panels around the world view.
+
 If the region stands your avatar up a second time while the editor is open (see below), the editor saves
 your work and closes, with the notification "The region kept standing you up, so the editor closed. Your
 work is saved and reopens next time." The next time you open the editor it reopens that work as it was:
@@ -71,6 +74,9 @@ with **Show Firestorm UI** and when you close the editor.
   UI over VATs Editor**, or with **Alt+Shift+U** from anywhere (the viewer's own Show User Interface keys,
   which do this while the editor is open). Closing the editor leaves the viewer's UI as it was before you
   opened it, whichever way it was showing.
+
+> **Note:** Screenshot to come: **Show Firestorm UI** on, with the viewer's menu bar, toolbars and chat bar
+> over the editor and the editor's panels moved in.
 
 ### Your avatar while the editor is open
 
@@ -178,6 +184,22 @@ bone or a panel takes the click, not the editor.
 The view cube (at the view's top left), **Frame Selected** (**F**) and the camera views move the viewer's
 camera.
 
+The **Actors** window is the app's, unchanged:
+
+![The Actors window with two actors, Lead (you) and Partner, and Lead's settings below the list](images/vats-editor-viewer/actors-window.png)
+*The first actor is your avatar. **Body** decides how the other actors are drawn in-world.*
+
+> **Note:** Screenshot to come: the handshake example open in-world, with **Partner** drawn as Ruth in its
+> colour in front of your avatar, and your avatar sat on the ground with Lead's bones drawn over it.
+
+### Worked example: a partner in-world
+
+[Open the example](example:couple-handshake.vat) while logged in: **Partner** stands 0.6 m in front of your
+avatar, facing it, drawn as **Ruth** tinted with its colour, and by frame 15 both bring the right hand
+forward. Click Partner's body: the status bar says **Editing Partner**, its bones are drawn on it and it
+loses its tint, while your avatar keeps playing Lead's animation. Click your avatar's bones to edit Lead
+again. Nothing is sent to the region; other residents see your avatar sitting on the ground as usual.
+
 ### Uploading
 
 **File → Upload Animation...**, or **Upload Animation...** in the Export section, uploads what **Export SL
@@ -190,6 +212,26 @@ The editor refuses an upload before you log in, and one that breaks Second Life'
 seconds, or 250,000 bytes or more), and says why.
 
 > **Warning:** Uploading costs L$ for each animation and cannot be undone.
+
+> **Note:** Screenshot to come: the viewer's upload price confirmation over the editor after **File →
+> Upload Animation...**.
+
+### Light
+
+The **Light** menu lights the world for looking at the animation: **Flat Noon** (the sun straight above),
+**Three-Quarter Key** (in front of your avatar, to its left and up), **Rim / Back** (behind it), **Dusk** (low and
+warm, from its right) and **Night** (moonlight). Each is a sky on your screen only, like **World → Environment**'s
+own choices: nobody else sees it and the region's sky is untouched. The light is placed from where your avatar
+faces when you choose it. **The World's Own** puts back the sky you had, and so does closing the editor.
+
+**Plain Backdrop** stands a grey wall behind your avatar, with a grey floor up to it, turning with the camera so
+it stays behind. It hides the world behind it and is on your screen only.
+
+### Help
+
+**Help → Help Contents** opens these pages in the editor, with their pictures. **Open the example** buttons open
+the example as **File → Open** would, asking to save your work first; **Save** asks for a new name, so the
+example stays as it was.
 
 ### Colours
 
@@ -210,6 +252,7 @@ The editor takes its colours from the viewer's skin and follows it when the skin
 | File types | registered with the desktop | not registered |
 | Upload | with any viewer's upload window | directly, from the editor |
 | Colours | **Dusk** or **Studio Grey** | the viewer's skin |
+| **Light** menu | lights the editor's own view | a sky on your screen only; the world's own comes back on close |
 
 Files open and save through the viewer's file picker. A cancelled folder choice leaves the setting as it
 was.

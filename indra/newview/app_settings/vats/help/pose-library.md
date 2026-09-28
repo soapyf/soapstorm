@@ -15,6 +15,9 @@ The pose library holds poses and clips you can reuse in any project: your own sa
 
 A body part's right-click menu also has **Save** *part* **Pose...**, which saves just that part.
 
+**Save Face Pose** in **Tools → Face...** saves the face at the current frame as a pose of the kind `face`,
+with the face bones' offsets when **Move face bones** is on (see [[Face animation#Saving a face pose]]).
+
 ### Saving a clip
 
 A clip is the keys of some bones over a frame range, for example a head nod or a hand gesture.
@@ -36,9 +39,18 @@ Your items are listed under **Poses** and **Clips**, with a thumbnail where one 
 
 Applying or pasting is one undo step. If some of a clip's bones don't fit, a **Clip pasted** message lists what was left out.
 
+### Blending a pose after applying it
+
+After a pose goes on (a saved pose, a starter hand or body pose, **Paste Pose** or **Paste onto** a body part), a **Blend** slider appears on the timeline bar for 5 seconds, longer while the pointer is on it. It mixes the applied pose with the pose that was there before, at the frame it was applied to: **0%** is the pose before, **100%** the pose as applied, and up to **150%** pushes past it. Rotations blend along the shortest arc, positions in a straight line, the same as [[Keys and timeline#Tweening between keys|Tween]].
+
+Each drag of the slider is one undo step, **Blend Pose**, after the one that applied the pose. Undo, redo or switching actor removes the slider; after any other edit, touching it removes it instead of blending. Pasting a clip has no **Blend**.
+
 ### Starter poses
 
 The **Starter poses** section lists the poses that ship with VATs, each marked **hand** or **body**.
+
+![The Poses section of the Inventory tab: Save Pose and Save Clip buttons, Apply mirrored, empty Poses and Clips lists, and the Starter poses list with a thumbnail for each hand pose](images/pose-library/inventory-poses.png)
+*The **Poses** and **Starter poses** sections of the **Inventory** tab.*
 
 | Kind | Poses |
 |---|---|
@@ -51,6 +63,15 @@ The **Starter poses** section lists the poses that ship with VATs, each marked *
 - **Right-click** a hand pose for **Left Hand**, **Right Hand** or **Both Hands**; right-click a body pose for **Apply at This Frame**.
 
 Starter poses can't be renamed or deleted.
+
+### Worked example: a starter pose between two others
+
+[Open the example](example:pose-library-two-poses.vat): **Relaxed Stand** keyed at frame 0 and **Waving** at frame 24.
+
+1. Type `12` in the **Frame** box. The pose is halfway between the two: the right arm is on its way up.
+2. Open the **Inventory** tab, scroll to **Starter poses** and click **Thinking** (a **body** pose).
+3. The pose is keyed at frame 12 on every bone it names. Click **mHead** in the **Bones** tab: **Rotation** reads `-4.0°`, `6.0°`, `0.0°` and **Keyed at this frame**. Click **mElbowRight**: its Z reads `132.0°`.
+4. Scrub from 0 to 24: stand, think, wave.
 
 ## Configuration
 

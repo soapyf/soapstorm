@@ -11,6 +11,9 @@ iFacialMocap on an iPhone and with VMC apps that send blendshapes.
 The face settings are in the **Face** section of **Tools → Motion Capture...**. **Use Face Tracking** is
 on by default. **Shapes** shows how many blendshapes the sender sends, or **none received**.
 
+![The Face section of the Motion Capture window with the Natural preset](images/face-tracking/face-section.png)
+*The **Natural** preset: **Strength** and **Eye Strength** at 1, **Eye Limit** 25° to the side and 20° up or down, **Move face bones** off. **Shapes** reads **none received** until a sender with blendshapes is connected.*
+
 > **Note:** Face bones only show in Second Life on a mesh head rigged to the Bento face bones. On a
 > system head or an unrigged head, a face take has no visible effect.
 
@@ -88,6 +91,10 @@ file `data/retarget/face-arkit.json`, made for the SL default head. The right si
 presets, the VRM names and the eyelid fractions are in the same file. VATs reads it when the Motion
 Capture window first opens.
 
+For another head, make your own table with **New Head** in **Tools → Face...** and choose it under **Head**
+there; face tracking then uses it too (see [[Face animation#Head and Move face bones]]). **Move face bones** is
+the same setting in both windows.
+
 ## Tips and tricks
 
 - Capture the neutral face again whenever you move the phone or change the light.
@@ -126,6 +133,7 @@ The face table was not found in VATs' data folder. Reinstall VATs (see [[Install
 
 ## See also
 
+- [[Face animation]]
 - [[Motion capture]]
 - [[VATs Editor (viewer)]]
 - [ARKit blend shape locations](https://developer.apple.com/documentation/arkit/arfaceanchor/blendshapelocation)

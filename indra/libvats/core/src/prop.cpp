@@ -1,7 +1,9 @@
 // Viewport Avatar Toolset - props in a project, and the prop library.
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 #include "vats/prop.h"
-#include "vats/legacy.h"
+#ifdef VATS_LEGACY_IMPORT
+#include "vats/legacy_import.h"
+#endif
 
 #include <algorithm>
 #include <cctype>
@@ -17,7 +19,6 @@ namespace {
 namespace fs = std::filesystem;
 
 constexpr const char* kLibraryFormat = "vats-prop-library";
-constexpr const char* kHextonLibraryFormat = "hexton-prop-library";
 
 Json vec(const Vec3& v) {
     Json a = Json::array();
@@ -123,8 +124,11 @@ bool load_prop_library(std::string_view text, std::vector<PropLibraryItem>& out,
     Json doc;
     if (!parse_json(text, doc, err)) return false;
     const Json* format = doc.find("format");
-    if (!format || !format->is_string() || (format->str != kLibraryFormat && format->str != legacy_name("-prop-library") &&
-                                               format->str != kHextonLibraryFormat)) {
+    bool ours = format && format->is_string() && format->str == kLibraryFormat;
+#ifdef VATS_LEGACY_IMPORT
+    ours = ours || (format && format->is_string() && format->str == legacy_import::kPropLibraryFormat);
+#endif
+    if (!ours) {
         err = "not a prop library (format is missing or unknown)";
         return false;
     }

@@ -639,15 +639,22 @@ void unbake_ragdoll(Clip& clip, const Skeleton& skel) {
     rd.baked = false;
 }
 
-double ragdoll_limit_excess(const Skeleton& skel, const Pose& pose) {
+std::vector<LimitExcess> ragdoll_limit_excesses(const Skeleton& skel, const Pose& pose, double tol_deg) {
     const std::vector<Xform> rest = skel.global_pose(Pose(skel.size()));
-    double worst = 0;
+    std::vector<LimitExcess> out;
     for (const Joint& j : table()) {
         int n = skel.find(j.name);
         if (n < 0 || j.kind == Joint::Root) continue;
         Quat q = skel[n].rest * pose.rot[n];
-        worst = std::max(worst, deg(angle_between(q, clamp_local(j, limit_axis(skel, rest, j, n), q))));
+        Quat c = clamp_local(j, limit_axis(skel, rest, j, n), q);
+        if (double d = deg(angle_between(q, c)); d > tol_deg) out.push_back({n, d, (skel[n].rest.conj() * c).normalized()});
     }
+    return out;
+}
+
+double ragdoll_limit_excess(const Skeleton& skel, const Pose& pose) {
+    double worst = 0;
+    for (const LimitExcess& e : ragdoll_limit_excesses(skel, pose, 0)) worst = std::max(worst, e.deg);
     return worst;
 }
 

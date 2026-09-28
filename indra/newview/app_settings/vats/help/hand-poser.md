@@ -10,6 +10,9 @@ The hand poser is a small **Hands** window for curling and spreading fingers by 
 
 Press **H** (**Tools → Hand Poser**), or right-click a hand bone and choose **Show Hand Poser**. The **Hands** window has a **Left** half and a **Right** half, each with a dot for **Pinky**, **Ring**, **Middle**, **Index** and **Thumb**, and a palm dot, **All fingers**. Hover a dot to see its name. The bottom line repeats the controls: "Drag down to curl, sideways to spread. Double-click resets."
 
+![The Hands window: a Left half and a Right half, each with five small finger dots in an arc and a large palm dot below them](images/hand-poser/hands-window.png)
+*The **Hands** window. From the outside in, the small dots are the pinky, ring, middle and index fingers and the thumb; the large one is the palm.*
+
 ### Curling and spreading
 
 - **Drag a dot down** to curl that finger.
@@ -22,6 +25,15 @@ Each drag is one undo step (**Pose Fingers**; a reset is **Reset Fingers**). The
 ### Built-in shapes
 
 For ready-made shapes (fist, point, peace, OK, grips and more), use the starter hand poses in the [[Pose library]]: click one for the left hand, **Shift+click** for the right.
+
+### Worked example: straightening one finger of a fist
+
+[Open the example](example:hand-poser-fist.vat): the left hand is keyed in the **Fist** starter shape at frame 0, the right hand in **Relaxed**.
+
+1. Press **H**. The **Hands** window opens at the bottom right of the view.
+2. In the **Left** half, double-click the **Index** dot (the fourth small dot from the left). The left index finger straightens; the other fingers stay curled.
+3. Click **mHandIndex1Left** in the **Bones** tab (under **mWristLeft**): **Rotation** reads `0.0°`, `0.0°`, `0.0°` and **Keyed at this frame**. The reset keyed all three joints of the finger back to rest.
+4. In the **Right** half, drag the **Index** dot down a little: the right index curls, every joint of it. **Edit → Undo** (**Pose Fingers**) puts it back in one step.
 
 ## Tips and tricks
 

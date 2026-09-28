@@ -44,7 +44,8 @@ void App::start_modal(Modal kind) {
 
 void App::end_modal(bool confirm) {
     if (confirm) {
-        if (doc_.history.commit(modal_ == Modal::Move ? "Move" : "Rotate", doc_.clip())) mark_dirty();
+        const char* label = modal_ == Modal::Move ? "Move" : modal_ == Modal::Tween ? "Tween" : "Rotate";
+        if (doc_.history.commit(label, doc_.clip())) mark_dirty();
     } else {
         doc_.clip() = doc_.history.cancel();  // back to the start value
         status("Cancelled");
@@ -65,6 +66,10 @@ bool App::modal_input(ImVec2 m) {
     if (ImGui::IsMouseClicked(1) || ImGui::IsKeyPressed(ImGuiKey_Escape) ||
         (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z))) {
         end_modal(false);
+        return true;
+    }
+    if (modal_ == Modal::Tween) {  // spec 08 TW-1: the mouse sets the tween, nothing else
+        tween_drag(m);
         return true;
     }
     // X / Y / Z: world axis, then the local axis, then free again.

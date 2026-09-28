@@ -6,6 +6,9 @@ between sessions.
 
 > Related articles: [[First steps]], [[Control presets]], [[Keyboard shortcuts]], [[Preferences]]
 
+![The VATs window with the default layout: Bones on the left, Viewport in the centre, Properties on the right, Graph and Timeline below, the status bar along the bottom](images/interface/window.png)
+*The default layout, with the [[First steps]] example open at frame 10 and **mElbowRight** selected.*
+
 ## Layout
 
 | Panel | Default place | Holds |
@@ -18,7 +21,8 @@ between sessions.
 | **Timeline** | bottom, under **Graph** | play controls, the frame box, tool buttons and the frame ruler |
 
 The **status bar** runs along the bottom of the window. On the left it shows what the last command
-did, and how many items are selected when there is more than one. On the right it shows the mouse
+did, how many items are selected when there is more than one, and **Check: N** when the
+[[Animation check]] has found problems. On the right it shows the mouse
 controls of the active [[Control presets|control preset]], or the graph's controls while the pointer
 is over the **Graph** panel.
 
@@ -42,7 +46,7 @@ attachment points in green. See [[Skeleton]].
 
 **Filter by name...** at the top narrows every section to the items whose names contain the text. Then:
 
-- **Projects** and **Animations**: your `.vat`, `.hxanim` and `.anim` files, from the library folders, recent
+- **Projects** and **Animations**: your `.vat` and `.anim` files, from the library folders, recent
   projects and folders you add ([[Project library]]).
 - **Bodies**: your [[Mesh bodies]].
 - **Meshes**: the prop library ([[Props]]).
@@ -65,7 +69,7 @@ Drag or double-click an item to use it; right-click it for the rest.
 Sections, each of which can be collapsed:
 
 - **Bone** (or **Prop** when a prop is selected): the selection's values and options.
-- **Animation**: **Frame rate**, **Length**, **Loop**, **Loop in** and **Loop out**, **Priority**,
+- **Animation**: **Frame rate**, **Last frame**, **Loop**, **Loop in** and **Loop out**, **Priority**,
   **Ease in** and **Ease out**, **Hand pose** and **Expression**. See [[Keys and timeline]],
   [[Animation priority]] and [[Loop tools]].
 - **Export**: file naming, folder, bake shape and export buttons. See [[Export to Second Life]].
@@ -81,6 +85,10 @@ From left to right: the play controls, the frame box and the last frame, the too
 button, **IK / FK** and **Set Key**. Below them is the frame ruler with the keys, the loop and ease
 markers and, when loaded, the [[Audio track]]. See [[Keys and timeline]].
 
+![The Timeline panel: play controls, Frame 10 of 30, the tool buttons, and the ruler with keys at 0, 10, 20 and 30 inside a tinted loop band](images/interface/timeline.png)
+*The timeline of the [[First steps]] example: amber diamonds are keys, the small triangles at 6 and
+24 the ease markers, and the band from 0 to 30 the loop.*
+
 The play controls are icons only; hover one for its name and key:
 
 | Button | Icon |
@@ -95,7 +103,9 @@ The play controls are icons only; hover one for its name and key:
 The other buttons show an icon and their name: **Select** (an arrow pointer), **Move** (four arrows),
 **Rotate** (a circling arrow), **Scale** (a corner with a dot), the axes button (**Local** with a box,
 **World** with a globe, **Gimbal** with three axes), **IK / FK** (a bone) and **Set Key** (a diamond with
-a plus). Their keys are in the tooltips. The active tool is highlighted.
+a plus). Their keys are in the tooltips. The active tool is highlighted. When the **Timeline** panel is too narrow
+for the names (a window about 1200 pixels wide), these buttons show their icons only, so the **Tween** slider and
+**Relax** stay in view.
 
 ### Menus
 
@@ -104,9 +114,10 @@ a plus). Their keys are in the tooltips. The active tool is highlighted.
 | **File** | **New**, **Open...**, **Open Recent**, **Save**, **Save As...**, the imports (BVH, SL `.anim`, retarget, prop / mesh, audio), the exports (`.anim`, BVH), **Quit** |
 | **Edit** | **Undo**, **Redo**, keys, resets, copy and paste pose, **Save Clip of Selected Bones...**, **Time**, mirror and flip, **Reverse Animation**, **Preferences...** |
 | **Playback** | play, frame and key stepping, start and end |
-| **View** | view directions, framing and zoom, **Reset Camera**, **Camera Views**, **Graph Editor**, the bone group switches, **Show Collision Volumes**, **Onion Skin**, **Body**, **Bones in Front (X-ray)** |
+| **View** | view directions, framing and zoom, **Reset Camera**, **Camera Views**, **Graph Editor**, the bone group switches, **Show Collision Volumes**, **Onion Skin**, **Preview as SL Plays It**, **Body**, **Bones in Front (X-ray)** |
+| **Light** | the lighting presets **Flat Noon**, **Three-Quarter Key**, **Rim / Back**, **Dusk** and **Night**, **Studio (Default)**, and **Plain Backdrop**: a grey wall and floor behind the actor that turn with the camera. They are for looking at the animation only; nothing is saved |
 | **Select** | **Select All**, **Select Keyed on Frame**, **Select All Keyed**, **Select None**, parent, child and siblings |
-| **Tools** | the four tools, the axes, IK and pins, **Clean Up Foot Sliding**, **Loop Tools**, **Hand Poser**, **Dynamics...**, **Ragdoll...**, **Actors (Couples and Groups)...**, **Motion Capture...** |
+| **Tools** | the four tools, the axes, IK and pins, **Clean Up Foot Sliding**, **Loop Tools**, **Hand Poser**, **Dynamics...**, **Idle Layer...**, **Overlap...**, **Ragdoll...**, **Face...**, **Actors (Couples and Groups)...**, **Motion Capture...**, **Animation Check...** |
 | **Help** | **Help Contents**, **Controls**, **Welcome**, **About Viewport Avatar Toolset** |
 
 A menu item that cannot be used now is greyed; hover over it to see why. The key shown beside an item
@@ -118,6 +129,20 @@ is the key in the active preset.
 - **Help → Controls** lists the mouse controls and every key of the active preset.
 - **Help → Welcome** reopens the start window.
 - **Help → About Viewport Avatar Toolset** shows the version, licence and credits.
+
+### Worked example: find a key with the panels
+
+[Open the example](example:first-wave.vat), the wave from [[First steps]], and use each panel once:
+
+1. **Bones**: type `Elbow` into **Filter bones...**. The list shrinks to the two elbows and the bones
+   above them, both elbows in amber because they have a key on frame 0; click **mElbowRight**.
+2. **Viewport**: the rotation gizmo appears around the elbow. Press **F** to frame it.
+3. **Properties → Bone**: **Rotation** reads `0.0°  9.0°  91.0°` and **Keyed at this frame**.
+4. **Timeline**: press **.** (**Next key**). The frame box reads **Frame 10**, the playhead sits on
+   the second diamond, and **Rotation** now reads `0.0°  9.0°  60.0°`.
+5. **Graph**: the blue **Rotate Z** curve dips to 60 under the playhead and rises to 110 at frame 20.
+6. **Status bar**: the left end says `Opened first-wave.vat (an example: Save As to keep your changes)`
+   until the next command; the right end shows the mouse controls of your preset.
 
 ## Configuration
 

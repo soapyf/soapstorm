@@ -28,9 +28,22 @@ can be moved or copied with its files.
 
 The title bar shows `*` after the file name while there are unsaved changes.
 
+### Worked example: save, change, save again
+
+[Open the example](example:first-wave.vat). It opens as an untitled copy, so nothing here touches
+the shipped file:
+
+1. Press **Ctrl+Shift+S** (**Save As...**) and save it as `wave-test` in an empty folder. VATs adds
+   `.vat`; the status bar says `Saved wave-test.vat` and the title bar shows the name without `*`.
+2. Untick **Loop** in **Properties → Animation**. The title bar shows `wave-test.vat*`.
+3. Press **Ctrl+S**. The folder now holds two files: `wave-test.vat`, the save with the loop off,
+   and `wave-test.vat.bak`, the save before it, with the loop on.
+4. To check the backup, rename `wave-test.vat.bak` to `wave-test-before.vat` and open it with
+   **Ctrl+O**: **Loop** is ticked.
+
 ### Opening
 
-- **File → Open...** (**Ctrl+O**) opens a VATs project (`.vat`) or a Hexton project (`.hxanim`).
+- **File → Open...** (**Ctrl+O**) opens a VATs project (`.vat`).
 - **File → Open Recent** lists up to 10 recent projects, newest first, numbered. Files that no longer
   exist are hidden. **Clear Recent** empties the list.
 - Double-click a project or `.anim` file in the **Projects** and **Animations** sections of the
@@ -51,7 +64,6 @@ When you close the window or press **Ctrl+Q**, VATs asks the same question.
 
 | Case | What VATs does |
 |---|---|
-| A Hexton `.hxanim` project | converts it; the status bar says `(converted from Hexton; Save As to keep it)`. The project has no file name, so **Save** asks for one and the original is never overwritten. |
 | A project saved by a newer VATs | opens what it can and shows **Newer project file**. **Save** asks for a new name, so the original stays whole. |
 | Prop meshes missing | opens anyway and lists them in **Some prop meshes are missing**. The props show as orange boxes until the files are back. |
 | An unreadable file | shows **Could not open project** with the reason; the open project is unchanged. |
@@ -83,28 +95,6 @@ work is autosaved again before the old copy is deleted, so a second crash still 
 > a copy of VATs that is still running. After a crash, if the window does not appear, start VATs
 > again a few minutes later.
 
-### Importing from Hexton SL Animator
-
-On the first start (when no `settings.json` exists yet), VATs looks for Hexton SL Animator's data
-folder:
-
-| System | Folder |
-|---|---|
-| Linux | `$XDG_DATA_HOME/godot/app_userdata/Hexton SL Animator 2026/`, normally under `~/.local/share` |
-| Windows | `%APPDATA%\Godot\app_userdata\Hexton SL Animator 2026\` |
-
-If it is there, the **Import from Hexton SL Animator?** window offers to bring across your pose library,
-prop library, recent files and preferences:
-
-- **Import** copies them and reports what was brought over. Preferences include the control preset,
-  3-button emulation, interface size, gizmo size, snap angle, view cube size, graph visibility, the
-  Welcome setting, gizmo axes, colour theme and body. A library is copied only when VATs has none
-  yet, so nothing is overwritten. Library thumbnails are not copied; VATs draws its own.
-- **Don't import** (or **Esc**) closes the window. VATs does not ask again.
-
-Hexton projects can be opened at any time with **File → Open...**; see
-[[Projects and files#Special cases when opening]] and [[Hexton import]].
-
 ## Data folders
 
 | What | Linux | Windows |
@@ -125,6 +115,7 @@ holds:
 | `library/bodies.json` | your mesh bodies ([[Mesh bodies]]) |
 | `library/Projects/`, `library/Animations/` | the Inventory's project and animation libraries ([[Project library]]) |
 | `library/*.png` | Inventory thumbnails |
+| `faces/` | face tables for your own heads ([[Face animation#Head and Move face bones]]) |
 | `autosave/` | autosaves, a `.vat` and a `.path` file per session |
 | `layout.ini` | the panel layout |
 

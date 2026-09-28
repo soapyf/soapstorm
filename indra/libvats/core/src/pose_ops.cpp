@@ -8,13 +8,14 @@
 
 #include "vats/edit.h"
 #include "vats/json.h"
-#include "vats/legacy.h"
+#ifdef VATS_LEGACY_IMPORT
+#include "vats/legacy_import.h"
+#endif
 
 namespace vats {
 namespace {
 
 constexpr const char* kFormat = "vats-pose-library";
-constexpr const char* kHextonFormat = "hexton-pose-library";
 constexpr const char* kPoleChannels[3] = {"pole_x", "pole_y", "pole_z"};
 constexpr const char* kFingers[] = {"Thumb", "Index", "Middle", "Ring", "Pinky"};
 
@@ -252,6 +253,11 @@ bool json_item(const Json& j, LibraryItem& it, std::string& err) {
         Vec3 h;
         if (!json_vec(*v, h)) return err = "hip is not [x, y, z]", false;
         it.hip = h;
+    }
+    if (const Json* v = j.find("offsets")) {
+        if (!v->is_object()) return err = "offsets is not an object", false;
+        for (auto& [bone, e] : v->obj)
+            if (!json_vec(e, it.offsets[bone])) return err = "offsets." + bone + " is not [x, y, z]", false;
     }
     return true;
 }
@@ -497,7 +503,11 @@ bool load_library(std::string_view json_text, Library& out, std::string& err) {
     Json doc;
     if (!parse_json(json_text, doc, err)) return false;
     const Json* f = doc.find("format");
-    if (!f || !f->is_string() || (f->str != kFormat && f->str != legacy_name("-pose-library") && f->str != kHextonFormat))
+    bool ours = f && f->is_string() && f->str == kFormat;
+#ifdef VATS_LEGACY_IMPORT
+    ours = ours || (f && f->is_string() && f->str == legacy_import::kPoseLibraryFormat);
+#endif
+    if (!ours)
         return err = "not a pose library (format is missing or unknown)", false;
     Library lib;
     if (const Json* items = doc.find("items")) {
@@ -532,6 +542,10 @@ std::string save_library(const Library& lib) {
             Json& bones = o.set("bones", Json::object());
             for (auto& [bone, e] : it.bones) bones.set(bone, vec_json(e));
             o.set("hip", it.hip ? vec_json(*it.hip) : Json());
+            if (!it.offsets.empty()) {
+                Json& offs = o.set("offsets", Json::object());
+                for (auto& [bone, v] : it.offsets) offs.set(bone, vec_json(v));
+            }
         }
         items.push(std::move(o));
     }
@@ -559,6 +573,10 @@ void apply_pose(Clip& clip, const Skeleton& skel, const LibraryItem& pose, doubl
         key_rotation(clip, skel[dst].name, frame, q);
     }
     if (pose.hip) key_offset(clip, "mPelvis", frame, mirrored ? mirror_v(*pose.hip) : *pose.hip);
+    for (auto& [name, v] : pose.offsets) {
+        const int dst = skel.find(mirrored ? Skeleton::mirror_name(name) : name);
+        if (dst >= 0) key_offset(clip, skel[dst].name, frame, mirrored ? mirror_v(v) : v);
+    }
 }
 
 LibraryItem make_clip(const Clip& clip, const std::vector<std::string>& tracks, double a, double b,

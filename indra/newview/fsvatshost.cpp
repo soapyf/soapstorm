@@ -30,7 +30,6 @@
 #undef None
 #include "app.h"
 #include "theme.h"
-#include "vats/legacy.h"
 #pragma pop_macro("None")
 
 #include "fsvatsclipmotion.h"
@@ -65,6 +64,9 @@
 #include "llweb.h"
 #include "llworld.h"
 #include "lldatapacker.h"
+#include "llenvironment.h"
+#include "llimagepng.h"
+#include "llsettingsvo.h"
 #include "llkeyframemotion.h"
 #include "pipeline.h"
 
@@ -170,9 +172,7 @@ namespace
             mPaths.assets = settings + delim + "assets";             // fonts, starter props, welcome.md
             mPaths.help = settings + delim + "help";                 // the wiki pages
             mPaths.character = gDirUtilp->getExpandedFilename(LL_PATH_CHARACTER, "");  // the avatar's own files
-            // First run after the rename: the folder saved under the former name moves here (never overwriting).
             const std::string user = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, "vats");
-            vats::migrate_path(gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, vats::legacy_name()), user);
             mPaths.user = user + delim;
             LLFile::mkdir(mPaths.user);
             mPaths.settings = mPaths.user + "settings.json";
@@ -189,8 +189,9 @@ namespace
                              bool translucent) override;
         ImTextureID scene_end() override { mSceneOpen = false; return ImTextureID{}; }
         bool save_thumbnail_png(const std::string&) override { return false; }
-        ImTextureID load_texture(const std::string&) override { return ImTextureID{}; }
-        void free_texture(ImTextureID) override {}
+        ImTextureID load_texture(const std::string& png) override;
+        void free_texture(ImTextureID texture) override;
+        void set_light(const vats::LightPreset* preset) override;
 
         void drive_avatar(const vats::Skeleton& skel, const vats::Pose& pose, const vats::Clip& clip, double) override;
 
@@ -309,6 +310,7 @@ namespace
         void pushCamera();
         void startSound();
         void stopSound();
+        void restoreSky();   // the local environment back as it was before the first Light preset
         // The UI's space is the edited actor's; mView places it in your actor's (the worn avatar's), whose origin is at
         // the feet. toAgentYours maps your actor's own space (the pose the avatar is driven with).
         LLVector3 toAgentYours(const Vec3& p) const { return toLL(p - pelvisRest()) * mRot + mPos; }
@@ -387,6 +389,13 @@ namespace
         U32 mProgram = 0, mVao = 0, mVbo = 0, mEbo = 0;
         S32 mMvpLoc = -1, mLightLoc = -1, mRectLoc = -1, mUseDepthLoc = -1, mDepthLoc = -1;
         bool mProgramFailed = false;
+        std::set<GLuint> mTextures;      // the help's pictures (load_texture), until freed or the context goes
+        // The local environment before the first Light preset (08 LT-1), put back by restoreSky.
+        bool mSkySaved = false, mHadLocal = false;
+        LLEnvironment::EnvSelection_t mPrevSelection = LLEnvironment::ENV_LOCAL;
+        LLSettingsDay::ptr_t mPrevDay;
+        LLSettingsDay::Seconds mPrevDayLength, mPrevDayOffset;
+        LLEnvironment::fixedEnvironment_t mPrevFixed;
 
         struct Question
         {
@@ -1295,8 +1304,118 @@ namespace
 
     void ViewerHost::releaseGL()
     {
-        // The context is going with them (stopGL); new ones are made on the next draw.
+        // The context is going with them (stopGL); new ones are made on the next draw. The help's pictures go too: the
+        // help keeps their stale names until its page changes (drawn blank), and free_texture ignores them.
         mProgram = mVao = mVbo = mEbo = 0;
+        mTextures.clear();
+    }
+
+    // The help's pictures (spec 09 §0e): a PNG decoded by the viewer's own classes into a plain GL texture, which ImGui's
+    // OpenGL 3 backend draws by its name. Small local UI pictures, so no LLViewerTexture and no texture cache.
+    ImTextureID ViewerHost::load_texture(const std::string& png)
+    {
+        LLPointer<LLImagePNG> file = new LLImagePNG;
+        LLPointer<LLImageRaw> raw = new LLImageRaw;
+        if (!file->load(png) || !file->decode(raw, 0.f) || raw->isBufferInvalid())
+            return ImTextureID{};
+        const S32 w = raw->getWidth(), h = raw->getHeight(), c = raw->getComponents();
+        if (w <= 0 || h <= 0 || c < 1 || c > 4)
+            return ImTextureID{};
+        // RGBA, top row first: LLImageRaw keeps the bottom row first (LLPngWrapper), and ImGui's UVs start at the top.
+        std::vector<U8> rgba(size_t(w) * h * 4);
+        const U8* src = raw->getData();
+        for (S32 y = 0; y < h; ++y)
+        {
+            const U8* row = src + size_t(h - 1 - y) * w * c;
+            for (S32 x = 0; x < w; ++x)
+            {
+                const U8* p = row + size_t(x) * c;
+                U8* q = &rgba[(size_t(y) * w + x) * 4];
+                q[0] = p[0];
+                q[1] = c >= 3 ? p[1] : p[0];
+                q[2] = c >= 3 ? p[2] : p[0];
+                q[3] = c == 4 ? p[3] : c == 2 ? p[1] : 255;
+            }
+        }
+        GLint active = 0, bound = 0, align = 0;
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &active);
+        glActiveTexture(GL_TEXTURE0);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound);  // gGL's unit 0 keeps thinking this is bound: put it back
+        glGetIntegerv(GL_UNPACK_ALIGNMENT, &align);
+        GLuint tex = 0;
+        glGenTextures(1, &tex);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+        glPixelStorei(GL_UNPACK_ALIGNMENT, align);
+        glBindTexture(GL_TEXTURE_2D, bound);
+        glActiveTexture(active);
+        mTextures.insert(tex);
+        return ImTextureID(tex);
+    }
+
+    void ViewerHost::free_texture(ImTextureID texture)
+    {
+        const GLuint tex = GLuint(texture);
+        if (mTextures.erase(tex))
+            glDeleteTextures(1, &tex);
+    }
+
+    // Light menu (08 LT-1): a local sky built from the preset, which only this viewer sees. The key light is in the edited
+    // actor's space; the sun (the moon at night) goes where it points, in the region's frame.
+    void ViewerHost::set_light(const vats::LightPreset* preset)
+    {
+        if (!preset)
+            return restoreSky();
+        LLEnvironment& env = LLEnvironment::instance();
+        if (!mSkySaved)
+        {
+            mSkySaved = true;
+            mHadLocal = env.hasEnvironment(LLEnvironment::ENV_LOCAL);
+            mPrevSelection = env.getSelectedEnvironment();
+            mPrevDay = mHadLocal ? env.getEnvironmentDay(LLEnvironment::ENV_LOCAL) : LLSettingsDay::ptr_t();
+            mPrevDayLength = mHadLocal ? env.getEnvironmentDayLength(LLEnvironment::ENV_LOCAL) : LLSettingsDay::Seconds(0);
+            mPrevDayOffset = mHadLocal ? env.getEnvironmentDayOffset(LLEnvironment::ENV_LOCAL) : LLSettingsDay::Seconds(0);
+            mPrevFixed = mHadLocal ? env.getEnvironmentFixed(LLEnvironment::ENV_LOCAL) : LLEnvironment::fixedEnvironment_t();
+        }
+        LLVector3 key = toLL(mView.rot.rotate(Vec3{ preset->key[0], preset->key[1], preset->key[2] }));
+        key = key * mRot;
+        key.normVec();
+        LLQuaternion up, down;
+        up.shortestArc(LLVector3::x_axis, key);
+        down.shortestArc(LLVector3::x_axis, LLVector3(key.mV[VX], key.mV[VY], -std::max(std::fabs(key.mV[VZ]), 0.3f)));
+        LLSettingsSky::ptr_t sky = LLSettingsVOSky::buildDefaultSky();
+        sky->setSunRotation(preset->night ? down : up);  // at night the sun is under the horizon and the moon lights
+        sky->setMoonRotation(preset->night ? up : down);
+        sky->setSunlightColor(LLColor3(preset->colour.r, preset->colour.g, preset->colour.b));
+        // ponytail: the fill at half the app's strength, a guess until seen in-world; tune here.
+        sky->setAmbientColor(LLColor3(preset->ambient.r, preset->ambient.g, preset->ambient.b) * 0.5f);
+        if (preset->night)
+            sky->setMoonBrightness(1.f);
+        sky->setCloudShadow(0.f);
+        env.setEnvironment(LLEnvironment::ENV_LOCAL, sky);
+        env.setSelectedEnvironment(LLEnvironment::ENV_LOCAL, LLEnvironment::TRANSITION_INSTANT);
+    }
+
+    void ViewerHost::restoreSky()
+    {
+        if (!mSkySaved)
+            return;
+        mSkySaved = false;
+        LLEnvironment& env = LLEnvironment::instance();
+        if (!mHadLocal)
+            env.clearEnvironment(LLEnvironment::ENV_LOCAL);
+        else if (mPrevDay)
+            env.setEnvironment(LLEnvironment::ENV_LOCAL, mPrevDay, mPrevDayLength, mPrevDayOffset);
+        else
+            env.setEnvironment(LLEnvironment::ENV_LOCAL, mPrevFixed);
+        env.setSelectedEnvironment(mPrevSelection, LLEnvironment::TRANSITION_INSTANT);
+        mPrevDay.reset();
+        mPrevFixed = LLEnvironment::fixedEnvironment_t();
     }
 
     // --- The viewer's UI beside the editor (spec 09 U4b) -------------------------------------------------
@@ -1541,6 +1660,7 @@ namespace
         mBase.clear();
         restore();
         stopSound();
+        restoreSky();
         VATsClipMotion::sEditor = VATsClipMotion::Playback();
         mSkel = nullptr;
         mCacheFor = nullptr;

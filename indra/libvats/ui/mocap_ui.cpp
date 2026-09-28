@@ -39,6 +39,7 @@ struct MocapUi {
     FaceTable face;
     std::string face_error;
     FaceSettings face_settings;
+    std::string face_head;  // the head whose table maps the face (App::load_face_table); "" = the default head
     bool face_on = true, face_only = false;
     int face_preset = 0;
     std::string phone_ip;
@@ -98,9 +99,17 @@ Json mocap_settings(const MocapUi& ui) {
     j.set("drive", ui.drive), j.set("face", ui.face_on), j.set("face_preset", ui.face_preset);
     j.set("face_gain", f.gain), j.set("eye_gain", f.eye_gain), j.set("eye_yaw_max", f.eye_yaw_max);
     j.set("eye_pitch_max", f.eye_pitch_max), j.set("head", f.head), j.set("positions", f.positions), j.set("shape_gains", map(f.gains));
+    j.set("face_head", ui.face_head);
     j.set("neutral_face", map(f.neutral)), j.set("countdown", double(ui.countdown));
     j.set("smooth", c.smooth), j.set("reduce", c.reduce), j.set("reduce_deg", c.rot_deg), j.set("reduce_m", c.pos_m);
     j.set("edge_blend", c.blend), j.set("foot_lock", c.lock_feet);
+    // MC-4a: "filter" is "box" (the old smoothing, radius in "smooth") or a curve filter with its settings.
+    static const char* kinds[] = {"one_euro", "savitzky_golay", "butterworth"};
+    const FilterSettings& fs = c.filter;
+    j.set("filter", c.use_filter ? kinds[int(fs.kind)] : "box");
+    j.set("euro_min_cutoff", fs.min_cutoff), j.set("euro_beta", fs.beta), j.set("euro_beta_m", fs.beta_m);
+    j.set("euro_d_cutoff", fs.d_cutoff), j.set("sg_half", fs.sg_half), j.set("sg_order", fs.sg_order);
+    j.set("butter_cutoff", fs.cutoff), j.set("butter_order", fs.order);
     return j;
 }
 
@@ -124,15 +133,54 @@ void load_mocap_settings(MocapUi& ui, const Json& j) {
         for (size_t i = 0; i < x->arr.size() && i < 3; ++i)
             if (x->arr[i].is_bool()) ui.lan[i] = x->arr[i].b;
     if (auto* x = j.find("phone_ip"); x && x->is_string() && x->str.size() < 64) ui.phone_ip = x->str;
+    if (auto* x = j.find("face_head"); x && x->is_string() && x->str.size() < 256) ui.face_head = x->str;
     flag("drive", ui.drive), flag("face", ui.face_on), num("face_preset", ui.face_preset, 0, 64);
     num("face_gain", f.gain, 0, 2), num("eye_gain", f.eye_gain, 0, 2), num("eye_yaw_max", f.eye_yaw_max, 5, 45);
     num("eye_pitch_max", f.eye_pitch_max, 5, 45), flag("head", f.head), flag("positions", f.positions), map("shape_gains", f.gains);
     map("neutral_face", f.neutral), num("countdown", ui.countdown, 0, 5);
     num("smooth", c.smooth, 0, 5), flag("reduce", c.reduce), num("reduce_deg", c.rot_deg, 0.05, 5);
     num("reduce_m", c.pos_m, 0.0001, 0.02), num("edge_blend", c.blend, 0, 15), flag("foot_lock", c.lock_feet);
+    // Settings from before MC-4a have no "filter": the box filter, as they had.
+    FilterSettings& fs = c.filter;
+    if (auto* x = j.find("filter"); x && x->is_string()) {
+        c.use_filter = x->str != "box";
+        if (x->str == "one_euro") fs.kind = FilterKind::OneEuro;
+        else if (x->str == "savitzky_golay") fs.kind = FilterKind::SavitzkyGolay;
+        else if (x->str == "butterworth") fs.kind = FilterKind::Butterworth;
+        else c.use_filter = false;
+    }
+    num("euro_min_cutoff", fs.min_cutoff, 0.1, 10), num("euro_beta", fs.beta, 0, 0.2), num("euro_beta_m", fs.beta_m, 0, 100);
+    num("euro_d_cutoff", fs.d_cutoff, 0.1, 10), num("sg_half", fs.sg_half, 1, 15), num("sg_order", fs.sg_order, 0, 5);
+    num("butter_cutoff", fs.cutoff, 0.5, 15), num("butter_order", fs.order, 2, 8);
+    fs.order += fs.order % 2;
 }
 
 }  // namespace
+
+// The face choices the Face window shares (face_ui.cpp): kept here, in the Motion Capture settings.
+bool App::face_positions() {
+    if (!mocap_ui_) load_mocap_settings(*(mocap_ui_ = std::make_shared<MocapUi>()), settings_.mocap);
+    return mocap_ui_->face_settings.positions;
+}
+
+void App::set_face_positions(bool on) {
+    face_positions();
+    mocap_ui_->face_settings.positions = on;
+    if (!headless_) settings_.mocap = mocap_settings(*mocap_ui_), save_settings();
+}
+
+std::string App::face_head() {
+    face_positions();
+    return mocap_ui_->face_head;
+}
+
+void App::set_face_head(const std::string& head) {
+    face_positions();
+    mocap_ui_->face_head = head;
+    mocap_ui_->face = FaceTable{}, mocap_ui_->face_error.clear();
+    load_face_table(head, mocap_ui_->face, mocap_ui_->face_error);  // now: a take may be running
+    if (!headless_) settings_.mocap = mocap_settings(*mocap_ui_), save_settings();
+}
 
 bool App::mocap_busy() const {  // listening, or waiting on a firewall check or change: keep frames coming
     return mocap_ui_ && (mocap_ui_->sock.is_open() || mocap_ui_->detect_job.valid() || mocap_ui_->allow_job.valid());
@@ -251,7 +299,7 @@ void App::draw_mocap_panel() {
     // Saved as soon as a change is finished (not on every step of a slider drag).
     if (Json j = mocap_settings(ui); !headless_ && !ImGui::IsAnyItemActive() && j != settings_.mocap)
         settings_.mocap = std::move(j), save_settings();
-    place_tool_window(3, 28, 44);
+    place_tool_window(3, 28, 76);  // tall enough for every section, capped to the screen
     if (!ImGui::Begin("Motion Capture", &show_mocap_)) return ImGui::End();
     help_button("motion-capture");
     if (ui.table.bones.empty() && ui.table_error.empty()) {
@@ -262,11 +310,7 @@ void App::draw_mocap_panel() {
             ui.table_error = "data/retarget/vrm-humanoid.json is missing";
     }
     if (ui.face.shapes.empty() && ui.face_error.empty()) {
-        std::ifstream f(data_dir_ + "/retarget/face-arkit.json", std::ios::binary);
-        std::stringstream ss;
-        ss << f.rdbuf();
-        if (!parse_face_table(ss.str(), ui.face, ui.face_error) && ui.face_error.empty())
-            ui.face_error = "data/retarget/face-arkit.json is missing";
+        load_face_table(ui.face_head, ui.face, ui.face_error);
         auto natural = ui.face.presets.find("Natural");  // the preset the default settings match
         if (natural != ui.face.presets.end() && !settings_.mocap.find("face_preset"))  // unless one was saved
             ui.face_preset = int(std::distance(ui.face.presets.begin(), natural));
@@ -671,9 +715,23 @@ void App::draw_mocap_panel() {
 
     // Clean-up (MC-4).
     ImGui::SeparatorText("Clean-up");
+    // MC-4a: Off, the old box filter (kept for old settings), or a curve filter on the take's keys.
     label("Smoothing");
-    ImGui::SliderInt("##smooth", &ui.clean.smooth, 0, 5, ui.clean.smooth ? "%d frames" : "off");
-    ImGui::SetItemTooltip("Averages each rotation with its neighbours to calm tracker jitter.");
+    int mode = ui.clean.use_filter ? 2 + int(ui.clean.filter.kind) : ui.clean.smooth > 0 ? 1 : 0;
+    const char* modes[] = {"Off", "Box (average)", "One-Euro", "Savitzky-Golay", "Butterworth"};
+    if (ImGui::Combo("##smoothing", &mode, modes, 5)) {
+        ui.clean.use_filter = mode >= 2;
+        if (mode >= 2) ui.clean.filter.kind = FilterKind(mode - 2);
+        ui.clean.smooth = mode == 1 ? std::max(ui.clean.smooth, 1) : mode == 0 ? 0 : ui.clean.smooth;
+    }
+    ImGui::SetItemTooltip("Calms tracker jitter. One-Euro follows quick moves; Savitzky-Golay keeps peaks; Butterworth\n"
+                          "removes everything above its cutoff without lag. Box averages neighbouring rotations.");
+    if (mode == 1) {
+        label("Box radius");
+        ImGui::SliderInt("##smooth", &ui.clean.smooth, 1, 5, "%d frames");
+    } else if (mode >= 2) {
+        filter_params_ui(ui.clean.filter, [&](const char* text) { label(text); });
+    }
     label("Reduce keys", 0);
     ImGui::Checkbox("##reduce", &ui.clean.reduce);
     ImGui::BeginDisabled(!ui.clean.reduce);

@@ -73,6 +73,21 @@ struct DynChain {
     bool operator==(const DynChain&) const = default;
 };
 
+// A procedural idle layer (spec 08 IL): a breath or a gradient-noise sway over a bone set, baked to keys.
+// The motion lives in idle.h; the settings live here, like DynChain, so they save and undo with the clip.
+struct IdleLayer {
+    std::string kind = "sway";       // "breath" (mTorso rises, the other bones pitch) or "sway" (noise, 3 axes)
+    double amplitude = 1.0;          // degrees (breath: also millimetres of mTorso rise)
+    double period = 5.0;             // seconds, snapped so a whole number fits the loop (IL-2)
+    int seed = 1;                    // sway: which noise
+    std::vector<std::string> bones;  // face and eye bones are never moved
+    bool baked = false;
+    std::map<std::string, Track> source;  // pre-bake tracks (absent = the track did not exist)
+    Json extra = Json::object();          // unknown fields, written back
+
+    bool operator==(const IdleLayer&) const = default;
+};
+
 // The project's audio track (spec 08 AU): played with the animation, never written into the .anim.
 // `offset` is in timeline seconds (frame / fps); beats are in the audio's own seconds, so they travel with
 // the music when it is slid along the timeline.
@@ -105,9 +120,32 @@ struct Ragdoll {
     bool operator==(const Ragdoll&) const = default;
 };
 
+// The face layer (spec 08 FA-5..FA-7): blinks, saccades and a look-at target, generated from a seed and baked
+// onto the eyes, the eyelids and (with a look-at) the head. The generator and the bake live in face_anim.h.
+struct FaceLayer {
+    std::uint32_t seed = 1;
+    bool blinks = true;
+    double blink_min = 2, blink_max = 6;  // seconds between blinks
+    double blink_length = 0.25;           // seconds, closing to open again
+    bool saccades = true;
+    double saccade_interval = 0.8;  // median seconds between saccades (log-normal)
+    double eye_limit = 10;          // degrees: no saccade takes the eyes further than this from where they look
+    std::string look;               // look-at target: "" none, "point", "prop", "camera", "actor"
+    Vec3 point;                     // "point": avatar space
+    std::string prop;               // "prop": the prop's name
+    std::string actor, bone;        // "actor": a bone of another actor (GR)
+    double head_share = 0.3;        // 0..1 of the turn towards the target the head takes
+    double head_max = 45;           // degrees the head may turn from straight ahead
+    bool baked = false;
+    bool head_baked = false;              // the bake keyed mHead (a look-at with head_share > 0)
+    std::map<std::string, Track> source;  // pre-bake tracks (absent = the track did not exist)
+    Json extra = Json::object();          // unknown fields, written back
+
+    bool operator==(const FaceLayer&) const = default;
+};
+
 // Two-bone IK frame (spec 02 section 3.7). VATs lines the mid joint up with the pole, so Switch to IK
-// never twists the limb; Literal is section 3.7 as written, which poses .hxanim projects as the reference
-// app did.
+// never twists the limb; Literal is section 3.7 as written, the solve converted projects use.
 enum class IkSolve { VATs, Literal };
 
 struct Clip {
@@ -115,6 +153,7 @@ struct Clip {
     int end_frame = 30;
     bool loop = false;
     int loop_in = 0, loop_out = 30;
+    bool loop_tangents = false;  // spec 08 LP-7: tangents at the loop points see across the seam (on for new projects)
     int priority = 3;
     double ease_in = 0.8, ease_out = 0.8;
     int hand_pose = 1;
@@ -128,8 +167,10 @@ struct Clip {
     std::vector<Pin> pins;  // in application order
     std::vector<Prop> props;  // meshes placed in the scene; paths absolute while in memory
     std::vector<DynChain> dynamics;  // spec 08 DY-1
+    std::vector<IdleLayer> idle;     // spec 08 IL
     std::optional<Ragdoll> ragdoll;  // spec 08 RD
     std::optional<AudioTrack> audio;  // spec 08 AU
+    std::optional<FaceLayer> face_layer;  // spec 08 FA-5; absent = off
     // Export choices live on the clip so undo covers them (UI-28); saved as the project's "export"
     // and "mirror_export" keys.
     bool mirror_export = false;

@@ -174,7 +174,7 @@ void read_controller(const Rig& rig, const Clip& clip, int limb, double frame, c
     if (l.spine) return;
     if (clip.has_channels(name, kPoleChannels))
         s.pole = space.apply(eval3(clip, name, frame, kPoleChannels));
-    else  // an .hxanim (Literal) poses a pole-less controller as the reference app did
+    else  // Literal (section 3.7 as written) derives a pole-less controller's pole from the pose
         s.pole = clip.ik_solve == IkSolve::VATs ? switch_pole(rig, limb, g, clip.ik_solve) : derive_pole(rig, limb, g);
 }
 

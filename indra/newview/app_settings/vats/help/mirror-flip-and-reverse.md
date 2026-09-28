@@ -25,6 +25,8 @@ A body part's right-click menu has the same for the whole part: **Mirror Left Ar
 
 Position keys are mirrored too where the bone has them, and always for attachment points.
 
+To mirror as you pose, turn on **Mirror** on the timeline bar; see [[Posing#Mirror while posing]].
+
 ### Mirroring over time
 
 - **Paste Range Mirrored** pastes a copied frame range with left and right swapped. See [[Time editing]].
@@ -34,7 +36,18 @@ Position keys are mirrored too where the bone has them, and always for attachmen
 
 **Edit → Reverse Animation** makes the whole animation play backwards: every key moves to the mirror frame (frame *f* becomes *last frame − f*), the handles and tangents are reversed with it, and the loop points and pins are flipped in time. The status bar says "The animation now plays backwards".
 
-To reverse just some keys, select them in the [[Graph editor]] and press **Flip Time** (the button with two triangles mirrored left and right).
+To reverse just some keys, select them in the [[Graph editor]] and choose **More → Flip Time**.
+
+### Worked example: mirroring a raised arm
+
+[Open the example](example:mirror-arm.vat): at frame 0 the left arm is raised and flexed, **mShoulderLeft** at **Rotation** `35.0°`, `0.0°`, `0.0°` and **mElbowLeft** at `60.0°`, `0.0°`, `0.0°`. The right arm hangs in the Relaxed Stand pose.
+
+![The avatar with the left arm raised and the forearm flexed up, the right arm hanging](images/mirror-flip-and-reverse/left-arm-posed.png)
+*Frame 0 of the example, before mirroring.*
+
+1. Choose **Edit → Mirror Left to Right**. The status bar says "Mirror Left to Right at frame 0" and both arms are now raised.
+2. Click **mShoulderRight** in the **Bones** tab: **Rotation** reads `-35.0°`, `0.0°`, `0.0°`. Click **mElbowRight**: `-60.0°`, `0.0°`, `0.0°`. Under the mirror, the X and Z angles change sign and Y keeps it.
+3. **Edit → Undo**, then **Edit → Flip Pose**: now the right arm is raised and the left hangs. Undo again to get back to the start.
 
 ## Tips and tricks
 

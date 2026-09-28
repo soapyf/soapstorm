@@ -1,4 +1,4 @@
-// Viewport Avatar Toolset - the Inventory's Projects and Animations: folders of .vat/.hxanim and .anim files.
+// Viewport Avatar Toolset - the Inventory's Projects and Animations: folders of .vat and .anim files.
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 //
 // Scanning with a metadata cache, and the file operations the Inventory offers (rename, duplicate,
@@ -13,7 +13,7 @@
 
 namespace vats {
 
-enum class LibKind { Project, Anim };  // .vat and .hxanim / .anim
+enum class LibKind { Project, Anim };  // .vat (and legacy projects) / .anim
 
 struct LibFile {
     std::string path, name;  // name: the file name without its extension

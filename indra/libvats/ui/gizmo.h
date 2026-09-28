@@ -13,6 +13,7 @@
 namespace vats {
 
 enum class GizmoKind { Rotate, Move, Scale };
+inline constexpr ImU32 kMirrorTint = IM_COL32(190, 120, 255, 255);  // live mirror (spec 08 PT-1)
 
 class Gizmo {
 public:
@@ -43,7 +44,8 @@ public:
     // Scale drags: the per-axis factor since the press (1 on untouched axes), in the gizmo's axes.
     const Vec3& scale() const { return scale_; }
 
-    void draw(ImDrawList* dl, Part hover) const;
+    // tint (0 = none) colours the centre disk or square and the view ring.
+    void draw(ImDrawList* dl, Part hover, ImU32 tint = 0) const;
 
 private:
     Vec3 axis(int i) const {

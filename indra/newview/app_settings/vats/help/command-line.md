@@ -17,8 +17,8 @@ anything loads.
 
 ### Files
 
-Any argument that names an existing file is opened as if it were dropped on the window: `.vat` and
-`.hxanim` open as projects, `.anim` and `.bvh` are imported, `.dae` and `.fbx` are added as props,
+Any argument that names an existing file is opened as if it were dropped on the window: `.vat`
+opens as a project, `.anim` and `.bvh` are imported, `.dae` and `.fbx` are added as props,
 `.gltf` and `.glb` open the retarget dialog, and `.wav`, `.mp3`, `.ogg` and `.flac` load as the audio
 track. An
 argument that is neither an option nor an existing file is skipped with
@@ -36,6 +36,8 @@ vats walk.vat --frame 12 --select mPelvis
 |---|---|
 | `--data-dir <dir>` | Keeps all user data in `<dir>`: `settings.json`, `layout.ini`, `autosave/` and `library/`. The folder is created if needed. See [[Projects and files#Data folders]]. |
 | `--library-dir <dir>` | Uses `<dir>` for the pose, prop and mesh body libraries and their thumbnails instead of `library/` in the data folder. |
+| `--light <name>` | Lights the view with a preset of the **Light** menu: `noon`, `key` (Three-Quarter Key), `rim`, `dusk`, `night` or `studio`. An unknown name prints `unknown light <name>`. |
+| `--backdrop` | Shows **Light → Plain Backdrop**. |
 | `--preset <name>` | Selects a [[Control presets|control preset]]: `industry`, `blender`, `qavimator` or `secondlife`. An unknown name prints `unknown preset <name>`. |
 | `--body <id>` | Shows a body for this run only: `sl-default`, `sl-default-male`, `female`, `male`, or `none` (also `off`) for the skeleton only. It replaces a mesh body too. The body saved in `settings.json` is kept unless you pick another in **View → Body**. Unknown ids are ignored. |
 | `--frame <n>` | Moves to frame `<n>`, clamped to the animation's length. Fractions are allowed. |
@@ -47,9 +49,14 @@ vats walk.vat --frame 12 --select mPelvis
 | `--focus` | Frames the selection once the first frame is drawn, as **Frame Selected**. |
 | `--distance <m>` | Sets the camera's distance from its target, in metres, on the first frame. |
 | `--points` | Shows the attachment points, as **View → Show Attachment Points**. |
-| `--tab <name>` | Brings a left panel to the front: `bones` for **Bones**; `actors` opens the **Actors** window instead; any other value for **Inventory**. |
+| `--tab <name>` | Brings a left panel to the front: `bones` for **Bones**; `poses` for **Inventory** scrolled to its poses; `actors` opens the **Actors** window instead, `check` the **Animation Check** window, `face` the **Face** window, `export` the **Export SL .anim** dialog, `sl-preview` **View → Preview as SL Plays It**; any other value for **Inventory**. |
 | `--import-prop <file>` | Imports a `.dae` or `.fbx` file as a prop, as **File → Import Prop / Mesh (.dae, .fbx)...**. |
+| `--retarget <file>` | Opens a motion file in the retarget dialog, as **File → Import Animation (Retarget)...**. |
 | `--open-help <page>` | Opens the help at a page, by title or file name; `<page>#<heading>` opens it at a heading. |
+| `--window <name>` | Opens a tool window: `graph`, `mocap` (**Motion Capture**), `actors`, `dynamics`, `ragdoll`, `preferences`, `hands` (the hand poser), `export` (**Export SL .anim**), `controls`, `about`, `help`, `insert-frames` or `stretch-range` (the **Edit → Time** prompts). `properties`, `timeline`, `bones` and `inventory` bring that panel to the front. An unknown name prints `unknown window <name>`. |
+| `--theme <name>` | Uses a colour theme for this run, by its name in **Preferences**: `Dusk` or `"Studio Grey"`. An unknown name prints `unknown theme <name>`. |
+| `--size <W>x<H>` | Opens the window at this size, for example `1200x1000`, instead of maximised. |
+| `--shot-rect <window>` | With `--screenshot`: prints the window's rectangle in the PNG as `shot-rect <x> <y> <w> <h>` (pixels) on standard output, for cropping. `<window>` is its title as shown, for example `Graph` or `Motion Capture`. |
 | `--screenshot <file.png>` | Runs without dialogs, draws 12 frames, saves the window as a PNG and quits. See [[Command line#Screenshots]]. |
 | `--bench <seconds>` | Plays the animation with vsync off, times each part of the frame for `<seconds>`, prints the results and quits. See [[Command line#Benchmarks]]. |
 
@@ -61,7 +68,7 @@ Starter pose slugs: body poses `body-stand`, `body-hips`, `body-arms-crossed`, `
 
 ### Screenshots
 
-With `--screenshot`, VATs runs headless: no message boxes, no Welcome window, no Hexton import offer,
+With `--screenshot`, VATs runs headless: no message boxes, no Welcome window,
 no **Recover unsaved work** window, no autosave, no "Save changes?" prompt, and opened files are not
 added to the recent list. Old autosaves stay where they are for the next normal start. Error messages go
 to standard error. The PNG has the window's size in pixels.
@@ -79,6 +86,29 @@ env -u WAYLAND_DISPLAY DISPLAY=:93 vats --screenshot out.png
 
 > **Tip:** Use `--data-dir` with a scratch folder for scripted runs, so the run starts from default
 > settings and layout rather than your own.
+
+The help's own screenshots are made this way by `tools/wiki-shots.sh`, which adds `--size`, `--theme`
+and `--shot-rect` to each shot and crops to the reported rectangle:
+
+```
+vats --data-dir /tmp/vats-shot --size 1200x1000 examples/graph-basics.vat --frame 22 --select mElbowRight --shot-rect Graph --screenshot graph.png
+```
+
+### Worked example: a scripted screenshot
+
+The help's example projects are installed with VATs, in `help/examples/` next to `data/` and `assets/`
+(`share/viewport-avatar-toolset/` in the release folder, `docs/wiki/` in the source tree).
+
+1. From the VATs folder, run
+   `bin/vats --data-dir /tmp/vats-shot --size 1200x1000 share/viewport-avatar-toolset/help/examples/graph-basics.vat --frame 22 --select mElbowRight --window graph --screenshot wave.png`
+2. The window opens for a moment and closes by itself; nothing is asked and nothing is saved to your own
+   settings.
+3. `wave.png` has the window's size, 1200 × 1000 at 100% display scale, and shows the picture below: the arm-wave example at frame 22 with
+   **mElbowRight** selected, its curves in the **Graph** panel fitted to the whole clip, and "Opened
+   graph-basics.vat" in the status bar.
+
+![The whole VATs window as --screenshot writes it: the wave example at frame 22 with mElbowRight selected and the Graph panel open](images/command-line/screenshot-command.png)
+*The PNG the command in the example writes.*
 
 ### Benchmarks
 

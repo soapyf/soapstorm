@@ -57,6 +57,25 @@ dialog:
 Choose **Export .anim Instead**, **Export BVH Anyway** or **Cancel**. BVH also has no priority, loop,
 ease, hand pose or expression; you set these in the viewer's upload window.
 
+### Worked example: what an exported file holds
+
+[Open the example](example:graph-basics.vat), the arm wave from the [[Graph editor]] page, and choose
+**File → Export BVH (Animated Bones)...**. Nothing on this page's list is lost, so no dialog appears; the
+file is written as `Animation_01.bvh` (the project is an untitled copy, so **Name** falls back to
+`Animation`). Open it in a text editor:
+
+1. `ROOT mPelvis` comes first, with six channels, although the hips have no keys: the root is always
+   written.
+2. Eleven joints follow the hierarchy from the hips to the wrist: `mSpine1`, `mSpine2`, `mTorso`,
+   `mSpine3`, `mSpine4`, `mChest`, `mCollarRight`, `mShoulderRight`, `mElbowRight`, `mWristRight`, each
+   with three rotation channels. The four keyed bones are there with every parent between them and the
+   hips; the left arm, the legs and the head are not.
+3. `Frames: 74` and `Frame Time: 0.033333`: the reference frame plus one line for each of the 73 clip
+   frames, at 30 fps.
+4. The first motion line is the reference frame: the hip's rest position, `0.000000 42.007874 0.000000`
+   (inches, Y up, so 1.067 m above the ground), then a 0 for every rotation. The next line is frame 0 of
+   the clip.
+
 ## Configuration
 
 | Setting | Default | Where |

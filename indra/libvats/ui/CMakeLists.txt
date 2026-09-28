@@ -1,5 +1,5 @@
 # vats_ui: every panel, menu, tool window, dialog and document operation of the editor, shared by the
-# standalone app and the SoapStorm viewer. It talks to its host through ui::Host (host.h) and never to
+# standalone app and an SL viewer. It talks to its host through ui::Host (host.h) and never to
 # SDL or a renderer; see docs/spec/09 section 0b.
 # A viewer build (tools/sync-to-viewer.sh) sets VATS_VIEWER and brings its own imgui target (the same
 # release, vendored in the viewer tree, OpenGL 3 backend included).
@@ -28,27 +28,37 @@ endif()
 
 add_library(vats_ui STATIC
     actors_ui.cpp
+    sit_export_ui.cpp
     app.cpp
     audio_track.cpp
     bodies.cpp
     context_menu.cpp
     dynamics_ui.cpp
+    idle_ui.cpp
+    overlap_ui.cpp
     firewall.cpp
     gizmo.cpp
+    curve_filter_ui.cpp
     graph_editor.cpp
     hand_poser.cpp
     file_library_ui.cpp
     help_ui.cpp
     icon_button.cpp
     inventory.cpp
+    light_ui.cpp
+    lint_ui.cpp
     loop_ui.cpp
-    migrate.cpp
+    loop_assist_ui.cpp
+    pose_tools_ui.cpp
     mocap_ui.cpp
     modal.cpp
     panels.cpp
     props.cpp
     ragdoll_ui.cpp
+    face_ui.cpp
+    tween_ui.cpp
     retarget_ui.cpp
+    sl_preview_ui.cpp
     settings.cpp
     theme.cpp
     udp.cpp
@@ -56,6 +66,9 @@ add_library(vats_ui STATIC
     viewport.cpp
     windows.cpp)
 add_library(vats::ui ALIAS vats_ui)
+if(VATS_LEGACY_IMPORT)
+    target_sources(vats_ui PRIVATE migrate.cpp)  # the first-run legacy import (core/CMakeLists.txt)
+endif()
 target_include_directories(vats_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(vats_ui PUBLIC vats::core imgui)
 if(WIN32)

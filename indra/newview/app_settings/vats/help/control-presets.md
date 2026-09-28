@@ -16,6 +16,23 @@ mouse controls of the new preset. **Help → Controls** lists the keys of the ac
 
 To try a preset for one session, start VATs with `--preset`; see [[Command line]].
 
+![The status bar with the Blender preset: Middle drag: orbit, Shift+middle: pan, Ctrl+middle: zoom, Wheel: zoom](images/control-presets/status-bar.png)
+*The right end of the status bar with the Blender preset. Each preset shows its own line here.*
+
+### Worked example: switch to Blender and key a frame
+
+[Open the example](example:first-wave.vat) and select **mElbowRight**, then:
+
+1. Press **Ctrl+,** and pick **Blender** under **Navigation & hotkeys**. The status bar reads
+   `Controls: Blender` on the left, and on the right
+   `Middle drag: orbit   Shift+middle: pan   Ctrl+middle: zoom   Wheel: zoom`.
+2. Press **Up**: in Blender, **Up** is **Next Key**, so the frame box reads **Frame 10**. (In
+   Industry, **Up** selects the parent bone and **.** is **Next Key**.)
+3. Press **I**, Blender's **Set Key**. The status bar says `Keyed 1 item(s) at frame 10`.
+4. Press **Ctrl+Z** to take the key back, then pick **Industry (Maya-style)** again in Preferences.
+   The status bar reads `Controls: Industry (Maya-style)` and its right end shows
+   `Alt + drag: left orbit, middle pan, right zoom    Wheel: zoom`.
+
 ### Mouse, per preset
 
 | | Industry (Maya-style) | Blender | QAvimator | Second Life |

@@ -492,6 +492,40 @@ void smooth_source(SourceAnim& src, int radius) {
         }
 }
 
+// MC-4a: filters every curve of the take (frames 0..last, keyed on each frame) and reports its shake before
+// and after, rotation in degrees/s^3.
+std::vector<std::string> filter_take(Clip& take, int last, const FilterSettings& s) {
+    std::vector<CurveId> ids;
+    std::vector<std::string> tracks;
+    for (auto& [name, tr] : take.curves) {
+        tracks.push_back(name);
+        for (auto& [ch, c] : tr) ids.push_back({name, ch});
+    }
+    const std::vector<JointShake> before = shake_scores(take, tracks, 0, last);
+    filter_curves(take, ids, 0, last, s);
+    const std::vector<JointShake> after = shake_scores(take, tracks, 0, last);
+    if (before.empty() || last < 3) return {};
+    double b = 0, a = 0;
+    std::vector<size_t> order;
+    for (size_t i = 0; i < before.size(); ++i) b += before[i].rot, a += after[i].rot, order.push_back(i);
+    std::sort(order.begin(), order.end(), [&](size_t x, size_t y) { return before[x].rot > before[y].rot; });
+    char buf[160];
+    std::snprintf(buf, sizeof buf, "%s filter: shake %.0f -> %.0f deg/s3 (mean of %zu bones)", filter_name(s.kind),
+                  b / double(before.size()), a / double(before.size()), before.size());
+    std::vector<std::string> out{buf};
+    for (size_t k = 0; k < order.size() && k < 3; ++k) {
+        std::snprintf(buf, sizeof buf, "shake of %s: %.0f -> %.0f deg/s3", before[order[k]].track.c_str(),
+                      before[order[k]].rot, after[order[k]].rot);
+        out.push_back(buf);
+    }
+    for (size_t i = 0; i < before.size(); ++i)
+        if (before[i].track == "mPelvis" && before[i].pos > 0) {
+            std::snprintf(buf, sizeof buf, "shake of the hips' travel: %.2f -> %.2f m/s3", before[i].pos, after[i].pos);
+            out.push_back(buf);
+        }
+    return out;
+}
+
 }  // namespace
 
 Clip live_pose(const Skeleton& skel, const RigTable& table, const VmcState& rest, const VmcState& now,
@@ -575,7 +609,7 @@ std::vector<std::string> merge_recording(Clip& clip, const Skeleton& skel, const
     if (!frames.front().bones.empty()) {
         // A take starts where the performer stands as it starts, unless they captured a rest pose to measure from.
         SourceAnim src = vmc_source(rest, frames, fps, rest.captured ? &rest : &frames.front());
-        smooth_source(src, cleanup.smooth);
+        if (!cleanup.use_filter) smooth_source(src, cleanup.smooth);
         BoneMap map;
         apply_rig_table(table, src, map);
         if (!map.count("mPelvis") && !has_face) return {"the sender's bones do not match the humanoid table (no hips)"};
@@ -591,7 +625,7 @@ std::vector<std::string> merge_recording(Clip& clip, const Skeleton& skel, const
     // Face (MC-5): one key per frame on every table bone, then the same reduction as the body.
     if (has_face) {
         // Smoothing averages each shape's weight with its neighbours, as it does the body's rotations.
-        const int r = std::max(cleanup.smooth, 0), n = int(frames.size());
+        const int r = cleanup.use_filter ? 0 : std::max(cleanup.smooth, 0), n = int(frames.size());
         for (int i = 0; i < n; ++i) {
             VmcState f = frames[i];
             if (r > 0) {
@@ -617,6 +651,9 @@ std::vector<std::string> merge_recording(Clip& clip, const Skeleton& skel, const
                 for (const char* ch : kPosChannels) t->second.erase(ch);
         }
     }
+    std::vector<std::string> shake;
+    res.clip.fps = fps;  // a face-only take has no retarget to set it
+    if (cleanup.use_filter) shake = filter_take(res.clip, int(frames.size()) - 1, cleanup.filter);
     if (cleanup.reduce) reduce_clip_keys(res.clip, cleanup.rot_deg, cleanup.pos_m);
 
     const int last = from + int(frames.size()) - 1;
@@ -661,6 +698,7 @@ std::vector<std::string> merge_recording(Clip& clip, const Skeleton& skel, const
     std::snprintf(buf, sizeof buf, "recorded %zu frames (%.2f s) into %d bones, frames %d to %d", frames.size(),
                   (frames.size() - 1) / double(fps), tracks, from, last);
     report.push_back(buf);
+    report.insert(report.end(), shake.begin(), shake.end());
     report.insert(report.end(), locked.begin(), locked.end());
     for (auto& r : res.report)
         if (r.find("no source bone") == std::string::npos) report.push_back(r);

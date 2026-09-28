@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "vats/clip.h"
+#include "vats/curve_filter.h"
 #include "vats/facecap.h"
 #include "vats/retarget.h"
 
@@ -107,7 +108,9 @@ struct MocapRecorder {
 // --- Writing keys (MC-3, MC-4) ------------------------------------------------------------------
 
 struct MocapCleanup {
-    int smooth = 0;          // box filter radius in frames on the source rotations; 0 = off
+    int smooth = 0;          // box filter radius in frames on the source rotations; 0 = off (old settings)
+    bool use_filter = false; // MC-4a: filter the take's curves with `filter` instead (smooth is then ignored)
+    FilterSettings filter;
     bool reduce = true;      // key reduction after retargeting
     double rot_deg = 0.5, pos_m = 0.002;
     int blend = 4;           // frames at each punch edge eased from the old animation into the take
@@ -117,7 +120,8 @@ struct MocapCleanup {
 // Retargets the recorded frames with table and writes them into clip from frame `from`, replacing
 // keys in that range. only_tracks non-empty limits it to those bones; other tracks are untouched.
 // mPelvis's offset is the hips' travel from rest when rest.captured, else from where the first frame
-// stands (vmc_source). Returns report lines.
+// stands (vmc_source). With cleanup.use_filter the report gives the take's shake (jerk RMS) before and after
+// the filter: the mean over its bones and the three shakiest. Returns report lines.
 std::vector<std::string> merge_recording(Clip& clip, const Skeleton& skel, const RigTable& table, const VmcState& rest,
                                          const std::vector<VmcState>& frames, int from,
                                          const std::vector<std::string>& only_tracks, const MocapCleanup& cleanup,

@@ -42,6 +42,9 @@ Both need the pinned point selected, at a frame the pin covers; otherwise they a
 - In the [[Graph editor]], a pin is a band over the frames it covers. Drag its start or its end to change when the pin starts or is released. On the timeline, a pinned point's offset keys show as diamonds.
 - While a point is pinned, moving it keys its **offset** from the pin instead of breaking the pin. **Properties → Bone** shows "These values offset the pin." The offset curves appear in the graph as *bone* **(pin)**.
 
+![The Bone section of Properties for a pinned wrist: Pinned in the world from frame 0, These values offset the pin, Rotation and Offset fields](images/hold-and-bind/pinned-properties.png)
+*A held wrist in **Properties**: the blue line names the pin, and the fields below it edit the offset from it.*
+
 ### Pinning hands and feet
 
 A pin on the end of a limb holds it through IK: the shoulder and elbow, or the hip and knee, bend to keep the hand or foot on its target, and no bone is stretched or slid. The limb keeps bending the way it was bent when you pinned it. A limb already in IK is held the same way; the pin takes over its target while it lasts.
@@ -59,6 +62,23 @@ If the target moves further away than the limb can reach, the limb straightens a
 5. Press **Bake**.
 
 Use it when you want ordinary keys that you can then edit by hand; delete keys where the point should fly free.
+
+### Worked example: a hand on a table while the body leans
+
+[Open the example](example:hold-hand-on-table.vat): 30 frames. At frame 0 the avatar stands with the right hand flat on a table at its side, and **mWristRight** is held in the world from frame 0. Over the 30 frames the body leans towards the table: **mTorso** turns from 0° to 20° on X and **mPelvis** slides 5 cm that way and 2 cm down. Nothing on the right arm is keyed after frame 0.
+
+![Frame 0: the avatar standing, the right hand resting flat at hip height beside the body](images/hold-and-bind/hand-on-table-0.png)
+*Frame 0: the hand rests on the table.*
+
+![Frame 30: the torso leans towards the hand, which is still on the same spot, and the elbow has bent further](images/hold-and-bind/hand-on-table-30.png)
+*Frame 30: the body has leaned, the hand has not moved, and the elbow has bent to allow it.*
+
+1. Click **mWristRight** in the **Bones** tab: it is light blue with **[pinned]** after its name, and **Properties → Bone** says **Pinned in the world from frame 0**.
+2. Scrub from 0 to 30. The hand stays on its spot while the shoulder comes closer to it; the elbow bends more and more. Click **mTorso** at frame 30: **Rotation** reads `20.0°`, `0.0°`, `0.0°`. Click **mPelvis**: **Offset (m)** reads `0.000`, `-0.050`, `-0.020`.
+3. Go to frame 15, click **mWristRight** again, and choose **Tools → Release from Here**. The status bar says "mWristRight follows its own bone again from frame 15". Scrub to 30: the hand now leans along with the body, because from frame 15 the arm follows its rotation keys, which were set at the release to the pose it had then.
+4. **Edit → Undo** restores the hold to the end.
+
+To make the same thing yourself, pose the hand on the table at the first frame, select **mWristRight**, choose **Tools → Hold in World from Here**, then animate the torso and hips; the arm looks after itself.
 
 ## Tips and tricks
 

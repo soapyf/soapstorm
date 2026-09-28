@@ -1,7 +1,7 @@
 # Project library
 
 The **Projects** and **Animations** sections at the top of the **Inventory** tab list your project files
-(`.vat` and Hexton `.hxanim`) and SL animation files (`.anim`) from a library folder in VATs' data
+(`.vat`) and SL animation files (`.anim`) from a library folder in VATs' data
 folder and from any other folders you add. Open a project or an animation from there, insert an animation
 into the open project, or rename, duplicate and delete the files.
 
@@ -10,6 +10,9 @@ into the open project, or rename, duplicate and delete the files.
 ## Usage
 
 ### What is listed
+
+![The top of the Inventory: the filter box, the Projects section with Save to Library... and Add Folder..., and the Animations section, each with an empty Library group](images/project-library/inventory.png)
+*The two sections on a new installation. Each **Library** group says what fills it.*
 
 Each section has groups, which fold open and closed:
 
@@ -76,6 +79,22 @@ Renaming the open project's file keeps it open under the new name.
   replacing a file of the same name. In the SoapStorm viewer the same tick also keeps a copy of each
   **Upload Animation...**. The tick is saved with the project.
 
+### Worked example: put a project in the library and take it out again
+
+[Open the example](example:first-wave.vat), the wave from [[First steps]], then:
+
+1. **File → Save to Library...** opens the **Save to Library** prompt with `Animation` filled in (the
+   copy is untitled). Type `first-wave` and press **Save**. The status bar says `Saved first-wave.vat`.
+2. Open the **Inventory** tab. **Projects → Library (1)** lists **first-wave** with the line
+   `1.00 s, 30 fps, priority 3, loops, 1 actor` and a thumbnail of its middle frame. Hover it for
+   the full path, `library/Projects/first-wave.vat` in the data folder.
+3. Right-click it and choose **Duplicate**: **first-wave copy** appears beside it and the group
+   reads **Library (2)**.
+4. Right-click each and choose **Delete**, answering `Delete "first-wave copy.vat"? This cannot be
+   undone.` with **Delete**. The status bar says `Deleted first-wave copy`, and once both are gone the
+   group reads **Library (0)** again and shows its empty hint. The open project stays open; **Save**
+   would write its file again.
+
 ### Adding folders
 
 **Add Folder...** in either section lists another folder's files there too, for example your export folder.
@@ -111,7 +130,7 @@ time has changed.
 
 ### A file is missing from the list
 
-Only `.vat`, `.hxanim` and `.anim` files directly in a listed folder are shown. Files copied in while VATs
+Only `.vat` and `.anim` files directly in a listed folder are shown. Files copied in while VATs
 was open appear when you click into the **Inventory**.
 
 ### "Cannot read:" on an item

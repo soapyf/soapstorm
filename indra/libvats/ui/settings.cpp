@@ -72,10 +72,15 @@ void Settings::load(const std::string& file) {
     boolean("bvh_reduce", bvh_reduce);
     boolean("viewer_reset_joints", viewer_reset_joints);
     boolean("viewer_show_others", viewer_show_others);
+    boolean("mirror_centre", mirror_centre);
+    boolean("scratch_existing_only", scratch_existing_only);
+    str("scratch_scrub", scratch_scrub);
     boolean("show_graph", show_graph);
     str("theme", theme);
     boolean("show_welcome", show_welcome);
+#ifdef VATS_LEGACY_IMPORT
     boolean("migration_offered", migration_offered);
+#endif
     str("body", body);
     str("mesh_body", mesh_body);
     if (auto* cams = j.find("cameras"); cams && cams->is_array())
@@ -94,7 +99,8 @@ void Settings::load(const std::string& file) {
     if (auto* r = j.find("recent"); r && r->is_array())
         for (auto& e : r->arr)
             if (e.is_string() && recent.size() < 10) recent.push_back(e.str);
-    for (auto [key, list] : {std::pair{"project_folders", &project_folders}, std::pair{"anim_folders", &anim_folders}})
+    for (auto [key, list] : {std::pair{"project_folders", &project_folders}, std::pair{"anim_folders", &anim_folders},
+                             std::pair{"check_off", &check_off}})
         if (auto* r = j.find(key); r && r->is_array())
             for (auto& e : r->arr)
                 if (e.is_string()) list->push_back(e.str);
@@ -112,10 +118,15 @@ void Settings::save(const std::string& file) const {
     j.set("bvh_reduce", bvh_reduce);
     j.set("viewer_reset_joints", viewer_reset_joints);
     j.set("viewer_show_others", viewer_show_others);
+    j.set("mirror_centre", mirror_centre);
+    j.set("scratch_existing_only", scratch_existing_only);
+    j.set("scratch_scrub", scratch_scrub);
     j.set("show_graph", show_graph);
     j.set("theme", theme);
     j.set("show_welcome", show_welcome);
+#ifdef VATS_LEGACY_IMPORT
     j.set("migration_offered", migration_offered);
+#endif
     j.set("body", body);
     j.set("mesh_body", mesh_body);
     Json cams = Json::array();
@@ -134,7 +145,8 @@ void Settings::save(const std::string& file) const {
     Json r = Json::array();
     for (auto& f : recent) r.push(f);
     j.set("recent", r);
-    for (auto [key, list] : {std::pair{"project_folders", &project_folders}, std::pair{"anim_folders", &anim_folders}}) {
+    for (auto [key, list] : {std::pair{"project_folders", &project_folders}, std::pair{"anim_folders", &anim_folders},
+                             std::pair{"check_off", &check_off}}) {
         Json a = Json::array();
         for (auto& f : *list) a.push(f);
         j.set(key, a);

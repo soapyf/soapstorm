@@ -6,6 +6,13 @@ IK (inverse kinematics) poses a limb by its end: place the hand or foot and the 
 
 ## Usage
 
+### The chain, the target and the pole
+
+![A two-bone chain: root joint, mid joint and end, a wire cube target at the end, a diamond pole under the mid joint, and a dashed arc for the limb's reach](images/ik/two-bone-chain.png)
+*Two bones, one target, one pole.*
+
+An IK limb is a chain of two bones between three joints. The **root** (the shoulder or hip) stays where the body puts it. The **end** (the wrist or ankle) goes to the **target**: move the target and the end follows; turn it and the hand or foot turns. The **mid joint** (the elbow or knee) bends about its hinge exactly as far as the target needs, and it points at the **pole**, so the pole decides which way the limb bends. The limb can reach anywhere up to the two bone lengths from the root; a target further away makes it straighten and point at the target, without stretching.
+
 ### Limbs with IK
 
 | Limb | Bones | Pole |
@@ -26,6 +33,9 @@ The tail and the face have no IK.
 3. A **target** box appears at the end of the limb, and for limbs with a pole, a small **pole** marker that shows which way the elbow or knee points. The target is selected.
 4. With the **Move** tool, drag the target to place the hand or foot; with **Rotate**, turn it. Move the pole to swing the elbow or knee.
 
+![The right arm in IK: a red wire cube on the wrist and a small red diamond for the pole](images/ik/target-and-pole.png)
+*The right arm in IK: the target cube on the wrist, and the pole diamond joined to the elbow by a dashed line.*
+
 **Double-clicking** a bone of a limb also switches it. The status bar confirms, for example "Left Arm is now IK from frame 12".
 
 ### Switching back to FK
@@ -40,9 +50,21 @@ Moving the target or pole keys it at the current frame, like any bone. **S** (Se
 
 The **Bones** tab lists every limb that uses IK under **IK Controls**, as **Left Arm IK** and **Left Arm Pole** and so on. Click one to select it. A limb whose IK is off at the current frame is marked **(FK)** and drawn dimmer.
 
+![The IK Controls group at the top of the Bones tab, listing Right Arm IK and Right Arm Pole](images/ik/ik-controls.png)
+*The **IK Controls** group of the **Bones** tab.*
+
 ### IK in the graph
 
 Select a target to see its curves in the [[Graph editor]]: **IK / FK Blend**, which records where the limb switches between IK and FK, and the target's **Translate** and **Rotate** channels. Select a pole to see its **Pole X/Y/Z** channels.
+
+### Worked example: reaching with the right arm
+
+[Open the example](example:ik-reach.vat): the right arm is in IK from frame 0, with the upper arm out to the side and the forearm up. The target is keyed at frame 0 and again at frame 24, 12 cm further in towards the head and 8 cm higher. The **Bones** tab lists **Right Arm IK** and **Right Arm Pole** under **IK Controls**.
+
+1. Scrub from 0 to 24: the hand follows the target and the elbow bends further to let it. The shoulder and elbow have no keys after frame 0; the IK poses them.
+2. Go to frame 12, click **mElbowRight**, and press **K**. The status bar says "Right Arm is now FK from frame 12" and the target cube disappears.
+3. Scrub to 24: the hand no longer moves. From frame 12 on the arm follows its rotation keys, and the switch keyed the pose it had at that moment, so there was no jump.
+4. **Edit → Undo** puts the arm back in IK.
 
 ## Tips and tricks
 

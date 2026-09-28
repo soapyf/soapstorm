@@ -4,6 +4,7 @@
 // Spec: docs/spec/06 sections 4.4, 4.9, 4.10 and 5.
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <sstream>
 
 #include "vats_version.h"
@@ -146,6 +147,20 @@ void App::draw_preferences() {
     if (ImGui::Checkbox("Reduce keys after import", &settings_.bvh_reduce)) save_settings();
     ImGui::SetItemTooltip("Drops keys that linear playback reproduces within 0.05 degrees and 0.5 mm. "
                           "Off keeps a key on every frame.");
+    row("Posing");  // spec 08 PT
+    if (ImGui::Checkbox("Mirror centre bones in place", &settings_.mirror_centre)) save_settings();
+    ImGui::SetItemTooltip("With Mirror on, posing the spine or head keeps it symmetric: a nod stays, a turn or lean is "
+                          "cancelled. Off: centre bones pose as usual.");
+    ImGui::SetCursorPosX(label_w);
+    if (ImGui::Checkbox("Only key channels that already have keys", &settings_.scratch_existing_only)) save_settings();
+    ImGui::SetItemTooltip("Keeping a scratch pose keys only the channels that were animated before it");
+    ImGui::SetCursorPosX(label_w);
+    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10);
+    const char* scrub[] = {"ask", "keep", "discard"};
+    const char* scrub_names[] = {"Ask", "Keep as keys", "Discard"};
+    int sc = 0;
+    for (int i = 0; i < 3; ++i) sc = settings_.scratch_scrub == scrub[i] ? i : sc;
+    if (ImGui::Combo("Leaving a scratch pose", &sc, scrub_names, 3)) settings_.scratch_scrub = scrub[sc], save_settings();
     row("Start screen");
     if (ImGui::Button("Show Now")) {
         show_prefs_ = false;
@@ -404,6 +419,7 @@ void App::draw_export_section() {
         a.push(double(std::max(pos_mm, 0.f)) / 1000);
         set("reduce", a);
     }
+    draw_upload_meter();  // UM: live size, what costs the most, Fit to 250 KB (sl_preview_ui.cpp)
     std::string folder = json_str(ex, "folder");
     label("Folder");
     ImGui::TextDisabled("%s", folder.empty() ? "(asks the first time)" : folder.c_str());
@@ -453,6 +469,7 @@ void App::draw_export_section() {
 // The viewer (spec 09 section 4): every file Export would write (each actor, and the mirrored copy when "both"
 // is on), under the export names, uploaded one after another; the host confirms the price of each.
 void App::upload_now() {
+    ScratchAside aside(*this);  // PT-2: the document, not a scratch pose
     if (!upload_queue_.empty()) return status("An upload is already waiting for its confirmation");
     const Json& ex = doc_.clip().export_settings;
     ExportNaming naming{json_str(ex, "name"), json_int(ex, "number", 1), json_str(ex, "side"),
@@ -514,6 +531,7 @@ void App::upload_next() {
 }
 
 void App::export_now(bool bvh, bool all_bones) {
+    ScratchAside aside(*this);  // PT-2: the document, not a scratch pose
     // BVH: say what the format will lose before anything is written (IO-29).
     if (bvh && !bvh_confirmed_) {
         BvhExportOptions opt;
@@ -623,7 +641,8 @@ void App::draw_export_dialog() {
     }
     ImGui::Separator();
     draw_export_section();
-    if (ImGui::IsKeyPressed(ImGuiKey_Escape)) show_export_dialog_ = false;
+    draw_message_popup(true);
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape) && message_title_.empty()) show_export_dialog_ = false;
     if (!show_export_dialog_) ImGui::CloseCurrentPopup();
     ImGui::EndPopup();
 }
@@ -764,6 +783,22 @@ void App::draw_recovery() {
     if (ImGui::Button("Later") || ImGui::IsKeyPressed(ImGuiKey_Escape)) recoverable_.clear();  // kept for next launch
     if (recoverable_.empty()) ImGui::CloseCurrentPopup();
     ImGui::EndPopup();
+}
+
+bool App::show_window(const std::string& name) {
+    static const std::map<std::string, bool App::*> windows = {
+        {"graph", &App::show_graph_},       {"mocap", &App::show_mocap_},         {"actors", &App::show_actors_},
+        {"dynamics", &App::show_dynamics_}, {"ragdoll", &App::show_ragdoll_},     {"preferences", &App::show_prefs_},
+        {"hands", &App::show_hands_},       {"export", &App::show_export_dialog_}, {"controls", &App::show_help_},
+        {"about", &App::show_about_}};
+    static const std::map<std::string, const char*> panels = {
+        {"graph", "Graph"}, {"properties", "Properties"}, {"timeline", "Timeline"}, {"bones", "Bones"}, {"inventory", "Inventory"}};
+    bool known = false;
+    if (auto w = windows.find(name); w != windows.end()) this->*(w->second) = true, known = true;
+    if (auto p = panels.find(name); p != panels.end()) pending_tab_ = p->second, known = true;  // docked: to the front
+    if (name == "help") open_help(), known = true;
+    if (name == "insert-frames" || name == "stretch-range") time_prompt_ = name == "insert-frames" ? 1 : 2, known = true;
+    return known;
 }
 
 }  // namespace vats

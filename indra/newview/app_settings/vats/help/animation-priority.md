@@ -29,6 +29,27 @@ goes into the exported `.anim` only; BVH cannot carry it.
 
 Use this to let a hand or the head win over other animations while the rest of the body stays low.
 
+![The Properties panel with mWristRight selected: Bone → Priority reads 5, Animation → Priority reads 2](images/animation-priority/bone-priority.png)
+*A hand hold: the clip is priority 2, the wrist alone is 5.*
+
+### How priorities stack per bone
+
+Second Life decides bone by bone, not animation by animation. For each bone, every animation that has a
+record for it is a candidate at its own priority for that bone: the clip's priority, or the bone's own
+where one is set. The candidate with the highest priority moves the bone; the others are ignored on that
+bone only, and still play on the bones where they win.
+
+![Three animations stacked: an AO stand at 2 and a dance at 4 on every bone, and a hand hold at 2 with the wrist at 5; per bone, the dance wins everywhere except the wrist](images/animation-priority/priority-stacking.png)
+*The dance takes the body, including the hold's elbow; the hold keeps only the wrist, where its 5 beats the dance's 4.*
+
+Two things follow from this:
+
+- A low-priority clip can still take one bone. The hold above is priority 2, lower than the dance, but
+  its wrist wins because that one bone is set to 5.
+- Key only the bones you mean to take. Had the hold keyed the shoulder as well, the shoulder would have
+  been a losing candidate against the dance, but a winning one against the AO whenever the dance
+  stopped.
+
 ### Know which bones an animation claims
 
 An `.anim` claims every bone that has a record in the file, for the whole length of the animation, at
@@ -67,6 +88,20 @@ writes the values unchanged; a BVH upload in the viewer would scale both down to
 `express_repulsed`, `express_sad`, `express_shrug`, `express_smile`, `express_surprise`,
 `express_tongue_out`, `express_toothsmile`, `express_wink`, `express_worry`. The misspelling
 `embarrased` is SL's own name and must stay.
+
+## Worked example: a hand hold that wins
+
+[Open the example](example:priority-hand.vat), the hold from the picture above: a one-second loop with
+keys on `mElbowRight` and `mWristRight` only.
+
+1. **Properties → Animation → Priority** reads 2.
+2. Select `mWristRight`: **Properties → Bone → Priority** reads 5. Select `mElbowRight`: it reads
+   **Clip (2)**, so the elbow follows the clip.
+3. Press **Ctrl+E**, then **Export SL .anim**. The status bar says "2 bones, 1.00 s, priority 2, 293
+   bytes": only the two keyed bones are in the file, at the clip's priority 2, with the wrist's record
+   carrying its own 5 (see [[Anim format#Joint records]]).
+4. Worn with a priority-4 dance, this file moves the wrist and nothing else. Set the wrist back to
+   **Clip (2)** and export again: now the dance takes the wrist too.
 
 ## Troubleshooting
 

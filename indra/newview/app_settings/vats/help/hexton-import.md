@@ -62,7 +62,8 @@ VATs asks once. A message lists what was imported, or says `Nothing new to impor
 ### VATs did not offer to import
 
 The prompt appears only on the first start, and only when the data folder exists at the path above. If
-you pressed **Don't import**, VATs does not ask again.
+you pressed **Don't import**, VATs does not ask again. Deleting `settings.json` makes the next start a
+first run, so the import is offered again.
 
 ### The theme changed after the import
 

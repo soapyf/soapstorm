@@ -23,6 +23,9 @@ constexpr double kDegPerPx = 0.6;
 void App::draw_hand_poser() {
     if (!show_hands_) return;
     const float s = ImGui::GetStyle().FontScaleDpi;
+    // Placed at the viewport's bottom-right corner; on the first frame the viewport has not been docked to size yet
+    // (--window hands), so wait until that corner leaves room for the window.
+    if (viewport_max_.x < 360 * s || viewport_max_.y < 190 * s) return;
     ImGui::SetNextWindowSize(ImVec2(0, 0));
     ImGui::SetNextWindowPos(ImVec2(viewport_max_.x - 360 * s, viewport_max_.y - 190 * s), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Hands", &show_hands_, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoResize |
@@ -75,8 +78,10 @@ void App::draw_hand_poser() {
             std::vector<std::pair<std::string, double>> fingers;
             bones_of(hover_side, hover_dot, fingers);
             edit("Reset Fingers", [&](Clip& c) {
+                std::vector<std::string> bones;
                 for (auto& f : fingers)
-                    for (int n = 1; n <= 3; ++n) key_euler(c, segment(f.first, n), frame_, {});
+                    for (int n = 1; n <= 3; ++n) bones.push_back(segment(f.first, n)), key_euler(c, bones.back(), frame_, {});
+                mirror_edit(bones);  // PT-1
             });
             hand_drag_dot_ = -1;
         } else {
@@ -104,6 +109,7 @@ void App::draw_hand_poser() {
         clip = hand_start_clip_;  // absolute from the press, so the drag never drifts
         if (dx == 0 && dy == 0) fingers.clear();  // a click that has not moved yet keys nothing
         const Vec3 side_axis = hand_drag_side_ == 0 ? Vec3{1, 0, 0} : Vec3{-1, 0, 0};
+        std::vector<std::string> keyed;  // PT-1
         for (auto& [pattern, swing_weight] : fingers) {
             bool thumb = pattern.find("Thumb") != std::string::npos;
             Vec3 palm = thumb ? Vec3{-0.7, 0, -1}.normalized() : Vec3{0, 0, -1};
@@ -118,8 +124,10 @@ void App::draw_hand_poser() {
                 if (n == 1 && dx != 0)
                     q = Quat::axis_angle(dir.cross(side_axis), dx * kDegPerPx * swing_weight * kDegToRad) * q;
                 key_rotation(clip, bone, frame_, q);
+                keyed.push_back(bone);
             }
         }
+        mirror_edit(keyed);
         ImVec2 p = dot_pos(hand_drag_side_, hand_drag_dot_);
         dl->AddLine(p, ImVec2(p.x + float(dx), p.y + float(dy)), IM_COL32(255, 222, 70, 200), 2);
     }

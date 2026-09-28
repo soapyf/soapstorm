@@ -11,8 +11,10 @@
 
 #include "imgui.h"
 #include "settings.h"
+#include "vats/curve_filter.h"
 #include "vats/curve_ops.h"
 #include "vats/history.h"
+#include "vats/pose_tools.h"
 #include "vats/rig.h"
 #include "vats/skeleton.h"
 
@@ -36,6 +38,11 @@ struct GraphContext {
     std::function<std::string(const char* action_id)> key_name;
 };
 
+// The filter settings shared by Filter Curves and the motion capture clean-up (curve_filter_ui.cpp). label lays
+// out a row's label and sets the next item's width. True when a value changed.
+bool filter_kind_ui(FilterKind& k);
+bool filter_params_ui(FilterSettings& s, const std::function<void(const char*)>& label);
+
 class GraphEditor {
 public:
     enum class Mode { Selected, AllAnimated };
@@ -57,6 +64,13 @@ public:
     void clip_replaced() { selection_.clear(), active_ = -1, pin_sel_ = -1, drag_ = Drag::None; }
     // The frame span of the selected keys, rounded to whole frames; false unless it spans a frame.
     bool key_span(const Clip& clip, double& a, double& b) const;
+    // Filter Curves (MC-4a): while its dialog is open the clip is the live preview and this is the clip as it
+    // was (for the ghost); nullptr otherwise.
+    const Clip* filter_original() const { return filter_open_ ? &filter_before_ : nullptr; }
+    // PT-4: the buffer curves, drawn in grey until cleared. Tools that rewrite curves wholesale (Euler Filter,
+    // Dynamics bake, the Loop tools) snapshot first, so the curves before them stay in view.
+    void snapshot_curves(const Clip& clip) { buffer_.snapshot(clip); }
+    void clear_snapshot() { buffer_.clear(); }  // New and Open: the grey curves were the old document's
 
 private:
     struct Channel {
@@ -78,7 +92,11 @@ private:
     void draw_toolbar(GraphContext& ctx);
     void draw_channel_list(GraphContext& ctx);
     void draw_canvas(GraphContext& ctx);
+    void draw_ease_menu(GraphContext& ctx);  // spec 08 TW-3, in tween_ui.cpp
     void edit(GraphContext& ctx, const char* label, const std::function<void(Clip&)>& change);
+    void open_filter(GraphContext& ctx);  // curve_filter_ui.cpp
+    void preview_filter(GraphContext& ctx);
+    void draw_filter_dialog(GraphContext& ctx);
 
     const FCurve* curve(const Clip& clip, const Channel& c) const;
     std::vector<int> shown_channels() const;
@@ -121,6 +139,16 @@ private:
     bool pin_end_ = false;       // dragging the release marker rather than the start
     int pin_frame_ = 0;          // where the dragged marker is
     bool escape_used_ = false;
+
+    // Filter Curves: the shown curves over filter_from_..filter_to_; the history step stays open meanwhile.
+    bool filter_open_ = false;
+    Clip filter_before_;
+    std::vector<CurveId> filter_ids_;
+    int filter_from_ = 0, filter_to_ = 0;
+    float filter_dim_ = 0;  // the style's modal dimming, put back on close
+    FilterSettings filter_;
+    std::vector<JointShake> filter_shake_[2];  // before, after
+    CurveBuffer buffer_;
 };
 
 }  // namespace vats

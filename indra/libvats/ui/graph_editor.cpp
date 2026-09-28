@@ -276,6 +276,7 @@ void GraphEditor::draw(GraphContext& ctx) {
     ImGui::BeginChild("##canvas", ImVec2(0, 0), 0, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     draw_canvas(ctx);
     ImGui::EndChild();
+    draw_filter_dialog(ctx);
     if (fit_pending_ && drag_ == Drag::None) {  // deferred so the new channel set is measured (pitfall 13)
         fit_values(ctx);
         fit_pending_ = false;
@@ -346,33 +347,63 @@ void GraphEditor::draw_toolbar(GraphContext& ctx) {
             edit(ctx, t.label, [&](Clip& c) { apply_tangent(c, sel, t.t); });
         }
     }
+    place(ImGui::CalcTextSize("Ease").x + ImGui::GetStyle().FramePadding.x * 2);
+    draw_ease_menu(ctx);
     sep();
     if (button("fit_values", icon::kFitValues, "Fit Values: fit the value range to the visible curves")) fit_values(ctx);
-    if (button("euler_filter", icon::kEulerFilter, "Euler Filter: remove 360-degree jumps from rotation curves")) {
-        std::vector<std::string> tracks;
-        for (int c : shown_channels())
-            if (channels_[c].channel.rfind("rot_", 0) == 0 &&
-                std::find(tracks.begin(), tracks.end(), channels_[c].track) == tracks.end())
-                tracks.push_back(channels_[c].track);
-        if (tracks.empty()) {
-            ctx.status("Select a bone with rotation curves first");
-        } else {
-            int n = 0;
-            edit(ctx, "Euler Filter", [&](Clip& c) { n = euler_filter(c, tracks); });
-            ctx.status(n ? "Euler filter fixed " + std::to_string(n) + " bone(s)" : "Rotation curves are already clean");
-        }
-    }
-    if (button("flip_time", icon::kFlipTime, "Flip Time: mirror the selected keys in time") && need_keys()) {
-        auto sel = selection_;
-        edit(ctx, "Flip Time", [&](Clip& c) { flip_time(c, sel, snap_); });
-        selection_ = sel;
-    }
-    if (button("flip_values", icon::kFlipValues, "Flip Values: mirror the selected keys across zero") && need_keys()) {
-        auto sel = selection_;
-        edit(ctx, "Flip Values", [&](Clip& c) { flip_values(c, sel); });
-        selection_ = sel;
-    }
     if (button("delete", icon::kDelete, "Delete (Delete): delete the selected keys")) delete_selected(ctx);
+    // The less-used tools in one dropdown, so the toolbar stays one row at 1200 px (08 UI).
+    {
+        const float w = ImGui::CalcTextSize("More").x + ImGui::GetFrameHeight() + ImGui::GetStyle().FramePadding.x * 2;
+        place(w);
+        ImGui::SetNextItemWidth(w);
+        if (ImGui::BeginCombo("##more", "More", ImGuiComboFlags_HeightLargest)) {
+            if (menu_item_icon(icon::kEulerFilter, "Euler Filter")) {
+                std::vector<std::string> tracks;
+                for (int c : shown_channels())
+                    if (channels_[c].channel.rfind("rot_", 0) == 0 &&
+                        std::find(tracks.begin(), tracks.end(), channels_[c].track) == tracks.end())
+                        tracks.push_back(channels_[c].track);
+                if (tracks.empty()) {
+                    ctx.status("Select a bone with rotation curves first");
+                } else {
+                    int n = 0;
+                    snapshot_curves(ctx.clip);  // PT-4
+                    edit(ctx, "Euler Filter", [&](Clip& c) { n = euler_filter(c, tracks); });
+                    ctx.status(n ? "Euler filter fixed " + std::to_string(n) + " bone(s)" : "Rotation curves are already clean");
+                }
+            }
+            ImGui::SetItemTooltip("Euler Filter: remove 360-degree jumps from rotation curves");
+            if (menu_item_icon(nullptr, "Filter Curves...")) open_filter(ctx);
+            ImGui::SetItemTooltip("Filter Curves: calm jitter on the shown curves with One-Euro, Savitzky-Golay or Butterworth, with a live preview");
+            ImGui::Separator();
+            if (menu_item_icon(icon::kFlipTime, "Flip Time") && need_keys()) {
+                auto sel = selection_;
+                edit(ctx, "Flip Time", [&](Clip& c) { flip_time(c, sel, snap_); });
+                selection_ = sel;
+            }
+            ImGui::SetItemTooltip("Flip Time: mirror the selected keys in time");
+            if (menu_item_icon(icon::kFlipValues, "Flip Values") && need_keys()) {
+                auto sel = selection_;
+                edit(ctx, "Flip Values", [&](Clip& c) { flip_values(c, sel); });
+                selection_ = sel;
+            }
+            ImGui::SetItemTooltip("Flip Values: mirror the selected keys across zero");
+            ImGui::SeparatorText("Snapshot curves");  // PT-4
+            if (menu_item_icon(nullptr, "Snapshot")) {
+                snapshot_curves(ctx.clip);
+                ctx.status("Snapshot taken: the grey curves stay until cleared");
+            }
+            ImGui::SetItemTooltip("Snapshot Curves: keep a grey copy of every curve to compare against");
+            if (menu_item_icon(nullptr, "Swap", nullptr, false, bool(buffer_.curves)))
+                edit(ctx, "Swap Buffer Curves", [&](Clip& c) { buffer_.swap(c); });
+            ImGui::SetItemTooltip("Swap: the grey curves become the live ones, and the live ones grey (one undo step)");
+            if (menu_item_icon(nullptr, "Clear", nullptr, false, bool(buffer_.curves))) buffer_.clear();
+            ImGui::SetItemTooltip("Clear the grey snapshot curves");
+            ImGui::EndCombo();
+        }
+        ImGui::SetItemTooltip("Euler Filter, Filter Curves, Flip Time and Values, and the snapshot curves");
+    }
     sep();
     place(ImGui::GetFontSize() * 6);
     ImGui::Checkbox("Snap frames", &snap_);
@@ -579,6 +610,13 @@ void GraphEditor::draw_canvas(GraphContext& ctx) {
             if (s.track == channels_[c].track && s.channel == channels_[c].channel) return true;
         return false;
     };
+    for (int c : shown)  // the buffer curves (PT-4), grey under the live ones
+        if (const FCurve* b = buffer_.curve(channels_[c].track, channels_[c].channel); b && !b->empty()) {
+            static std::vector<ImVec2> pts;
+            pts.clear();
+            for (float x = canvas_min_.x; x <= cmax.x + 4; x += 4) pts.emplace_back(x, y_of(b->evaluate(f_at(x))));
+            dl->AddPolyline(pts.data(), int(pts.size()), IM_COL32(150, 150, 150, 150), ImDrawFlags_None, 1.f);
+        }
     for (int c : shown) {
         const FCurve* cv = curve(clip, channels_[c]);
         bool hot = is_hot(c);
@@ -596,6 +634,22 @@ void GraphEditor::draw_canvas(GraphContext& ctx) {
         } else {
             for (size_t i = 1; i < pts.size(); ++i)
                 if (i % 4 != 3) dl->AddLine(pts[i - 1], pts[i], col, width);  // poles are dashed
+        }
+        // LP-7: with loop-aware tangents, the loop repeats faintly on both sides of its range, each repeat moved by
+        // the seam's jump (a whole-turn rotation carries on turning).
+        if (clip.loop && clip.loop_tangents && clip.loop_out > clip.loop_in && cv && cv->keys.size() > 1) {
+            const double a = clip.loop_in, len = clip.loop_out - clip.loop_in, jump = cv->evaluate(a + len) - cv->evaluate(a);
+            const ImU32 ghost = alpha(channels_[c].colour, 0.3f);
+            for (int side = 0; side < 2; ++side) {
+                const float x0 = side ? x_of(a + len) : canvas_min_.x, x1 = side ? cmax.x : x_of(a);
+                pts.clear();
+                for (float x = x0; x <= x1 + step; x += step) {
+                    const double n = std::floor((f_at(std::min(x, x1)) - a) / len);
+                    const double f = f_at(std::min(x, x1)) - n * len;
+                    pts.emplace_back(std::min(x, x1), y_of(cv->evaluate(f) + n * jump));
+                }
+                if (pts.size() > 1) dl->AddPolyline(pts.data(), int(pts.size()), ghost, ImDrawFlags_None, 1.f);
+            }
         }
     }
 

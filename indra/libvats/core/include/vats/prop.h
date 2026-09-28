@@ -47,7 +47,7 @@ struct PropLibraryItem {
     Prop prop;  // path (absolute), name, rigged, bone, point, pos, rot, scale
 };
 
-// Reads "vats-prop-library" and "hexton-prop-library". On failure returns false and sets err.
+// Reads "vats-prop-library" (and, with VATS_LEGACY_IMPORT, a legacy one). On failure returns false and sets err.
 bool load_prop_library(std::string_view text, std::vector<PropLibraryItem>& out, std::string& err);
 // Writes "vats-prop-library", tab-indented.
 std::string save_prop_library(const std::vector<PropLibraryItem>& items);

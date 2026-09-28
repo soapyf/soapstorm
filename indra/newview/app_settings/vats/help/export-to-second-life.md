@@ -5,7 +5,7 @@ other tools. An `.anim` keeps everything VATs can animate: attachment points, mo
 priorities and constraints. You upload the file from any Second Life viewer, or from inside the viewer
 with the [[VATs Editor (viewer)]].
 
-> Related articles: [[Animation priority]], [[Anim format]], [[BVH]], [[Couples and groups]], [[Mesh bodies]]
+> Related articles: [[Animation check]], [[Animation priority]], [[Anim format]], [[BVH]], [[Couples and groups]], [[Mesh bodies]]
 
 ## Usage
 
@@ -25,6 +25,25 @@ attachment points that move or rotate, how many unmoving position channels were 
 many bones were left out.
 
 The export settings are saved with the project, and each change to them is an undo step.
+
+![The Export SL .anim dialog for the arm-wave example](images/export-to-second-life/export-dialog.png)
+*The top line sums up the clip; **Saves as** shows the file name the settings produce.*
+
+### Worked example
+
+[Open the example](example:graph-basics.vat), the arm wave from the [[Graph editor]] page, and press
+**Ctrl+E**.
+
+1. The top line reads "Length 2.40 s, priority 3, ease 0.80 / 0.80 s". **Name** is empty and the project
+   is an untitled copy, so **Saves as** shows `Animation_01.anim`.
+2. Type `Wave` in **Name**: **Saves as** becomes `Wave_01.anim`. Set **Side** to **Right**:
+   `Wave_01_Right.anim`.
+3. Press **Export SL .anim** and pick a folder when asked. The status bar says "Exported Wave_01_Right.anim
+   to <folder>: 4 bones, 2.40 s, priority 3, 1337 bytes": the four keyed bones of the right arm, and
+   nothing else, are in the file. [[Anim format#Worked example: the size of a file|Anim format]] shows
+   where the 1337 bytes come from.
+4. Set both **Reduce keys** fields to `0` and export again. The status bar now says "(1 replaced)" and
+   the file is larger, with a key on all 73 frames of every bone.
 
 ### Name the files
 
@@ -105,6 +124,40 @@ reproduces within a tolerance. **Reduce keys** has two fields: rotation (default
 position (default `0.50 mm`). The first and last frames and the frames where you set keys are always
 kept. Set both fields to `0` to keep a key on every frame.
 
+To see what the reduced file looks like when it plays, use **View → Preview as SL Plays It**
+([[Preview as SL plays it]]).
+
+### Check the upload size
+
+Under **Reduce keys**, **Upload size** measures the file the export would write, as you edit:
+
+- a bar with its size against `250,000` bytes (SL refuses a file of 250,000 bytes or more) and one with its
+  length against 60 seconds; each is green, amber from 90% of the limit, and red over it;
+- the share of the file taken by rotation keys, position keys, bone names and key counts, and the header;
+- the body parts that cost the most, up to eight, with each part's bones in brackets, its bytes, its share of
+  the file, and the share of its rotation and position keys. Face bones count as **Face** and attachment points
+  as **Attachment points**, whatever they are attached to.
+
+VATs measures again when something that goes into the file changes, at most four times a second, and not
+while the left mouse button is held down.
+
+**Fit to 250 KB** is available while the file is over the size limit or longer than 60 seconds. It raises
+both **Reduce keys** tolerances by half again, step by step, starting from the current values (at least
+`0.050 deg` and `0.50 mm`) and going no further than `5 deg` and `50 mm`, until the file is under 250,000
+bytes. When it fits, the new tolerances become **Reduce keys** (one undo step, `Fit to 250 KB`), and a line
+gives the size and the largest difference between the fitted file and your animation, in the world, in
+millimetres and degrees, with the bones where they occur. The [[Preview as SL plays it|SL preview]] table shows
+the differences bone by bone.
+
+The keys you set are always kept, so an animation keyed on most frames, such as motion capture, can stay over
+the limit at `5 deg` and `50 mm`, and an animation over 60 seconds never fits. Then **Split into Parts...**
+appears: it saves the animation as consecutive projects beside this one, `<name>_part1.vat`,
+`<name>_part2.vat` and so on, each under 60 seconds and the size limit, each starting where the previous one
+ends. Each part is fitted as [[Retargeting#Fit SL's limits]] fits a clip, which may also lower its frame rate
+and leave out face, finger and toe bones. Parts from an earlier split are listed first and replaced (kept as
+`.bak`) only after **Replace Them**. Save the project first; a project with more than one actor cannot be
+split.
+
 ### Export BVH
 
 **File → Export BVH (Animated Bones)...** writes the animated bones and their parents; **File → Export BVH
@@ -137,6 +190,9 @@ All of these are stored in the project, not in the preferences.
 
 ## Troubleshooting
 
+> **Tip:** **Tools → Animation Check...** finds most of the problems below before you export, and
+> offers a fix for each; see [[Animation check]].
+
 ### Export refuses the animation
 
 VATs checks each file with the same rules the viewer uses when it reads an `.anim`. A file the viewer
@@ -147,8 +203,10 @@ would reject gets a **Cannot export** message and is not written:
 - `the file is N bytes; SL accepts animations under 250000 bytes`;
 - `nothing is keyed`.
 
-Shorten the clip, raise **Reduce keys**, or remove keys from bones that do not move. For long motion
-capture, [[Retargeting#Fit SL's limits]] can split the clip into parts.
+Shorten the clip, raise **Reduce keys**, or remove keys from bones that do not move. **Fit to 250 KB** under
+**Upload size** raises **Reduce keys** for you, and splits the project into parts when that is not enough
+(see [[Export to Second Life#Check the upload size]]). For long motion capture, [[Retargeting#Fit SL's limits]]
+can split the clip into parts.
 
 ### Exported with warnings
 
@@ -181,6 +239,7 @@ The animation was baked against a different shape. Set **Bake shape** to the bod
 
 ## See also
 
+- [[Animation check]], problems to fix before upload
 - [[Anim format]], the byte layout VATs writes
 - [Second Life Wiki: Animation](https://wiki.secondlife.com/wiki/Animation)
 - [Second Life Wiki: Aditi](https://wiki.secondlife.com/wiki/Aditi), the beta grid

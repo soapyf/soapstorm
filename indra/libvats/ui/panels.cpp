@@ -226,8 +226,9 @@ void App::draw_bones_panel() {
         bool pinned = false;
         ImU32 colour = row_colour(i, pinned);
         if (colour) ImGui::PushStyleColor(ImGuiCol_Text, colour);
-        bool open = ImGui::TreeNodeEx(reinterpret_cast<void*>(intptr_t(i)), flags, "%s%s", n.name.c_str(),
-                                      pinned ? " [pinned]" : "");
+        const bool scratch = std::binary_search(scratch_marks_.begin(), scratch_marks_.end(), n.name);  // PT-2
+        bool open = ImGui::TreeNodeEx(reinterpret_cast<void*>(intptr_t(i)), flags, "%s%s%s", n.name.c_str(),
+                                      pinned ? " [pinned]" : "", scratch ? " (scratch)" : "");
         if (colour) ImGui::PopStyleColor();
         if (reveal_now && i == prim) ImGui::SetScrollHereY(0.5f);
         if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) select(i, ImGui::GetIO().KeyShift), bones_clicked_ = true;
@@ -427,9 +428,11 @@ void App::draw_timeline_panel() {
         std::string k = key_hint(id);
         return k.empty() ? std::string(what) : std::string(what) + " (" + k + ")";
     };
-    // Tool buttons: an icon and the name; the name and shortcut in the tooltip (UI-26).
+    // Tool buttons: an icon and the name; the name and shortcut in the tooltip (UI-26). Icon only while the panel
+    // is narrower than the row last took with names, so the tween controls stay on screen.
+    const bool compact = timeline_row_w_ > 0 && ImGui::GetContentRegionAvail().x < timeline_row_w_;
     auto tool_button = [&](const char* icon, const char* label, bool on, const std::string& tip_text) {
-        bool pressed = icon_label_button(icon, label, tip_text, on);
+        bool pressed = compact ? icon_button(label, icon, tip_text, on) : icon_label_button(icon, label, tip_text, on);
         ImGui::SameLine();
         return pressed;
     };
@@ -469,9 +472,13 @@ void App::draw_timeline_panel() {
         run_action("orientation");
     if (tool_button(icon::kIkFk, "IK / FK", false, tip("IK / FK", "ik_toggle") + ": switch the selected limb between IK and FK, matched"))
         run_action("ik_toggle");
+    if (tool_button(icon::kFlipTime, "Mirror", mirror_live_, "Mirror: posing a bone or IK control also keys its other side"))
+        mirror_live_ = !mirror_live_;  // PT-1
     ImGui::SameLine(0, 16);
     if (tool_button(icon::kSetKey, "Set Key", false, tip("Set Key", "key") + ": key the selected bones, pins and IK controls"))
         run_action("key");
+    draw_tween_controls();  // spec 08 TW-1, TW-2
+    if (!compact) timeline_row_w_ = tween_row_end_ - ImGui::GetWindowPos().x - ImGui::GetStyle().WindowPadding.x;
     ImGui::NewLine();
 
     // Timeline strip.
@@ -714,6 +721,11 @@ void App::draw_status_bar() {
                 const std::string editing = "Editing " + doc_.project.actors[doc_.project.active].name;
                 if (status_ != editing) ImGui::SameLine(0, 24), hint(editing.c_str());
             }
+            if (mirror_live_) {  // PT-1, in the gizmo's tint
+                ImGui::SameLine(0, 24);
+                ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kMirrorTint), "Mirror on");
+            }
+            if (scratch_on_) ImGui::SameLine(0, 24), hint("Scratch Pose: nothing is keyed until Set Key");  // PT-2
             if (size_t n = selection_.size() + handles_.size(); n > 1) {  // TG-112
                 ImGui::SameLine(0, 24);
                 hint((std::to_string(n) + " selected: keys, copy/paste and the graph apply to all of them").c_str());
@@ -722,6 +734,7 @@ void App::draw_status_bar() {
                 ImGui::SameLine(0, 24);
                 if (ImGui::SmallButton(("Notifications (" + std::to_string(h->unread_notices()) + ")").c_str())) h->toggle_notices();
             }
+            draw_check_badge();
             const std::string hint = graph_.hovered() ? graph_nav_hint() : nav_hint();
             ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize(hint.c_str()).x - 16);
             ImGui::TextDisabled("%s", hint.c_str());

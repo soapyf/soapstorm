@@ -7,6 +7,9 @@ License 2.1.
 
 > Related articles: [[Installation]], [[First steps]], [[Interface]]
 
+![The VATs app: the Bento skeleton posed in a wave, its curves in the graph editor and its keys on the timeline](images/vats/window.png)
+*The app with the [[First steps]] example open: a one-second wave, keyed on four frames.*
+
 ## App and viewer
 
 VATs comes in two forms that share the same core code and the same project files:
@@ -41,6 +44,7 @@ says so in a note. See [[VATs Editor (viewer)]] for what differs in the viewer.
 - [[IK]]: inverse kinematics on arms, legs and spine.
 - [[Hold and bind]]: pinning a hand or foot to the world or to another bone.
 - [[Hand poser]]: finger poses.
+- [[Face animation]]: face sliders, blinks, eye darts and looking at things.
 - [[Pose library]]: stored poses and clips in the Inventory.
 - [[Mirror, flip and reverse]]: mirroring, flipping and playing backwards.
 - [[Onion skin]]: ghosts of nearby frames.
@@ -53,6 +57,8 @@ says so in a note. See [[VATs Editor (viewer)]] for what differs in the viewer.
 - [[Motion capture]]: live capture from capture apps.
 - [[Face tracking]]: driving the face bones.
 - [[Dynamics]]: secondary motion on tails, hair and other chains.
+- [[Idle layer]]: breathing and sway that loop cleanly.
+- [[Overlap]]: follow-through down a keyed chain.
 - [[Ragdoll]]: physics falls.
 
 ## Import and export
@@ -62,12 +68,13 @@ says so in a note. See [[VATs Editor (viewer)]] for what differs in the viewer.
 - [[Props]]: `.dae` and `.fbx` objects held or worn.
 - [[Mesh bodies]]: previewing on a rigged mesh body.
 - [[Couples and groups]]: animating two or more avatars together.
-- [[Hexton import]]: Hexton SL Animator projects, preferences and libraries.
 
 ## Second Life
 
 - [[Export to Second Life]]: settings, limits and upload.
+- [[Preview as SL plays it]]: the exported file played back, and how far each bone moves from yours.
 - [[Animation priority]]: which animation wins in-world.
+- [[Animation check]]: problems that show only in-world, with fixes.
 
 ## Viewer
 

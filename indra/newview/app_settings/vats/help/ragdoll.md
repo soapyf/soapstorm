@@ -23,6 +23,9 @@ Open the window with **Tools → Ragdoll...**. A clip has at most one ragdoll.
    through it. No keys change.
 6. Click **Bake** to write the fall as keys, as one undo step.
 
+![The Ragdoll window set up for a whole-body fall from frame 10 lasting 60 frames](images/ragdoll/ragdoll-window.png)
+*Whole body, from frame 10 for 60 frames, with the default body settings.*
+
 ### Re-baking and clearing
 
 - **Re-bake** starts again from the keys the clip had before the first bake.
@@ -58,6 +61,23 @@ slumps on its own. **Random** is repeatable: the same start frame gives the same
 
 The simulation runs at 480 sub-steps per second. The ground is at height 0. Visible props that are not
 rigged collide as solid boxes, sized to their bounds.
+
+## Worked example: a fall from standing
+
+[Open the example](example:ragdoll-fall.vat): a 70-frame clip in which the arms come down by frame 10,
+with a whole-body ragdoll already set up from frame 10 for 60 frames.
+
+1. Choose **Tools → Ragdoll...**. **Start** reads 10, **Length** 60, **Blend in** 3, **Gravity** 1.00 g,
+   **Stiffness** 0, **Fall direction** Forward.
+2. Press **Simulate**. The status bar says "Simulated frames 10 to 70: scrub or play to see it" and the
+   window shows "Showing the simulated preview". Scrub: the body stands until frame 10, topples forward,
+   and lies still from about frame 43. No keys have changed yet.
+3. Press **Bake**. The status bar says "Baked the ragdoll to keys" and the button reads **Re-bake**. The
+   timeline now shows keys through the fall, thinned where nothing changes. Select `mPelvis` at frame
+   70: **Properties → Bone → Offset (m)** reads 1.027, −0.026, −0.925: the hips came down 0.925 m and
+   travelled about a metre forward.
+4. Set **Fall direction** to **Back** and press **Re-bake**: the body goes the other way from the same
+   standing pose. **Clear** puts the standing clip back and removes the ragdoll.
 
 ## Tips and tricks
 

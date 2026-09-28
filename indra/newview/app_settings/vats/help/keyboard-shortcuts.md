@@ -16,6 +16,21 @@ Every command is also in the menus, including the many that have no key.
   **Quit**, **Undo**, **Redo**, **Preferences...** and **Graph Editor**.
 - Mouse controls differ more than keys between presets; see [[Control presets#Mouse, per preset]].
 
+![The Controls window: the mouse controls of the Industry preset, then each command with its keys](images/keyboard-shortcuts/controls-window.png)
+*The same list inside the app: **Help → Controls** shows only the commands that have a key in the
+active preset.*
+
+### Worked example: step through keys in two presets
+
+[Open the example](example:first-wave.vat), which has keys on frames 0, 10, 20 and 30:
+
+1. In the Industry preset, press **.** three times. The frame box reads **Frame 10**, **Frame 20**,
+   then **Frame 30**; **Home** returns to **Frame 0**.
+2. Switch to Blender in **Edit → Preferences...** and press **Up** three times: the same three
+   frames, because **Next Key** is **Up** there (see the Playback table). **Shift+Left** is Blender's
+   **Go to Start**; **Home** frames everything instead.
+3. Press **Ctrl+,** and pick **Industry (Maya-style)** again.
+
 ## Keys
 
 ### Files
@@ -43,6 +58,7 @@ Every command is also in the menus, including the many that have no key.
 | Redo | Ctrl+Y, Ctrl+Shift+Z | Ctrl+Shift+Z, Ctrl+Y | Ctrl+Shift+Z, Ctrl+Y | Ctrl+Y, Ctrl+Shift+Z |
 | Set Key | S | I | S | S |
 | Set Key on All Visible Bones | Shift+S | Shift+I | Shift+S | Shift+S |
+| Tween (Breakdown) | Shift+E | Shift+E | Shift+E | Shift+E |
 | Delete Key | Delete, Backspace | Alt+I, Delete | Delete, Backspace | Delete, Backspace |
 | Delete Keys on All Bones at Frame | Shift+Delete | Shift+Delete | Shift+Delete | Shift+Delete |
 | Reset Selected Bone | Alt+R | Alt+R | Alt+R | Alt+R |
@@ -145,6 +161,9 @@ These keys work only inside a running operation:
 - Second Life preset: hold **Ctrl** to rotate, **Ctrl+Shift** to scale props; **Alt** and **Ctrl+Alt**
   with the arrow keys move the camera; see [[Control presets#Second Life]].
 - Any drag in the viewport: **Esc** cancels it.
+- **Tween (Breakdown)** (**Shift+E**, every preset): move the mouse left or right, **Ctrl** for 10%
+  steps, then a left click, **Enter** or **Space** keys it and a right-click, **Esc** or **Ctrl+Z**
+  cancels; see [[Keys and timeline#Tweening between keys]].
 
 ## Troubleshooting
 

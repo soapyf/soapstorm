@@ -56,7 +56,7 @@ for the current user, pointing at the copy of VATs you are running. **Remove** u
 
 | | Linux | Windows |
 |---|---|---|
-| Registers | `.vat` and `.hxanim` | `.vat` and `.hxanim` |
+| Registers | `.vat` | `.vat` |
 | Writes | `~/.local/share/applications/viewport-avatar-toolset.desktop`, `~/.local/share/mime/packages/viewport-avatar-toolset.xml` and the VATs icon in every size under `~/.local/share/icons/hicolor/`, then runs `update-mime-database`, `update-desktop-database` and `xdg-mime default` | keys under `HKEY_CURRENT_USER\Software\Classes`; the icon comes from `vats.exe` |
 | Remove | deletes those files, icons included | deletes VATs' keys and the extensions' link to them; an extension that another program has taken since is left alone |
 
@@ -75,11 +75,6 @@ cp share/viewport-avatar-toolset/packaging/viewport-avatar-toolset.xml ~/.local/
 mkdir -p ~/.local/share/icons && cp -r share/icons/hicolor ~/.local/share/icons/
 update-mime-database ~/.local/share/mime; update-desktop-database ~/.local/share/applications
 ```
-
-### Coming from Hexton SL Animator
-
-On the first start, if VATs finds Hexton SL Animator's data on the computer, it offers to import it;
-see [[Projects and files#Importing from Hexton SL Animator]].
 
 ## Troubleshooting
 

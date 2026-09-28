@@ -12,6 +12,18 @@ Tick **View → Onion Skin → Show Ghosts**. The ghosts appear around the body 
 
 Ghosts are see-through and can't be clicked, so they never get in the way of selecting bones. They hide while the animation plays.
 
+![The avatar at the middle of an arm swing, with two blue ghost arms below the real arm and two orange ones above it](images/onion-skin/ghosts.png)
+*Frame 6 of a 12-frame arm swing with two ghosts each side, every 2 frames: blue for frames 2 and 4, orange for 8 and 10.*
+
+### Worked example: reading an arm swing
+
+[Open the example](example:onion-arm-swing.vat): the left arm swings out and up over 12 frames, keyed at 0 and 12. **Show Ghosts** is on, with **Before** 2, **After** 2 and **Every** 2, saved in the project.
+
+1. Type `6` in the **Frame** box. Two blue ghosts trail the arm (frames 2 and 4) and two orange ones lead it (8 and 10); the nearer pair is stronger.
+2. Tick **View → Onion Skin → Keyed Frames Only**. Only two ghosts remain, at the keys: the arm down at frame 0 and up at frame 12. **Every** greys out.
+3. Set **View → Onion Skin → Before** to 0. The blue ghost goes; the orange one at frame 12 stays.
+4. Go to frame 12: no ghosts at all, since there is nothing after the last frame and **Before** is 0.
+
 ## Configuration
 
 All settings are in **View → Onion Skin**:

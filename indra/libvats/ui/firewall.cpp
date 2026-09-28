@@ -40,6 +40,10 @@ std::string subnet_of(const std::string& ipv4, int prefix) {
 
 std::vector<LanAddress> lan_addresses() {
     std::vector<LanAddress> out;
+    if (const char* fake = std::getenv("VATS_FAKE_LAN")) {  // scripted screenshots: never this computer's address
+        out.push_back({"wlan0", fake, subnet_of(fake, 24)});
+        return out;
+    }
 #if !defined(_WIN32)
     ifaddrs* list = nullptr;
     if (getifaddrs(&list) != 0) return out;

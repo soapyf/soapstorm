@@ -41,6 +41,9 @@ The body is only for display. It changes nothing in the exported animation.
 
 Attachment points are bones too: select, rotate, move and key them like any other bone. Whatever is worn on a point moves with it in Second Life, so an animation can wave a worn sword or pass a worn glass from one hand to the other ([[Hold and bind]]).
 
+![The skeleton drawn without a body, in the Relaxed Stand pose, with a green dot at each attachment point](images/skeleton/attachment-points.png)
+*The skeleton with **View → Body → Skeleton Only** and **View → Show Attachment Points**: each green dot is an attachment point, clickable like a bone.*
+
 A rotation key on an attachment point replaces the point's default rotation, the way Second Life applies it in-world. On export VATs writes the rest rotation combined with your pose, so a worn object sits the same in-world as in VATs.
 
 ### Collision volumes

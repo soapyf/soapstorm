@@ -25,6 +25,33 @@ frame count, frame rate and file size before and after, and each step VATs took.
 
 Change a setting and press **Import Again** to try another result; **Close** keeps the last one.
 
+![The Import Animation (Retarget) dialog for a Mixamo BVH: the file's joint count, frames and rate, the Rig set to Mixamo, and the mapping table](images/retargeting/retarget-dialog.png)
+*A Mixamo walk: 22 joints, 61 frames at 30 fps. Each SL bone lists the source bone it will follow.*
+
+### Worked example: a Mixamo walk
+
+The pictures on this page use `tests/data/mixamo_walk.bvh` from the VATs source tree, a two-second
+walk on a skeleton with Mixamo's bone names (`mixamorig:Hips` and so on), Y up, in centimetres; the
+script beside it makes the file. Any Mixamo BVH gives the same kind of result.
+
+1. Choose **File → Import Animation (Retarget)...** and pick the file. The dialog reads "22 joints, 61
+   frames at 30 fps (2.0 s)". **Rig** shows **Mixamo**; open the list and its entry says "(21 bones)":
+   21 SL bones get a source bone. `mixamorig:Spine1` goes unused, because `mChest` takes `Spine2` when
+   the file has it, and `mToeLeft` and `mToeRight` read **(none)**, because the file has no
+   `LeftToe_End` or `RightToe_End`.
+2. Leave **Clean Up Foot Sliding** and the five trades ticked and press **Import**. The report begins
+   "Fits SL's limits: 61 frames at 30 fps, 6139 bytes (was 11251)." No trade was needed, so no step is
+   listed before the notes: `source up axis: Y`, `hip movement scaled by 0.01124` (centimetres to
+   metres, times SL's longer legs), the two toes keeping their rest pose, and `Left Leg: 2 foot contacts
+   held still`, `Right Leg: 3 foot contacts held still`.
+3. Press **Close** and play: the avatar walks forward at about 1.5 m/s with the feet planted while they
+   carry weight. Select the left leg's IK target: the [[Graph editor]] shows its **IK / FK Blend** curve
+   rising to 1 over each contact and back to 0 between them.
+
+[Open the example](example:retarget-walk.vat) to see the result without the source file. The clip has a
+key on every frame, as an import does; use **Tools → Loop Tools** ([[Loop tools]]) to take the travel
+out and loop it.
+
 ### Rigs
 
 | Rig | Source bone names |

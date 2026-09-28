@@ -48,9 +48,21 @@ There are two ways to get beats onto the timeline; they can be used together:
 
 With **Snap to Beats** on, the playhead and **Shift+drag** ranges snap to a beat within 3 frames of the mouse.
 
+![The timeline with a waveform and beat grid lines every 15 frames](images/audio-track/timeline-beats.png)
+*A 120 BPM click track at 30 fps: the waveform shows each click, and the grid puts a line every 15 frames.*
+
 ### Saving
 
 The audio is saved in the project as a path to the file, relative to the project where possible (like props), together with its start, volume, BPM and beats. The sound itself is not copied into the project; keep the file with it. See [[Projects and files]].
+
+## Worked example: keys on the beat
+
+[Open the example](example:audio-beats.vat): four seconds at 30 fps, **BPM** already set to 120 with the grid starting at frame 0 and **Snap to Beats** on, and a head nod keyed on every beat. The project carries no sound, so the grid does not show until you load some.
+
+1. Choose **File → Load Audio...** and pick any song or click track you have; the numbers below do not depend on it. The status bar reports its name and length, and the waveform appears along the timeline with a grid line every 15 frames: 60 / 120 BPM is 0.5 s, which is 15 frames at 30 fps.
+2. Scrub to frame 13 and let go: the playhead lands on 15, the nearest beat. The keys where the head dips sit on the grid lines, frames 0, 15, 30 and so on to 120; the keys in between (8, 23, ...) bring it back up.
+3. Play. The head dips on each beat of the grid. If the song's own beat does not line up, **Ctrl+drag** the timeline until a beat of the song sits on a grid line, or set **Start (s)**; the marks slide with the audio.
+4. Press **B** on a beat while it plays: a marker is added at the current frame, on top of the grid.
 
 ## Tips and tricks
 

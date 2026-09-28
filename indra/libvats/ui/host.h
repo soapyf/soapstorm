@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 //
 // Two hosts implement this: the standalone app (app/sdl_host.*: SDL3 window, its own OpenGL scene
-// renderer) and the SoapStorm viewer (spec 09 stages U2-U3). The UI never includes SDL or a renderer;
+// renderer) and an SL viewer (spec 09 stages U2-U3). The UI never includes SDL or a renderer;
 // everything platform- or renderer-specific comes through here. Spec: docs/spec/09 section 0b.
 //
 // Not here on purpose:
@@ -40,7 +40,7 @@ struct Paths {
     std::string character;  // the Linden character files; "" = <data>/character (the viewer ships its own)
 };
 
-// A file-type filter for the file dialogs: {"VATs project", "vat;hxanim"}.
+// A file-type filter for the file dialogs: {"Mesh", "dae;fbx"}.
 struct FileFilter {
     std::string name, patterns;
 };
@@ -74,6 +74,12 @@ public:
     // Textures for thumbnails: a PNG loaded for ImGui::Image; 0 when missing or unreadable.
     virtual ImTextureID load_texture(const std::string& png) = 0;
     virtual void free_texture(ImTextureID texture) = 0;
+
+    // --- Lighting (08 LT-1) -----------------------------------------------------------------------
+    // The Light menu's preset, or null for the host's own lighting. The app lights its scene with the key and fill;
+    // the viewer sets a local sky from them (only this viewer sees it) and puts the sky it had back with null, and
+    // when the editor closes.
+    virtual void set_light(const LightPreset* preset) { (void)preset; }
 
     // --- Avatar ---------------------------------------------------------------------------------
     // The evaluated pose, once a frame: every node's rotation and offset from rest (previews included).
@@ -130,7 +136,7 @@ public:
         virtual void place_view(ImVec2 min, ImVec2 max) { (void)min, (void)max; }
         virtual int unread_notices() const = 0;  // the host's notifications not yet seen
         virtual void toggle_notices() = 0;       // shows or hides the host's notification window
-        // The host's full UI, shown over the editor until turned off again ("Show Firestorm UI").
+        // The host's full UI, shown over the editor until turned off again (the viewer).
         virtual const char* reveal_label() const = 0;
         virtual const char* reveal_shortcut() const { return nullptr; }  // shown beside it in the menu
         virtual bool revealed() const = 0;

@@ -62,10 +62,30 @@ direction, and four ease times. The viewer ignores the whole section when the co
 ### Size
 
 ```
-41 + len(emote) + Σ over joints (len(name) + 1 + 12 + 8 × (rot keys + pos keys)) + 86 × constraints
+41 + len(emote) + Σ over joints (len(name) + 1 + 12 + 8 × (rot keys + pos keys)) + 4 + 86 × constraints
 ```
 
-The Second Life upload server refuses files of 250,000 bytes or more.
+The 4 is the constraint count, written even when it is 0. The Second Life upload server refuses files of
+250,000 bytes or more.
+
+### Worked example: the size of a file
+
+[Open the example](example:graph-basics.vat), the arm wave from the [[Graph editor]] page, and export it
+with the default settings ([[Export to Second Life#Worked example]]). The status bar reports 1337 bytes,
+which the formula reproduces:
+
+| Part | Bytes |
+|---|---|
+| Header, no emote | 41 |
+| `mCollarRight`: 13 + 12 + 8 × 16 rotation keys | 153 |
+| `mShoulderRight`: 15 + 12 + 8 × 32 | 283 |
+| `mElbowRight`: 12 + 12 + 8 × 73 | 608 |
+| `mWristRight`: 12 + 12 + 8 × 28 | 248 |
+| Constraint count, 0 constraints | 4 |
+| Total | 1337 |
+
+No bone has position keys: none of them moves from its rest position. The elbow keeps a key on all 73
+frames because it never stops turning; the collar, which only rises and comes down, keeps 16.
 
 ## What VATs writes
 

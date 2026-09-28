@@ -26,5 +26,5 @@
 - Naming patterns and an export folder in the Export section, so exporting takes one click.
 
 ## Where your work lives
-- Projects are plain .vat files. Hexton .hxanim projects open too.
+- Projects are plain .vat files.
 - Settings, autosaves and your libraries are kept in your user folder.

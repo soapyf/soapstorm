@@ -32,6 +32,9 @@ If a rigged mesh covers most of the skeleton, VATs asks whether it is an avatar 
 **Inventory → Meshes** shows your imported meshes as a grid of thumbnails, followed by **Starter props**
 grouped by category. Hover a thumbnail to see its parent, category and file.
 
+![The Meshes section of the Inventory: the Import button, then the Starter props grid starting with Seating](images/props/starter-props.png)
+*Starter props ship with VATs, grouped by category; your own imports appear above them.*
+
 - **Double-click** adds the prop at its usual place: the parent and offset it was saved with.
 - **Drag** it onto a bone or attachment point in the view to attach it there, or onto empty space to
   place it in the world. A note by the cursor says which: `Attach ... to ...` or `Place ... in the
@@ -51,6 +54,9 @@ Starter props cannot be renamed, saved over or deleted.
 ### Place a static prop
 
 Click a prop in the view to select it. **Properties → Prop** shows its name and:
+
+![The Prop section of the Properties panel for a mug on the Right Hand attachment point](images/props/prop-properties.png)
+*The starter Mug at its grip: **Parent** Right Hand, offset (0.005, 0, −0.062) m from the point and turned 90° about Y.*
 
 | Field | Meaning |
 |---|---|
@@ -73,6 +79,23 @@ With a static prop selected, **Ctrl+C** opens a small menu with the same three c
 an SL vector from the clipboard and asks whether to paste it as **Position**, **Rotation** or **Size**.
 Pasting a size sets the scale so the prop has that size.
 
+### Worked example: a mug in the hand
+
+[Open the example](example:prop-in-hand.vat): the starter **Mug** on the **Right Hand** attachment point,
+with the arm bent to hold it up.
+
+![The right hand holding the mug, seen from the front](images/props/mug-in-hand.png)
+
+1. Click the mug in the view. **Properties → Prop** shows **Mug** (**static**), **Parent** **Right Hand**,
+   **Position** `0.005`, `0.000`, `-0.062` and **Rotation** `0.0°`, `90.0°`, `0.0°`: the grip the starter
+   prop was saved with.
+2. Press **Copy for SL → Position**. The status bar says "Copied <0.00500, 0.00000, -0.06200>", and the
+   clipboard holds that vector, ready for the build window of a mug worn on the right hand in Second Life.
+3. Drag the first **Position** field to the right: the mug slides along the hand. **Ctrl+Z** puts it back
+   (**Move Prop** is one undo step).
+4. In **Inventory → Meshes**, double-click **Mug** under **Starter props → Cups**: a second mug is added at
+   the same grip, over the first. **Remove Prop** takes it out again.
+
 ## Tips and tricks
 
 - Use a chair or bed prop with [[Couples and groups]] to check where each actor sits.
@@ -85,7 +108,8 @@ Pasting a size sets the scale so the prop has that size.
 
 The project refers to a mesh file that has moved or been deleted. The prop shows as an orange box and
 **Properties → Prop** says `Mesh file not found:` with the path. Put the file back at that path, or remove
-the prop and import the mesh again. The project still opens and saves.
+the prop and import the mesh again. The project still opens and saves. A starter prop is never missing: a
+project made on another computer finds this installation's copy through its **Starter props** entry.
 
 ### Paste needs an SL vector like `<1.0, 2.0, 3.0>` on the clipboard
 

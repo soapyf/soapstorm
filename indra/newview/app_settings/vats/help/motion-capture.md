@@ -11,6 +11,9 @@ motion on the avatar while it arrives, and records takes as keys.
 Open the window with **Tools → Motion Capture...**. The window has a **Setup** checklist at the top, then
 the **Connection**, **Live**, **Face**, **Record**, **Clean-up** and **Last take** sections.
 
+![The Motion Capture window before listening: the Setup checklist, the Connection row with Source, Port and Listen, and the Live section](images/motion-capture/setup-and-connection.png)
+*Before **Listen**: a grey dot marks what is still to do, a green one what is done. The dot after **Listen** turns amber while VATs waits for a sender and green once packets arrive.*
+
 ### Sources
 
 | Source | Default port | Allow Other Devices | Sent by |
@@ -71,6 +74,9 @@ while listening. The clip does not change until you record.
 
 ### Recording a take
 
+![The Record and Clean-up sections with their defaults](images/motion-capture/record-and-clean-up.png)
+*The defaults: a take starts at frame 0 after a 3 s countdown, keys are reduced within 0.5° and 2 mm, and the edges blend over 4 frames. **Record** stays grey until data arrives.*
+
 1. Set **Start at frame**. **Current** uses the playhead.
 2. Optionally tick **Stop at frame** (default `30`) to record into that range only ("punch in"). Keys
    outside the range are left alone.
@@ -105,10 +111,24 @@ The **Clean-up** settings apply to the next take:
 
 | Setting | Range | Default | Effect |
 |---|---|---|---|
-| **Smoothing** | 0–5 frames | 0 (off) | averages each rotation with its neighbours to calm tracker jitter |
+| **Smoothing** | **Off**, **Box (average)**, **One-Euro**, **Savitzky-Golay**, **Butterworth** | **Off** | calms tracker jitter; see below |
 | **Reduce keys** | degrees, millimetres | on, `0.5` deg, `2.0` mm | removes keys that don't change the motion by more than these amounts |
 | **Edge blend** | 0–15 frames | 4 | eases a punched-in take in and out of the animation around it |
 | **Clean Up Foot Sliding** | on/off | off | holds planted feet still with leg [[IK]] where the take had them on the ground |
+
+**Smoothing** choices:
+
+- **Box (average)** averages each rotation with its neighbours over a **Box radius** of 1–5 frames. It is
+  the filter older versions had; settings saved by them open with it.
+- **One-Euro**, **Savitzky-Golay** and **Butterworth** filter the take's curves after it is fitted to the
+  skeleton, before key reduction: every rotation curve (degrees) and position curve (metres, such as the
+  hips' travel), face bones included. Their settings are the same as in the graph editor's **Filter
+  Curves...**; see [[Graph editor#Filtering curves]] for what each one does. The ends of the take are
+  padded by reflection.
+
+With one of the three filters, **Last take** also gives the take's shake before and after the filter: the
+mean over its bones, the three shakiest bones, and the hips' travel in m/s³ when it has any. Shake is the
+RMS of the jerk (the third difference of each curve), in degrees per second cubed.
 
 **Last take** reports what the last take recorded.
 

@@ -273,7 +273,7 @@ void App::draw_library_icon(ImDrawList* dl, ImVec2 at, float size, const Library
             const ImVec2 pts[4] = {P(0.45f, 0.15f), P(0.55f, 0.5f), P(0.45f, 0.82f), P(0.72f, 0.84f)};
             dl->AddPolyline(pts, 4, col, 0, w);
             for (int k = 0; k < 3; ++k) dl->AddCircleFilled(pts[k], w * 1.6f, col);
-        } else if (it.kind == "head") {
+        } else if (it.kind == "head" || it.kind == "face") {
             dl->AddCircle(P(0.5f, 0.45f), size * 0.22f, col, 0, w);
             dl->AddLine(P(0.5f, 0.67f), P(0.5f, 0.85f), col, w);
         } else {  // whole pose, selection, wing, tail: a figure
@@ -326,6 +326,10 @@ void App::draw_inventory_panel() {
         }
     }
     ImGui::SeparatorText("Poses");
+    if (inv_scroll_poses_) {  // --tab poses: the panel is docked to size after the first frames
+        ImGui::SetScrollHereY(0);
+        if (ImGui::GetFrameCount() > 3) inv_scroll_poses_ = false;
+    }
     if (icon_label_button(icon::kAddToLibrary, "Save Pose...")) {
         name_prompt_ = selection_.empty() ? "Whole pose" : "Selected bones";
         name_action_ = NameAction::SavePose;
@@ -428,10 +432,12 @@ void App::draw_inventory_panel() {
                     if (ImGui::MenuItem("Left Hand")) apply_library_item(it, false);
                     if (ImGui::MenuItem("Right Hand")) apply_library_item(it, true);
                     if (ImGui::MenuItem("Both Hands")) {
+                        Clip before = doc_.clip();
                         edit("Apply Pose", [&](Clip& c) {
                             apply_pose(c, skel_, it, std::round(frame_), false);
                             apply_pose(c, skel_, it, std::round(frame_), true);
                         });
+                        offer_pose_blend(std::move(before), std::round(frame_));
                     }
                 } else if (ImGui::MenuItem("Apply at This Frame")) {
                     apply_library_item(it, false);
@@ -469,7 +475,9 @@ void App::apply_library_item(const LibraryItem& it, bool mirrored) {
             message("Clip pasted", t);
         }
     } else {
+        Clip before = doc_.clip();
         edit("Apply Pose", [&](Clip& c) { apply_pose(c, skel_, it, std::round(frame_), mirrored); });
+        offer_pose_blend(std::move(before), std::round(frame_));
         status("Applied " + it.name + " at frame " + std::to_string(int(frame_)) + (mirrored ? " (mirrored)" : ""));
     }
 }

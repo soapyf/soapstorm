@@ -1,4 +1,5 @@
-// Viewport Avatar Toolset - one-time import of the reference app's settings and libraries (IO-54).
+// Viewport Avatar Toolset - one-time import of Hexton SL Animator's settings and libraries (IO-54).
+// Built only with VATS_LEGACY_IMPORT (core/CMakeLists.txt).
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 //
 // Spec: docs/spec/03 sections 3.7 and 3.8.2. Only data files are read: settings.cfg (a Godot ConfigFile,

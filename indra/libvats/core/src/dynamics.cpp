@@ -44,6 +44,8 @@ DynChain dyn_preset(const std::string& kind, const std::string& root, int length
     c.length = length;
     if (kind == "tail") c.stiffness = 0.08, c.damping = 0.12, c.drag = 0.03, c.gravity = 0.3, c.radius = 0.03;
     else if (kind == "ears") c.stiffness = 0.2, c.damping = 0.25, c.drag = 0.02, c.gravity = 0.1, c.radius = 0.01;
+    // Follow-through on a limb or spine: lags and settles with little swing back, no droop.
+    else if (kind == "overlap") c.stiffness = 0.3, c.damping = 0.35, c.drag = 0.02, c.gravity = 0.0, c.radius = 0.02;
     else if (kind == "jiggle") c.stiffness = 0.12, c.damping = 0.08, c.drag = 0.0, c.gravity = 0.0, c.radius = 0, c.length = 1;
     return c;
 }
@@ -192,11 +194,11 @@ std::vector<Pose> simulate_frames(const Rig& rig, const Clip& clip, const Shape*
 }
 
 void bake_samples(Clip& clip, const Skeleton& skel, const std::vector<int>& nodes, const std::vector<Pose>& frames,
-                  double tol_deg, double tol_m, const std::vector<int>& with_position) {
+                  double tol_deg, double tol_m, const std::vector<int>& with_position, bool position_only) {
     const int max_gap = std::max(clip.fps, 1) * 2;
     for (int n : nodes) {
         const std::string& track = skel[n].name;
-        const bool rot = !skel[n].volume;
+        const bool rot = !skel[n].volume && !position_only;
         const bool pos = skel[n].volume || std::find(with_position.begin(), with_position.end(), n) != with_position.end();
         if (pos) {
             for (const char* ch : kPosChannels) clip.curves[track].erase(ch);

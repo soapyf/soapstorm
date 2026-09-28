@@ -11,6 +11,9 @@ OK button.
 Open it with **Edit → Preferences...** (**Ctrl+,** in every preset). Press **Esc** while it has focus,
 or its **×**, to close it.
 
+![The Preferences window with its defaults: Industry (Maya-style), Dusk, 100%, 90 px, 5°, and the hotkey list below](images/preferences/window.png)
+*Preferences as a new installation shows them. The list at the bottom is the active preset's keys.*
+
 ### Settings
 
 | Setting | Values | Default | What it does |
@@ -22,8 +25,11 @@ or its **×**, to close it.
 | **Gizmo size** | 50 px to 220 px | 90 px | The size of the move, rotate and scale gizmo. |
 | **Rotation snap (Ctrl)** | 1° to 90° | 5° | The step used while **Ctrl** is held during a rotation. With the Second Life preset the row is **Rotation snap (G)**: the step used while snapping is toggled on with **G**. |
 | **BVH import → Reduce keys after import** | on, off | off | Drops keys that linear playback reproduces within 0.05 degrees and 0.5 mm. Off keeps a key on every frame. See [[BVH]]. |
+| **Posing → Mirror centre bones in place** | on, off | off | With **Mirror** on, posing the head or spine keeps it symmetric: a nod stays, a turn or lean is cancelled. See [[Posing#Mirror while posing]]. |
+| **Posing → Only key channels that already have keys** | on, off | off | Keeping a scratch pose keys only the channels that were animated before it. See [[Posing#Scratch pose]]. |
+| **Posing → Leaving a scratch pose** | **Ask**, **Keep as keys**, **Discard** | Ask | What moving off a changed scratch pose does. **Don't ask again** in the question sets it. |
 | **Start screen → Show Now** | button | | Closes Preferences and opens the Welcome window. |
-| **Project files → Open .vat Files with VATs** | button | | Registers `.vat` and `.hxanim` files with this copy of VATs; **Remove** undoes it. See [[Installation#Opening project files by double-click]]. |
+| **Project files → Open .vat Files with VATs** | button | | Registers `.vat` files with this copy of VATs; **Remove** undoes it. See [[Installation#Opening project files by double-click]]. |
 | **In the viewer → Opening the editor → Reset joint positions when the editor opens** | on, off | on | Shown only in the [[VATs Editor (viewer)|viewer]]. Resets your avatar's skeleton on your screen as the editor opens, as the viewer's **Reset skeleton** does: joint positions left by stopped animations go back; your mesh body's own joint offsets stay. Saved as `viewer_reset_joints`. |
 | **In the viewer → While the editor is open → Show other avatars** | on, off | off | Shown only in the viewer. Off hides every other avatar, friends too, with their attachments and name tags, on your screen while the editor is open; your own avatar stays. Also **View → Show Other Avatars**. Saved as `viewer_show_others`. |
 
@@ -34,6 +40,17 @@ or its **×**, to close it.
 The lower part of the window lists the mouse controls and every command of the active preset with its
 keys; `-` marks a command without a key. It is the same list as **Help → Controls**, which
 shows only the commands that have keys. See [[Keyboard shortcuts]].
+
+### Worked example: change the theme and find it on disk
+
+1. Press **Ctrl+,** and pick **Studio Grey** under **Colour theme**. The panels, viewport and
+   timeline change colour at once; there is nothing to confirm.
+2. Open `settings.json` (the path is under [[Preferences#Settings file]]) in a text editor. It holds
+   the line `"theme": "Studio Grey"`, written the moment you chose it.
+3. Pick **Dusk** again: the line now reads `"theme": "Dusk"`.
+
+Every other row works the same way: the file is rewritten on each change, so a setting that does
+not survive a restart means the file could not be written (see [[Preferences#Troubleshooting]]).
 
 ## Configuration
 
@@ -49,7 +66,6 @@ Some choices are saved in the same file from other places in the app:
 | Welcome at start-up (`show_welcome`) | **Show this at startup** in the Welcome window |
 | Camera views (`cameras`) | **View → Camera Views → Store Camera View 1** to **4** |
 | Recent files (`recent`, up to 10) | **File → Open Recent**; **Clear Recent** empties it |
-| Hexton import asked (`migration_offered`) | the first-run import window |
 | Motion capture and face tracking (`mocap`) | **Tools → Motion Capture...**; see [[Motion capture]] |
 
 ### Settings file
@@ -67,8 +83,7 @@ a gizmo size of 500 loads as 220. Unknown keys are ignored.
 
 ### Resetting all preferences
 
-Quit VATs and delete `settings.json`. The next start counts as a first run, so the Hexton import is
-offered again if Hexton's data is present.
+Quit VATs and delete `settings.json`. The next start counts as a first run.
 
 ## Troubleshooting
 

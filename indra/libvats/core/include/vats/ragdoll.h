@@ -93,5 +93,13 @@ void unbake_ragdoll(Clip& clip, const Skeleton& skel);
 
 // How far a local pose goes past the ragdoll's joint limits: the worst joint, in degrees (0 = inside).
 double ragdoll_limit_excess(const Skeleton& skel, const Pose& pose);
+// Each joint of the table that a local pose takes more than tol_deg past its limits: the node, how far (degrees),
+// and its local rotation (relative to rest, as Pose::rot) brought back inside them. Used by the Animation Check.
+struct LimitExcess {
+    int node = -1;
+    double deg = 0;
+    Quat inside;
+};
+std::vector<LimitExcess> ragdoll_limit_excesses(const Skeleton& skel, const Pose& pose, double tol_deg);
 
 }  // namespace vats

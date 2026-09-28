@@ -203,49 +203,63 @@ void App::draw_avatar(bool view, const std::vector<Xform>& globals, const SceneC
     host_.scene_triangles(verts, eye_idx, true, 0.6f);
 }
 
+// The onion ghosts while onion skin is on and, while Filter Curves is open (08 MC-4a), the pose before filtering
+// at the current frame (offset 0). Nothing is evaluated while playing.
+std::vector<OnionGhost> App::ghost_poses() {
+    std::vector<OnionGhost> out;
+    if (playing_ || !rig_) return out;
+    if (const OnionView v = onion_view(); v.on) out = onion_ghosts(*rig_, doc_.clip(), frame_, shape(), v.s);
+    if (const Clip* was = graph_.filter_original())
+        out.push_back({{frame_, 0, 1.f}, vats::evaluate(*rig_, *was, frame_, shape()).globals});
+    return out;
+}
+
 // Onion skin (08 ON-1..3): ghosts of the pose at nearby frames, earlier ones cool, later ones warm, fading
-// with distance. Drawn see-through and never picked; nothing is evaluated while they are off or playing.
+// with distance; the pre-filter ghost is grey. Drawn see-through and never picked.
 void App::draw_onion(const SceneColours& colours) {
     const OnionView v = onion_view();
-    if (!v.on || playing_ || !rig_) return;
-    const Shape* sh = shape();
-    const auto ghosts = onion_ghosts(*rig_, doc_.clip(), frame_, sh, v.s);
+    const auto ghosts = ghost_poses();
     if (ghosts.empty()) return;
     const Rgb cool = mix({0.35f, 0.62f, 1.0f}, colours.body, 0.2f), warm = mix({1.0f, 0.58f, 0.28f}, colours.body, 0.2f);
+    const Rgb grey = mix({0.85f, 0.85f, 0.85f}, colours.body, 0.2f);
+    const bool bones = v.bones_only || (body_ == Body::SkeletonOnly && !mesh_body());
+    for (auto it = ghosts.rbegin(); it != ghosts.rend(); ++it)  // farthest first
+        draw_ghost(it->globals, it->at.offset < 0 ? cool : it->at.offset > 0 ? warm : grey,
+                   0.12f + 0.28f * it->at.weight, bones);
+}
+
+// One see-through copy of the body (or its bones) in a pose: the onion ghosts, the pre-filter ghost and the SL
+// preview's original (08 SP-2).
+void App::draw_ghost(const std::vector<Xform>& globals, const Rgb& c, float alpha, bool bones) {
     static std::vector<Vertex> verts;
     static std::vector<std::uint32_t> idx;
     static std::vector<float> pos, nrm;
-    const bool bones = v.bones_only || (body_ == Body::SkeletonOnly && !mesh_body());
-    for (auto it = ghosts.rbegin(); it != ghosts.rend(); ++it) {  // farthest first
-        const OnionGhost& g = *it;
-        const Rgb c = g.at.offset < 0 ? cool : warm;
-        const float alpha = 0.12f + 0.28f * g.at.weight;
-        if (bones) {
-            verts.clear();
-            for (int i = 0; i < skel_.joint_count(); ++i) {
-                if (!node_visible(i)) continue;
-                Vec3 end = sh ? skel_[i].end.mul(sh->scale[i]) : skel_[i].end;
-                if (end.length() < 1e-5) continue;
-                bone_glyph(verts, g.globals[i].pos, g.globals[i].apply(end), g.globals[i].rot * skel_.bone_frame(i), c);
-            }
-            for (Vertex& vx : verts) vx.c[3] = alpha;
-            host_.scene_triangles(verts, {}, true, 0.1f, true);
-        } else if (const MeshBody* mb = mesh_body()) {
-            const float tint[4] = {c.r, c.g, c.b, alpha};
-            for (const std::string& path : mb->parts) {
-                Prop part;
-                part.path = path;
-                part.rigged = true;
-                draw_prop(part, verts, idx, &g.globals, sh, 1.f, {}, tint);
-            }
-        } else {
-            mesh_.skin(g.globals, sh, pos, nrm);
-            verts.resize(pos.size() / 3);
-            for (size_t i = 0; i < verts.size(); ++i)
-                verts[i] = {{pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]}, {nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]},
-                            {c.r, c.g, c.b, alpha}};
-            host_.scene_triangles(verts, mesh_.indices(), true, 0.05f, true);
+    const Shape* sh = shape();
+    if (bones) {
+        verts.clear();
+        for (int i = 0; i < skel_.joint_count(); ++i) {
+            if (!node_visible(i)) continue;
+            Vec3 end = sh ? skel_[i].end.mul(sh->scale[i]) : skel_[i].end;
+            if (end.length() < 1e-5) continue;
+            bone_glyph(verts, globals[i].pos, globals[i].apply(end), globals[i].rot * skel_.bone_frame(i), c);
         }
+        for (Vertex& vx : verts) vx.c[3] = alpha;
+        host_.scene_triangles(verts, {}, true, 0.1f, true);
+    } else if (const MeshBody* mb = mesh_body()) {
+        const float tint[4] = {c.r, c.g, c.b, alpha};
+        for (const std::string& path : mb->parts) {
+            Prop part;
+            part.path = path;
+            part.rigged = true;
+            draw_prop(part, verts, idx, &globals, sh, 1.f, {}, tint);
+        }
+    } else {
+        mesh_.skin(globals, sh, pos, nrm);
+        verts.resize(pos.size() / 3);
+        for (size_t i = 0; i < verts.size(); ++i)
+            verts[i] = {{pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]}, {nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]},
+                        {c.r, c.g, c.b, alpha}};
+        host_.scene_triangles(verts, mesh_.indices(), true, 0.05f, true);
     }
 }
 
@@ -264,7 +278,12 @@ ImTextureID App::render_scene(int w, int h) {
     }
     { VATS_PROFILE("vp other actors"); draw_other_actors(colours); }  // couples and groups (GR-1)
     { VATS_PROFILE("vp onion"); draw_onion(colours); }  // ghosts (08 ON)
+    if (!sl_ghost_.empty())  // the SL preview's original (08 SP-2): green, bones when the onion ghosts are bones
+        draw_ghost(sl_ghost_, mix({0.4f, 0.9f, 0.55f}, colours.body, 0.2f), 0.3f,
+                   onion_view().bones_only || (body_ == Body::SkeletonOnly && !mesh_body()));
     { VATS_PROFILE("vp props"); draw_props(prop_verts, prop_indices); }
+    draw_treadmill();  // 08 LP-8
+    draw_backdrop();   // 08 LT-2
 
     VATS_PROFILE("vp volumes+bones+end");
     static std::vector<Vertex> volumes;
@@ -414,6 +433,7 @@ void App::apply_delta(const Quat& r, const Vec3& t, int gimbal_axis, double gimb
             else target.pos = target.pos + t;
             key_limb_target(clip, *rig_, frame_, h->limb, target, shape());
         }
+        mirror_edit({"ik." + rig_->limbs()[h->limb].name});  // PT-1
         return;
     }
     int p = primary();
@@ -444,6 +464,7 @@ void App::apply_delta(const Quat& r, const Vec3& t, int gimbal_axis, double gimb
         }
         key_offset(clip, n.name, frame_, drag_start_offset_ + local);
     }
+    mirror_edit({n.name});  // PT-1
 }
 
 // Places the gizmo on the selection for the current camera; false when there is none. Runs again just before
@@ -778,6 +799,8 @@ void App::render_world_scene() {
     if (editing_other() && !doc_.project.actors[doc_.project.active].body.empty() && !globals_.empty())
         draw_actor_body(doc_.project.active, globals_, colours, true);
     draw_props(verts, indices);
+    draw_treadmill();  // 08 LP-8
+    draw_backdrop();   // 08 LT-2
     host_.scene_end();
 }
 
@@ -805,18 +828,24 @@ void App::draw_world_extras(ImDrawList* dl) {
             line(g[i].pos, g[i].apply(skel_[i].end), col, 1.8f);
         }
 
-    // Onion skin (08 ON): nothing is evaluated while it is off or playing.
-    const OnionView v = onion_view();
-    if (v.on && !playing_ && rig_)
-        for (const OnionGhost& g : onion_ghosts(*rig_, doc_.clip(), frame_, sh, v.s)) {
-            const int a = int(255 * (0.25f + 0.6f * g.at.weight));
-            const ImU32 c = g.at.offset < 0 ? IM_COL32(102, 178, 255, a) : IM_COL32(255, 158, 77, a);
-            for (int i = 1; i < skel_.volume_start(); ++i) {
-                const int parent = skel_[i].parent;
-                if (parent >= 0 && !skel_[i].attachment && skel_[i].category != Category::Face && node_visible(i))
-                    line(g.globals[parent].pos, g.globals[i].pos, c, 1.5f);
-            }
+    // Onion skin (08 ON) and the pre-filter ghost (MC-4a): nothing is evaluated while they are off or playing.
+    for (const OnionGhost& g : ghost_poses()) {
+        const int a = int(255 * (0.25f + 0.6f * g.at.weight));
+        const ImU32 c = g.at.offset < 0 ? IM_COL32(102, 178, 255, a) : g.at.offset > 0 ? IM_COL32(255, 158, 77, a)
+                                                                                 : IM_COL32(220, 220, 220, a);
+        for (int i = 1; i < skel_.volume_start(); ++i) {
+            const int parent = skel_[i].parent;
+            if (parent >= 0 && !skel_[i].attachment && skel_[i].category != Category::Face && node_visible(i))
+                line(g.globals[parent].pos, g.globals[i].pos, c, 1.5f);
         }
+    }
+
+    // The SL preview's original (08 SP-2), as the onion ghosts are drawn here: bone lines, green.
+    for (int i = 1; !sl_ghost_.empty() && i < skel_.volume_start(); ++i) {
+        const int parent = skel_[i].parent;
+        if (parent >= 0 && !skel_[i].attachment && skel_[i].category != Category::Face && node_visible(i))
+            line(sl_ghost_[parent].pos, sl_ghost_[i].pos, IM_COL32(102, 230, 140, 200), 1.5f);
+    }
 
     // Collision volumes (VP-10): an ellipse in each of the volume's three planes.
     for (const CollisionVolume& cv : skel_.volumes()) {
@@ -895,7 +924,7 @@ void App::draw_viewport() {
         viewport_drop_target(origin, size);
         ImGui::End();
     } else {
-        viewport_drop_target(origin, size);  // props agent: Inventory drops (VP-83); after hover, before the highlight
+        viewport_drop_target(origin, size);  // Inventory drops (VP-83); after hover, before the highlight
     }
     projector_ = host_.projector(origin, size);  // input may have moved the camera
 
@@ -940,7 +969,7 @@ void App::draw_viewport() {
     if ((primary() >= 0 || primary_handle() || selected_prop_ >= 0) && gizmo_.visible() && bone_drag_ < 0 &&
         (effective_tool() == Tool::Rotate || effective_tool() == Tool::Move || effective_tool() == Tool::Scale || dragging_gizmo_) &&
         place_gizmo())
-        gizmo_.draw(dl, gizmo_hover_);
+        gizmo_.draw(dl, gizmo_hover_, mirror_live_ ? kMirrorTint : 0);  // PT-1: tinted while Mirror is on
     if (place_actor_gizmo()) actor_gizmo_.draw(dl, actor_gizmo_hover_);  // GR: placing another actor
 
     // Hover label.

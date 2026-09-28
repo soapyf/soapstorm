@@ -1,4 +1,4 @@
-// Viewport Avatar Toolset - the Inventory's Projects and Animations: .vat, .hxanim and .anim files in folders.
+// Viewport Avatar Toolset - the Inventory's Projects and Animations: .vat and .anim files in folders.
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 //
 // Spec: docs/spec/08 section 8 (FL). Scanning, metadata and the file operations are core's (vats/file_library.h);
@@ -17,6 +17,9 @@
 #include "vats/curve_ops.h"
 #include "vats/file_library.h"
 #include "theme.h"
+#ifdef VATS_LEGACY_IMPORT
+#include "vats/legacy_import.h"
+#endif
 
 namespace vats {
 
@@ -45,6 +48,8 @@ std::string stem_of(const std::string& path) {
     return std::string(s.begin(), s.end());
 }
 
+}  // namespace
+
 // A file:// URL of a folder for Host::open_url, percent-encoded (spaces, non-ASCII names).
 std::string folder_url(const std::string& dir) {
     std::string url = "file://";
@@ -60,6 +65,8 @@ std::string folder_url(const std::string& dir) {
     }
     return url;
 }
+
+namespace {
 
 std::string meta_line(const LibFile& f) {
     if (!f.error.empty()) return "Cannot read: " + f.error;
@@ -217,7 +224,12 @@ void App::draw_file_library() {
                 lib->added.emplace_back(kind, files[0]);
             });
         }
-        ImGui::SetItemTooltip("List the %s files of another folder here too", anim ? ".anim" : ".vat and .hxanim");
+#ifdef VATS_LEGACY_IMPORT
+        const std::string projects = std::string(".vat and ") + legacy_import::kProjectExtension;
+#else
+        const std::string projects = ".vat";
+#endif
+        ImGui::SetItemTooltip("List the %s files of another folder here too", anim ? ".anim" : projects.c_str());
         int remove_folder = -1;
         for (const FileLibUi::Group& g : L.groups[k]) {
             int shown = 0;

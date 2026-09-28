@@ -148,6 +148,8 @@ void App::draw_dynamics_panel() {
         preset("Ears", "ears");
         ImGui::SameLine();
         preset("Jiggle", "jiggle");
+        ImGui::SameLine();
+        preset("Overlap", "overlap");
         const int root = skel_.find(d.root);
         if (root >= 0 && !skel_[root].volume) {
             const int len0 = d.length;
@@ -171,6 +173,7 @@ void App::draw_dynamics_panel() {
         slider("Radius", d.radius, 0.f, 0.15f, "%.3f m", "How far the chain keeps from the body's collision volumes");
 
         if (ImGui::Button(d.baked ? "Re-bake" : "Bake")) {
+            graph_.snapshot_curves(doc_.clip());  // PT-4
             edit("Bake Dynamics", [&](Clip& c) { bake_dynamics(c, *rig_, export_shape(), i); });
             status("Baked " + d.root + " to keys");
         }

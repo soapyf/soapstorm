@@ -36,12 +36,6 @@ viewer, animating your own avatar in-world. They read and write the same `.vat` 
 
 ## Coming from other programs
 
-### Can I open my Hexton projects?
-
-Yes. **File → Open...** reads `.hxanim` projects and converts them; save the result as a new `.vat`
-file. On the first start, VATs also offers to import Hexton's preferences, recent files and
-libraries. See [[Hexton import]].
-
 ### Can I keep my Maya, Blender or QAvimator habits?
 
 Yes. Pick a preset in **Edit → Preferences... → Navigation & hotkeys**. See [[Control presets]].

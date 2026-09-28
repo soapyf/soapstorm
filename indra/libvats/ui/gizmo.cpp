@@ -217,13 +217,15 @@ void Gizmo::drag(ImVec2 m, bool snap, double snap_deg, Quat& rotation, Vec3& tra
     }
 }
 
-void Gizmo::draw(ImDrawList* dl, Part hover) const {
+void Gizmo::draw(ImDrawList* dl, Part hover, ImU32 tint) const {
     if (!visible_) return;
+    const ImU32 view = tint ? tint : kViewColour;
     auto hot = [&](Part p) { return drag_ == p || (drag_ == None && hover == p); };
     if (kind_ == GizmoKind::Rotate) {
         if (!z_only_) {
-            dl->AddCircleFilled(centre_px_, size_px_, IM_COL32(255, 255, 255, hot(Free) ? 26 : 10), kSegments);
-            dl->AddCircle(centre_px_, size_px_ * 1.15f, hot(ViewRing) ? kHot : kViewColour, kSegments, hot(ViewRing) ? 3 : 2);
+            dl->AddCircleFilled(centre_px_, size_px_, tint ? with_alpha(tint, hot(Free) ? 0.22f : 0.12f)
+                                                           : IM_COL32(255, 255, 255, hot(Free) ? 26 : 10), kSegments);
+            dl->AddCircle(centre_px_, size_px_ * 1.15f, hot(ViewRing) ? kHot : view, kSegments, hot(ViewRing) ? 3 : 2);
         }
         ImVec2 pts[kSegments + 1];
         bool front[kSegments + 1];
@@ -246,8 +248,8 @@ void Gizmo::draw(ImDrawList* dl, Part hover) const {
             dl->AddRectFilled(ImVec2(tip.x - 5, tip.y - 5), ImVec2(tip.x + 5, tip.y + 5), c);
         }
         ImVec2 a(centre_px_.x - 8, centre_px_.y - 8), b(centre_px_.x + 8, centre_px_.y + 8);
-        dl->AddRectFilled(a, b, with_alpha(hot(Centre) ? kHot : kViewColour, hot(Centre) ? 0.35f : 0.12f));
-        dl->AddRect(a, b, hot(Centre) ? kHot : kViewColour, 0, 0, 2.0f);
+        dl->AddRectFilled(a, b, with_alpha(hot(Centre) ? kHot : view, hot(Centre) ? 0.35f : 0.12f));
+        dl->AddRect(a, b, hot(Centre) ? kHot : view, 0, 0, 2.0f);
     } else {
         for (int i = 0; i < 3; ++i) {
             Vec3 u = axis((i + 1) % 3), v = axis((i + 2) % 3);
@@ -276,8 +278,8 @@ void Gizmo::draw(ImDrawList* dl, Part hover) const {
                                   ImVec2(base.x - side.x * 6, base.y - side.y * 6), c);
         }
         ImVec2 a(centre_px_.x - 7, centre_px_.y - 7), b(centre_px_.x + 7, centre_px_.y + 7);
-        dl->AddRectFilled(a, b, with_alpha(hot(Centre) ? kHot : kViewColour, 0.35f));
-        dl->AddRect(a, b, hot(Centre) ? kHot : kViewColour, 0, 0, 1.5f);
+        dl->AddRectFilled(a, b, with_alpha(hot(Centre) ? kHot : view, 0.35f));
+        dl->AddRect(a, b, hot(Centre) ? kHot : view, 0, 0, 1.5f);
     }
     if (dragging() && !readout_.empty()) {
         ImVec2 at(centre_px_.x + size_px_ * 0.8f, centre_px_.y - size_px_ * 0.9f);

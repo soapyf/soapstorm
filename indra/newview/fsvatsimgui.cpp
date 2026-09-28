@@ -44,7 +44,6 @@
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_internal.h"  // the hovered window, for routing presses
-#include "vats/legacy.h"
 
 #include <cctype>
 #include <cfloat>
@@ -285,9 +284,6 @@ namespace
         io.BackendPlatformName = "soapstorm_viewer";
         io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
         sIniPath = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, "vats_imgui.ini");
-        // The layout saved under the former name (first run after the rename). The docked windows keep their
-        // names, so the layout carries over as it is.
-        vats::migrate_path(gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, vats::legacy_name("_imgui.ini")), sIniPath);
         io.IniFilename = sIniPath.c_str();
         ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
         pio.Platform_GetClipboardTextFn = getClipboard;

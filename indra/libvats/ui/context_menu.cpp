@@ -237,8 +237,11 @@ void App::draw_context_menu() {
             part_clipboard_ = copy_pose(clip, frame_, part_tracks(part));
             status("Copied " + P);
         }
-        if (!part_clipboard_.entries.empty() && ImGui::MenuItem(("Paste onto " + P).c_str()))
+        if (!part_clipboard_.entries.empty() && ImGui::MenuItem(("Paste onto " + P).c_str())) {
+            Clip before = doc_.clip();
             edit("Paste onto " + P, [&](Clip& c) { paste_pose_part(c, part_clipboard_, frame_, part_tracks(part)); });
+            offer_pose_blend(std::move(before), frame_);
+        }
 
         std::string kind = kind_of(part.kind);
         if (!kind.empty()) {

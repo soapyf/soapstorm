@@ -15,6 +15,9 @@ shares or uploads them.
 
 ### Import a body
 
+![The Bodies section of the Inventory with only the Linden body and the Import Body Parts button](images/mesh-bodies/bodies.png)
+*Before any import: **Linden body** is the only entry, highlighted as the body shown.*
+
 1. Open the **Inventory** and find **Bodies** at the top.
 2. Press **Import Body Parts (.dae, .fbx)...** and choose every part at once: body, head, hands and
    feet.

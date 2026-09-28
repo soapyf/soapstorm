@@ -78,11 +78,22 @@ With `--data-dir <dir>`, all of these are in `<dir>`. See [[Projects and files#D
 
 Quit VATs, then:
 
-- delete `settings.json` to reset preferences (the Hexton import is offered again);
+- delete `settings.json` to reset preferences;
 - delete `layout.ini` to reset the panel layout;
 - move the `library` folder away to start with empty libraries.
 
 To test without touching your data, start VATs with `--data-dir` and an empty folder.
+
+### Worked example: a clean start
+
+1. Quit VATs and start it from a terminal with an empty folder: `bin/vats --data-dir /tmp/vats-fresh`
+   on Linux, `bin\vats.exe --data-dir %TEMP%\vats-fresh` on Windows. The folder is created.
+2. The Welcome window opens, the panels are in their default layout and the Inventory's libraries are
+   empty: every setting is a default, whatever your own settings say.
+3. Open **Edit → Preferences...**, set **Colour theme** to **Studio Grey** and quit. The folder now holds a
+   `settings.json` with `"theme": "Studio Grey"` and a `layout.ini`; your own settings folder is untouched.
+4. Delete the folder when you are done. If the problem is gone with the clean start, it is in your settings:
+   see [[Troubleshooting#Starting fresh]].
 
 ### My work is gone after a crash
 
@@ -113,6 +124,9 @@ Include:
 5. Any output on standard error (see [[Troubleshooting#Logs]]) and the text of any message box.
 6. The `.vat` project, and the exported file for export or in-world problems.
 
+![The About window, with the version on its first line](images/troubleshooting/about-window.png)
+*The version is the first line of **Help → About Viewport Avatar Toolset**.*
+
 ## Topic pages
 
 These pages have their own **Troubleshooting** sections:
@@ -122,6 +136,8 @@ These pages have their own **Troubleshooting** sections:
 - [[Projects and files#Troubleshooting]]: saving, crashes, missing props.
 - [[Installation#Troubleshooting]]: file associations.
 - [[Export to Second Life]]: refused uploads and files that look different in-world.
+- [[Animation check]]: problems that show only in Second Life (loop pops, feet in the floor, frozen
+  tails and hands, files too big), each with a fix.
 - [[Animation priority]]: another animation wins.
 - [[Hold and bind]]: a bound hand drifts.
 - [[IK]], [[Retargeting]], [[BVH]], [[Props]], [[Mesh bodies]], [[Motion capture]] and

@@ -17,7 +17,7 @@
 namespace vats {
 
 // Presets for DY-1's common cases.
-DynChain dyn_preset(const std::string& kind, const std::string& root, int length);  // "tail", "ears", "jiggle"
+DynChain dyn_preset(const std::string& kind, const std::string& root, int length);  // "tail", "ears", "jiggle", "overlap"
 
 // Nodes the chain simulates, in order: root, then the first joint child, length times. A collision
 // volume root is a chain of one.
@@ -59,9 +59,10 @@ std::vector<Pose> simulate_frames(const Rig& rig, const Clip& clip, const Shape*
 
 // Replaces the rotation keys (position keys for volumes) of nodes with per-frame samples, reduced to
 // tol_deg / tol_m, with linear keys. Nodes in with_position also get their position keys replaced (a
-// ragdoll's pelvis).
+// ragdoll's pelvis). position_only leaves every rotation key alone (an idle breath's mTorso rise).
 void bake_samples(Clip& clip, const Skeleton& skel, const std::vector<int>& nodes, const std::vector<Pose>& frames,
-                  double tol_deg = 0.1, double tol_m = 0.0002, const std::vector<int>& with_position = {});
+                  double tol_deg = 0.1, double tol_m = 0.0002, const std::vector<int>& with_position = {},
+                  bool position_only = false);
 
 // DY-3: simulates the chains (all when which < 0) from their pre-bake tracks and bakes them, keeping
 // those tracks in DynChain::source. One call is one undo step for the caller.

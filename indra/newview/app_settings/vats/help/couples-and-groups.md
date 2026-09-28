@@ -28,6 +28,9 @@ Open **Tools → Actors (Couples and Groups)...**. A project starts with one act
 Each new actor gets its own colour and the current actor's **Body**, so actors added to a plain project
 start with **None** and draw nothing until you choose a body. Cross-actor binds are not copied.
 
+![The Actors window with two actors, Lead (you) and Partner, and Lead's settings below the list](images/couples-and-groups/actors-window.png)
+*Two actors. The highlighted row is the actor being edited; the three buttons on each row are **Place**, **Shown** and **Unlocked**. Below the list: the edited actor's name, colour, body, placement and the bind to another actor.*
+
 ### Your avatar
 
 The first actor in the list is your avatar and shows **(you)** after its name. In the viewer it is the
@@ -111,7 +114,7 @@ Below the list, under the actor's name:
 | **Body** | How the actor looks: **None** (the default: nothing but its [[Props|props]], and its bones while you edit it), **Ruth** (the Second Life default body), or one of your [[Mesh bodies]]. Saved in the project. In the app the actor you edit shows **Ruth**, or the body chosen under **View** when it has **None** or a mesh body; in the viewer your avatar's actor is the avatar you wear. Projects made before may show another Linden body by name. |
 
 Under **Placement from the sit target**, **Position (m)** and **Turn (deg)** set where the actor stands
-relative to the shared point, which stands for the pose ball or the furniture's root in Second Life.
+relative to the shared point, which stands for the pose ball or the furniture's sit target in Second Life.
 
 ### Share the timeline
 
@@ -130,6 +133,9 @@ The bind works like any other pin (see [[Hold and bind]]); release it later with
 It is baked into the exported file. Binds follow one level: an actor bound to a second actor that is
 itself bound to a third follows the second actor's own animation only.
 
+**Look at Partner**, below the bind, keys the active actor's head and eyes to look between the eyes of the
+**Other actor** on every frame, as one undo step (see [[Face animation#Look at partner]]).
+
 ### Export
 
 **File → Export SL .anim...** writes one `.anim` per actor, loaded ones included, each baked with that
@@ -144,6 +150,78 @@ rotation and a ready-made line for a sit script:
 ```
 llSitTarget(<0.600, 0.000, 0.000>, llEuler2Rot(<0.0, 0.0, 180.00> * DEG_TO_RAD));
 ```
+
+The note ends with the lines for AVsitter2 and nPose V4, the same as in [[#Sit systems (AVsitter and nPose)]].
+
+### Sit systems (AVsitter and nPose)
+
+Furniture usually seats avatars with AVsitter2 or nPose, which read each sitter's position and rotation from
+a notecard. The **Actors** window has a **Sit systems (furniture)** section, below the placement, with those
+lines for every actor, ready to paste:
+
+| Field | Meaning |
+|---|---|
+| **Sit target (m)** | Where the shared sit target is from the furniture's root prim, in metres. Press **Enter** to apply. |
+| **Rotation (deg)** | The sit target's rotation in the root prim, in degrees, as the build window shows it. Press **Enter** to apply. |
+
+Both are saved in the project, the same for every actor; a change is one undo step. With both at 0 the lines
+give each actor's placement as it is.
+
+Under each format, **Copy** puts its lines on the clipboard, and **Save as .txt...** writes them to a text
+file. The pose name is the export name without the actor (`Hug_01`), and the animation names are the export
+names without `.anim` (`Hug_01_Lead`), from the actor you edit, as [[#Export]] writes them.
+
+For AVsitter2, paste into the `AVpos` notecard. Each actor gets a `SITTER` section, counted from 0, with a
+`SYNC` pose, so the actors play together:
+
+```
+SITTER 0|Lead
+SYNC Hug_01|Hug_01_Lead
+{Hug_01}<0,-0.3,0.5><0,0,90>
+
+SITTER 1|Partner
+SYNC Hug_01|Hug_01_Partner
+{Hug_01}<0,0.3,0.5><0,0,-90>
+```
+
+The prim needs one `[AV]sitA` and `[AV]sitB` pair per actor. AVsitter shows at most 23 characters of a pose
+name, so VATs cuts longer names to 23.
+
+For nPose V4, paste into a `SET` card. Each actor is a seat, counted from 1:
+
+```
+XANIM|1|Hug_01_Lead|<0, -0.3, 0.5>|<0, 0, 90>
+XANIM|2|Hug_01_Partner|<0, 0.3, 0.5>|<0, 0, -90>
+```
+
+The `.init` card needs `SEAT_INIT|2`, with the number of actors. nPose V4 has no `ANIM` line; the `XANIM`
+line replaces it.
+
+Positions are in metres from the root prim, rotations in degrees, turned into a rotation X first, then Y,
+then Z, as `llEuler2Rot` does. With a tilted **Rotation**, an actor's turn can show up in all three angles:
+that is the same rotation. Numbers are rounded as the systems write them when you dump their settings:
+AVsitter to 3 decimals for positions and 1 for rotations, nPose to 3 and 2.
+
+### Worked example: a handshake
+
+[Open the example](example:couple-handshake.vat): two actors, **Lead** (you) and **Partner**, placed as
+**Add Partner** places them, 0.6 m apart and facing each other. Each brings its right hand forward by
+frame 15 and holds it there. **Partner** has the body **Ruth**; **Lead** has **None**, so it shows the body
+chosen under **View**.
+
+![Lead and Partner at frame 15, facing each other, each with the right hand forward](images/couples-and-groups/two-actors.png)
+*Frame 15: Lead, with its bones drawn, and Partner tinted in its colour.*
+
+1. Go to frame 15. In the **Actors** window, **Lead (you)** is highlighted: you are editing Lead.
+2. Select **mWristRight** in the **Bones** list, or click Lead's right wrist in the view.
+3. Under **Contact with another actor**, keep **Other actor** on **Partner** and **Their bone** on
+   **mWristRight**, then press **Bind Selected Point to This Bone from Here**. The status bar says
+   "mWristRight now follows Partner's mWristRight", and **Properties → Bone** reads **Pinned to mWristRight
+   from frame 15**.
+4. Click **Partner** in the **Actors** window and drag its **Turn (deg)**: as Partner turns, Lead's hand
+   stays on Partner's wrist. Press **Ctrl+Z** to put Partner back (**Place Actor** is one undo step).
+5. **File → Export SL .anim...** writes one `.anim` per actor and `<name>_placement.txt`, whose
+   **Partner** entry ends with the sit-target line shown above.
 
 ## Tips and tricks
 
@@ -175,5 +253,7 @@ A drag or text edit is still open. Release the mouse or press **Enter**, then tr
 ## See also
 
 - [Second Life Wiki: llSitTarget](https://wiki.secondlife.com/wiki/LlSitTarget)
+- [AVsitter2: The AVpos notecard](https://avsitter.github.io/avsitter2_avpos.html)
+- [nPose V4: Notecard contents](https://github.com/nPoseTeam/nPose-V4/wiki/NC-Contents)
 
 Category: Animating

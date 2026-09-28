@@ -23,6 +23,9 @@ The status bar ends with **(all bones)** or **(selected bones)** so you can tell
 
 **Edit → Time → Insert Frames...** opens empty frames at the playhead. The dialog reads "Insert empty frames at frame N on every bone" (or "on the selected bones"); set **Frames** (1–3600, 10 by default) and press **OK**. Keys at or after the playhead move later by that many frames.
 
+![The Insert Frames dialog at frame 10 with nothing selected](images/time-editing/insert-frames.png)
+*With nothing selected, the frames open on every bone.*
+
 ### Removing a range
 
 **Edit → Time → Remove Range** deletes the frames of the range and closes the gap: keys after the range move earlier. The range is cleared afterwards.
@@ -41,6 +44,16 @@ The status bar ends with **(all bones)** or **(selected bones)** so you can tell
    - **Paste Range Mirrored**: pastes with left and right swapped, as [[Mirror, flip and reverse|Mirror]] does.
 
 The paste commands are greyed out with "Copy a range first" until something is copied. A paste goes onto the same bones it was copied from, whatever is selected when you paste.
+
+## Worked example: slow a nod down
+
+[Open the example](example:time-nod.vat): a 30-frame clip in which the head nods between frames 0 and 20 (keys on **mHead** and **mNeck** at 0, 10 and 20) and then holds.
+
+1. With nothing selected, **Shift+drag** on the timeline from frame 10 to frame 20. A yellow band marks the range.
+2. Choose **Edit → Time → Stretch Range...**. The dialog reads "Frames 10 to 20 (10 frames) become:"; type `20` in **Frames** and press **OK**. The status bar says "Stretch Range (all bones)".
+3. Look at the timeline: the keys are now at frames 0, 10 and 30, and **Properties → Animation → Last frame** reads 40, because the key that ended up at frame 30 pushed the 10 frames after it along. The head comes up in 20 frames instead of 10; the way down is unchanged.
+
+To try the other command instead, undo (**Ctrl+Z**), scrub to frame 10 and choose **Edit → Time → Insert Frames...** with **Frames** at 10: the keys land at 0, 20 and 30 and the last frame is again 40. Nothing holds: the curve runs from the key at 0 to the key at 20, so the head now takes 20 frames to go down and 10 to come up.
 
 ## Tips and tricks
 

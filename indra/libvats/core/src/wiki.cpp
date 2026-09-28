@@ -57,6 +57,17 @@ bool separator_row(std::string_view line) {
 
 }  // namespace
 
+bool png_size(const std::string& path, int& width, int& height) {
+    unsigned char h[24] = {};
+    std::ifstream f(std::filesystem::path(std::u8string(path.begin(), path.end())), std::ios::binary);  // UTF-8
+    if (!f.read(reinterpret_cast<char*>(h), sizeof h)) return false;
+    static const unsigned char sig[] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n', 0, 0, 0, 13, 'I', 'H', 'D', 'R'};
+    if (!std::equal(sig, sig + 16, h)) return false;
+    auto be = [&](int at) { return int(h[at]) << 24 | int(h[at + 1]) << 16 | int(h[at + 2]) << 8 | int(h[at + 3]); };
+    width = be(16), height = be(20);
+    return width > 0 && height > 0;
+}
+
 std::string anchor_key(std::string_view heading) {
     std::string out;
     bool dash = false;
@@ -137,6 +148,7 @@ std::vector<Span> parse_inline(std::string_view text) {
                     l.link = true;
                     l.target = std::string(text.substr(close + 2, end - close - 2));
                     l.external = l.target.find("://") != std::string::npos;
+                    if (starts(l.target, "example:")) l.example = true, l.target.erase(0, 8);
                     l.text = std::string(text.substr(i + 1, close - i - 1));
                     flush();
                     out.push_back(l);
@@ -220,6 +232,22 @@ Page parse_page(std::string_view markdown, std::string file) {
                 continue;
             }
         }
+        if (starts(t, "![") && t.back() == ')') {  // an image on its own line, then an optional *caption* line
+            const size_t mid = t.find("](");
+            if (mid != std::string::npos) {
+                close();
+                Block img;
+                img.kind = Block::Image;
+                img.alt = trim(std::string_view(t).substr(2, mid - 2));
+                img.image = trim(std::string_view(t).substr(mid + 2, t.size() - mid - 3));
+                if (n + 1 < lines.size()) {
+                    const std::string c = trim(lines[n + 1]);
+                    if (c.size() > 2 && c[0] == '*' && c[1] != '*' && c[1] != ' ' && c.back() == '*') img.spans = parse_inline(c), ++n;
+                }
+                page.blocks.push_back(img);
+                continue;
+            }
+        }
         if (t[0] == '|') {  // table: this and the following "|" lines
             close();
             Block table;
@@ -277,7 +305,7 @@ Page parse_page(std::string_view markdown, std::string file) {
 
     std::string plain = page.title + "\n";
     for (const Block& b : page.blocks) {
-        plain += spans_text(b.spans) + b.code + "\n";
+        plain += b.alt + (b.alt.empty() ? "" : " ") + spans_text(b.spans) + b.code + "\n";
         for (const auto& row : b.rows)
             for (const auto& cell : row) plain += spans_text(cell) + " ";
     }

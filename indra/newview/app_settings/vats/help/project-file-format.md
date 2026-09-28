@@ -44,7 +44,7 @@ A project is one JSON object. VATs writes the fields below; readers must accept 
 
 | Field | Value |
 |---|---|
-| `format` | `"vats-project"`. VATs also opens Hexton projects (`"hexton-sl-anim"`, `.hxanim`) |
+| `format` | `"vats-project"` |
 | `version` | `1` for a project with one actor, `2` for a project with two or more actors (see actors below) |
 | `euler_order` | `"xyz-extrinsic"`, the only order: a rotation `(x, y, z)` in degrees is X applied first, then Y, then Z |
 | `meta` | a free-form object, always kept |
@@ -66,7 +66,7 @@ A file with a higher `version` than VATs knows opens with a warning and is saved
 | `emote` | string | `""` | the facial emote played with the animation |
 | `mirror_export` | bool | `false` | the export is mirrored left to right |
 | `export` | object | `{}` | export settings (below) |
-| `ik_solve` | string | absent | `"literal"` in projects converted from Hexton: IK poses the way Hexton posed them |
+| `ik_solve` | string | absent | `"literal"`: IK uses the literal two-bone frame instead of lining the mid joint up with the pole |
 
 The `export` object holds the settings of **File → Export**: `name`, `number`, `side`, `pattern`,
 `folder`, `both`, `count_up`, the body `shape` (default `"sl-default"`), `reduce` as an array
@@ -123,11 +123,25 @@ An array of [[Dynamics]] chains, each with `root`, `length`, `stiffness`, `dampi
 `radius` and `baked`. A baked chain also has `source`: the chain's tracks from before the bake, in the
 `curves` layout.
 
+### idle
+
+An array of [[Idle layer|idle layers]], each with `kind` (`"breath"` or `"sway"`), `amplitude` (degrees),
+`period` (seconds, before snapping), `seed`, `bones` (an array of bone names) and `baked`. A baked layer
+also has `source`: its bones' tracks from before the bake, in the `curves` layout.
+
 ### ragdoll
 
 The [[Ragdoll]], when set up: `whole_body`, `bones`, `start`, `frames`, `blend_in`, `blend_out`,
 `gravity`, `stiffness`, `friction`, `baked`, and `source` when baked. `fall_direction` is one of
 `"forward"`, `"back"`, `"left"`, `"right"`, `"random"` or `"none"`; absent means forward.
+
+### face_layer
+
+The blink, eye-dart and look-at layer of [[Face animation]], when added: `seed`, `blinks`, `blink_min`,
+`blink_max`, `blink_length` (seconds), `saccades`, `saccade_interval` (seconds), `eye_limit` (degrees), `look`
+(`""`, `"point"`, `"prop"`, `"camera"` or `"actor"`), `point` (`[x, y, z]`, metres), `prop` (a prop's name),
+`actor` and `bone` (`""` is between the eyes), `head_share`, `head_max` (degrees), `baked`, `head_baked`, and
+`source` when baked: the eye, eyelid and head tracks from before the bake.
 
 ### audio
 
@@ -156,8 +170,8 @@ has a `clip` object with the same fields as the top level: timing, curves, props
 ### Unknown fields
 
 VATs keeps every field it does not know, at the top level, in each actor and clip, and in pins, chains,
-the ragdoll and the audio track, and writes them back on save. A tool can store its own data in a project
-this way; a name with a prefix of its own avoids clashes with later VATs fields.
+idle layers, the ragdoll, the face layer and the audio track, and writes them back on save. A tool can store its
+own data in a project this way; a name with a prefix of its own avoids clashes with later VATs fields.
 
 ## Usage
 
@@ -166,15 +180,9 @@ this way; a name with a prefix of its own avoids clashes with later VATs fields.
 The app writes a project to a temporary file and renames it over the old one, so a failed save never
 leaves half a file. The previous version is kept as `<name>.vat.bak`.
 
-### Hexton projects
-
-Opening a Hexton `.hxanim` project converts it (see [[Hexton import]]). `meta.migrated_from` records the
-source file, unknown Hexton fields are kept under `meta.hexton_extra`, and the project is saved only
-under a new name.
-
 ## Troubleshooting
 
-### "not a VATs or Hexton project (format is missing or unknown)"
+### "not a VATs project (format is missing or unknown)"
 
 The file has no `format` field, or an unknown one. Check that it is a VATs project and not a pose or
 prop library.
