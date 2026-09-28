@@ -4,7 +4,7 @@
 // The subset is the one docs/wiki/STYLE.md allows: # to ### headings, paragraphs, **bold**, *italic*,
 // `code`, fenced code blocks, bullet and numbered lists (one level of nesting), pipe tables, the Note / Tip /
 // Warning boxes and the "Related articles" line, [[Page#Section|label]] and [text](https://...) links, images
-// (![alt](images/<page>/<name>.png) on a line of its own, an optional *caption* line under it), example links
+// (![alt](images/<page>/<name>.png or .gif) on a line of its own, an optional *caption* line under it), example links
 // ([text](example:<file>.vat), a project in examples/) and a closing "Category: ..." line. No UI here: the app (ImGui) and the viewer (LLUI) draw the same blocks.
 #pragma once
 
@@ -49,6 +49,8 @@ std::vector<Span> parse_inline(std::string_view text);
 
 // The width and height of a PNG file from its header; false when it is not a readable PNG.
 bool png_size(const std::string& path, int& width, int& height);
+// The same for a GIF (its logical screen), from the header alone.
+bool gif_size(const std::string& path, int& width, int& height);
 
 // Normalises heading text for anchor matching: lower case, runs of spaces/hyphens/underscores as one "-".
 std::string anchor_key(std::string_view heading);

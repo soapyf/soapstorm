@@ -1,9 +1,12 @@
-// Viewport Avatar Toolset - the animated GIF writer (see vats/gif.h).
+// Viewport Avatar Toolset - the animated GIF writer and reader (see vats/gif.h).
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 #include "vats/gif.h"
 
+#include "stb/stb_image.h"  // declarations only; the implementation is compiled in audio_decoders.c
+
 #include <algorithm>
 #include <array>
+#include <climits>
 #include <cmath>
 #include <unordered_map>
 
@@ -196,6 +199,23 @@ std::vector<std::uint8_t> GifWriter::finish() {
 int gif_delay_cs(int i, double fps) {
     fps = std::max(fps, 0.01);
     return int(std::lround((i + 1) * 100.0 / fps) - std::lround(i * 100.0 / fps));
+}
+
+bool read_gif(const std::uint8_t* data, std::size_t size, GifImage& out) {
+    out = {};
+    if (!data || size == 0 || size > std::size_t(INT_MAX)) return false;
+    int* delays = nullptr;
+    int w = 0, h = 0, n = 0, comp = 0;
+    stbi_uc* px = stbi_load_gif_from_memory(data, int(size), &delays, &w, &h, &n, &comp, 4);
+    const bool ok = px && delays && w > 0 && h > 0 && n > 0;
+    if (ok) {
+        out.width = w, out.height = h;
+        out.rgba.assign(px, px + std::size_t(w) * std::size_t(h) * 4 * std::size_t(n));
+        out.delays_ms.assign(delays, delays + n);
+    }
+    stbi_image_free(px);
+    stbi_image_free(delays);
+    return ok;
 }
 
 }  // namespace vats

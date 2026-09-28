@@ -72,7 +72,8 @@ void App::store_library_item(LibraryItem item) {
 }
 
 // The user's prop library (library.json beside poses.json) and the read-only starter props shipped in
-// assets/props/props.json: [{slug, name, file, category, suggested_point, pos, rot}].
+// assets/props/props.json: [{slug, name, file, category, suggested_point, pos, rot}]. A two-handed prop may add
+// support_grip: where the other hand's fist goes, in metres in the suggested point's frame (for tutorials).
 void App::load_prop_libraries() {
     std::string path = library_dir() + "library.json", err;
     if (std::ifstream f{path, std::ios::binary}) {

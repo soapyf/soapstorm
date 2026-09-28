@@ -154,7 +154,7 @@ slider and **Blend** stay in view.
 | **Light** | the lighting presets **Flat Noon**, **Three-Quarter Key**, **Rim / Back**, **Dusk** and **Night**, **Studio (Default)**, and **Plain Backdrop**: a grey wall and floor behind the actor that turn with the camera. They are for looking at the animation only; nothing is saved |
 | **Select** | **Select All**, **Select Keyed on Frame**, **Select All Keyed**, **Select None**, parent, child and siblings |
 | **Tools** | the four tools, the axes, IK and pins, **Clean Up Foot Sliding...**, **Loop Tools**, **Hand Poser**, **Dynamics...**, **Idle Layer...**, **Overlap...**, **Auto-Balance...**, **Jump Arc...**, **Ragdoll...**, **Face...**, **Actors (Couples and Groups)...**, **Motion Capture...**, **Split Dance at Beats...**, **Animation Check...**, **Motion Quality...** |
-| **Help** | **Help Contents**, **Controls**, **Welcome**, **About Viewport Avatar Toolset** |
+| **Help** | **Help Contents**, **Tutorials**, **Controls**, **Welcome**, **About Viewport Avatar Toolset** |
 
 Every **Tools** item has an icon, the same as its button where it has one:
 
@@ -186,9 +186,17 @@ is the key in the active preset.
 ### Help windows
 
 - **Help → Help Contents** (**F1**) opens this help: contents, search and every page.
+- **Help → Tutorials** opens the [[Tutorials]] page: the lessons in order, beginner first.
 - **Help → Controls** lists the mouse controls and every key of the active preset.
 - **Help → Welcome** reopens the start window.
 - **Help → About Viewport Avatar Toolset** shows the version, licence and credits.
+
+The **Help** window opens floating. To keep it beside your work, drag its title bar onto a panel,
+such as **Properties**, and drop it on the centre of the docking target: it becomes a tab there and
+stays there the next time you open it. Drag the tab out again to float it. While it is docked, **F1**
+or **Help → Help Contents** brings its tab to the front. In a narrow panel the contents list hides
+behind a **Pages** button, which shows search and the page list in place of the page; picking a page
+or pressing **Page** goes back to the page.
 
 ### Worked example: find a key with the panels
 

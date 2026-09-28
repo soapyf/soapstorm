@@ -36,6 +36,9 @@ Pick a tool from the timeline bar or the **Tools** menu. The keys below are the 
 - Hold **Ctrl** while dragging to snap rotations to the step set in [[Preferences]] (**Rotation snap**, 5° by default). In the Second Life preset, **G** turns snapping on and off instead.
 - **Esc** or a right-click during a drag puts everything back.
 
+![Dragging the Rotate tool's blue ring turns the head to one side, then part of the way back](images/posing/rotate-drag.gif)
+*Dragging the blue Z ring turns **mHead** and keys frame 12; the angle shows beside the gizmo during the drag.*
+
 ### Typing exact values
 
 The **Bone** section of **Properties** shows the primary bone's **Rotation** in degrees around X, Y and Z; type or drag to change it. Under it, **Keyed at this frame** or **Not keyed at this frame** tells you whether the values are a key or are interpolated.

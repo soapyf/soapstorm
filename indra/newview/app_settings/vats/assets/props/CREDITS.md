@@ -1,10 +1,11 @@
 # Starter props: credits
 
-Every model here is a third-party model under CC0 1.0 or CC BY 3.0, converted for VATs.
+Every model here is a third-party model under CC0 1.0 or CC BY 3.0, converted for VATs, or a model made for
+VATs. Models made for VATs are released under CC0 1.0.
 
-Changes to every model: converted from glTF/GLB to COLLADA 1.4 (Z up, metres, triangles), rotated to
-SL axes (+X forward, +Y left, +Z up), scaled to real-world size, moved to a new origin (floor centre,
-base centre or grip point), textures replaced by flat colours from one shared muted palette,
+Changes to every third-party model: converted from glTF/GLB to COLLADA 1.4 (Z up, metres, triangles),
+rotated to SL axes (+X forward, +Y left, +Z up), scaled to real-world size, moved to a new origin (floor
+centre, base centre or grip point), textures replaced by flat colours from one shared muted palette,
 degenerate triangles removed. Other changes are listed at the end.
 
 ## CC BY 3.0 attribution
@@ -47,13 +48,26 @@ These models need attribution (https://creativecommons.org/licenses/by/3.0/):
 | `ball.dae` | Kenney Minigolf Kit, `ball-red` | Kenney (kenney.nl) | CC0 1.0 | https://kenney.nl/assets/minigolf-kit |
 | `mic-stand.dae` | "Mic" | iPoly3D | CC0 1.0 | https://poly.pizza/m/yqbacXdPsg |
 | `rug.dae` | Kenney Furniture Kit, `rugRectangle` | Kenney (kenney.nl) | CC0 1.0 | https://kenney.nl/assets/furniture-kit |
+| `knife.dae` | "Knife" | Quaternius | CC0 1.0 | https://poly.pizza/m/NNzzvlGXzO |
+| `greatsword.dae` | "Claymore" | Quaternius | CC0 1.0 | https://poly.pizza/m/BBhN1O6TOL |
+| `pistol.dae` | "Pistol" | Quaternius | CC0 1.0 | https://poly.pizza/m/Jyn9qex4ba |
+| `rifle.dae` | "Assault Rifle" | Quaternius | CC0 1.0 | https://poly.pizza/m/K2lXTYFSLC |
+| `shotgun.dae` | "Shotgun" | Quaternius | CC0 1.0 | https://poly.pizza/m/ZmPTnh7njL |
+| `spear.dae` | made for VATs | Viewport Avatar Toolset contributors | CC0 1.0 | `tools/make-starter-props.py` |
+| `magazine.dae` | made for VATs | Viewport Avatar Toolset contributors | CC0 1.0 | `tools/make-starter-props.py` |
 
 Kenney kits are distributed under CC0 1.0 (the `License.txt` in each kit); crediting Kenney is optional.
 poly.pizza lists the licence of each model on its page; "Poly by Google" is poly.pizza's credit for models
 from the former Google Poly library, published there under CC BY 3.0.
+
+`tools/glb-to-prop.py` converts a GLB model this way; `tools/make-starter-props.py` builds the models made for VATs.
 
 Other changes:
 
 - `mic-stand.dae` (iPoly3D "Mic") is used as a floor-standing mic stand, scaled to 1.6 m.
 - `flashlight.dae` is Quaternius' "Torch" (an electric torch), scaled to 25 cm.
 - `mug.dae` is Kenney's `cup`, and `tankard.dae` is Kenney's `mug`.
+- `greatsword.dae` is Quaternius' "Claymore", scaled to 1.35 m, with its red blade recoloured steel.
+- `rifle.dae` and `shotgun.dae` are scaled to 0.88 m and 1 m; `pistol.dae` to 20 cm; `knife.dae` to 30 cm.
+- The guns' origin is the centre of the pistol grip (the shotgun's: the wrist of the stock), and the blades'
+  the centre of the hand on the grip.

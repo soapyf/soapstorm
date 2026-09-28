@@ -1137,6 +1137,7 @@ void App::build_actions() {
     add("about", {"About Viewport Avatar Toolset", 0, 0, false, [this] { show_about_ = true; }, {}});
     add("prefs", {"Preferences...", ctrl | ImGuiKey_Comma, 0, false, [this] { show_prefs_ = !show_prefs_; }, {}});
     add("help_contents", {"Help Contents", ImGuiKey_F1, 0, false, [this] { open_help(); }, {}});
+    add("tutorials", {"Tutorials", 0, 0, false, [this] { open_help("tutorials"); }, {}});
     add("help", {"Controls", 0, 0, false, [this] { show_help_ = !show_help_; }, {}});
     add("welcome", {"Welcome", 0, 0, false, [this] { show_welcome_ = true; }, {}});
     add("zoom_in", {"Zoom In", 0, 0, true, [this] { camera_.zoom(0.85); }, {}});
@@ -1536,7 +1537,7 @@ void App::draw_menus() {
         }
     }
     if (begin_menu_icon(nullptr, "Help")) {
-        for (const char* id : {"help_contents", "help", "welcome", "about"}) menu_item(id);
+        for (const char* id : {"help_contents", "tutorials", "help", "welcome", "about"}) menu_item(id);
         ImGui::EndMenu();
     }
     ImGui::EndMainMenuBar();

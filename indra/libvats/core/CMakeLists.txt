@@ -1,10 +1,11 @@
 # libvats: the animation core. No UI, no rendering, and no third-party dependencies except the
-# vendored ufbx (third_party/ufbx, MIT) behind VATS_FBX and the public-domain audio decoders
+# vendored ufbx (third_party/ufbx, MIT) behind VATS_FBX and the public-domain audio and image decoders
 # (third_party/dr_libs, third_party/stb), so it can be embedded in an SL viewer as well as the standalone app.
 add_library(vats_core STATIC
     src/anim_convert.cpp
     src/audio.cpp
     src/audio_decoders.c
+    src/image_decoders.c
     src/anim_file.cpp
     src/avatar_mesh.cpp
     src/bvh.cpp
@@ -82,13 +83,14 @@ elseif(MSVC)
     set_source_files_properties(src/anim_file.cpp PROPERTIES COMPILE_OPTIONS "/fp:precise")
 endif()
 
-# Audio decoding (spec 08 AU) through the vendored public-domain dr_libs and stb_vorbis, warnings off like ufbx.
+# Audio decoding (spec 08 AU) through the vendored public-domain dr_libs and stb_vorbis, and the help's GIFs through
+# stb_image; warnings off like ufbx.
 enable_language(C)
 target_include_directories(vats_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-    set_source_files_properties(src/audio_decoders.c PROPERTIES COMPILE_OPTIONS "-w")
+    set_source_files_properties(src/audio_decoders.c src/image_decoders.c PROPERTIES COMPILE_OPTIONS "-w")
 elseif(MSVC)
-    set_source_files_properties(src/audio_decoders.c PROPERTIES COMPILE_OPTIONS "/W0")
+    set_source_files_properties(src/audio_decoders.c src/image_decoders.c PROPERTIES COMPILE_OPTIONS "/W0")
 endif()
 if(NOT WIN32)
     target_link_libraries(vats_core PRIVATE m)

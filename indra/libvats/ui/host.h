@@ -77,6 +77,18 @@ public:
     virtual bool save_thumbnail_png(const std::string& path) = 0;
     // Textures for thumbnails: a PNG loaded for ImGui::Image; 0 when missing or unreadable.
     virtual ImTextureID load_texture(const std::string& png) = 0;
+    // A texture from straight-alpha RGBA pixels, width * height * 4 bytes, top row first (the help's GIF frames),
+    // freed with free_texture; 0 when this host cannot (the help then shows the GIF's alt text).
+    virtual ImTextureID make_texture(const std::uint8_t* rgba, int width, int height) {
+        (void)rgba, (void)width, (void)height;
+        return ImTextureID{};
+    }
+    // Replaces a make_texture texture's pixels with ones of the same size (the next GIF frame); false when this host
+    // cannot (the help then frees it and makes another).
+    virtual bool update_texture(ImTextureID texture, const std::uint8_t* rgba, int width, int height) {
+        (void)texture, (void)rgba, (void)width, (void)height;
+        return false;
+    }
     virtual void free_texture(ImTextureID texture) = 0;
 
     // --- Reference picture and listing media (08 RF, LM) -------------------------------------------

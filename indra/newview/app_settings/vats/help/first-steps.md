@@ -175,6 +175,7 @@ The selection was another bone, or the **Move** tool was active. Click the forea
 
 ## See also
 
+- [[Tutorials]]: the next lessons, starting with [[Your first pose]]
 - [[Interface]]
 - [[Keyboard shortcuts]]
 - [[Posing]]

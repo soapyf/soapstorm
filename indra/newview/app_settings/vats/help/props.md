@@ -51,6 +51,23 @@ grouped by category. Hover a thumbnail to see its parent, category and file.
 
 Starter props cannot be renamed, saved over or deleted.
 
+### Starter props
+
+| Category | Props |
+|---|---|
+| Seating | Chair, Bar Stool, Park Bench, Sofa, Armchair, Double Bed |
+| Table | Table |
+| Cups | Mug, Tankard, Wine Glass, Cocktail Glass, Wine Bottle, Soda Can |
+| Handheld | Phone, Book, Pen, Microphone, Umbrella, Flashlight |
+| Weapons | Sword, Round Shield, Bow, Staff, Axe, Knife, Greatsword, Spear, Pistol, Rifle, Shotgun, Magazine |
+| Fun | Acoustic Guitar, Ball, Mic Stand |
+| Floor | Rug |
+
+Hand-held props sit in the fist of the **Right Hand** point; the Round Shield, the Bow and the Magazine go on
+the **Left Hand**. The guns' grip runs up through the fist with the muzzle along the fingers. Two-handed
+props leave room for the other hand: the Rifle's wooden handguard, the Shotgun's pump, the Greatsword's
+grip below the right hand, and the Spear's shaft half a metre up from the right hand.
+
 ### Place a static prop
 
 Click a prop in the view to select it. **Properties → Prop** shows its name and:

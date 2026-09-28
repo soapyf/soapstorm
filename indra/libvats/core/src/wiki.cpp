@@ -68,6 +68,17 @@ bool png_size(const std::string& path, int& width, int& height) {
     return width > 0 && height > 0;
 }
 
+bool gif_size(const std::string& path, int& width, int& height) {
+    unsigned char h[10] = {};
+    std::ifstream f(std::filesystem::path(std::u8string(path.begin(), path.end())), std::ios::binary);
+    if (!f.read(reinterpret_cast<char*>(h), sizeof h)) return false;
+    if (std::string_view(reinterpret_cast<const char*>(h), 6) != "GIF89a" &&
+        std::string_view(reinterpret_cast<const char*>(h), 6) != "GIF87a")
+        return false;
+    width = h[6] | h[7] << 8, height = h[8] | h[9] << 8;
+    return width > 0 && height > 0;
+}
+
 std::string anchor_key(std::string_view heading) {
     std::string out;
     bool dash = false;

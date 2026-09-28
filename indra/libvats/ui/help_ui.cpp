@@ -1,11 +1,14 @@
 // Viewport Avatar Toolset - the help browser: the shipped wiki (docs/wiki, vats/wiki.h) drawn with ImGui.
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 #include <cfloat>
+#include <fstream>
 #include <functional>
+#include <iterator>
 #include <map>
 
 #include "app.h"
 #include "imgui_internal.h"
+#include "vats/gif.h"
 #include "vats/wiki.h"
 #include "theme.h"
 
@@ -18,6 +21,7 @@ struct HelpUi {
     std::function<void(const std::string&)> open_example;  // an example link's project file, in <dir>/examples
     bool loaded = false, open = false, focus = false;
     bool modal = false;  // opened from a modal dialog: drawn as a nested modal there, not as a window
+    bool pages = false;  // docked narrow: the contents list shows in place of the page
     std::vector<std::pair<std::string, std::string>> history;  // page file, heading
     int at = -1;
     bool scroll = false;  // move to the heading (or the top) after the next draw
@@ -27,19 +31,46 @@ struct HelpUi {
     std::vector<wiki::Hit> hits;
     const void* hovered = nullptr;  // the link span under the mouse last frame, so all its words underline
     const void* hovering = nullptr;
-    // The shown page's images by path, loaded as first drawn and freed when another page shows.
+    // The shown page's images by path, loaded as first drawn and freed when another page shows or the help closes.
+    // A GIF holds memory only while on screen: it is decoded (every frame, stb_image) when it scrolls into view and
+    // shown through one texture updated in place; frames and texture go once it has been off screen for kGifKeepNs,
+    // and scrolling back decodes it again. Peak: the visible GIFs' frames, w x h x 4 bytes each (rotate-drag.gif, 96
+    // frames at 360x290: 40 MB).
     struct Image {
-        ImTextureID tex = 0;
+        ImTextureID tex = 0;  // a GIF's: its frame `shown`
         int w = 0, h = 0;
+        bool gif = false, failed = false;  // failed: no decode, or the host makes no textures; the alt text shows
+        GifImage px;                       // a GIF's frames, while on screen
+        int at = 0, shown = -1;
+        std::uint64_t next_ns = 0;  // when frame `at` ends; 0 = not playing
+        std::uint64_t seen_ns = 0;  // when last on screen
+        bool paused = false;        // by a click
     };
+    static constexpr std::uint64_t kGifKeepNs = 2'000'000'000;
     std::map<std::string, Image> images;
     std::string images_page;
+    // GIFs play only while the app has the system's focus and the help window has ImGui's; live_before is last frame's.
+    bool app_focused = true, live = false, live_before = false;
 
     ~HelpUi() { free_images(); }  // App::shutdown drops the help before the host's GL context goes
     void free_images() {
         for (auto& [path, im] : images)
             if (im.tex) host->free_texture(im.tex);
         images.clear();
+        images_page.clear();
+    }
+    // Once a frame, drawn or not (a collapsed help draws no page): drops the GIFs off screen for kGifKeepNs.
+    void release_idle_gifs() {
+        const std::uint64_t now = host->ticks_ns();
+        for (auto& [path, im] : images) {
+            if (!im.gif || (!im.tex && im.px.rgba.empty())) continue;
+            if (now - im.seen_ns >= kGifKeepNs) {
+                if (im.tex) host->free_texture(im.tex);
+                im.tex = 0, im.shown = -1, im.px = {}, im.next_ns = 0;
+            } else {
+                host->wake(double(im.seen_ns + kGifKeepNs - now) * 1e-9);  // a sleeping host still gets to free it
+            }
+        }
     }
 
     void load() {
@@ -51,7 +82,7 @@ struct HelpUi {
         history.resize(size_t(at + 1));
         history.emplace_back(file, anchor);
         at = int(history.size()) - 1;
-        scroll = true;
+        scroll = true, pages = false;
     }
     const wiki::Page* home() const {
         if (const wiki::Page* p = lib.find("vats")) return p;
@@ -164,20 +195,85 @@ const wiki::Span* draw_box(HelpUi& ui, const wiki::Block& b, float w) {
     return clicked;
 }
 
+// A GIF on screen: decodes it if it holds no frames, moves it on to the frame due now and puts that frame in its
+// texture; returns the texture, 0 when it cannot be shown.
+ImTextureID gif_now(HelpUi& ui, HelpUi::Image& im, const std::string& path) {
+    const std::uint64_t now = ui.host->ticks_ns();
+    im.seen_ns = now;
+    if (im.px.rgba.empty()) {
+        std::ifstream f(std::filesystem::path(std::u8string(path.begin(), path.end())), std::ios::binary);
+        const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        if (!read_gif(bytes.data(), bytes.size(), im.px) || im.px.width != im.w || im.px.height != im.h) {
+            im.px = {}, im.failed = true;
+            return 0;
+        }
+        if (im.at >= im.px.frames()) im.at = 0;
+    }
+    const int n = im.px.frames();
+    // Browsers show a delay under 20 ms as 100 ms; so do we, so a GIF plays here as it does on the web.
+    auto delay_ns = [&](int i) {
+        const int ms = im.px.delays_ms[size_t(i)];
+        return std::uint64_t(ms < 20 ? 100 : ms) * 1000000u;
+    };
+    if (!ui.live) {
+        im.at = 0, im.next_ns = 0;  // still, on the first frame
+    } else if (!im.paused && n > 1) {
+        if (!im.next_ns || now > im.next_ns + 1000000000u) im.next_ns = now + delay_ns(im.at);  // start, or back from a stall
+        while (now >= im.next_ns) im.at = (im.at + 1) % n, im.next_ns += delay_ns(im.at);
+        ui.host->wake(double(im.next_ns - now) * 1e-9);
+    } else {
+        im.next_ns = 0;  // paused: resumes with the whole of this frame
+    }
+    if (im.shown != im.at) {
+        const std::uint8_t* frame = &im.px.rgba[size_t(im.at) * size_t(im.w) * size_t(im.h) * 4];
+        if (!im.tex || !ui.host->update_texture(im.tex, frame, im.w, im.h)) {  // a host that cannot update makes anew
+            if (im.tex) ui.host->free_texture(im.tex);
+            im.tex = ui.host->make_texture(frame, im.w, im.h);
+        }
+        im.shown = im.tex ? im.at : -1;
+        if (!im.tex) im.px = {}, im.failed = true;
+    }
+    return im.tex;
+}
+
 // An image scaled down to the column width, or its alt text in a frame when the file is missing; then its caption.
+// A GIF plays in place, looping, and a click pauses and resumes it.
 const wiki::Span* draw_image(HelpUi& ui, const wiki::Page& page, const wiki::Block& b, float w) {
     if (ui.images_page != page.file) ui.free_images(), ui.images_page = page.file;
     auto [it, fresh] = ui.images.try_emplace(b.image);
     HelpUi::Image& im = it->second;
     const bool inside = !b.image.empty() && b.image[0] != '/' && b.image.find("..") == std::string::npos;
-    if (fresh && inside && wiki::png_size(ui.dir + "/" + b.image, im.w, im.h)) im.tex = ui.host->load_texture(ui.dir + "/" + b.image);
+    const std::string path = ui.dir + "/" + b.image;
+    if (fresh && inside) {
+        im.gif = b.image.size() > 4 && b.image.compare(b.image.size() - 4, 4, ".gif") == 0;
+        if (im.gif) wiki::gif_size(path, im.w, im.h);
+        else if (wiki::png_size(path, im.w, im.h)) im.tex = ui.host->load_texture(path);
+    }
     const ImU32 border = ImGui::GetColorU32(ImGuiCol_Border);
-    if (im.tex) {
-        const float dw = std::min(w, float(im.w) * ImGui::GetFontSize() / 15.f);  // shots are at 100%: 15 px text (load_fonts)
-        const ImVec2 p = ImGui::GetCursorScreenPos(), sz(dw, dw * float(im.h) / float(im.w));
-        ImGui::Image(im.tex, sz);
+    const float dw = im.w > 0 ? std::min(w, float(im.w) * ImGui::GetFontSize() / 15.f) : 0;  // shots are at 100%: 15 px text (load_fonts)
+    const ImVec2 p = ImGui::GetCursorScreenPos(), sz(dw, im.w > 0 ? dw * float(im.h) / float(im.w) : 0);
+    const bool gif = im.gif && im.w > 0 && !im.failed;
+    const ImTextureID tex = gif ? (ImGui::IsRectVisible(sz) ? gif_now(ui, im, path) : 0) : im.tex;
+    if (tex || (gif && !im.failed)) {  // a GIF off screen: its frame only
+        if (im.gif) {
+            if (ImGui::InvisibleButton("gif", sz) && ui.live_before) im.paused = !im.paused, im.next_ns = 0;
+            if (tex) ImGui::GetWindowDrawList()->AddImage(tex, p, ImVec2(p.x + sz.x, p.y + sz.y));
+            if (im.paused && im.px.frames() > 1) {  // a play sign in the middle
+                const float r = ImGui::GetFontSize() * 1.1f;
+                const ImVec2 c(p.x + sz.x * 0.5f, p.y + sz.y * 0.5f);
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+                dl->AddCircleFilled(c, r, IM_COL32(0, 0, 0, 140));
+                dl->AddTriangleFilled(ImVec2(c.x - r * 0.35f, c.y - r * 0.5f), ImVec2(c.x - r * 0.35f, c.y + r * 0.5f),
+                                      ImVec2(c.x + r * 0.55f, c.y), IM_COL32(255, 255, 255, 230));
+            }
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip) && im.px.frames() > 1)
+                ImGui::SetTooltip("%s%sClick to %s", b.alt.c_str(), b.alt.empty() ? "" : "\n", im.paused ? "play" : "pause");
+            else if (!b.alt.empty()) ImGui::SetItemTooltip("%s", b.alt.c_str());
+        } else {
+            ImGui::Image(tex, sz);
+            if (!b.alt.empty()) ImGui::SetItemTooltip("%s", b.alt.c_str());
+        }
         ImGui::GetWindowDrawList()->AddRect(p, ImVec2(p.x + sz.x, p.y + sz.y), border);
-        if (!b.alt.empty()) ImGui::SetItemTooltip("%s", b.alt.c_str());
     } else {
         const float pad = ImGui::GetFontSize() * 0.8f;
         const ImVec2 p0 = ImGui::GetCursorScreenPos();
@@ -309,58 +405,91 @@ void draw_page(HelpUi& ui, const wiki::Page& page) {
 
 void draw_help(HelpUi& ui) {
     ui.load();
+    // The system focus from the platform glue's events (ImGui keeps only a one-frame "lost" flag). A click counts as
+    // focus back, for glue that sends only the loss (the viewer's); glue that sends none counts as focused.
+    for (const ImGuiInputEvent& e : GImGui->InputEventsTrail)
+        if (e.Type == ImGuiInputEventType_Focus) ui.app_focused = e.AppFocused.Focused;
+        else if (e.Type == ImGuiInputEventType_MouseButton && e.MouseButton.Down) ui.app_focused = true;
+    ui.live_before = ui.live;
+    ui.live = ui.app_focused && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
     const float fs = ImGui::GetFontSize();
     const wiki::Page* page = ui.page();
 
-    ImGui::BeginChild("nav", ImVec2(fs * 15, 0), ImGuiChildFlags_ResizeX | ImGuiChildFlags_Borders);
-    ImGui::SetNextItemWidth(-1);
-    ImGui::InputTextWithHint("##search", "Search help", ui.query, sizeof ui.query);
-    if (ui.searched != ui.query) ui.searched = ui.query, ui.hits = ui.lib.search(ui.query);
-    ImGui::BeginChild("list");
-    if (ui.query[0]) {
-        if (ui.hits.empty()) ImGui::TextDisabled("No pages match.");
-        for (size_t i = 0; i < ui.hits.size(); ++i) {
-            const wiki::Hit& h = ui.hits[i];
-            ImGui::PushID(int(i));
-            std::string label = h.page->title + (h.heading.empty() ? "" : "  \xE2\x80\xBA  " + h.heading);
-            if (ImGui::Selectable(label.c_str(), page == h.page)) ui.go(h.page->file, h.heading);
-            if (!h.snippet.empty()) hint(h.snippet.c_str());
-            ImGui::PopID();
-        }
-    } else {
-        for (auto& [category, pages] : ui.lib.contents()) {
-            ImGui::SeparatorText(category.empty() ? "Other" : category.c_str());
-            for (const wiki::Page* p : pages)
-                if (ImGui::Selectable(p->title.c_str(), page == p)) ui.go(p->file, "");
-        }
-    }
-    ImGui::EndChild();
-    ImGui::EndChild();
-    ImGui::SameLine();
+    // Docked into a narrow panel there is no room for both panes: a Pages button swaps the contents list for the page.
+    const bool narrow = ImGui::GetContentRegionAvail().x < fs * 34;
+    if (!narrow) ui.pages = false;
 
-    ImGui::BeginGroup();
-    ImGui::BeginDisabled(ui.at <= 0);
-    if (ImGui::ArrowButton("##back", ImGuiDir_Left)) --ui.at, ui.scroll = true;
-    ImGui::EndDisabled();
-    ImGui::SetItemTooltip("Back");
-    ImGui::SameLine();
-    ImGui::BeginDisabled(ui.at + 1 >= int(ui.history.size()));
-    if (ImGui::ArrowButton("##forward", ImGuiDir_Right)) ++ui.at, ui.scroll = true;
-    ImGui::EndDisabled();
-    ImGui::SetItemTooltip("Forward");
-    ImGui::SameLine();
-    if (ImGui::Button("Contents") && ui.home()) ui.go(ui.home()->file, "");
-    ImGui::BeginChild("page", ImVec2(0, 0), 0, ImGuiWindowFlags_NoSavedSettings);
-    if (page) draw_page(ui, *page);
-    else hint(("No help pages were found in " + ui.dir + ".").c_str());
-    // The mouse's back and forward buttons.
-    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
-        if (ImGui::IsMouseClicked(3) && ui.at > 0) --ui.at, ui.scroll = true;
-        if (ImGui::IsMouseClicked(4) && ui.at + 1 < int(ui.history.size())) ++ui.at, ui.scroll = true;
+    auto toolbar = [&] {
+        ImGui::BeginDisabled(ui.at <= 0);
+        if (ImGui::ArrowButton("##back", ImGuiDir_Left)) --ui.at, ui.scroll = true, ui.pages = false;
+        ImGui::EndDisabled();
+        ImGui::SetItemTooltip("Back");
+        ImGui::SameLine();
+        ImGui::BeginDisabled(ui.at + 1 >= int(ui.history.size()));
+        if (ImGui::ArrowButton("##forward", ImGuiDir_Right)) ++ui.at, ui.scroll = true, ui.pages = false;
+        ImGui::EndDisabled();
+        ImGui::SetItemTooltip("Forward");
+        ImGui::SameLine();
+        if (ImGui::Button("Contents") && ui.home()) ui.go(ui.home()->file, "");
+        if (!narrow) return;
+        ImGui::SameLine();
+        if (ImGui::Button(ui.pages ? "Page" : "Pages")) ui.pages = !ui.pages;
+        ImGui::SetItemTooltip(ui.pages ? "Back to the page" : "Search and the list of pages");
+    };
+    auto contents = [&] {
+        ImGui::SetNextItemWidth(-1);
+        ImGui::InputTextWithHint("##search", "Search help", ui.query, sizeof ui.query);
+        if (ui.searched != ui.query) ui.searched = ui.query, ui.hits = ui.lib.search(ui.query);
+        ImGui::BeginChild("list");
+        if (ui.query[0]) {
+            if (ui.hits.empty()) ImGui::TextDisabled("No pages match.");
+            for (size_t i = 0; i < ui.hits.size(); ++i) {
+                const wiki::Hit& h = ui.hits[i];
+                ImGui::PushID(int(i));
+                std::string label = h.page->title + (h.heading.empty() ? "" : "  \xE2\x80\xBA  " + h.heading);
+                if (ImGui::Selectable(label.c_str(), page == h.page)) ui.go(h.page->file, h.heading);
+                if (!h.snippet.empty()) hint(h.snippet.c_str());
+                ImGui::PopID();
+            }
+        } else {
+            for (auto& [category, pages] : ui.lib.contents()) {
+                ImGui::SeparatorText(category.empty() ? "Other" : category.c_str());
+                for (const wiki::Page* p : pages)
+                    if (ImGui::Selectable(p->title.c_str(), page == p)) ui.go(p->file, "");
+            }
+        }
+        ImGui::EndChild();
+    };
+    auto page_view = [&] {
+        ImGui::BeginChild("page", ImVec2(0, 0), 0, ImGuiWindowFlags_NoSavedSettings);
+        if (page) draw_page(ui, *page);
+        else hint(("No help pages were found in " + ui.dir + ".").c_str());
+        // The mouse's back and forward buttons.
+        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
+            if (ImGui::IsMouseClicked(3) && ui.at > 0) --ui.at, ui.scroll = true;
+            if (ImGui::IsMouseClicked(4) && ui.at + 1 < int(ui.history.size())) ++ui.at, ui.scroll = true;
+        }
+        ImGui::EndChild();
+    };
+
+    if (narrow) {
+        toolbar();
+        if (!ui.pages) return page_view();
+        ImGui::BeginChild("nav narrow", ImVec2(0, 0), ImGuiChildFlags_Borders);
+        contents();
+        ImGui::EndChild();
+        return;
     }
+    ImGui::BeginChild("nav", ImVec2(fs * 15, 0), ImGuiChildFlags_ResizeX | ImGuiChildFlags_Borders);
+    contents();
     ImGui::EndChild();
+    ImGui::SameLine();
+    ImGui::BeginGroup();
+    toolbar();
+    page_view();
     ImGui::EndGroup();
 }
+
 
 }  // namespace
 
@@ -383,13 +512,15 @@ void App::open_help(const std::string& page, const std::string& anchor) {
 }
 
 void App::draw_help_browser() {
+    if (help_ui_) help_ui_->release_idle_gifs();
     if (!help_ui_ || !help_ui_->open || help_ui_->modal) return;
     HelpUi& ui = *help_ui_;
     ImGui::SetNextWindowSize(window_size(62, 44), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
     if (ui.focus) ImGui::SetNextWindowFocus(), ui.focus = false;
-    if (ImGui::Begin("Help", &ui.open, ImGuiWindowFlags_NoDocking)) draw_help(ui);
+    if (ImGui::Begin("Help", &ui.open)) draw_help(ui);
     ImGui::End();
+    if (!ui.open) ui.free_images();
 }
 
 void App::help_button(const char* page) {
@@ -434,7 +565,7 @@ void App::help_button(const char* page) {
         draw_help(*help_ui_);
         ImGui::EndPopup();
     }
-    if (!open) help_ui_->modal = help_ui_->open = false;
+    if (!open) help_ui_->modal = help_ui_->open = false, help_ui_->free_images();
 }
 
 }  // namespace vats

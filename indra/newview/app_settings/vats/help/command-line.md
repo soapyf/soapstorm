@@ -65,6 +65,8 @@ vats walk.vat --frame 12 --select mPelvis
 | `--open-menu <menu>` | With `--screenshot`: opens a menu of the menu bar for the shot, by its name, for example `Tools`. A path separated by `/` also opens a sub-menu inside it that has an icon, for example `"Tools/Loop Tools"`. Names are matched exactly, as shown; an unknown name opens nothing. |
 | `--screenshot <file.png>` | Runs without dialogs, draws 12 frames, saves the window as a PNG and quits. See [[Command line#Screenshots]]. |
 | `--bench <seconds>` | Plays the animation with vsync off, times each part of the frame for `<seconds>`, prints the results and quits. See [[Command line#Benchmarks]]. |
+| `--help`, `-h` | Prints a short list of the options and quits, without opening a window. |
+| `--version` | Prints the version and quits, without opening a window. |
 
 Starter pose slugs: body poses `body-stand`, `body-hips`, `body-arms-crossed`, `body-thinking`,
 `body-wave`, `body-sit`, `body-contrapposto`; hand poses include `hand-relaxed`, `hand-rest`,
