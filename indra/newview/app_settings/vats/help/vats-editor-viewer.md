@@ -288,7 +288,6 @@ The editor takes its colours from the viewer's skin and follows it when the skin
 | [[Control presets]] | all four, picked in **Preferences** | **Second Life** only, matching the viewer's own controls; no picker, and your own keys still apply |
 | Other actors | **None**, **Ruth** or a mesh body each | the same, on your screen only; your avatar is the first actor and keeps playing it while you edit another |
 | Other people's avatars | none | hidden while the editor is open, unless **View → Show Other Avatars** |
-| Pose and prop thumbnails | pictures | plain icons |
 | [[Audio track]] | the app's audio output | the viewer's sound, heard by you only; no snippets while scrubbing |
 | File types | registered with the desktop | not registered |
 | Upload | with any viewer's upload window | directly, from the editor |

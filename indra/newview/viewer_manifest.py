@@ -116,7 +116,7 @@ class ViewerManifest(LLManifest,FSViewerManifest):
                 # ... and the entire image filters directory
                 self.path("filters")
 
-                # <FS> Viewport Avatar Toolset motion capture tables
+                # <FS> Viewport Avatar Toolset editor run-time files (rig tables, fonts, props, help)
                 self.path("vats")
 
                 # ... and the included spell checking dictionaries

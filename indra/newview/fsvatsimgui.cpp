@@ -50,6 +50,7 @@
 #include <cfloat>
 #include <iterator>
 #include <map>
+#include <utility>
 
 #if LL_SDL2
 #include <SDL3/SDL.h>  // the number pad's keys, which LLKeyboardSDL does not tell apart (keypadKeys)
@@ -322,6 +323,8 @@ namespace
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
         io.BackendPlatformName = "soapstorm_viewer";
         io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
+        // The viewer's macOS keyboard already turns Cmd into MASK_CONTROL; ImGui's own Mac swap would make it Super again.
+        io.ConfigMacOSXBehaviors = false;
         sIniPath = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, "vats_imgui.ini");
         io.IniFilename = sIniPath.c_str();
         ImGuiPlatformIO& pio = ImGui::GetPlatformIO();

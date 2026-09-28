@@ -452,6 +452,7 @@ namespace
         void open_file_dialog(const std::vector<vats::ui::FileFilter>&, bool multiple, vats::ui::FilesChosen done) override
         {
             // ponytail: FFLOAD_ALL, since VATs' filters (.vat, glTF, audio...) have no ELoadFilter.
+            done = whileOpen(std::move(done));
             LLFilePickerReplyThread::startPicker(
                 [done](const std::vector<std::string>& files, LLFilePicker::ELoadFilter, LLFilePicker::ESaveFilter) { done(files); },
                 LLFilePicker::FFLOAD_ALL, multiple,
@@ -460,6 +461,7 @@ namespace
         void save_file_dialog(const std::vector<vats::ui::FileFilter>&, const std::string& suggested, vats::ui::FilesChosen done) override
         {
             // The picker proposes a file name; the UI adds the extension itself.
+            done = whileOpen(std::move(done));
             LLFilePickerReplyThread::startPicker(
                 [done](const std::vector<std::string>& files, LLFilePicker::ELoadFilter, LLFilePicker::ESaveFilter) { done(files); },
                 LLFilePicker::FFSAVE_ALL, gDirUtilp->getBaseFileName(suggested),
@@ -468,8 +470,19 @@ namespace
         void open_folder_dialog(const std::string& start, vats::ui::FilesChosen done) override
         {
             // The folder picker has no cancel callback: a cancelled choice simply never answers.
+            done = whileOpen(std::move(done));
             (new LLDirPickerThread([done](const std::vector<std::string>& dirs, std::string) { done(dirs); }, start))->getFile();
         }
+        // A picker's answer can come after the editor closed (logout, quit, unticked): the UI it would call is gone.
+        vats::ui::FilesChosen whileOpen(vats::ui::FilesChosen done)
+        {
+            return [done = std::move(done), alive = std::weak_ptr<bool>(mAlive)](const std::vector<std::string>& paths)
+            {
+                if (!alive.expired())
+                    done(paths);
+            };
+        }
+        std::shared_ptr<bool> mAlive = std::make_shared<bool>(true);  // replaced by close(): older pickers' answers are dropped
         // An ImGui modal over the editor, drawn after the UI's frame (drawQuestion).
         void ask(const std::string& title, const std::string& text, const std::vector<std::string>& buttons,
                  std::function<void(int)> done) override
@@ -832,7 +845,7 @@ namespace
         // Straight to the motion controller: LLVOAvatar::startMotion would offer the id to the AO first.
         gAgentAvatarp->registerMotion(mMotionID, VATsClipMotion::create);
         gAgentAvatarp->getMotionController().startMotion(mMotionID, 0.f);
-        LL_INFOS("VATsEditor") << "driving " << pb.joints.size() << " joints of the avatar"
+        LL_DEBUGS("VATsEditor") << "driving " << pb.joints.size() << " joints of the avatar"
                                << (in_world ? " at the animation's own priorities (as it plays in-world)" : "") << LL_ENDL;
     }
 
@@ -1686,7 +1699,7 @@ namespace
         }
         LLJoint* foot = avatar->getJoint("mFootLeft");
         const F32 ground = foot ? LLWorld::getInstance()->resolveLandHeightAgent(foot->getWorldPosition()) : 0.f;
-        LL_INFOS("VATsEditor") << "frame check (" << (sitting ? "sitting" : "not sitting") << (avatar->getParent() ? " on an object" : "")
+        LL_DEBUGS("VATsEditor") << "frame check (" << (sitting ? "sitting" : "not sitting") << (avatar->getParent() ? " on an object" : "")
                                 << (gAgent.getFlying() ? ", flying" : "") << ", pin " << (VATsClipMotion::sEditor.pinned ? "on" : "off")
                                 << "):" << line << " ground under the left foot " << ground << LL_ENDL;
     }
@@ -1742,7 +1755,7 @@ namespace
             mDriveQuiet = -1;
             LLViewerCamera* cam = LLViewerCamera::getInstance();
             const F64 viewer = (gAgent.getPosAgentFromGlobal(gAgentCamera.getFocusGlobal()) - cam->getOrigin()) * cam->getAtAxis();
-            LL_INFOS("VATsEditor") << "camera move ended: distance " << mCamera.distance << " m, the viewer's " << viewer << " m" << LL_ENDL;
+            LL_DEBUGS("VATsEditor") << "camera move ended: distance " << mCamera.distance << " m, the viewer's " << viewer << " m" << LL_ENDL;
         }
         if (same || !isAgentAvatarValid() || gAgentCamera.cameraMouselook())
             return;
@@ -2447,8 +2460,24 @@ namespace
 
     void ViewerHost::releaseGL()
     {
-        // The context is going with them (stopGL); new ones are made on the next draw. The help's pictures go too: the
-        // help keeps their stale names until its page changes (drawn blank), and free_texture ignores them.
+        // Called with the context still current (stopGL, or the editor closing): everything made here is deleted, and
+        // made again on the next draw. The help's pictures go too: the help keeps their stale names until its page
+        // changes (drawn blank), and free_texture ignores them. Deleting a zero name is a no-op.
+        for (U32 program : { mProgram, mImageProgram, mThumbProgram })
+            if (program)
+                glDeleteProgram(program);
+        const GLuint vao = mVao, buffers[3] = { mVbo, mEbo, mImageVbo };
+        glDeleteVertexArrays(1, &vao);
+        glDeleteBuffers(3, buffers);
+        for (const Offscreen* o : { &mFace, &mThumb, &mPicker })
+        {
+            const GLuint fbos[2] = { o->fbo, o->msFbo }, tex = o->tex, rbs[3] = { o->depth, o->msColour, o->msDepth };
+            glDeleteFramebuffers(2, fbos);
+            glDeleteTextures(1, &tex);
+            glDeleteRenderbuffers(3, rbs);
+        }
+        for (GLuint tex : mTextures)
+            glDeleteTextures(1, &tex);
         mProgram = mVao = mVbo = mEbo = 0;
         mImageProgram = mImageVbo = 0;
         mFace = mThumb = mPicker = Offscreen();  // the face cam's, the thumbnails' and the Picker's; remade at their next picture
@@ -2795,7 +2824,7 @@ namespace
             mWavAsset.generate();
             const std::string path = gDirUtilp->getExpandedFilename(LL_PATH_FS_SOUND_CACHE, mWavAsset.asString()) + ".dsf";
             const std::string wav = wavBytes(samples, frames, mChannels, mRate);
-            std::ofstream out(path, std::ios::binary);
+            llofstream out(path, std::ios::binary);  // UTF-8 paths on Windows too
             if (!out.write(wav.data(), std::streamsize(wav.size())))
             {
                 LL_WARNS("VATsEditor") << "could not write " << path << LL_ENDL;
@@ -2842,9 +2871,10 @@ namespace
     void ViewerHost::close()
     {
         // Build 27: each step logged, so a hang after closing shows where it stopped.
-        auto step = [](const char* what) { LL_INFOS("VATsEditor") << "close: " << what << LL_ENDL; };
+        auto step = [](const char* what) { LL_DEBUGS("VATsEditor") << "close: " << what << LL_ENDL; };
         step("plan, walk test and seat selection");
         mMode = Mode::Hold;  // build 20: the in-world play and the walk test end with the editor (restore below)
+        mAlive = std::make_shared<bool>(true);  // pickers still open answer nobody
         mOwnPlan.reset();
         mWalkState = 0;
         mDriveQuiet = -1;  // no camera move of the UI's outlives it
@@ -2954,11 +2984,14 @@ namespace
         if (sApp)
         {
             sApp->shutdown();
-            LL_INFOS("VATsEditor") << "close: UI shut down" << LL_ENDL;
-            sApp.reset();
-            LL_INFOS("VATsEditor") << "close: UI destroyed" << LL_ENDL;
+            LL_DEBUGS("VATsEditor") << "close: UI shut down" << LL_ENDL;
         }
-        sHost->close();
+        sHost->close();  // before the UI is freed: the hand-back still reads its skeleton (mSkel)
+        if (sApp)
+        {
+            sApp.reset();
+            LL_DEBUGS("VATsEditor") << "close: UI destroyed" << LL_ENDL;
+        }
         FSVATsImGui::removeClient(CLIENT);
         ImGui::GetIO().ConfigFlags &= ~ImGuiConfigFlags_NavEnableKeyboard;
         sOpen = sQuit = sClosing = sFailed = false;
@@ -2974,7 +3007,7 @@ void FSVATsEditor::update(bool want_open)
     if (sFramesSinceClose >= 0 && LLFrameTimer::getFrameCount() != sLastLoggedFrame)
     {
         sLastLoggedFrame = LLFrameTimer::getFrameCount();
-        LL_INFOS("VATsEditor") << "frame " << ++sFramesSinceClose << " after the editor closed" << LL_ENDL;
+        LL_DEBUGS("VATsEditor") << "frame " << ++sFramesSinceClose << " after the editor closed" << LL_ENDL;
         if (sFramesSinceClose >= 3)
             sFramesSinceClose = -1;
     }
