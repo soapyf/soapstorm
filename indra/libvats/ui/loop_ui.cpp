@@ -78,7 +78,7 @@ void App::draw_loop_tools_menu() {
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
     ImGui::SliderInt("Blend", &loop_blend_, 0, 15, loop_blend_ ? "%d frames" : "end key only");
     ImGui::SetItemTooltip("Ease the last frames into the start pose instead of only changing the end key");
-    if (ImGui::MenuItem("Make Loop Seamless")) {
+    if (menu_item_icon(icon::kSeamless, "Make Loop Seamless")) {
         int n = 0;
         graph_.snapshot_curves(doc_.clip());  // PT-4
         edit("Make Loop Seamless", [&](Clip& c) { n = make_loop_seamless(c, loop_blend_); });
@@ -87,7 +87,7 @@ void App::draw_loop_tools_menu() {
     }
     ImGui::SetItemTooltip("Every channel ends where it starts, with the same slope");
     ImGui::Separator();
-    if (ImGui::MenuItem("Remove Hip Travel (In Place)")) {
+    if (menu_item_icon(icon::kInPlace, "Remove Hip Travel (In Place)")) {
         Travel t;
         graph_.snapshot_curves(doc_.clip());  // PT-4
         edit("Remove Hip Travel", [&](Clip& c) { t = remove_travel(c); });
@@ -100,7 +100,7 @@ void App::draw_loop_tools_menu() {
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
     ImGui::DragFloat("##travel", &loop_travel_, 0.01f, -5.f, 5.f, "%.2f m/s");
     ImGui::SameLine();
-    if (ImGui::SmallButton("Add Travel Forward")) {
+    if (icon_label_small_button(icon::kAdd, "Add Travel Forward")) {
         const float v = loop_travel_;
         graph_.snapshot_curves(doc_.clip());  // PT-4
         edit("Add Hip Travel", [&](Clip& c) { add_travel(c, {v, 0}); });
@@ -109,7 +109,7 @@ void App::draw_loop_tools_menu() {
     ImGui::Separator();
     const int here = int(std::lround(frame_));
     ImGui::BeginDisabled(here <= r.in || here >= r.out);
-    if (ImGui::MenuItem(("Start Cycle at Frame " + std::to_string(here)).c_str())) {
+    if (menu_item_icon(icon::kCycleStart, ("Start Cycle at Frame " + std::to_string(here)).c_str())) {
         graph_.snapshot_curves(doc_.clip());  // PT-4
         edit("Start Cycle Here", [&](Clip& c) { cycle_offset(c, here); });
         status("The cycle now starts with what was frame " + std::to_string(here));

@@ -1340,7 +1340,7 @@ void App::menu_item(const char* id) {
 
 void App::draw_menus() {
     if (!ImGui::BeginMainMenuBar()) return;
-    if (ImGui::BeginMenu("File")) {
+    if (begin_menu_icon(nullptr, "File")) {
         for (const char* id : {"new", "open"}) menu_item(id);
         if (ImGui::BeginMenu("Open Recent")) {
             bool any = false;
@@ -1379,7 +1379,7 @@ void App::draw_menus() {
         menu_item("quit");
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Edit")) {
+    if (begin_menu_icon(nullptr, "Edit")) {
         menu_item("undo");
         menu_item("redo");
         ImGui::Separator();
@@ -1406,11 +1406,11 @@ void App::draw_menus() {
         menu_item("prefs");
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Playback")) {
+    if (begin_menu_icon(nullptr, "Playback")) {
         for (const char* id : {"play", "next_frame", "prev_frame", "next_key", "prev_key", "start", "end"}) menu_item(id);
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("View")) {  // order of spec 06 section 3.4; Camera Views, zoom and reset are additions
+    if (begin_menu_icon(nullptr, "View")) {  // order of spec 06 section 3.4; Camera Views, zoom and reset are additions
         for (const char* id : {"view_front", "view_back", "view_right", "view_left", "view_top"}) menu_item(id);
         if (menu_item_icon(icon::kOrtho, "Orthographic", key_hint("view_ortho").c_str(), camera_.ortho)) run_action("view_ortho");
         ImGui::Separator();
@@ -1485,35 +1485,36 @@ void App::draw_menus() {
         ImGui::EndMenu();
     }
     draw_light_menu();
-    if (ImGui::BeginMenu("Select")) {
+    if (begin_menu_icon(nullptr, "Select")) {
         for (const char* id : {"select_all", "select_keyed_frame", "select_all_keyed", "select_none"}) menu_item(id);
         ImGui::Separator();
         for (const char* id : {"select_parent", "select_child", "next_sibling", "prev_sibling"}) menu_item(id);
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Tools")) {
+    if (begin_menu_icon(nullptr, "Tools")) {
         for (const char* id : {"tool_select", "tool_move", "tool_rotate", "tool_scale"}) menu_item(id);
         ImGui::Separator();
         menu_item("orientation");
         ImGui::Separator();
         for (const char* id : {"ik_toggle", "follow_target", "pin_world", "pin_bone", "unpin", "delete_pin", "foot_lock"}) menu_item(id);
-        if (ImGui::BeginMenu("Loop Tools")) {
+        if (begin_menu_icon(icon::kLoop, "Loop Tools")) {
             draw_loop_tools_menu();
             ImGui::EndMenu();
         }
         ImGui::Separator();
         menu_item("hands");
-        ImGui::MenuItem("Dynamics...", nullptr, &show_dynamics_);
+        if (menu_item_icon(icon::kDynamics, "Dynamics...", nullptr, show_dynamics_)) show_dynamics_ = !show_dynamics_;
         if (menu_item_icon(icon::kIdle, "Idle Layer...", nullptr, show_idle_)) show_idle_ = !show_idle_;
         if (menu_item_icon(icon::kOverlap, "Overlap...", nullptr, show_overlap_)) show_overlap_ = !show_overlap_;
         if (menu_item_icon(icon::kBalance, "Auto-Balance...", nullptr, show_auto_balance_)) show_auto_balance_ = !show_auto_balance_;  // 08 CM-2
         if (menu_item_icon(icon::kJumpArc, "Jump Arc...", nullptr, show_jump_arc_)) show_jump_arc_ = !show_jump_arc_; // 08 JA-1
-        if (ImGui::MenuItem("Make Transition...", nullptr, &show_transition_)) transition_.to = int(std::round(frame_));  // 08 PM-3
-        ImGui::MenuItem("Ragdoll...", nullptr, &show_ragdoll_);
+        if (menu_item_icon(icon::kTransition, "Make Transition...", nullptr, show_transition_))  // 08 PM-3
+            show_transition_ = !show_transition_, transition_.to = int(std::round(frame_));
+        if (menu_item_icon(icon::kRagdoll, "Ragdoll...", nullptr, show_ragdoll_)) show_ragdoll_ = !show_ragdoll_;
         if (menu_item_icon(icon::kFace, "Face...", nullptr, show_face_)) show_face_ = !show_face_;
-        ImGui::MenuItem("Actors (Couples and Groups)...", nullptr, &show_actors_);
+        if (menu_item_icon(icon::kActors, "Actors (Couples and Groups)...", nullptr, show_actors_)) show_actors_ = !show_actors_;
         if (menu_item_icon(icon::kClips, "Clips (AO Sets)...", nullptr, show_clips_)) show_clips_ = !show_clips_;
-        ImGui::MenuItem("Motion Capture...", nullptr, &show_mocap_);
+        if (menu_item_icon(icon::kRecord, "Motion Capture...", nullptr, show_mocap_)) show_mocap_ = !show_mocap_;
         if (menu_item_icon(icon::kSplit, "Split Dance at Beats...", nullptr, show_split_dance_))  // 08 TE-6
             show_split_dance_ = !show_split_dance_;
         ImGui::Separator();
@@ -1525,7 +1526,7 @@ void App::draw_menus() {
     if (ui::Host::HostUi* h = host_.host_ui()) {  // the viewer's own UI beside the editor (spec 09 U4b)
         const int n = h->unread_notices();
         const std::string count = n > 0 ? " (" + std::to_string(n) + ")" : "";
-        if (ImGui::BeginMenu(("Viewer" + count + "###host_menu").c_str())) {
+        if (begin_menu_icon(nullptr, ("Viewer" + count + "###host_menu").c_str())) {
             ImGui::MenuItem(h->pane_title(), nullptr, &show_host_pane_);
             if (ImGui::MenuItem(("Notifications" + count).c_str())) h->toggle_notices();
             if (ImGui::MenuItem(h->reveal_label(), h->reveal_shortcut(), h->revealed())) h->reveal(!h->revealed());
@@ -1534,7 +1535,7 @@ void App::draw_menus() {
             ImGui::EndMenu();
         }
     }
-    if (ImGui::BeginMenu("Help")) {
+    if (begin_menu_icon(nullptr, "Help")) {
         for (const char* id : {"help_contents", "help", "welcome", "about"}) menu_item(id);
         ImGui::EndMenu();
     }

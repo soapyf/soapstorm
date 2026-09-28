@@ -156,6 +156,27 @@ slider and **Blend** stay in view.
 | **Tools** | the four tools, the axes, IK and pins, **Clean Up Foot Sliding...**, **Loop Tools**, **Hand Poser**, **Dynamics...**, **Idle Layer...**, **Overlap...**, **Auto-Balance...**, **Jump Arc...**, **Ragdoll...**, **Face...**, **Actors (Couples and Groups)...**, **Motion Capture...**, **Split Dance at Beats...**, **Animation Check...**, **Motion Quality...** |
 | **Help** | **Help Contents**, **Controls**, **Welcome**, **About Viewport Avatar Toolset** |
 
+Every **Tools** item has an icon, the same as its button where it has one:
+
+| Tools item | Icon |
+|---|---|
+| **Select Tool**, **Move Tool**, **Rotate Tool**, **Scale Tool** | the tool buttons' arrow pointer, four arrows, circling arrow and corner |
+| **Cycle Local / World / Gimbal Axes** | three axes |
+| **Switch IK / FK** | a bone |
+| **Follow Target (Bake)...** | a crosshair in a circle |
+| **Hold in World from Here**, **Bind to Selected Bone from Here**, **Release from Here**, **Delete Pin** | a pin, a chain link, a crossed-out pin, a bin |
+| **Clean Up Foot Sliding...** | an anchor |
+| **Loop Tools** | two arrows chasing each other, as **Loop**; inside it **Make Loop Seamless** (an infinity sign), **Remove Hip Travel (In Place)** (an arrow down to a dot), **Start Cycle at Frame** (a turning arrow), **Find Best Loop Points...** (a magnifier), **Fit Loop to Beats...** (a two-way arrow), **Loop-Aware Tangents** (a curve through two points) |
+| **Hand Poser** | a hand |
+| **Dynamics...** | an atom |
+| **Idle Layer...**, **Overlap...**, **Auto-Balance...**, **Jump Arc...** | wind, waves, a balance scale, a rabbit |
+| **Make Transition...** | boxes with an arrow at the end, beside **Tween**'s at the start |
+| **Ragdoll...** | a line falling to the right |
+| **Face...**, **Actors (Couples and Groups)...**, **Clips (AO Sets)...** | a smile, two people, a clapperboard |
+| **Motion Capture...** | a dot in a circle, as its **Record** button |
+| **Split Dance at Beats...** | scissors |
+| **Animation Check...**, **Motion Quality...**, **Priority Planner...** | a shield with a tick, a gauge, a numbered list |
+
 ![The waving avatar lit by Light → Dusk, a low warm light, in front of the grey Plain Backdrop wall and floor](images/interface/light-dusk.png)
 *The **Dusk** preset with **Plain Backdrop** on.*
 

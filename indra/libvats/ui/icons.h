@@ -144,4 +144,17 @@ inline constexpr char kWalkTest[] = "\xee\x88\x9e";     // person-standing U+E21
 inline constexpr char kFaceCam[] = "\xee\x88\x85";      // webcam U+E205
 inline constexpr char kSeat[] = "\xee\x8b\x80";         // armchair U+E2C0
 
+// The Tools menu's items without a button of their own
+inline constexpr char kFollow[] = "\xee\x87\x9b";       // locate-fixed U+E1DB
+inline constexpr char kBind[] = "\xee\x84\x82";         // link U+E102
+inline constexpr char kRelease[] = "\xee\x8a\xb6";      // pin-off U+E2B6
+inline constexpr char kHand[] = "\xee\x87\x97";         // hand U+E1D7
+inline constexpr char kDynamics[] = "\xee\x8f\x97";     // atom U+E3D7
+inline constexpr char kTransition[] = "\xee\x96\x91";   // between-horizontal-end U+E591
+inline constexpr char kRagdoll[] = "\xee\x86\x90";      // trending-down U+E190
+inline constexpr char kActors[] = "\xee\x86\xa4";       // users U+E1A4
+inline constexpr char kSeamless[] = "\xee\x87\xa7";     // infinity U+E1E7
+inline constexpr char kInPlace[] = "\xee\x91\x8d";      // arrow-down-to-dot U+E44D
+inline constexpr char kCycleStart[] = "\xee\x85\x89";   // rotate-cw U+E149
+
 }  // namespace vats::icon

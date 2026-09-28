@@ -33,6 +33,9 @@ bool menu_item_icon(const char* icon, const char* label, const char* shortcut = 
                     bool enabled = true);
 // A sub-menu with an icon in the same column (ImGui::BeginMenu otherwise); EndMenu() as usual.
 bool begin_menu_icon(const char* icon, const char* label, bool enabled = true);
+// --open-menu (screenshots): the menus on this path ("Tools", "Tools/Loop Tools") open by themselves in every
+// begin_menu_icon() call; a menu's name is its label up to any "##".
+void force_open_menus(const std::string& path);
 // The icon of an editor action shown in the menus ("open", "undo"...), or null.
 const char* action_icon(const char* action_id);
 

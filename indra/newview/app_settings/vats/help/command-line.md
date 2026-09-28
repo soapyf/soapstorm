@@ -62,6 +62,7 @@ vats walk.vat --frame 12 --select mPelvis
 | `--theme <name>` | Uses a colour theme for this run, by its name in **Preferences**: `Dusk` or `"Studio Grey"`. An unknown name prints `unknown theme <name>`. |
 | `--size <W>x<H>` | Opens the window at this size, for example `1200x1000`, instead of maximised. |
 | `--shot-rect <window>` | With `--screenshot`: prints the window's rectangle in the PNG as `shot-rect <x> <y> <w> <h>` (pixels) on standard output, for cropping. `<window>` is its title as shown, for example `Graph` or `Motion Capture`. |
+| `--open-menu <menu>` | With `--screenshot`: opens a menu of the menu bar for the shot, by its name, for example `Tools`. A path separated by `/` also opens a sub-menu inside it that has an icon, for example `"Tools/Loop Tools"`. Names are matched exactly, as shown; an unknown name opens nothing. |
 | `--screenshot <file.png>` | Runs without dialogs, draws 12 frames, saves the window as a PNG and quits. See [[Command line#Screenshots]]. |
 | `--bench <seconds>` | Plays the animation with vsync off, times each part of the frame for `<seconds>`, prints the results and quits. See [[Command line#Benchmarks]]. |
 

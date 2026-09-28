@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <string_view>
+#include <vector>
 
 #include "icons.h"
 #include "imgui.h"
@@ -12,6 +14,8 @@
 
 namespace vats {
 namespace {
+
+std::vector<std::string> g_forced_menus;  // --open-menu
 
 bool with_active(bool active, const auto& draw) {
     if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_Header));
@@ -113,7 +117,18 @@ bool menu_item_icon(const char* icon, const char* label, const char* shortcut, b
     return ImGui::MenuItemEx(label, icon, shortcut, selected, enabled);
 }
 
+void force_open_menus(const std::string& path) {
+    for (size_t at = 0; at <= path.size();) {
+        const size_t end = std::min(path.find('/', at), path.size());
+        g_forced_menus.push_back(path.substr(at, end - at));
+        at = end + 1;
+    }
+}
+
 bool begin_menu_icon(const char* icon, const char* label, bool enabled) {
+    const std::string_view name = std::string_view(label).substr(0, std::string_view(label).find("##"));
+    if (std::find(g_forced_menus.begin(), g_forced_menus.end(), name) != g_forced_menus.end() && !ImGui::IsPopupOpen(label))
+        ImGui::OpenPopup(label);
     return ImGui::BeginMenuEx(label, icon, enabled);
 }
 
@@ -123,7 +138,11 @@ const char* action_icon(const char* action_id) {
     } icons[] = {{"new", icon::kNew},     {"open", icon::kOpen},          {"save", icon::kSave},
                  {"undo", icon::kUndo},   {"redo", icon::kRedo},          {"export_anim", icon::kExport},
                  {"upload", icon::kUpload}, {"import_prop", icon::kImport}, {"tween", icon::kTween},
-                 {"batch_retarget", icon::kBatch}, {"dope_sheet", icon::kDopeSheet}, {"foot_lock", icon::kFootLock}};
+                 {"batch_retarget", icon::kBatch}, {"dope_sheet", icon::kDopeSheet}, {"foot_lock", icon::kFootLock},
+                 {"tool_select", icon::kSelect}, {"tool_move", icon::kMove}, {"tool_rotate", icon::kRotate},
+                 {"tool_scale", icon::kScale}, {"orientation", icon::kGimbal}, {"ik_toggle", icon::kIkFk},
+                 {"follow_target", icon::kFollow}, {"pin_world", icon::kPin}, {"pin_bone", icon::kBind},
+                 {"unpin", icon::kRelease}, {"delete_pin", icon::kDelete}, {"hands", icon::kHand}};
     for (const auto& i : icons)
         if (std::strcmp(i.id, action_id) == 0) return i.icon;
     return nullptr;

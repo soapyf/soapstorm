@@ -44,7 +44,8 @@ void App::draw_loop_assist_items() {
     if (menu_item_icon(icon::kStretch, "Fit Loop to Beats...")) show_loop_assist_ = true;
     ImGui::SetItemTooltip("Stretch the loop to a whole number of the audio track's beats");
     bool on = doc_.clip().loop_tangents;
-    if (ImGui::MenuItem("Loop-Aware Tangents", nullptr, &on)) {
+    if (menu_item_icon(icon::kRelax, "Loop-Aware Tangents", nullptr, on)) {
+        on = !on;
         edit(on ? "Loop-Aware Tangents On" : "Loop-Aware Tangents Off", [&](Clip& c) {
             c.loop_tangents = on;
             if (on) return (void)apply_loop_tangents(c);
