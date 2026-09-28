@@ -441,6 +441,8 @@ void LLFloaterIMNearbyChatScreenChannel::arrangeToasts()
     if (mFloaterSnapRegion == NULL)
     {
         mFloaterSnapRegion = gViewerWindow->getFloaterSnapRegion();
+        if (!mFloaterSnapRegion) // VATs editor: it redraws every channel, some before the world UI exists
+            return;
     }
 
     if (!getParent())

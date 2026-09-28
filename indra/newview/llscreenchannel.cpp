@@ -71,6 +71,9 @@ LLRect LLScreenChannelBase::getChannelRect()
     LLRect channel_rect;
     LLRect chiclet_rect;
 
+    if (!mFloaterSnapRegion || !mChicletRegion) // VATs editor: redraws may reach a channel before the world UI exists
+        return channel_rect;
+
     mFloaterSnapRegion->localRectToScreen(mFloaterSnapRegion->getLocalRect(), &channel_rect);
     mChicletRegion->localRectToScreen(mChicletRegion->getLocalRect(), &chiclet_rect);
 
@@ -595,6 +598,12 @@ void LLScreenChannel::modifyToastByNotificationID(LLUUID id, LLPanel* panel)
 //--------------------------------------------------------------------------
 void LLScreenChannel::redrawToasts()
 {
+    if (!mFloaterSnapRegion) // VATs editor: it redraws every channel, some before their postBuild
+    {
+        mFloaterSnapRegion = gViewerWindow->getFloaterSnapRegion();
+        if (!mFloaterSnapRegion)
+            return;
+    }
     if (!getParent())
     {
         // connect to floater snap region just to get resize events, we don't care about being a proper widget
