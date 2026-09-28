@@ -488,17 +488,7 @@ private:
                 if (r > 0.3 && b > 1e-12 && std::isfinite(b)) ratios.push_back(r / b);
             }
         }
-        if (ratios.empty()) return;
-        std::sort(ratios.begin(), ratios.end());
-        size_t h = ratios.size() / 2;
-        double s = ratios.size() % 2 ? ratios[h] : (ratios[h - 1] + ratios[h]) / 2;
-        rep.measured_scale = s;
-        rig_scale = s;
-        for (double u : {1.0, 0.01, 0.001, 0.0254, 0.1, 10.0, 100.0})
-            if (std::fabs(std::log(s / u)) < 0.05) {
-                rig_scale = u;
-                break;
-            }
+        if (!ratios.empty()) rig_scale = rig_scale_of(ratios, rep.measured_scale);
     }
 
     std::string find_texture(std::string raw) {
@@ -894,6 +884,26 @@ bool Loader::run(std::string_view text, std::string& err) {
 
 }  // namespace
 
+double rig_scale_of(std::vector<double> ratios, double& measured) {
+    std::sort(ratios.begin(), ratios.end());
+    const size_t h = ratios.size() / 2;
+    measured = ratios.size() % 2 ? ratios[h] : (ratios[h - 1] + ratios[h]) / 2;
+    const double units[] = {1.0, 0.01, 0.001, 0.0254, 0.1, 10.0, 100.0};
+    auto near_unit = [](double r, double u) { return std::fabs(std::log(r / u)) < 0.05; };
+    // A body bound in another pose than SL's rest (an A-pose) has its arms and hands nearer the origin, and they
+    // are a good third of its joints: the median lands between units. A unit a third of the joints agree on wins.
+    double best = 0;
+    size_t votes = 0;
+    for (double u : units) {
+        const size_t n = std::count_if(ratios.begin(), ratios.end(), [&](double r) { return near_unit(r, u); });
+        if (n > votes) votes = n, best = u;
+    }
+    if (votes * 3 >= ratios.size()) return best;
+    for (double u : units)
+        if (near_unit(measured, u)) return u;
+    return measured;
+}
+
 int map_skin_joint(const Skeleton& skel, std::string_view name) {
     int root = dae_root(skel);
     size_t cut = name.find_last_of(":|");
@@ -1066,7 +1076,9 @@ void settle_rig(DaeModel& model, const Skeleton& skel, const std::vector<bool>& 
     }
     // 1a'. Mixed files: Blender's COLLADA exporter writes stored SL bind data for some joints and Blender's
     // own bone positions (its axes) for others, often the face. A joint whose bind is far from its SL rest
-    // but lands on it under a quarter turn takes that turn on its own.
+    // but lands on it under a quarter turn takes that turn on its own. Never a half turn: Blender's axes are a
+    // quarter off SL's, and a half turn only flips a joint near the centre line front to back, which is how a
+    // body that moved its CHEST volume a few centimetres back used to get its chest turned inside out.
     int mixed = 0;
     for (int j = 0; j < count; ++j) {
         if (!bound[j] || j == root) continue;
@@ -1078,7 +1090,7 @@ void settle_rig(DaeModel& model, const Skeleton& skel, const std::vector<bool>& 
         if (here < 0.01 * 0.01) continue;  // already within a centimetre
         int best = 0;
         double lo = here;
-        for (int k = 1; k < 4; ++k)
+        for (int k = 1; k < 4; k += 2)
             if (double c = flat(turn(k).rotate(b)); c < lo * 0.25) lo = c, best = k;
         if (best) {
             model.binds[j] = {(turn(best) * model.binds[j].rot).normalized(), turn(best).rotate(b)};
@@ -1112,9 +1124,24 @@ void settle_rig(DaeModel& model, const Skeleton& skel, const std::vector<bool>& 
         add_unique(rep.warnings, "the mesh was turned " + std::to_string(kv * 90) +
                                      " degrees about Z to line up with its skeleton");
     }
-    // 2. Bone-orientation binds: any bound joint far (> 5 degrees) from its SL rest rotation.
-    bool oriented = false;
-    for (int j = 0; j < count && !oriented; ++j)
+    // 2. Bone-orientation binds. A bind rotation far from the SL rest is either a pose the body was modelled in
+    // (an A-pose: SL skins it back onto the rest skeleton through the inverse bind, so it is kept) or a tool's
+    // bone axes (Blender's Y along the bone: meaningless in SL). In SL's own frames a joint sits in its nearest
+    // bound ancestor's frame in the direction of its SL rest offset, whatever the pose; in bone axes it mostly
+    // does not. With no bound pair to judge by, any bind far (> 5 degrees) from its rest counts.
+    int pairs = 0, agree = 0;
+    for (int j = 0; j < root; ++j) {
+        int a = skel[j].parent;
+        while (a >= 0 && !bound[a]) a = skel[a].parent;
+        if (!bound[j] || a < 0 || skel[j].attachment) continue;
+        const Vec3 want = rest[a].rot.conj().rotate(rest[j].pos - rest[a].pos);
+        const Vec3 d = model.binds[a].rot.conj().rotate(model.binds[j].pos - model.binds[a].pos);
+        if (want.length() < 0.01 || d.length() < 0.005) continue;
+        ++pairs;
+        agree += d.normalized().dot(want.normalized()) > std::cos(15 * kDegToRad);
+    }
+    bool oriented = pairs && agree * 2 < pairs;
+    for (int j = 0; j < count && !oriented && !pairs; ++j)
         if (bound[j] && j != root) oriented = std::fabs((rest[j].rot.conj() * model.binds[j].rot).w) < std::cos(2.5 * kDegToRad);
     if (oriented)
         for (int j = 0; j < count; ++j)
@@ -1127,6 +1154,11 @@ bool shape_from_binds(const Skeleton& skel, const std::vector<const DaeModel*>& 
     out = base ? *base : Shape{std::vector<Vec3>(n, Vec3{1, 1, 1}), std::vector<Vec3>(n, Vec3{})};
     const std::vector<Xform> rest = skel.global_pose(Pose(n));
     std::vector<const Vec3*> target(n, nullptr);
+    // A pinned node is placed relative to its nearest ancestor bound in the same part, in that ancestor's bound
+    // frame: a body modelled in another pose (an A-pose) keeps its bone lengths on SL's rest directions, as SL
+    // reads joint positions (parent-relative), and a hand volume stays on a wrist the body did not bind.
+    std::vector<int> anchor(n, -1);
+    std::vector<const Xform*> anchor_bind(n, nullptr);
     bool any = false;
     for (const DaeModel* m : parts)
         if (m && m->rigged && m->binds.size() >= static_cast<size_t>(n))
@@ -1134,10 +1166,15 @@ bool shape_from_binds(const Skeleton& skel, const std::vector<const DaeModel*>& 
             // Every joint the file bound is pinned to its bind, even one that matches SL's rest, so a moved
             // parent does not carry it off; without the bound flags, only joints that differ are moved.
             auto bound = [&](int i) { return i < int(m->bound.size()) && m->bound[i]; };
+            auto pin = [&](int node, int b, int a) {
+                target[node] = &m->binds[b].pos;
+                while (a >= 0 && !bound(a)) a = skel[a].parent;
+                if (a >= 0) anchor[node] = a, anchor_bind[node] = &m->binds[a];
+            };
             for (int j = 0; j < skel.joint_count(); ++j) {
                 if (target[j]) continue;
                 const bool moved = (m->binds[j].pos - rest[j].pos).length() > tol_m;
-                if (moved || bound(j)) target[j] = &m->binds[j].pos;
+                if (moved || bound(j)) pin(j, j, skel[j].parent);
                 any |= moved;
             }
             // Collision volumes too: fitted mesh is weighted to them, so they must sit where the body bound them.
@@ -1146,7 +1183,7 @@ bool shape_from_binds(const Skeleton& skel, const std::vector<const DaeModel*>& 
                 const int node = vols[v].node, b = dae_volume(skel, int(v));
                 if (node < 0 || node >= n || static_cast<size_t>(b) >= m->binds.size() || target[node]) continue;
                 const bool moved = (m->binds[b].pos - rest[node].pos).length() > tol_m;
-                if (moved || bound(b)) target[node] = &m->binds[b].pos;
+                if (moved || bound(b)) pin(node, b, vols[v].joint);
                 any |= moved;
             }
         }
@@ -1157,7 +1194,8 @@ bool shape_from_binds(const Skeleton& skel, const std::vector<const DaeModel*>& 
         const Node& node = skel[j];
         const int p = node.parent;
         if (target[j]) {
-            Vec3 local = p >= 0 ? g[p].inverse().apply(*target[j]) : *target[j];
+            const Vec3 at = anchor[j] >= 0 ? g[anchor[j]].apply(anchor_bind[j]->inverse().apply(*target[j])) : *target[j];
+            const Vec3 local = p >= 0 ? g[p].inverse().apply(at) : at;
             Vec3 s = p >= 0 ? out.scale[p] : Vec3{1, 1, 1};
             out.offset[j] = Vec3{local.x / s.x, local.y / s.y, local.z / s.z} - node.pos;
         }

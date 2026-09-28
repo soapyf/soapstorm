@@ -84,7 +84,9 @@ public:
     const AvatarParams& params() const { return params_; }
 
     // World-space positions and normals (3 floats per vertex) of every part for a pose. globals come from
-    // Skeleton::global_pose with the same shape. No allocation once the outputs have grown.
+    // Skeleton::global_pose with the same shape. No allocation once the outputs have grown. The eyeballs ride the
+    // head at the built body's own eye positions: a shape carrying another body's (a worn mesh head's joint
+    // positions) never moves them out of this head.
     void skin(const std::vector<Xform>& globals, const Shape* shape, std::vector<float>& positions,
               std::vector<float>& normals) const;
 
@@ -103,6 +105,8 @@ private:
         int node = -1;  // -1: identity
         Vec3 bind;      // subtracted before the joint transform
         bool shaped = true;
+        int parent = -1;  // a rigid eye: placed from its parent's transform at local (this body's rest), not its own
+        Vec3 local;
     };
 
     const Skeleton* skel_ = nullptr;
@@ -117,9 +121,10 @@ private:
     std::vector<Slot> slots_;
     std::vector<std::uint16_t> vslot_;  // two slots per vertex
     std::vector<float> vblend_;
-    mutable std::vector<float> mats_;
+    mutable std::vector<float> mats_;  // 12 floats per slot, per skin() call
 
-    void build(const BodyShape* shape, bool finger_weights);  // null: Skeleton Only   // 12 floats per slot, per skin() call
+    // null shape: Skeleton Only. own: the body's own proportions, where its eyes sit (null = none).
+    void build(const BodyShape* shape, const Shape* own, bool finger_weights);
 };
 
 }  // namespace vats

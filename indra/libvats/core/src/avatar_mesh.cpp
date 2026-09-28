@@ -272,12 +272,14 @@ void AvatarMesh::build(Body body, bool finger_weights) {
         morphs.morphs[UpperBody] = {{"Male_Torso", 1.0f}};
         morphs.morphs[LowerBody] = {{"Male_Legs", 1.0f}};
     }
-    build(body == Body::SkeletonOnly ? nullptr : &morphs, finger_weights);
+    build(body == Body::SkeletonOnly ? nullptr : &morphs, shape(body), finger_weights);
 }
 
-void AvatarMesh::build(const BodyShape& body, bool finger_weights) { build(&body, finger_weights); }
+void AvatarMesh::build(const BodyShape& body, bool finger_weights) {
+    build(&body, body.shape.offset.empty() ? nullptr : &body.shape, finger_weights);
+}
 
-void AvatarMesh::build(const BodyShape* shape, bool finger_weights) {
+void AvatarMesh::build(const BodyShape* shape, const Shape* own, bool finger_weights) {
     parts_.clear();
     indices_.clear();
     influences_.clear();
@@ -323,7 +325,12 @@ void AvatarMesh::build(const BodyShape* shape, bool finger_weights) {
     auto slot_for = [&](int node, bool rigid) {
         for (size_t s = 0; s < slots_.size(); ++s)
             if (slots_[s].node == node && slots_[s].shaped != rigid) return static_cast<std::uint16_t>(s);
-        slots_.push_back({node, node >= 0 && !rigid ? rest[node].pos : Vec3{}, !rigid});
+        Slot sl{node, node >= 0 && !rigid ? rest[node].pos : Vec3{}, !rigid, -1, {}};
+        if (rigid && node >= 0) {  // an eye rides its parent (the head) at this body's own eye position
+            sl.parent = skel[node].parent;
+            sl.local = skel[node].pos + (own && size_t(node) < own->offset.size() ? own->offset[node] : Vec3{});
+        }
+        slots_.push_back(sl);
         return static_cast<std::uint16_t>(slots_.size() - 1);
     };
     for (const MeshPart& p : parts_)
@@ -347,7 +354,11 @@ void AvatarMesh::skin(const std::vector<Xform>& globals, const Shape* shape, std
             std::memcpy(m, id, sizeof(id));
             continue;
         }
-        const Xform& g = globals[sl.node];
+        Xform g = globals[sl.node];
+        if (sl.parent >= 0) {  // the eyes: the skin's shape may carry another body's eye positions (a worn mesh head)
+            const Xform& h = globals[sl.parent];
+            g.pos = h.apply(shape ? sl.local.mul(shape->scale[sl.parent]) : sl.local);
+        }
         const Quat& q = g.rot;
         double r[3][3] = {{1 - 2 * (q.y * q.y + q.z * q.z), 2 * (q.x * q.y - q.w * q.z), 2 * (q.x * q.z + q.w * q.y)},
                           {2 * (q.x * q.y + q.w * q.z), 1 - 2 * (q.x * q.x + q.z * q.z), 2 * (q.y * q.z - q.w * q.x)},

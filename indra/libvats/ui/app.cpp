@@ -1505,9 +1505,9 @@ void App::draw_menus() {
             ImGui::MenuItem("Bones in Front (X-ray)", nullptr, &xray_);
             ImGui::EndMenu();
         }
-        ImGui::MenuItem("Centre of Mass", nullptr, &show_com_);  // 08 CM-1
+        if (menu_item_icon(icon::kBalance, "Centre of Mass", nullptr, show_com_)) show_com_ = !show_com_;  // 08 CM-1
         ImGui::SetItemTooltip("The body's centre of mass over the planted feet; red when it falls outside them");
-        if (ImGui::BeginMenu("Onion Skin")) {
+        if (begin_menu_icon(icon::kAddLayer, "Onion Skin")) {
             draw_onion_settings();
             draw_pinned_ghost_menu();  // 08 ON-5
             ImGui::EndMenu();
@@ -1537,7 +1537,7 @@ void App::draw_menus() {
         ImGui::SetItemTooltip("A cutout of a face driven by your face tracking, to move and resize anywhere; your avatar "
                               "is not animated by the tracking meanwhile");
         ImGui::Separator();
-        if (ImGui::BeginMenu("Body")) {
+        if (begin_menu_icon(icon::kWalkTest, "Body")) {
             // SL defaults first: they are what people see in-world.
             const bool linden = !mesh_body();
             for (Body b : {Body::SLDefault, Body::SLDefaultMale, Body::Female, Body::Male, Body::SkeletonOnly})
@@ -1556,7 +1556,7 @@ void App::draw_menus() {
             }
             ImGui::EndMenu();
         }
-        if (host_.world_view() && ImGui::MenuItem("Show Other Avatars", nullptr, settings_.viewer_show_others)) {
+        if (host_.world_view() && menu_item_icon(icon::kActors, "Show Other Avatars", nullptr, settings_.viewer_show_others)) {
             settings_.viewer_show_others = !settings_.viewer_show_others;  // the viewer's (spec 09 U5), saved
             save_settings();
         }

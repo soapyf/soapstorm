@@ -26,6 +26,11 @@ inline int dae_index_count(const Skeleton& s) { return s.size() + 1 + static_cas
 // document and is applied inside load_dae.)
 int map_skin_joint(const Skeleton& skel, std::string_view name);
 
+// §3.3.4 rig scale from rest / bind distance ratios (bones > 0.3 m out): the unit (1, 0.01, 0.001, 0.0254, 0.1,
+// 10, 100) that a third of the ratios lie within 5 % of, else the median snapped to a unit within 5 %, else the
+// median. measured gets the median.
+double rig_scale_of(std::vector<double> ratios, double& measured);
+
 struct DaeMaterial {
     std::string name;  // the COLLADA material id, or "" for the default material
     std::array<float, 4> rgba{0.82f, 0.80f, 0.78f, 1.0f};  // white tint when textured

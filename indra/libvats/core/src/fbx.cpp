@@ -211,7 +211,7 @@ static bool load_fbx(const std::vector<std::uint8_t>& bytes, const std::string& 
         std::vector<Xform> rest = skel.global_pose(Pose(skel.size()));
         rest.push_back({});  // mRoot
         for (auto& v : skel.volumes()) rest.push_back(rest[v.joint] * Xform{v.rot, v.pos});
-        // Rig scale as in load_dae: median rest / bind distance over bones > 0.3 m out, snapped.
+        // Rig scale as in load_dae: rest / bind distance over bones > 0.3 m out (rig_scale_of).
         std::vector<double> ratios;
         for (auto& [c, n] : target) {
             if (n < 0 || n == root) continue;
@@ -219,17 +219,7 @@ static bool load_fbx(const std::vector<std::uint8_t>& bytes, const std::string& 
             double r = rest[n].pos.length(), d = vec(b.cols[3]).length();
             if (r > 0.3 && d > 1e-12 && std::isfinite(d)) ratios.push_back(r / d);
         }
-        if (!ratios.empty()) {
-            std::sort(ratios.begin(), ratios.end());
-            size_t h = ratios.size() / 2;
-            double m = ratios.size() % 2 ? ratios[h] : (ratios[h - 1] + ratios[h]) / 2;
-            rep.measured_scale = rig_scale = m;
-            for (double u : {1.0, 0.01, 0.001, 0.0254, 0.1, 10.0, 100.0})
-                if (std::fabs(std::log(m / u)) < 0.05) {
-                    rig_scale = u;
-                    break;
-                }
-        }
+        if (!ratios.empty()) rig_scale = rig_scale_of(ratios, rep.measured_scale);
         model.binds = rest;
         bound.assign(count, false);
         for (auto& [c, n] : target) {
