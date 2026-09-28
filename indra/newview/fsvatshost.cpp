@@ -446,7 +446,7 @@ namespace
             bool visible = false, drag = true, close = true, resize = true, minimize = true, minimized = false, docked = false;
         } mPane;                         // the conversations floater as it was before it filled the Chat pane
 
-        // The world layer's triangles (spec 09 U5): x y z, normal, rgba per vertex, in the agent frame; opaque, then translucent.
+        // The world layer's triangles (spec 09 U5): x y z, normal, rgba, gloss per vertex, in the agent frame; opaque, then translucent.
         struct SceneBatch
         {
             std::vector<F32> verts;
@@ -458,11 +458,17 @@ namespace
         int mOffW = 0, mOffH = 0;
         glm::mat4 mOffMvp{ 1.f };
         LLVector3 mOffLight;
+        LLVector3 mOffEye;               // thumbnails: where the shading looks from (the app's shade_eye_)
+        vats::SceneColours mOffColours;  // thumbnails: the hemisphere ambient's sky and ground
         struct Offscreen  // an FBO with a depth buffer, remade when the size changes
         {
             U32 fbo = 0, tex = 0, depth = 0;
+            U32 msFbo = 0, msColour = 0, msDepth = 0;  // thumbnails: drawn 4x multisampled, resolved into fbo/tex
             int w = 0, h = 0;
         };
+        U32 mThumbProgram = 0;           // thumbnails: the app's lit shader, so both draw the same picture
+        bool mThumbProgramFailed = false;
+        bool ensureThumbProgram();
         Offscreen mFace, mThumb;         // apart, so a thumbnail never overwrites the face cam's picture (ui/host.h)
         Offscreen* mOffTarget = &mFace;
         void drawBatches(const SceneBatch (&batches)[2]);  // program, VAO and buffers bound: opaque, then translucent
@@ -1618,7 +1624,7 @@ namespace
     // --- The world layer's triangles (spec 09 U5) ----------------------------------------------------------
 
     bool ViewerHost::scene_begin(vats::ui::SceneTarget target, int width, int height, const vats::Camera& cam,
-                                 const vats::SceneColours&, const vats::Mat4* projection)
+                                 const vats::SceneColours& colours, const vats::Mat4* projection)
     {
         if (target == vats::ui::SceneTarget::FaceCam || target == vats::ui::SceneTarget::Thumbnail)
         {
@@ -1634,6 +1640,9 @@ namespace
             mOffMvp = glm::make_mat4(mvp.m);
             const Vec3 light = (cam.to_viewer(cam.target) + Vec3{ 0, 0, 0.5 }).normalized();
             mOffLight = toLL(light);
+            // As the app's Renderer::begin: in ortho from far back along the view, since a close zoom is inside the body.
+            mOffEye = toLL(cam.ortho ? cam.target - cam.forward() * 1000.0 : cam.eye());
+            mOffColours = colours;
             mOffOpen = !mProgramFailed;
             return mOffOpen;
         }
@@ -1646,15 +1655,15 @@ namespace
     }
 
     void ViewerHost::scene_triangles(const std::vector<vats::Vertex>& verts, const std::vector<std::uint32_t>& indices, bool,
-                                     float, bool translucent)
+                                     float gloss, bool translucent)
     {
         if (mOffOpen && !verts.empty())  // the face cam's: kept in the UI's space
         {
             SceneBatch& b = mOff[translucent ? 1 : 0];
-            const U32 base = U32(b.verts.size() / 10);
-            b.verts.reserve(b.verts.size() + verts.size() * 10);
+            const U32 base = U32(b.verts.size() / 11);
+            b.verts.reserve(b.verts.size() + verts.size() * 11);
             for (const vats::Vertex& v : verts)
-                b.verts.insert(b.verts.end(), { v.p[0], v.p[1], v.p[2], v.n[0], v.n[1], v.n[2], v.c[0], v.c[1], v.c[2], v.c[3] });
+                b.verts.insert(b.verts.end(), { v.p[0], v.p[1], v.p[2], v.n[0], v.n[1], v.n[2], v.c[0], v.c[1], v.c[2], v.c[3], gloss });
             if (indices.empty())
                 for (U32 i = 0; i < U32(verts.size()); ++i)
                     b.indices.push_back(base + i);
@@ -1666,13 +1675,13 @@ namespace
         if (!mSceneOpen || verts.empty())
             return;
         SceneBatch& b = mScene[translucent ? 1 : 0];
-        const U32 base = U32(b.verts.size() / 10);
-        b.verts.reserve(b.verts.size() + verts.size() * 10);
+        const U32 base = U32(b.verts.size() / 11);
+        b.verts.reserve(b.verts.size() + verts.size() * 11);
         for (const vats::Vertex& v : verts)
         {
             const LLVector3 p = toAgent(Vec3{ v.p[0], v.p[1], v.p[2] });
             const LLVector3 n = toLL(mView.rot.rotate(Vec3{ v.n[0], v.n[1], v.n[2] })) * mRot;
-            b.verts.insert(b.verts.end(), { p.mV[VX], p.mV[VY], p.mV[VZ], n.mV[VX], n.mV[VY], n.mV[VZ], v.c[0], v.c[1], v.c[2], v.c[3] });
+            b.verts.insert(b.verts.end(), { p.mV[VX], p.mV[VY], p.mV[VZ], n.mV[VX], n.mV[VY], n.mV[VZ], v.c[0], v.c[1], v.c[2], v.c[3], gloss });
         }
         if (indices.empty())
             for (U32 i = 0; i < U32(verts.size()); ++i)
@@ -1768,6 +1777,7 @@ namespace
         glUniform1i(mImgTexLoc, 1);
         glBindBuffer(GL_ARRAY_BUFFER, mImageVbo);
         glDisableVertexAttribArray(2);
+        glDisableVertexAttribArray(3);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(F32), (void*)0);
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(F32), (void*)(3 * sizeof(F32)));
         glDepthMask(GL_FALSE);
@@ -1864,6 +1874,64 @@ namespace
         return mProgram != 0;
     }
 
+    // Thumbnails' program: the app's lit shader (app/renderer.cpp kLitVs/kLitFs) in GLSL 150, with the app's studio light
+    // (Renderer::kStudio; the app's thumbnails keep it whatever the Light menu says), so the two draw the same picture.
+    bool ViewerHost::ensureThumbProgram()
+    {
+        if (!mThumbProgram && !mThumbProgramFailed)
+        {
+            static const char* vs = "#version 150\n"
+                "in vec3 pos; in vec3 nrm; in vec4 col; in float a_gloss;\n"
+                "uniform mat4 view_proj; out vec3 v_pos, v_nrm; out vec4 v_col; out float v_gloss;\n"
+                "void main() { v_pos = pos; v_nrm = nrm; v_col = col; v_gloss = a_gloss; gl_Position = view_proj * vec4(pos, 1.0); }\n";
+            static const char* fs = "#version 150\n"
+                "in vec3 v_pos, v_nrm; in vec4 v_col; in float v_gloss;\n"
+                "uniform vec3 eye, sky, ground, key, key_colour, amb;\n"
+                "out vec4 color;\n"
+                "void main() {\n"
+                "  vec3 n = normalize(v_nrm);\n"
+                "  vec3 v = normalize(eye - v_pos);\n"
+                "  if (dot(n, v) < 0.0) n = -n;\n"
+                "  vec3 fill = normalize(vec3(-0.6, -0.5, 0.35));\n"
+                "  vec3 ambient = mix(ground, sky, n.z * 0.5 + 0.5);\n"
+                "  float wrap = max((dot(n, key) + 0.25) / 1.25, 0.0);\n"
+                "  vec3 diffuse = key_colour * wrap * 0.85 + amb / 0.75 * max(dot(n, fill), 0.0) * 0.25;\n"
+                "  float rim = pow(1.0 - max(dot(n, v), 0.0), 3.0) * 0.35;\n"
+                "  vec3 spec = key_colour * pow(max(dot(n, normalize(key + v)), 0.0), 40.0) * v_gloss;\n"
+                "  color = vec4(v_col.rgb * (ambient * amb + diffuse) + vec3(rim * 0.6) + spec, v_col.a);\n"
+                "}\n";
+            GLuint sh[2] = { glCreateShader(GL_VERTEX_SHADER), glCreateShader(GL_FRAGMENT_SHADER) };
+            glShaderSource(sh[0], 1, &vs, nullptr);
+            glShaderSource(sh[1], 1, &fs, nullptr);
+            mThumbProgram = glCreateProgram();
+            for (GLuint x : sh)
+            {
+                glCompileShader(x);
+                glAttachShader(mThumbProgram, x);
+            }
+            glBindAttribLocation(mThumbProgram, 0, "pos");
+            glBindAttribLocation(mThumbProgram, 1, "nrm");
+            glBindAttribLocation(mThumbProgram, 2, "col");
+            glBindAttribLocation(mThumbProgram, 3, "a_gloss");
+            glBindFragDataLocation(mThumbProgram, 0, "color");
+            glLinkProgram(mThumbProgram);
+            for (GLuint x : sh)
+                glDeleteShader(x);
+            GLint linked = 0;
+            glGetProgramiv(mThumbProgram, GL_LINK_STATUS, &linked);
+            if (!linked)
+            {
+                char log[1024] = "";
+                glGetProgramInfoLog(mThumbProgram, sizeof log, nullptr, log);
+                LL_WARNS("VATsEditor") << "the thumbnail shader did not link, thumbnails use the face cam's: " << log << LL_ENDL;
+                glDeleteProgram(mThumbProgram);
+                mThumbProgram = 0;
+                mThumbProgramFailed = true;
+            }
+        }
+        return mThumbProgram != 0;
+    }
+
     void ViewerHost::drawScene()
     {
         if (mScene[0].indices.empty() && mScene[1].indices.empty() && mImages.empty())
@@ -1935,9 +2003,11 @@ namespace
         glEnableVertexAttribArray(0);
         glEnableVertexAttribArray(1);
         glEnableVertexAttribArray(2);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 10 * sizeof(F32), (void*)0);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 10 * sizeof(F32), (void*)(3 * sizeof(F32)));
-        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 10 * sizeof(F32), (void*)(6 * sizeof(F32)));
+        glEnableVertexAttribArray(3);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 11 * sizeof(F32), (void*)0);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 11 * sizeof(F32), (void*)(3 * sizeof(F32)));
+        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 11 * sizeof(F32), (void*)(6 * sizeof(F32)));
+        glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 11 * sizeof(F32), (void*)(10 * sizeof(F32)));  // gloss
         for (int pass = 0; pass < 2; ++pass)
         {
             const SceneBatch& b = batches[pass];
@@ -2011,10 +2081,43 @@ namespace
             glBindFramebuffer(GL_FRAMEBUFFER, o.fbo);
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, o.tex, 0);
             glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, o.depth);
+            if (&o == &mThumb)  // as the app's Renderer: 4x MSAA colour and depth, blitted into o.tex at the end
+            {
+                if (!o.msFbo)
+                {
+                    glGenFramebuffers(1, &o.msFbo);
+                    glGenRenderbuffers(1, &o.msColour);
+                    glGenRenderbuffers(1, &o.msDepth);
+                }
+                glBindRenderbuffer(GL_RENDERBUFFER, o.msColour);
+                glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_RGBA8, mOffW, mOffH);
+                glBindRenderbuffer(GL_RENDERBUFFER, o.msDepth);
+                glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_DEPTH_COMPONENT24, mOffW, mOffH);
+                glBindRenderbuffer(GL_RENDERBUFFER, 0);
+                glBindFramebuffer(GL_FRAMEBUFFER, o.msFbo);
+                glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, o.msColour);
+                glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, o.msDepth);
+            }
             o.w = mOffW, o.h = mOffH;
         }
-        glBindFramebuffer(GL_FRAMEBUFFER, o.fbo);
-        const bool complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+        // Thumbnails: the app's shader and 4x MSAA; either missing, the face cam's way (one sample, its lighting).
+        const bool ms = &o == &mThumb && o.msFbo && ensureThumbProgram();
+        bool complete = false;
+        if (ms)
+        {
+            glBindFramebuffer(GL_FRAMEBUFFER, o.fbo);
+            complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+            glBindFramebuffer(GL_FRAMEBUFFER, o.msFbo);
+            complete = complete && glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+        }
+        if (!complete)
+        {
+            glBindFramebuffer(GL_FRAMEBUFFER, o.fbo);
+            complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+        }
+        const bool thumb_look = ms && complete;
+        if (thumb_look)
+            glBindFramebuffer(GL_FRAMEBUFFER, o.msFbo);
         if (complete)
         {
             glViewport(0, 0, mOffW, mOffH);
@@ -2022,6 +2125,31 @@ namespace
             glClearColor(0.f, 0.f, 0.f, 0.f);
             glDepthMask(GL_TRUE);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        }
+        if (complete && thumb_look)
+        {
+            // The app's Renderer::draw_triangles uniforms; SRC_ALPHA / ONE_MINUS_SRC_ALPHA on alpha too, as it blends.
+            const vats::SceneColours& c = mOffColours;
+            glUseProgram(mThumbProgram);
+            glUniformMatrix4fv(glGetUniformLocation(mThumbProgram, "view_proj"), 1, GL_FALSE, glm::value_ptr(mOffMvp));
+            glUniform3f(glGetUniformLocation(mThumbProgram, "eye"), mOffEye.mV[VX], mOffEye.mV[VY], mOffEye.mV[VZ]);
+            glUniform3f(glGetUniformLocation(mThumbProgram, "sky"), c.sky.r, c.sky.g, c.sky.b);
+            glUniform3f(glGetUniformLocation(mThumbProgram, "ground"), c.ground.r, c.ground.g, c.ground.b);
+            glUniform3f(glGetUniformLocation(mThumbProgram, "key"), 0.5514f, 0.4511f, 0.7018f);  // Renderer::kStudio
+            glUniform3f(glGetUniformLocation(mThumbProgram, "key_colour"), 1.f, 1.f, 1.f);
+            glUniform3f(glGetUniformLocation(mThumbProgram, "amb"), 0.75f, 0.75f, 0.75f);
+            glDisable(GL_CULL_FACE);
+            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(GL_LESS);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            drawBatches(mOff);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, o.msFbo);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, o.fbo);
+            glBlitFramebuffer(0, 0, mOffW, mOffH, 0, 0, mOffW, mOffH, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        }
+        else if (complete)
+        {
             glUseProgram(mProgram);
             glUniformMatrix4fv(mMvpLoc, 1, GL_FALSE, glm::value_ptr(mOffMvp));
             glUniform3f(mLightLoc, mOffLight.mV[VX], mOffLight.mV[VY], mOffLight.mV[VZ]);
@@ -2115,6 +2243,7 @@ namespace
         mProgram = mVao = mVbo = mEbo = 0;
         mImageProgram = mImageVbo = 0;
         mFace = mThumb = Offscreen();  // the face cam's and the thumbnails'; remade at their next picture
+        mThumbProgram = 0;
         mTextures.clear();
     }
 
