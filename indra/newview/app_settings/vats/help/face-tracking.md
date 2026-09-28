@@ -47,6 +47,23 @@ record an open jaw. **Clear** drops the neutral face.
 Tick **Face Only** in the **Record** section to record only the face bones (and the head from an iPhone)
 over the animation already there. See [[Motion capture#Recording a take]].
 
+### Face cam
+
+**View → Face Cam** shows a face driven by your tracking in a borderless cutout, for a stream or a video call:
+only the head is drawn, on a see-through background. Drag it anywhere to move it, drag its bottom-right corner to
+resize it, and right-click it for **Close Face Cam** (or untick the menu item). It is not saved.
+
+- The face is the Second Life default body's head (Ruth), in your shape: in the viewer, your own avatar's shape
+  sliders; in the app, SL's default shape. Your worn mesh head is not drawn: the editor never reads a worn mesh's
+  own data.
+- It follows the head turn, the eyes and the face bones the tracking moves, and shows blinks, an open mouth, a
+  smile, a frown and a kiss with the head's own expressions (the default head is not rigged to the face bones, so
+  these carry the expression): `eyeBlinkLeft` and `eyeBlinkRight`, `jawOpen`, `mouthSmileLeft` and
+  `mouthSmileRight`, `mouthFrownLeft` and `mouthFrownRight`, `mouthPucker`.
+- While it shows, the tracking moves only the face cam: your avatar (in the viewer, your in-world avatar) keeps
+  its own pose and motions. Recording a take still works as usual.
+- With nothing streaming it shows the resting face and **No tracking: Tools > Motion Capture**.
+
 ## Configuration
 
 | Setting | Range | Default | Effect |

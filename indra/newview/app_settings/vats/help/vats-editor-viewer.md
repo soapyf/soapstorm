@@ -121,6 +121,29 @@ The avatar belongs to the editor until you close it:
 Other residents see your avatar sitting on the ground with its normal animations; the editor's pose is
 yours only until you upload the animation and play it.
 
+Two commands change this while they are on, and give it back when they end: **View → As It Plays In-World**
+(below) lets your AO and the other motions play, and **Tools → Loop Tools → Test as My Walk** lets you walk (see
+[[Loop tools#Testing as your walk (viewer)]]). Sat on furniture, see [[Couples and groups#Animating on real furniture (viewer)]].
+
+### As it plays in-world
+
+**View → As It Plays In-World** shows your animation as it will play in-world, among everything else your avatar
+plays:
+
+- Your AO, the animations the region, scripts and gestures play on you, the viewer's own motions (head and eye
+  motion, breathing, hands) and avatar physics run again, on your screen as usual.
+- Your animation plays at its own priorities, and only on the joints its upload keys: its priority, or a joint's
+  own, as **Export SL .anim** writes them. Each joint goes to the highest priority, on equal priority to the one
+  started last, so your AO may win joints your animation keys at a lower priority.
+- The avatar stays sat on the ground and drawn where it was, as before; nothing is sent to the region.
+- The **As It Plays In-World** window lists every joint something animates: the motion that drives it and at what
+  priority. Your animation is blue; a joint it keys but loses is orange, with the priority it keys it at in the
+  tooltip. **Only the joints your animation keys** shortens the list. The list is your own avatar's only, names and
+  priorities, as the [[Priority planner]]'s **Add Running Animations** reads them.
+
+Choose it again, or close its window, and the editor holds your avatar alone again: every other motion stops and
+the editor's pose shows on every joint. In the app, the [[Priority planner]] answers the same question from files.
+
 ### Other avatars while the editor is open
 
 Every other avatar is hidden on your screen while the editor is open, friends too, with their attachments
@@ -274,6 +297,10 @@ The editor takes its colours from the viewer's skin and follows it when the skin
 | Attachment point labels | the point's name | also what you wear there, and a warning when the point is keyed |
 | Grid and upload price | not shown | the grid in the status bar, the price in the Export section |
 | [[Listing media]] | **File → Export Listing Media...** | not in the menu; the viewer's own snapshots |
+| **View → As It Plays In-World** | not shown; the [[Priority planner]] with your files | your animation live among your AO and the rest, with who wins each joint |
+| **Test as My Walk / Run** | not shown | walk for real with the animation as your walk, your speed against its stride |
+| Furniture | the sit target typed in | your seat measured, pins and IK targets placed by clicking it |
+| Face cam ([[Face tracking]]) | Ruth in SL's default shape | Ruth in your own shape; your in-world avatar is left alone |
 
 Files open and save through the viewer's file picker. A cancelled folder choice leaves the setting as it
 was.

@@ -93,6 +93,34 @@ Each is one undo step.
 
 > **Note:** In the viewer the treadmill's lines are drawn in the world, on the ground under your avatar, on your screen only.
 
+### Testing as your walk (viewer)
+
+In the [[VATs Editor (viewer)]], **Tools → Loop Tools → Test as My Walk** (or **Test as My Run**) lets you walk
+your avatar for real with the animation as its walk. The app has no such command.
+
+- The editor lets your avatar go: it stands up if the editor sat it down, and your usual movement keys (**W**,
+  **A**, **S**, **D**, the arrows, **Page Up**, **Page Down**, **E**, **C**, **F** and **Space**, without **Ctrl**
+  or **Alt**) walk it. The camera follows you again. Other keys stay the editor's.
+- Whenever the region walks you (or runs you), your animation plays as that walk on your screen, from its first
+  frame, at its own priorities on the joints it keys, as [[VATs Editor (viewer)#As it plays in-world]] shows it.
+  Neither the default walk nor your AO's walk starts meanwhile. Standing, your AO's or the default stand plays.
+- Other residents see your ordinary walk: nothing new is sent to the region, and your AO asks for no walk of its
+  own while the test runs.
+
+The **Test as My Walk** window shows:
+
+| Line | Meaning |
+|---|---|
+| **Walking** / **Standing** | whether your animation plays now |
+| **Ground speed** | how fast your avatar moves over the ground, m/s, averaged while you walk |
+| **Stride**, **cycle** | the cycle as the treadmill measures it, and the speed it walks at |
+| **Suggested rate** | ground speed / the cycle's speed: at 1.00x the feet keep pace; above, they slide backwards; below, forwards |
+
+**Match Cycle to This Speed** stretches or squashes the loop so the cycle walks at the ground speed you walked
+at, as **Stretch Time** does for the treadmill; one undo step. **Stop** (or the window's close button, or the menu
+item again) ends the test: the editor holds your avatar again, sat down where it stands, and every other motion
+stops.
+
 ## Worked example: a walk made seamless and in place
 
 [Open the example](example:loop-walk.vat): one second of walking at 30 fps with **Loop** on from frame 0 to 30. The hips travel 1.2 m forward, and frame 30 does not quite match frame 0 on the legs.

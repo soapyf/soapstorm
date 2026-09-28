@@ -74,6 +74,11 @@ Two warnings appear under **For AO makers**, about any clip in the list:
 > put you in are left out. The app has no such button. With nothing playing, it reports
 > `No animations are running on your avatar`.
 
+In the viewer, **View → As It Plays In-World** goes one step further: your avatar plays your animation live with
+your AO and the rest, and a table shows who wins each joint by the same rule (see
+[[VATs Editor (viewer)#As it plays in-world]]). The app has no world to play in; there the planner, with your AO's
+and furniture's `.anim` files added through **Add Clips...**, answers the same question.
+
 ## Troubleshooting
 
 ### My clip loses a bone it should win

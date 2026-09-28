@@ -215,6 +215,27 @@ then Z, as `llEuler2Rot` does. With a tilted **Rotation**, an actor's turn can s
 that is the same rotation. Numbers are rounded as the systems write them when you dump their settings:
 AVsitter to 3 decimals for positions and 1 for rotations, nPose to 3 and 2.
 
+### Animating on real furniture (viewer)
+
+In the [[VATs Editor (viewer)]], sit on the furniture before you open the editor: the editor leaves you seated
+on it. The **Actors** window then has a **Your seat** section above **Sit systems (furniture)**:
+
+- **You sit on** the object's name (known once you have checked it, below), your avatar's **Offset from its
+  root** in metres and **Rotation** in degrees: where you sit, in the root prim's frame, as sit systems place you.
+- **Use as the Sit Target** makes that the **Sit target** and **Rotation** above, so the AVsitter and nPose lines
+  seat your actor (the first) exactly where you sit now; your other actors keep their placement around it. One
+  undo step.
+- **Place on Furniture Point**, then a click on the furniture: the selected hand, foot or other bone goes to the
+  point you clicked. A limb in [[IK]] (or a selected IK handle) gets its target keyed there at this frame; any
+  other bone is held there with a [[Hold and bind|world pin]] from this frame. **Esc** cancels. Only that one
+  point is read from the furniture, never its shape. A click off the furniture says so and keeps waiting.
+- **Settle on Furniture** drops each selected bone and IK handle straight down onto the furniture, from 30 cm
+  above it to 1 m below. It works only on furniture you created every part of: **Check Whether You Made It**
+  finds out, by selecting the furniture as the viewer's **Edit** does to read who created each part (the
+  viewer's own export rule), then deselecting it. Otherwise place points by clicking.
+
+The app has no in-world furniture: type the sit target's offset there instead.
+
 ### Worked example: a handshake
 
 [Open the example](example:couple-handshake.vat): two actors, **Lead** (you) and **Partner**, placed as

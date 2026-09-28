@@ -42,7 +42,7 @@ What it does:
 2. On every frame of the range where the centre of mass is outside the support polygon shrunk by **Margin**, `mPelvis` moves sideways and forward or back (never up or down) by the smallest distance that brings it inside. The legs bend to keep the feet on their spots.
 3. The corrections are averaged over **Smoothing** frames each side, so the hips glide instead of jumping; up to 12 passes run, the last four unsmoothed, until every frame is inside.
 
-`mPelvis` is keyed on every frame of the range. The frames just before and after the range are keyed where the curves already were, and the curves outside the range keep their shape. A frame with no foot on the ground needs no correction of its own (smoothing may still carry a neighbour's to it). The status bar reports, for example, "Balanced frames 0-30: the hips moved up to 38.5 cm"; frames that could not be brought inside are counted: "..., 2 frame(s) still off balance".
+`mPelvis` is keyed on every frame of the range. The frames just before and after the range are keyed where the curves already were, and the curves outside the range keep their shape. A frame with no foot on the ground needs no correction of its own (smoothing may still carry a neighbour's to it). The status bar reports, for example, "Balanced frames 0-30: the hips moved up to 41.8 cm"; frames that could not be brought inside are counted: "..., 2 frame(s) still off balance".
 
 ### Jump Arc
 
@@ -63,10 +63,10 @@ The takeoff and landing keys keep their values, and the curves before the takeof
 
 ### Worked example: a lean that tips over
 
-[Open the example](example:balance-lean.vat): 30 frames. Both legs are in IK with their targets where the feet stand, and the whole body tips forward about the ankles, from upright at frame 0 to 30° at frame 30.
+[Open the example](example:balance-lean.vat): 30 frames. Both legs are in IK with their targets where the feet stand and their poles in front of the knees, and the whole body tips forward about the ankles, from upright at frame 0 to 30° at frame 30.
 
-1. Scrub from 0 to 30. The centre of mass is green until frame 13 and red from frame 14: by then it has passed the toes.
-2. Choose **Tools → Auto-Balance...**, press **Whole Clip**, then **Balance**. The status bar says "Balanced frames 0-30: the hips moved up to 38.5 cm".
+1. Scrub from 0 to 30. The centre of mass is green until frame 12 and red from frame 13: by then it has passed the toes.
+2. Choose **Tools → Auto-Balance...**, press **Whole Clip**, then **Balance**. The status bar says "Balanced frames 0-30: the hips moved up to 41.8 cm".
 3. Scrub again: the dot stays green, the hips slide back over the feet as the body tips, the knees bend, and the feet do not move.
 4. **Edit → Undo** puts the lean back.
 
