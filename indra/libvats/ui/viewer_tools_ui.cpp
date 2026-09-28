@@ -15,6 +15,7 @@
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "theme.h"
 #include "vats/loop_assist.h"
 #include "vats/priority_plan.h"
@@ -138,7 +139,7 @@ void App::draw_in_world_window() {
     clips.push_back(ui.own);
     const std::map<std::string, int> winners = plan_winners(clips);
 
-    place_tool_window(7, 26, 30);
+    place_tool_window(26, 30);
     bool open = true;
     if (!ImGui::Begin("As It Plays In-World", &open)) {
         ImGui::End();
@@ -189,7 +190,7 @@ void App::draw_walk_test_window() {
     const Clip& c = avatar_clip(doc_.project);
     if (!(c == ui.gait_seen)) ui.gait_seen = c, ui.gait = measure_gait(*rig_, c, shape());
     const ui::Host::Locomotion l = host_.locomotion();
-    place_tool_window(8, 24, 16);
+    place_tool_window(24, 16);
     bool open = true;
     if (ImGui::Begin(walk_test_ == 1 ? "Test as My Walk###walk_test" : "Test as My Run###walk_test", &open)) {
         help_button("loop-tools");
@@ -217,7 +218,7 @@ void App::draw_walk_test_window() {
                     const double target = ui.speed;
                     edit("Match Cycle to Walking Speed", [&](Clip& cl) { frames = match_speed_by_time(cl, g, target); });
                     sync_actor_timing(doc_.project);
-                    status("The cycle is now " + std::to_string(frames) + " frames long");
+                    status("The cycle is now " + count_noun(frames, "frame") + " long");
                 }
             }
         }

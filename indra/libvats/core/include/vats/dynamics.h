@@ -19,9 +19,10 @@ namespace vats {
 // Presets for DY-1's common cases.
 DynChain dyn_preset(const std::string& kind, const std::string& root, int length);  // "tail", "ears", "jiggle", "overlap"
 
-// Nodes the chain simulates, in order: root, then the first joint child, length times. A collision
-// volume root is a chain of one.
-std::vector<int> dyn_nodes(const Skeleton& skel, const DynChain& chain);
+// Nodes the chain simulates, parents before children: root, then down the first joint child, `length` bones deep,
+// with the children that start where the first one does (a fan: mWing4Fan beside mWing4) as branches. A collision
+// volume root is a chain of one. branches = false: the first-child path alone (Overlap's chain).
+std::vector<int> dyn_nodes(const Skeleton& skel, const DynChain& chain, bool branches = true);
 
 // The spring simulation state for a set of chains.
 class DynSim {
@@ -42,10 +43,11 @@ private:
     struct Chain {
         DynChain def;
         std::vector<int> nodes;
+        std::vector<int> up, child;  // per node: its parent's and its first child's index in nodes, -1 for none
         std::vector<Vec3> p, prev, target_prev;  // one point per node: bone tail, or volume centre
+        std::vector<Vec3> origin_prev, body_prev;  // the step before: where the node was, its animated direction
     };
-    // The simulated global of every chain node for the current points, from the animated globals.
-    void solve(const Chain& c, const std::vector<Xform>& animated, std::vector<Xform>& out, bool with_points) const;
+    Vec3 tail_local(const Chain& c, size_t i, const std::vector<Xform>& animated) const;
     Vec3 collide(const Vec3& p, const Vec3& target, double radius, const std::vector<Xform>& animated) const;
 
     const Skeleton& skel_;

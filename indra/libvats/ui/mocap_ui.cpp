@@ -18,19 +18,34 @@
 #include "firewall.h"
 #include "theme.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "vats/mocap.h"
 #include "vats/pose_ops.h"
 #include "udp.h"
 
 namespace vats {
 
+// The Source list, in order. A phone source is face only, always another device, and may send the head.
+enum { kSrcVmc, kSrcRokoko, kSrcIFacialMocap, kSrcVts, kSrcLiveLinkFace, kSources };
+struct SourceInfo {
+    const char* name;
+    int port;
+    bool phone;
+};
+constexpr SourceInfo kSourceInfo[kSources] = {{"VMC protocol", 39539, false},
+                                              {"Rokoko Studio Live", kRokokoPort, false},
+                                              {"iFacialMocap (iPhone)", kIFacialMocapPort, true},
+                                              {"VTube Studio (iPhone)", kVtsPort, true},
+                                              {"Live Link Face (iPhone)", kLiveLinkFacePort, true}};
+
 struct MocapUi {
     UdpReceiver sock;
-    int source = 0;    // 0 VMC, 1 Rokoko Studio Live (JSON v3), 2 iFacialMocap (face only)
+    int source = kSrcVmc;
     int port = 39539;  // VMC's usual port
     std::string actor;  // Rokoko: the actor streamed (the first with a body)
     // Accept senders on other devices, remembered per source. A phone is always another device.
-    bool lan[3] = {false, false, true};
+    bool lan[kSources] = {false, false, true, true, true};
+    double phone_asked = -1;  // VTube Studio: when the request was last sent (it is repeated); -1 = not asked
     std::string error;
 
     RigTable table;
@@ -41,7 +56,7 @@ struct MocapUi {
     FaceSettings face_settings;
     std::string face_head;  // the head whose table maps the face (App::load_face_table); "" = the default head
     bool face_on = true, face_only = false;
-    int face_preset = 0;
+    int face_preset = -1;  // an index into face.presets; -1 = never chosen: "Natural" once the table has loaded
     std::string phone_ip;
     VmcState state, rest;
     bool have_data = false, drive = true;
@@ -96,7 +111,8 @@ Json mocap_settings(const MocapUi& ui) {
     for (bool b : ui.lan) lan.push(b);
     Json j = Json::object();
     j.set("source", ui.source), j.set("port", ui.port), j.set("allow_other_devices", lan), j.set("phone_ip", ui.phone_ip);
-    j.set("drive", ui.drive), j.set("face", ui.face_on), j.set("face_preset", ui.face_preset);
+    j.set("drive", ui.drive), j.set("face", ui.face_on);
+    if (ui.face_preset >= 0) j.set("face_preset", ui.face_preset);  // not before a choice or the table
     j.set("face_gain", f.gain), j.set("eye_gain", f.eye_gain), j.set("eye_yaw_max", f.eye_yaw_max);
     j.set("eye_pitch_max", f.eye_pitch_max), j.set("head", f.head), j.set("positions", f.positions), j.set("shape_gains", map(f.gains));
     j.set("face_head", ui.face_head);
@@ -128,9 +144,9 @@ void load_mocap_settings(MocapUi& ui, const Json& j) {
     };
     FaceSettings& f = ui.face_settings;
     MocapCleanup& c = ui.clean;
-    num("source", ui.source, 0, 2), num("port", ui.port, 1, 65535);
+    num("source", ui.source, 0, kSources - 1), num("port", ui.port, 1, 65535);
     if (auto* x = j.find("allow_other_devices"); x && x->is_array())
-        for (size_t i = 0; i < x->arr.size() && i < 3; ++i)
+        for (size_t i = 0; i < x->arr.size() && i < kSources; ++i)
             if (x->arr[i].is_bool()) ui.lan[i] = x->arr[i].b;
     if (auto* x = j.find("phone_ip"); x && x->is_string() && x->str.size() < 64) ui.phone_ip = x->str;
     if (auto* x = j.find("face_head"); x && x->is_string() && x->str.size() < 256) ui.face_head = x->str;
@@ -220,8 +236,18 @@ void App::draw_mocap_panel() {
     if (!mocap_ui_) load_mocap_settings(*(mocap_ui_ = std::make_shared<MocapUi>()), settings_.mocap);
     MocapUi& ui = *mocap_ui_;
     const double now = double(host_.ticks_ns()) * 1e-9;
-    // Scripted checks: VATS_MOCAP_LISTEN=<port> starts with the window open and listening (VMC, this
-    // computer only), like VATS_FAKE_FIREWALL for the setup checklist.
+    // Connect to iPhone: iFacialMocap's hello once, or VTube Studio's request, which is repeated while listening.
+    auto ask_phone = [&] {
+        const bool vts = ui.source == kSrcVts;
+        if (!ui.sock.send_to(ui.phone_ip, vts ? kVtsPhonePort : kIFacialMocapPort,
+                             vts ? vts_request(ui.port) : std::string(kIFacialMocapHello), ui.error))
+            return ui.phone_asked = -1, false;
+        if (vts) ui.phone_asked = now;
+        return true;
+    };
+    // Scripted checks: VATS_MOCAP_LISTEN=<port> starts with the window open and listening (the saved source, this
+    // computer only), like VATS_FAKE_FIREWALL for the setup checklist. A phone source with a saved phone address
+    // also presses Connect to iPhone.
     if (static bool checked = false; !checked) {
         checked = true;
         if (const char* port = std::getenv("VATS_MOCAP_LISTEN")) {
@@ -229,19 +255,34 @@ void App::draw_mocap_panel() {
             ui.port = std::atoi(port);
             ui.sock.open(ui.port, false, ui.error);
             ui.window_start = ui.listen_start = now;
+            if ((ui.source == kSrcIFacialMocap || ui.source == kSrcVts) && !ui.phone_ip.empty()) ask_phone();
         }
     }
 
     // Poll the socket every frame, open window or not.
     if (ui.sock.is_open()) {
+        if (ui.source == kSrcVts && ui.phone_asked >= 0 && now - ui.phone_asked >= kVtsResendSeconds) ask_phone();
         std::uint8_t buf[65536];
         std::vector<OscMessage> msgs;
         std::string from;
+        // A packet a face source cannot read: said once in the window, not counted as received.
+        auto refused = [&](bool ok, const char* why) {
+            if (ok && ui.error == why) ui.error.clear();
+            if (!ok) ui.error = why;
+            return !ok;
+        };
         for (int n, guard = 0; guard < 4000 && (n = ui.sock.receive(buf, sizeof buf, &from)) > 0; ++guard) {
             try {  // packets come from the network: a hostile one is dropped, never fatal
-                if (ui.source == 2) {
-                    apply_ifacialmocap(std::string_view(reinterpret_cast<const char*>(buf), size_t(n)), ui.state);
-                } else if (ui.source == 1) {
+                const std::string_view text(reinterpret_cast<const char*>(buf), size_t(n));
+                if (ui.source == kSrcVts) {
+                    if (refused(apply_vts(text, ui.state), "VTube Studio: a packet was not a tracking frame")) continue;
+                } else if (ui.source == kSrcLiveLinkFace) {
+                    if (refused(apply_live_link_face(buf, size_t(n), ui.state),
+                                "Live Link Face: a packet did not fit. Set the app to Live Link (ARKit)."))
+                        continue;
+                } else if (ui.source == kSrcIFacialMocap) {
+                    apply_ifacialmocap(text, ui.state);
+                } else if (ui.source == kSrcRokoko) {
                     std::string err;
                     if (!apply_rokoko(buf, size_t(n), ui.state, "", ui.actor, err)) ui.error = "Rokoko: " + err;
                     else if (ui.error.rfind("Rokoko: ", 0) == 0) ui.error.clear();
@@ -265,7 +306,7 @@ void App::draw_mocap_panel() {
             ui.have_data = true;
             // VMC: positions from the first frame, T-pose rotations. Rokoko sends each joint in its own
             // axes, so the first frame is the rest until the performer's T-pose is captured.
-            ui.rest = ui.source == 1 ? ui.state : vmc_t_pose(ui.state);
+            ui.rest = ui.source == kSrcRokoko ? ui.state : vmc_t_pose(ui.state);
         }
         for (auto& [name, x] : ui.state.bones)  // bones a sender starts sending later
             if (!ui.rest.bones.count(name)) ui.rest.bones[name] = Xform{Quat{}, x.pos};
@@ -308,10 +349,17 @@ void App::draw_mocap_panel() {
     }
 
     if (!show_mocap_) return;
+    // The face table before the save below: the preset shown and saved is only known once it has loaded.
+    if (ui.face.shapes.empty() && ui.face_error.empty()) load_face_table(ui.face_head, ui.face, ui.face_error);
+    if (ui.face_preset < 0 || ui.face_preset >= int(ui.face.presets.size())) {  // never chosen: the default settings' match
+        auto natural = ui.face.presets.find("Natural");
+        if (natural != ui.face.presets.end()) ui.face_preset = int(std::distance(ui.face.presets.begin(), natural));
+        else ui.face_preset = ui.face.presets.empty() ? -1 : 0;
+    }
     // Saved as soon as a change is finished (not on every step of a slider drag).
     if (Json j = mocap_settings(ui); !headless_ && !ImGui::IsAnyItemActive() && j != settings_.mocap)
         settings_.mocap = std::move(j), save_settings();
-    place_tool_window(3, 28, 76);  // tall enough for every section, capped to the screen
+    place_tool_window(28, 76);  // tall enough for every section, capped to the screen
     if (!ImGui::Begin("Motion Capture", &show_mocap_)) return ImGui::End();
     help_button("motion-capture");
     if (ui.table.bones.empty() && ui.table_error.empty()) {
@@ -321,21 +369,19 @@ void App::draw_mocap_panel() {
         if (!parse_rig_table(ss.str(), ui.table, ui.table_error) && ui.table_error.empty())
             ui.table_error = "data/retarget/vrm-humanoid.json is missing";
     }
-    if (ui.face.shapes.empty() && ui.face_error.empty()) {
-        load_face_table(ui.face_head, ui.face, ui.face_error);
-        auto natural = ui.face.presets.find("Natural");  // the preset the default settings match
-        if (natural != ui.face.presets.end() && !settings_.mocap.find("face_preset"))  // unless one was saved
-            ui.face_preset = int(std::distance(ui.face.presets.begin(), natural));
-    }
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped("%s", ui.source == 2
-        ? "Receives iFacialMocap from an iPhone or iPad with Face ID. Enter the address the app shows, "
-          "listen, then press Connect to iPhone. Face and head only: add a body sender separately."
-        : ui.source == 1
-        ? "Receives Rokoko Studio Live. In Studio, add a Custom streaming target with this computer's address, "
-          "this port and the JSON v3 data format."
-        : "Receives the VMC protocol, which webcam and VR tracker apps send (for example XR Animator, "
-          "VSeeFace, or VirtualMotionCapture). Point the app's VMC sender at this computer and port.");
+    static const char* const kAbout[kSources] = {
+        "Receives the VMC protocol, which webcam, phone and VR tracker apps send (for example XR Animator, SlimeVR, "
+        "VSeeFace, Waidayo or VirtualMotionCapture). Point the app's VMC sender at this computer and port.",
+        "Receives Rokoko Studio Live, body and face. In Studio, add a Custom streaming target with this computer's "
+        "address, this port and the JSON v3 data format.",
+        "Receives iFacialMocap from an iPhone or iPad with Face ID. Enter the address the app shows, "
+        "listen, then press Connect to iPhone. Face and head only: add a body sender separately.",
+        "Receives VTube Studio from an iPhone or iPad with Face ID. Enter the phone's address (on the phone: "
+        "Settings > Wi-Fi, your network's details), listen, then press Connect to iPhone. Face and head only.",
+        "Receives Live Link Face from an iPhone or iPad with Face ID, in Live Link (ARKit) mode. In the app, add "
+        "this computer's address as a target with this port. Face and head only."};
+    ImGui::TextWrapped("%s", kAbout[ui.source]);
     ImGui::PopStyleColor();
     if (!ui.table_error.empty()) ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "%s", ui.table_error.c_str());
     if (!ui.face_error.empty()) ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "%s", ui.face_error.c_str());
@@ -477,10 +523,16 @@ void App::draw_mocap_panel() {
             ImGui::TextColored(ui.allow_failed ? ImVec4(1, 0.5f, 0.4f, 1) : ImVec4(0.45f, 0.82f, 0.5f, 1), "%s",
                                ui.allow_message.c_str());
 
-        if (ui.source == 2)
+        if (ui.source == kSrcIFacialMocap || ui.source == kSrcVts)
             row(got ? 0 : ui.phone_ip.empty() ? 1 : 2,
-                ui.phone_ip.empty() ? "Phone address: type the address the iFacialMocap app shows, then press Connect to iPhone."
+                ui.phone_ip.empty() ? std::string("Phone address: type ") +
+                                          (ui.source == kSrcVts ? "the phone's address"
+                                                                : "the address the iFacialMocap app shows") +
+                                          ", then press Connect to iPhone."
                                     : "Phone address: " + ui.phone_ip + (got ? "" : " (press Connect to iPhone)"));
+        if (ui.source == kSrcLiveLinkFace)
+            row(got ? 0 : 2, "In Live Link Face: Live Link (ARKit) mode, and this computer's address with port " +
+                                 std::to_string(ui.port) + " as a target.");
         if (!listening) row(2, "Receiving: not listening");
         else if (!got) row(listening && now - ui.listen_start > 5 ? 1 : 2, "Receiving: waiting for the sender...");
         else if (now - ui.last_packet > 1)
@@ -495,16 +547,15 @@ void App::draw_mocap_panel() {
     ImGui::BeginDisabled(open);
     label("Source", ImGui::GetFontSize() * 11);
     const int previous = ui.source;
-    if (ImGui::Combo("##source", &ui.source, "VMC protocol\0Rokoko Studio Live\0iFacialMocap (iPhone)\0")) {
-        const int defaults[3] = {39539, kRokokoPort, kIFacialMocapPort};
-        if (ui.port == defaults[previous]) ui.port = defaults[ui.source];  // keep a port the user chose
+    if (ImGui::Combo("##source", &ui.source, [](void*, int i) { return kSourceInfo[i].name; }, nullptr, kSources)) {
+        if (ui.port == kSourceInfo[previous].port) ui.port = kSourceInfo[ui.source].port;  // keep a port the user chose
         ui.rest.captured = false;
     }
     label("Port", ImGui::GetFontSize() * 6);
     ImGui::InputInt("##port", &ui.port, 0);
     ui.port = std::clamp(ui.port, 1, 65535);
     ImGui::SameLine();
-    ImGui::BeginDisabled(ui.source == 2);  // iFacialMocap always runs on a phone
+    ImGui::BeginDisabled(kSourceInfo[ui.source].phone);  // a phone is always another device
     ImGui::Checkbox("Allow Other Devices", &ui.lan[ui.source]);
     ImGui::EndDisabled();
     ImGui::SetItemTooltip("Listen on every network interface, for a phone or headset on your network.\n"
@@ -519,6 +570,7 @@ void App::draw_mocap_panel() {
             ui.have_data = false;
             ui.state = {};
             ui.pps = ui.count = 0;
+            ui.phone_asked = -1;
         } else {
             ui.error.clear();
             ui.sock.open(ui.port, ui.lan[ui.source], ui.error);
@@ -544,7 +596,7 @@ void App::draw_mocap_panel() {
     else ImGui::Text("%d packets/s from %s", ui.pps, ui.sender.c_str());
     if (!ui.error.empty()) ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "%s", ui.error.c_str());
     if (open && ui.state.loaded == 0) ImGui::TextDisabled("The sender says no model is loaded.");
-    if (ui.source == 2) {
+    if (ui.source == kSrcIFacialMocap || ui.source == kSrcVts) {
         label("Phone address", ImGui::GetFontSize() * 9);
         char ip[64];
         std::snprintf(ip, sizeof ip, "%s", ui.phone_ip.c_str());
@@ -553,11 +605,13 @@ void App::draw_mocap_panel() {
         ImGui::BeginDisabled(!open || ui.phone_ip.empty());
         if (icon_label_button(icon::kPhone, "Connect to iPhone")) {
             ui.error.clear();
-            if (ui.sock.send_to(ui.phone_ip, kIFacialMocapPort, kIFacialMocapHello, ui.error))
-                status("Asked the iPhone to start streaming");
+            if (ask_phone()) status("Asked the iPhone to start streaming");
         }
         ImGui::EndDisabled();
-        ImGui::SetItemTooltip("iFacialMocap starts sending to this computer once it receives this request.");
+        ImGui::SetItemTooltip(ui.source == kSrcVts
+                                  ? "VTube Studio sends to this computer while it keeps receiving this request; VATs "
+                                    "repeats it every few seconds until you stop listening."
+                                  : "iFacialMocap starts sending to this computer once it receives this request.");
     }
 
     // Live view and rest pose.
@@ -567,9 +621,9 @@ void App::draw_mocap_panel() {
     ImGui::SetItemTooltip("Shows the incoming motion on the avatar while listening. The clip is not changed until you record.");
     label("Rest pose");
     ImGui::TextDisabled("%s", ui.rest.captured     ? "captured from the performer"
-                              : ui.source == 1     ? "first frame: stand in a T-pose and capture"
+                              : ui.source == kSrcRokoko ? "first frame: stand in a T-pose and capture"
                                                    : "T-pose (VRM models)");
-    if (open && ui.source == 1 && !ui.actor.empty()) {
+    if (open && ui.source == kSrcRokoko && !ui.actor.empty()) {
         label("Actor");
         ImGui::TextUnformatted(ui.actor.c_str());
     }
@@ -579,7 +633,7 @@ void App::draw_mocap_panel() {
         ui.rest.captured = true;
     }
     ImGui::SetItemTooltip("Stand in a T-pose and press this if the arms or legs come in twisted.");
-    if (ui.source == 0) {  // a Rokoko joint's T-pose is not the identity, so there is nothing to reset to
+    if (ui.source == kSrcVmc) {  // a Rokoko joint's T-pose is not the identity, so there is nothing to reset to
         ImGui::SameLine();
         if (ImGui::Button("Reset to T-Pose")) {
             ui.rest = vmc_t_pose(ui.state);
@@ -611,20 +665,20 @@ void App::draw_mocap_panel() {
     }
     label("Strength");
     float gain = float(ui.face_settings.gain);
-    if (ImGui::SliderFloat("##facegain", &gain, 0, 2, "%.2f")) ui.face_settings.gain = gain;
+    if (slider_float("##facegain", &gain, 0, 2, "%.2f")) ui.face_settings.gain = gain;
     label("Eye Strength");
     float eye = float(ui.face_settings.eye_gain);
-    if (ImGui::SliderFloat("##eyegain", &eye, 0, 2, "%.2f")) ui.face_settings.eye_gain = eye;
+    if (slider_float("##eyegain", &eye, 0, 2, "%.2f")) ui.face_settings.eye_gain = eye;
     ImGui::SetItemTooltip("How far the eyes follow the tracked gaze. The eyelids follow the eyes up and down.");
     label("Eye Limit");
     float yaw = float(ui.face_settings.eye_yaw_max), pitch = float(ui.face_settings.eye_pitch_max);
     const float half = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) / 2;
     ImGui::SetNextItemWidth(half);
-    if (ImGui::SliderFloat("##eyeyaw", &yaw, 5, 45, "Side %.0f°")) ui.face_settings.eye_yaw_max = yaw;
+    if (slider_float("##eyeyaw", &yaw, 5, 45, "Side %.0f°")) ui.face_settings.eye_yaw_max = yaw;
     ImGui::SetItemTooltip("The farthest the eyes turn left or right, in degrees.");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(half);
-    if (ImGui::SliderFloat("##eyepitch", &pitch, 5, 45, "Up/Down %.0f°")) ui.face_settings.eye_pitch_max = pitch;
+    if (slider_float("##eyepitch", &pitch, 5, 45, "Up/Down %.0f°")) ui.face_settings.eye_pitch_max = pitch;
     ImGui::SetItemTooltip("The farthest the eyes turn up or down, in degrees.");
     label("");
     ImGui::Checkbox("Move face bones", &ui.face_settings.positions);
@@ -635,7 +689,7 @@ void App::draw_mocap_panel() {
         for (auto& [shape, motions] : ui.face.shapes) {
             float g = float(ui.face_settings.gains.count(shape) ? ui.face_settings.gains[shape] : 1.0);
             label(shape.c_str());
-            if (ImGui::SliderFloat(("##g" + shape).c_str(), &g, 0, 2, "%.2f")) ui.face_settings.gains[shape] = g;
+            if (slider_float(("##g" + shape).c_str(), &g, 0, 2, "%.2f")) ui.face_settings.gains[shape] = g;
         }
         ImGui::TreePop();
     }
@@ -650,10 +704,10 @@ void App::draw_mocap_panel() {
     ImGui::SetItemTooltip("Relax your face and press this: your resting expression becomes the rest pose.");
     ImGui::SameLine();
     if (ImGui::Button("Clear")) ui.face_settings.neutral.clear();
-    if (ui.source == 2) {
+    if (kSourceInfo[ui.source].phone) {
         indent();
         ImGui::Checkbox("Head from iPhone", &ui.face_settings.head);
-        ImGui::SetItemTooltip("Keys the head's turn from iFacialMocap's head tracking.");
+        ImGui::SetItemTooltip("Keys the head's turn from the phone's head tracking.");
     }
     ImGui::EndDisabled();
 
@@ -674,7 +728,7 @@ void App::draw_mocap_panel() {
     ui.to = std::max(ui.to, ui.from);
     ImGui::EndDisabled();
     label("Countdown");
-    ImGui::SliderFloat("##countdown", &ui.countdown, 0, 5, "%.0f s");
+    slider_float("##countdown", &ui.countdown, 0, 5, "%.0f s");
     indent();
     ImGui::Checkbox("Selected Body Parts Only", &ui.selected_only);
     if (ui.selected_only) ui.face_only = false;
@@ -696,7 +750,7 @@ void App::draw_mocap_panel() {
             ui.only.clear();
             if (ui.face_only) {
                 ui.only = ui.face.bones();
-                if (ui.source == 2 && ui.face_settings.head) ui.only.push_back("mHead");
+                if (kSourceInfo[ui.source].phone && ui.face_settings.head) ui.only.push_back("mHead");
             }
             for (int n : ui.selected_only ? selection_ : std::vector<int>{}) {
                 BodyPart part = body_part_of(skel_, n);
@@ -740,7 +794,7 @@ void App::draw_mocap_panel() {
                           "removes everything above its cutoff without lag. Box averages neighbouring rotations.");
     if (mode == 1) {
         label("Box radius");
-        ImGui::SliderInt("##smooth", &ui.clean.smooth, 1, 5, "%d frames");
+        slider_int("##smooth", &ui.clean.smooth, 1, 5, "%d frames");
     } else if (mode >= 2) {
         filter_params_ui(ui.clean.filter, [&](const char* text) { label(text); });
     }
@@ -756,7 +810,7 @@ void App::draw_mocap_panel() {
     if (ImGui::DragFloat("##mm", &pos, 0.1f, 0.1f, 20, "%.1f mm")) ui.clean.pos_m = pos / 1000;
     ImGui::EndDisabled();
     label("Edge blend");
-    ImGui::SliderInt("##blend", &ui.clean.blend, 0, 15, ui.clean.blend ? "%d frames" : "off");
+    slider_int("##blend", &ui.clean.blend, 0, 15, ui.clean.blend ? "%d frames" : "off");
     ImGui::SetItemTooltip("Eases the start and end of a punched-in take from the animation around it, so the edges do not jump.");
     indent();
     ImGui::Checkbox("Clean Up Foot Sliding", &ui.clean.lock_feet);

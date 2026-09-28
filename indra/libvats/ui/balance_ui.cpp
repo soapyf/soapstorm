@@ -9,6 +9,7 @@
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "vats/balance.h"
 #include "vats/edit.h"
 #include "vats/jump_arc.h"
@@ -57,7 +58,7 @@ void App::draw_balance(ImDrawList* dl) const {
 // CM-2: Tools > Auto-Balance...
 void App::draw_auto_balance_panel() {
     if (!show_auto_balance_) return;
-    place_tool_window(5, 24, 22);
+    place_tool_window(24, 22);
     if (!ImGui::Begin("Auto-Balance", &show_auto_balance_)) return ImGui::End();
     help_button("balance");
     const Clip& clip = doc_.clip();
@@ -86,10 +87,10 @@ void App::draw_auto_balance_panel() {
     if (ImGui::SmallButton("Whole Clip")) balance_.from = 0, balance_.to = clip.end_frame;
     float margin = float(balance_.margin * 100);
     label("Margin");
-    if (ImGui::SliderFloat("##bal_margin", &margin, 0.f, 6.f, "%.1f cm")) balance_.margin = margin / 100;
+    if (slider_float("##bal_margin", &margin, 0.f, 6.f, "%.1f cm")) balance_.margin = margin / 100;
     ImGui::SetItemTooltip("How far inside the feet's outline the centre of mass is brought");
     label("Smoothing");
-    ImGui::SliderInt("##bal_smooth", &balance_.smooth, 0, 10, "%d frames");
+    slider_int("##bal_smooth", &balance_.smooth, 0, 10, "%d frames");
     ImGui::SetItemTooltip("The hips' correction is averaged over this many frames each side");
     ImGui::Checkbox("Counter-Lean the Torso", &balance_.counter_lean);
     ImGui::SetItemTooltip("mTorso also leans back towards the feet, so the hips move less");
@@ -106,7 +107,7 @@ void App::draw_auto_balance_panel() {
 // JA-1: Tools > Jump Arc...
 void App::draw_jump_arc_panel() {
     if (!show_jump_arc_) return;
-    place_tool_window(6, 24, 22);
+    place_tool_window(24, 22);
     if (!ImGui::Begin("Jump Arc", &show_jump_arc_)) return ImGui::End();
     help_button("balance");
     const Clip& clip = doc_.clip();
@@ -164,7 +165,7 @@ void App::draw_ik_target_properties(int limb) {
     ImGui::TextUnformatted((std::string(icon::kPull) + " Pull").c_str());
     ImGui::SameLine(ImGui::GetFontSize() * 5.5f);
     ImGui::SetNextItemWidth(-1);
-    const bool changed = ImGui::SliderFloat("##ik_pull", &pull, 0.f, 1.f, "%.2f");
+    const bool changed = slider_float("##ik_pull", &pull, 0.f, 1.f, "%.2f");
     if (ImGui::IsItemActivated()) doc_.history.begin(clip);  // before the first change: a click sets the value at once
     if (changed) {
         if (pull > 0) clip.ik_pull[l.name] = pull;

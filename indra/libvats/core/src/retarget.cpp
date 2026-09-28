@@ -573,16 +573,18 @@ Clip slice_clip(const Clip& clip, int a, int b) {
     a = std::clamp(a, 0, clip.end_frame);
     b = std::clamp(b, a, clip.end_frame);
     Clip out = clip;
-    for (auto& [name, tr] : out.curves)
-        for (auto& [ch, c] : tr) {
-            if (c.empty()) continue;
-            insert_on_curve(c, a);
-            insert_on_curve(c, b);
-            c.keys.erase(std::remove_if(c.keys.begin(), c.keys.end(),
-                                        [&](const Key& k) { return k.frame < a - 1e-6 || k.frame > b + 1e-6; }),
-                         c.keys.end());
-            for (Key& k : c.keys) k.frame -= a, k.lx -= a, k.rx -= a;
-        }
+    for_each_track_map(out, [&](std::map<std::string, Track>& curves) {
+        for (auto& [name, tr] : curves)
+            for (auto& [ch, c] : tr) {
+                if (c.empty()) continue;
+                insert_on_curve(c, a);
+                insert_on_curve(c, b);
+                c.keys.erase(std::remove_if(c.keys.begin(), c.keys.end(),
+                                            [&](const Key& k) { return k.frame < a - 1e-6 || k.frame > b + 1e-6; }),
+                             c.keys.end());
+                for (Key& k : c.keys) k.frame -= a, k.lx -= a, k.rx -= a;
+            }
+    });
     out.pins.clear();
     for (Pin p : clip.pins) {
         const int to = p.to < 0 ? clip.end_frame : p.to;

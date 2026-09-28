@@ -50,6 +50,7 @@ add_library(vats_ui STATIC
     file_library_ui.cpp
     help_ui.cpp
     icon_button.cpp
+    widgets.cpp
     inventory.cpp
     light_ui.cpp
     listing_media_ui.cpp

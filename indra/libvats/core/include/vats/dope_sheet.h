@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "vats/curve_ops.h"
+#include "vats/rig.h"
 #include "vats/skeleton.h"
 
 namespace vats {
@@ -22,6 +23,10 @@ struct DopeRow {
 // The tracks grouped by body_part_of (pose_ops.h): a pin track goes with its joint, an IK track with the part
 // that lists it. Parts come in skeleton order (torso first), tracks in each part too, IK controls after the bones.
 std::vector<DopeRow> dope_rows(const Skeleton& skel, const std::vector<std::string>& tracks);
+
+// The tracks plus the IK control track ("ik.<Limb>", its target and pole) of every limb one of them rotates, when the
+// clip keys it: a limb's keys and its controls' keys then move and scale together.
+std::vector<std::string> with_limb_controls(const Rig& rig, const Clip& clip, std::vector<std::string> tracks);
 
 // Every frame that holds a key on any channel of the tracks, sorted, frames within same_frame counted once
 // (the summary row, a part's row, a bone's row).

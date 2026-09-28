@@ -67,12 +67,13 @@ its priority. Key only the bones you mean to control.
 ### Loop
 
 Tick **Properties → Animation → Loop** to make the animation repeat. **Loop in** and **Loop out** (frames)
-set the part that repeats; the frames before **Loop in** play once. Turning **Loop** on with **Loop out**
-at 0 sets it to the last frame. Export warns `loop in is after loop out` when the range is reversed.
+set the part that repeats; the frames before **Loop in** play once. While **Loop out** is on the last frame
+it follows **Last frame**, so lengthening the animation lengthens the loop too. Turning **Loop** on with **Loop
+out** at 0 sets it to the last frame. Export warns `loop in is after loop out` when the range is reversed.
 
 ### Ease in and ease out
 
-**Ease in** and **Ease out** (0 to 10 s, in steps of 0.05 s, default 0.8 s) blend the animation in when
+**Ease in** and **Ease out** (0 to 10 s, in steps of 0.05 s; 0.3 s in a new project) blend the animation in when
 it starts and out when it stops. The avatar's other animations play through the blend.
 
 With **Loop** off, the sum of the two must not be longer than the animation. If it is, export warns and

@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "app.h"
+#include "widgets.h"
 #include "imgui_internal.h"
 #include "vats/edit.h"
 #include "vats/pose_presets.h"
@@ -71,15 +72,23 @@ void App::draw_context_menu() {
             any = true;
         }
         // Starter poses of this kind (hands are authored for the left side).
-        bool header = false;
+        bool header = false, group = false;  // group: a category's submenu is open
+        std::string category;
         for (const LibraryItem& it : builtin_poses(skel_)) {
             if (it.kind != kind) continue;
             if (!header && ImGui::BeginMenu("Starter poses")) header = true;
             else if (!header) break;
+            any = true;
+            if (it.category != category) {  // a category's poses come together, in a submenu of its own
+                if (group) ImGui::EndMenu();
+                category = it.category;
+                group = !category.empty() && ImGui::BeginMenu(category.c_str());
+            }
+            if (!category.empty() && !group) continue;
             bool mirrored = !side.empty() && !it.side.empty() && it.side != side;
             if (ImGui::MenuItem(it.name.c_str())) apply_library_item(it, mirrored);
-            any = true;
         }
+        if (group) ImGui::EndMenu();
         if (header) ImGui::EndMenu();
         if (!any) ImGui::TextDisabled("  (none saved yet)");
     };
@@ -108,8 +117,8 @@ void App::draw_context_menu() {
                 handles_.push_back({l, false});
                 if (!rig_->limbs()[l].spine) handles_.push_back({l, true});
             }
-        status("Selected " + std::to_string(selection_.size()) + " bones and " + std::to_string(handles_.size()) +
-               " IK handles of " + part.label);
+        status("Selected " + count_noun(selection_.size(), "bone") + " and " + count_noun(handles_.size(), "IK handle") + " of " +
+               part.label);
     };
 
     if (node < 0) {

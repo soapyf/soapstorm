@@ -83,8 +83,10 @@ bool lz4_frame_decompress(const std::uint8_t* data, size_t size, std::string& ou
 
 // Applies one JSON v3 packet (LZ4-compressed or plain JSON). The body joints are world transforms
 // in Unity axes; they become Unity humanoid bones with local transforms, as VMC sends, so the VRM
-// humanoid table and everything after it are shared. Takes the actor named `actor`, or the first
-// actor with a body when it is empty; `actor_out` gets the one used. False with err on a bad packet.
+// humanoid table and everything after it are shared. With meta.hasFace, the actor's face (ARKit weights
+// 0..100, Rokoko Face Capture) goes into s.blend as 0..1. Takes the actor named `actor`, or the first
+// actor with a body (else the first with a face) when it is empty; `actor_out` gets the one used. False
+// with err on a bad packet.
 bool apply_rokoko(const std::uint8_t* data, size_t size, VmcState& s, const std::string& actor,
                   std::string& actor_out, std::string& err);
 

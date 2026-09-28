@@ -48,12 +48,15 @@ struct Settings {
     bool mirror_centre = false;        // PT-1: live mirror makes centre bones symmetric in place
     bool scratch_existing_only = false;  // PT-2: a scratch pose keys only channels that already have keys
     std::string scratch_scrub = "ask";   // PT-2: scrubbing off a scratch pose: "ask", "keep" or "discard"
+    std::string picker_style = "silhouette";  // 08 PK-3: the Picker's backdrop, "silhouette" or "avatar"
+    bool picker_live = true;                  // 08 PK-3: the avatar backdrop follows the pose (else the rest pose)
     std::string body = "sl-default";
     std::string mesh_body;  // id of a library mesh body shown instead of the Linden mesh ("" = none)
     std::array<CameraView, 4> cameras;
     std::vector<std::string> recent;
     std::vector<std::string> project_folders, anim_folders;  // Inventory folders added with Add Folder... (spec 08 FL)
     std::vector<std::string> check_off;  // Animation Check rules switched off, by id (spec 08 CK)
+    std::vector<std::string> inventory_closed;  // the Inventory's collapsed sections, by name
     bool mixamo_notice_seen = false;     // 07 RT-14: Batch Retarget showed the Mixamo licence notice once
     // The user's own shortcuts over the preset (ui/keymap.h): action id -> both slots, "" for none.
     std::map<std::string, std::array<std::string, 2>> key_overrides;

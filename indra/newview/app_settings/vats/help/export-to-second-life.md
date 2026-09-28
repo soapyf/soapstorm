@@ -17,7 +17,10 @@ with the [[VATs Editor (viewer)]].
    settings are also in **Properties → Export**.
 3. Check the **Saves as** line, then press **Export SL .anim**.
 
-The first export asks for a folder when none is set (**Folder** shows `(asks the first time)`). After
+The first export asks for a folder when none is set (**Folder** shows `(asks the first time)`): a save
+dialog offers the **Saves as** name. Its folder becomes the export **Folder**. Keep the name offered, or type
+another: a typed name becomes the **Name**, with **Pattern** `[NAME]` and no **Side**, so that exact file is
+written (a mirrored export still ends in `_mirrored`, and several actors or clips still add theirs). After
 that, **Export SL .anim** writes straight to the folder; **Choose...** changes it. The status bar reports
 the files written, how many were replaced, and a summary of bones, length, priority, bytes, any
 attachment points that move or rotate, how many unmoving position channels were left out (see

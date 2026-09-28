@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <vector>
 
 #include "vats/footlock.h"
 #include "vats/time_edit.h"
@@ -14,6 +15,10 @@ namespace vats {
 namespace {
 
 constexpr double kDeg = 57.29577951308232;
+constexpr int kGaitSub = 8;                // gait samples per frame: the median holds within half a percent
+constexpr double kContactHeight = 0.03;    // m: a sole this close to the ground is down
+constexpr double kMinContactFrames = 2;    // shorter touches are not steps
+constexpr double kPlanted = 0.015;         // m: a sole point this close to the ground goes with it
 
 bool contains(const std::string& s, const char* part) { return s.find(part) != std::string::npos; }
 
@@ -206,29 +211,89 @@ int apply_loop_tangents(Clip& clip) {
 Gait measure_gait(const Rig& rig, const Clip& clip, const Shape* shape) {
     Gait g;
     const LoopRange r = loop_range(clip);
-    FootLockOptions o;
-    o.heel_toe = false;  // the ankle alone: its travel is what the gait measures
-    o.speed = 1e9;  // an in-place cycle's planted foot slides at the walk speed: height alone tells a contact
-    o.from = r.in, o.to = r.out, o.shape = shape;
-    const std::vector<FootContact> contacts = find_foot_contacts(rig, clip, o);
-    const int pelvis = rig.skeleton().find("mPelvis");
+    const Skeleton& skel = rig.skeleton();
+    const int pelvis = skel.find("mPelvis");
+    if (pelvis < 0 || r.out <= r.in) return g;
     const double fps = std::max(clip.fps, 1);
-    double dist = 0, time = 0;
-    std::map<int, int> starts;  // per leg: contacts that start inside the loop (not carried over its start)
-    for (const FootContact& c : contacts) {
-        if (c.from > r.in) ++starts[c.limb];
-        if (c.to <= c.from || pelvis < 0) continue;
-        const int ankle = rig.limbs()[c.limb].end;
-        const Evaluation e0 = evaluate(rig, clip, c.from, shape), e1 = evaluate(rig, clip, c.to, shape);
-        const Vec3 rel = (e1.globals[pelvis].pos - e0.globals[pelvis].pos) - (e1.globals[ankle].pos - e0.globals[ankle].pos);
-        dist += std::hypot(rel.x, rel.y);
-        time += (c.to - c.from) / fps;
+    // The hips and the soles (heel, ball and toe tip of each foot: footlock.h) kGaitSub times a frame over the loop.
+    const int n = (r.out - r.in) * kGaitSub + 1;
+    std::vector<Vec3> hips(n);
+    std::vector<std::vector<Vec3>> soles[2];
+    std::vector<double> lows;  // the lowest sole point of either foot, per sample
+    for (int i = 0; i < n; ++i) {
+        const Evaluation e = evaluate(rig, clip, r.in + double(i) / kGaitSub, shape);
+        hips[i] = e.globals[pelvis].pos;
+        double low = 1e9;
+        for (int side : {0, 1}) {
+            soles[side].push_back(sole_points(skel, e.globals, side));
+            for (const Vec3& p : soles[side].back()) low = std::min(low, p.z);
+        }
+        lows.push_back(low);
     }
-    g.contacts = int(contacts.size());
-    if (time <= 0) return g;
+    if (soles[0][0].empty() || soles[1][0].empty()) return g;
+    // The ground the steps are found on: where the feet are lowest most of the time (a tenth of the samples lower), so
+    // a toe digging in on one frame, or a seam that jumps, does not lift every step off it. The floor the planted
+    // points are measured on: the soles at rest, as the Animation Check has it, which does not move when the samples
+    // do (after a stretch); the ground instead when the feet never come near it (a crouched or lifted walk).
+    std::nth_element(lows.begin(), lows.begin() + n / 10, lows.end());
+    const double ground = lows[n / 10];
+    double floor = sole_floor(skel, shape);
+    if (std::fabs(ground - floor) > kContactHeight) floor = ground;
+    // Where a height crosses `level` between samples i and i + 1, as a fraction of the step (the sub-frame contact).
+    auto cross = [](double a, double b, double level) { return std::clamp((level - a) / (b - a), 0.0, 1.0); };
+
+    // The cycle: a foot is down while its lowest sole point is within kContactHeight of the ground.
+    std::map<int, int> starts;  // per foot: contacts that start inside the loop (not carried over its start)
+    for (int side : {0, 1}) {
+        auto height = [&](int i) {
+            double z = 1e9;
+            for (const Vec3& p : soles[side][i]) z = std::min(z, p.z);
+            return z - ground;
+        };
+        for (int i = 0; i < n;) {
+            if (height(i) > kContactHeight) {
+                ++i;
+                continue;
+            }
+            int j = i;
+            while (j + 1 < n && height(j + 1) <= kContactHeight) ++j;
+            const double on = i > 0 ? i - 1 + cross(height(i - 1), height(i), kContactHeight) : i;
+            const double off = j + 1 < n ? j + cross(height(j), height(j + 1), kContactHeight) : j;
+            if ((off - on) / kGaitSub >= kMinContactFrames) ++g.contacts, starts[side] += i > 0;
+            i = j + 1;
+        }
+    }
+    // The speed: the foot's lowest sole point, while it is on the floor (within kPlanted of it), goes with the ground,
+    // so the body moves over it at the speed the cycle implies: over each sample step, weighted by how much of the
+    // step it is down (touch-down and lift-off fall between samples); the median over that time.
+    std::vector<std::pair<double, double>> speeds;  // speed, weight (sample steps)
+    for (int side : {0, 1}) {
+        const auto& s = soles[side];
+        auto lowest = [&](int i) {
+            return int(std::min_element(s[i].begin(), s[i].end(), [](const Vec3& a, const Vec3& b) { return a.z < b.z; }) -
+                       s[i].begin());
+        };
+        for (int i = 0; i + 1 < n; ++i) {
+            const int p = lowest(i);
+            const double a = s[i][p].z - floor, b = s[i + 1][lowest(i + 1)].z - floor;
+            const double down = a <= kPlanted ? (b <= kPlanted ? 1 : cross(a, b, kPlanted))
+                                : b <= kPlanted ? 1 - cross(a, b, kPlanted) : 0;
+            if (down < 1e-9) continue;
+            const Vec3 d = (hips[i + 1] - s[i + 1][p]) - (hips[i] - s[i][p]);
+            speeds.push_back({std::hypot(d.x, d.y) * fps * kGaitSub, down});
+        }
+    }
+    if (speeds.empty() || g.contacts == 0) return g;
+    std::sort(speeds.begin(), speeds.end());
+    double total = 0, below = 0;
+    for (auto& [v, w] : speeds) total += w;
+    for (auto& [v, w] : speeds)
+        if ((below += w) >= total / 2) {
+            g.speed = v;
+            break;
+        }
     int cycles = 1;
-    for (auto& [limb, k] : starts) cycles = std::max(cycles, k);
-    g.speed = dist / time;
+    for (auto& [side, k] : starts) cycles = std::max(cycles, k);
     g.cycle = (r.out - r.in) / fps / cycles;
     g.stride = g.speed * g.cycle;
     return g;

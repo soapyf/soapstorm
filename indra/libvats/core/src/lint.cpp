@@ -11,6 +11,7 @@
 #include "vats/curve_ops.h"
 #include "vats/dynamics.h"
 #include "vats/edit.h"
+#include "vats/footlock.h"
 #include "vats/loop_tools.h"
 #include "vats/ragdoll.h"
 #include "vats/rig.h"
@@ -20,7 +21,7 @@
 namespace vats {
 namespace {
 
-constexpr double kGroundTol = 0.02;    // m: the lowest foot this far off its rest height is off the ground
+constexpr double kGroundTol = 0.02;    // m: the lowest sole point this far off its rest height is off the ground
 constexpr double kLimitTol = 5;        // degrees past a ragdoll limit before it counts
 constexpr double kArcMax = 90;         // degrees between kept keys before nlerp speed goes visibly uneven
 constexpr double kArcStep = 45;        // the fix's key spacing: any two frames inside a step are <= 90 apart
@@ -46,6 +47,7 @@ const std::vector<LintRule> kRules = {
     {"joint_limits", "Joints past their limits"},
     {"ground", "Feet off the ground"},
     {"self_contact", "Body parts pass through each other"},
+    {"actor_contact", "Actors pass through each other"},
     {"upload_size", "Upload size"},
     {"duration", "Duration"},
 };
@@ -147,8 +149,26 @@ std::string list(const std::vector<std::string>& names) {
 
 const std::vector<LintRule>& lint_rules() { return kRules; }
 
+int lint_frame_runs(const std::vector<int>& frames) {
+    int runs = 0;
+    for (size_t i = 0; i < frames.size(); ++i) runs += i == 0 || frames[i] != frames[i - 1] + 1;
+    return runs;
+}
+
+int lint_goto_frame(const std::vector<int>& frames, int here) {
+    if (frames.empty()) return -1;
+    // The end of the run holding here (or here itself), then the first run start after it.
+    int end = here;
+    if (auto at = std::find(frames.begin(), frames.end(), here); at != frames.end())
+        for (auto it = at; it != frames.end() && *it == end; ++it) ++end;
+    for (size_t i = 0; i < frames.size(); ++i)
+        if ((i == 0 || frames[i] != frames[i - 1] + 1) && frames[i] >= end && frames[i] > here) return frames[i];
+    return frames.front();
+}
+
 std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const AnimExportOptions& opt,
-                                   const std::vector<std::string>& off, const Shape* mesh_body) {
+                                   const std::vector<std::string>& off, const Shape* mesh_body,
+                                   const std::string& ao_state, const std::vector<LintPartner>& partners) {
     std::vector<LintFinding> out;
     auto on = [&](const char* rule) { return std::find(off.begin(), off.end(), rule) == off.end(); };
     auto add = [&](const char* rule, LintSeverity sev, std::vector<std::string> bones, std::vector<int> frames,
@@ -285,19 +305,12 @@ std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const
     rig.external = opt.external;
     std::vector<Pose> poses;
     poses.reserve(last + 1);
-    const int feet[] = {skel.find("mAnkleLeft"), skel.find("mAnkleRight"), skel.find("mFootLeft"),
-                        skel.find("mFootRight"), skel.find("mToeLeft"),    skel.find("mToeRight")};
-    auto lowest = [&](const std::vector<Xform>& g) {
-        double z = 1e9;
-        for (int n : feet)
-            if (n >= 0) z = std::min(z, g[n].pos.z);
-        return z;
-    };
-    const double ground = lowest(skel.global_pose(Pose(skel.size()), opt.shape));
+    // The ground: the lowest sole point (heel, ball, toe tip) at rest, as every foot measure takes it.
+    const double ground = sole_floor(skel, opt.shape);
     std::vector<double> low;
     for (int f = 0; f <= last; ++f) {
         Evaluation e = evaluate(rig, clip, f, opt.shape);
-        low.push_back(lowest(e.globals));
+        low.push_back(sole_height(skel, e.globals));
         poses.push_back(std::move(e.pose));
     }
 
@@ -357,9 +370,39 @@ std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const
         }
     }
 
+    // Cross-actor contact (08 SX, GR): this body's capsules against each other actor's, frame by frame, in this actor's
+    // space; one finding per other actor, its deepest pairs named. No automatic fix: which of the two should give way
+    // is the animator's call (Push Out moves one's own arm against one's own body).
+    if (on("actor_contact"))
+        for (const LintPartner& other : partners) {
+            if (other.frames.empty()) continue;
+            std::map<std::pair<int, int>, double> deepest;  // (mine, theirs) -> depth
+            std::vector<int> frames;
+            for (int f = 0; f <= last; ++f) {
+                const std::vector<Xform>& theirs = other.frames[std::min<size_t>(f, other.frames.size() - 1)];
+                if (int(theirs.size()) != skel.size()) continue;
+                const auto hits = cross_contacts(skel, skel.global_pose(poses[f], opt.shape), theirs);
+                if (!hits.empty()) frames.push_back(f);
+                for (const SelfContact& s : hits) deepest[{s.a, s.b}] = std::max(deepest[{s.a, s.b}], s.depth);
+            }
+            if (deepest.empty()) continue;
+            std::vector<std::pair<double, std::pair<int, int>>> pairs;
+            for (auto& [ab, d] : deepest) pairs.push_back({d, ab});
+            std::sort(pairs.rbegin(), pairs.rend());
+            std::vector<std::string> bones, named;
+            for (auto& [d, ab] : pairs) {
+                if (std::find(bones.begin(), bones.end(), skel[ab.first].name) == bones.end()) bones.push_back(skel[ab.first].name);
+                named.push_back(skel[ab.first].name + " and " + skel[ab.second].name);
+            }
+            add("actor_contact", LintSeverity::Info, bones, frames,
+                "This body and " + other.name + fmt("'s pass up to %.1f cm into each other: ", pairs[0].first * 100) +
+                    list(named) + " (their capsules: a hint, not the mesh)",
+                {});
+        }
+
     // ponytail: rest height is the ground, so sits and flights are flagged too (Info when above); a sit-aware ground
     // would need to know what the avatar sits on.
-    if (on("ground") && feet[0] >= 0) {
+    if (on("ground") && skel.find("mAnkleLeft") >= 0) {
         const auto lo = std::min_element(low.begin(), low.end());
         const double d = *lo - ground;
         std::vector<int> frames;
@@ -486,9 +529,14 @@ std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const
                 std::move(fix));
         }
     }
-    if (on("ao_priority") && upper && !low_priority.empty())
+    // An AO plays one animation per state and stops the one before, so a stand, walk, run, turn, sit... of the AO
+    // never competes with another AO animation for the legs. Typing and Always play over the other states.
+    const bool layered = ao_state == "Always" || ao_state == "Typing";
+    if (on("ao_priority") && upper && !low_priority.empty() && (ao_state.empty() || layered))
         add("ao_priority", LintSeverity::Warning, low_priority, {},
-            "The whole body is animated but the hips and legs play below priority 4; a walking or standing AO wins them",
+            layered ? "The whole body is animated but the hips and legs play below priority 4; as the AO's " + ao_state +
+                          " animation it plays over its walks and stands, which win them"
+                    : "The whole body is animated but the hips and legs play below priority 4; a walking or standing AO wins them",
             {"Set Priority 4", [low_priority](Clip& c) {
                  c.priority = std::max(c.priority, kAoPriority);
                  for (const std::string& b : low_priority)

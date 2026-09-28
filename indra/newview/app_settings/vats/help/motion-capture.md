@@ -1,8 +1,9 @@
 # Motion capture
 
 Motion capture records live body and face motion from a tracking app or suit into the animation. VATs
-receives the VMC protocol, Rokoko Studio Live and iFacialMocap over UDP on your local network, shows the
-motion on the avatar while it arrives, and records takes as keys.
+receives the VMC protocol, Rokoko Studio Live, and iPhone face tracking from iFacialMocap, VTube Studio
+and Live Link Face over UDP on your local network. It shows the motion on the avatar while it arrives,
+and records takes as keys.
 
 > Related articles: [[Face tracking]], [[Retargeting]], [[Keys and timeline]], [[VATs Editor (viewer)]]
 
@@ -21,6 +22,10 @@ the **Connection**, **Live**, **Face**, **Record**, **Clean-up** and **Last take
 | **VMC protocol** | `39539` | off | webcam and VR-tracker apps, for example XR Animator, VSeeFace and VirtualMotionCapture |
 | **Rokoko Studio Live** | `14043` | off | Rokoko suits through Rokoko Studio |
 | **iFacialMocap (iPhone)** | `49983` | on | the iFacialMocap app on an iPhone or iPad with Face ID |
+| **VTube Studio (iPhone)** | `21413` | on | the VTube Studio app on an iPhone or iPad with Face ID |
+| **Live Link Face (iPhone)** | `11111` | on | the Live Link Face app on an iPhone or iPad with Face ID |
+
+The three iPhone sources always run on another device, so **Allow Other Devices** stays on for them.
 
 Choosing a source sets its default port. A port you typed yourself is kept when you switch source.
 
@@ -36,6 +41,53 @@ Choosing a source sets its default port. A port you typed yourself is kept when 
 VMC apps send a VRM-style avatar that stands in a T-pose at rest. If the arms or legs come in twisted,
 stand in a T-pose and press **Capture Rest Pose Now**. **Reset to T-Pose** drops the captured rest pose.
 
+### Apps that work with VATs
+
+iFacialMocap has been checked with a real iPhone. The steps for the others come from their own settings
+and documentation, and have not been checked with VATs on real hardware yet.
+
+| App | Tracks | Runs on | Price | VATs **Source** |
+|---|---|---|---|---|
+| **SlimeVR Server** | body, from SlimeVR trackers | Windows, Linux | free (trackers are bought or built) | **VMC protocol** |
+| **XR Animator** | body, hands and face from a webcam | Windows, Linux, macOS, browser | free | **VMC protocol** |
+| **VirtualMotionCapture** | body from SteamVR trackers, Kinect (through Amethyst) or mocopi; Index fingers | Windows | free | **VMC protocol** |
+| **VSeeFace** with Leap Motion | face from a webcam, hands and fingers from a Leap Motion | Windows | free | **VMC protocol** |
+| **Waidayo** | face and head | iPhone or iPad with Face ID | free | **VMC protocol** |
+| **AndroidMoCap** | face (52 ARKit shapes) and gaze | Android 11 or later | free | **VMC protocol** or **iFacialMocap (iPhone)** |
+| **MeowFace** | face and head | Android (unmaintained) | pay what you want | **iFacialMocap (iPhone)** |
+| **iFacialMocap** | face, head and eyes | iPhone or iPad with Face ID | paid | **iFacialMocap (iPhone)** |
+| **VTube Studio** | face, head and eyes | iPhone or iPad with Face ID | free | **VTube Studio (iPhone)** |
+| **Live Link Face** | face, head and eyes | iPhone or iPad with Face ID | free | **Live Link Face (iPhone)** |
+| **Rokoko Face Capture** | face, through Rokoko Studio | iPhone with Face ID | Rokoko Studio Pro plan | **Rokoko Studio Live** |
+
+For a sender on another device, tick **Allow Other Devices** and enter the address under **Your
+computer** in the app. For an app on this computer, enter `127.0.0.1`.
+
+**SlimeVR Server**
+
+1. In VATs, keep **Source** on **VMC protocol**, port `39539`, and click **Listen**.
+2. In SlimeVR Server, open **Settings → OSC → Virtual Motion Capture** and turn on **Enable**.
+3. Leave the output port at `39539`, and the address at `127.0.0.1` when both run on this computer.
+4. For walking takes, untick **Anchor at hips**. It is on by default and pins the hips in place, so
+   the hips never travel.
+
+SlimeVR sends the hips, spine, chest, neck, head, legs, feet and arms, as its trackers cover them. It
+sends no blendshapes, toes, eyes or jaw. Fingers come only with finger trackers, and the arms are left
+out when controllers track them.
+
+**XR Animator** runs as a desktop app on Linux, Windows and macOS (and in a browser). Turn on its VMC
+protocol output with port `39539` and choose **VMC protocol** in VATs.
+
+**VirtualMotionCapture** (Windows) turns SteamVR into VMC: a headset and controllers, Vive or SlimeVR
+trackers, Kinect through Amethyst (which shows a Kinect as SteamVR trackers), Index finger tracking and
+Sony mocopi. Turn on its VMC protocol sending with this computer's address and port `39539`.
+
+**VSeeFace with Leap Motion** (Windows) is the way to capture fingers without gloves. Turn on hand
+tracking with the Leap Motion in VSeeFace, then its VMC protocol sender with this computer's address and
+port `39539`. The hand and finger bones arrive with the rest of the body.
+
+For the face apps, see [[Face tracking]].
+
 ### Connecting Rokoko Studio
 
 1. Set **Source** to **Rokoko Studio Live**. The port changes to `14043`.
@@ -45,11 +97,14 @@ stand in a T-pose and press **Capture Rest Pose Now**. **Reset to T-Pose** drops
 4. Stand in a T-pose and press **Capture Rest Pose Now**. Rokoko's joints have their own rest directions,
    so do this every time you connect.
 
-VATs takes the first actor in the stream that has a body. Face and glove data from Rokoko are ignored.
+VATs takes the first actor in the stream that has a body, or else the first with a face. An actor's face
+from Rokoko Face Capture arrives with it; see [[Face tracking#Rokoko Face Capture]]. Glove data is
+ignored.
 
 ### Connecting an iPhone
 
-See [[Face tracking#Connecting iFacialMocap]]. iFacialMocap sends the face and head only. The window
+See [[Face tracking#Connecting iFacialMocap]], [[Face tracking#Connecting VTube Studio]] and
+[[Face tracking#Connecting Live Link Face]]. The iPhone apps send the face and head only. The window
 listens to one source at a time, so record the body in a separate take with a body source.
 
 ### The setup checklist

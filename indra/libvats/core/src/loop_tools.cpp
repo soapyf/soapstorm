@@ -138,35 +138,37 @@ bool cycle_offset(Clip& clip, int start) {
     const LoopRange r = loop_range(clip);
     if (start <= r.in || start >= r.out) return false;
     const double a = r.in, b = r.out, f = start;
-    for (auto& [name, track] : clip.curves)
-        for (auto& [ch, c] : track) {
-            if (c.keys.size() < 2) continue;
-            ensure_key(c, a);
-            ensure_key(c, f);
-            ensure_key(c, b);
-            // Keys in [f, b) move to the front, keys in [a, f) to the back; the old end key (a copy of the
-            // start on a seamless loop) is replaced by a copy of the new start.
-            std::vector<Key> outside, moved;
-            Key first;
-            for (const Key& k : c.keys) {
-                if (k.frame < a - 1e-9 || k.frame > b + 1e-9) {
-                    outside.push_back(k);
-                    continue;
+    for_each_track_map(clip, [&](std::map<std::string, Track>& curves) {
+        for (auto& [name, track] : curves)
+            for (auto& [ch, c] : track) {
+                if (c.keys.size() < 2) continue;
+                ensure_key(c, a);
+                ensure_key(c, f);
+                ensure_key(c, b);
+                // Keys in [f, b) move to the front, keys in [a, f) to the back; the old end key (a copy of the
+                // start on a seamless loop) is replaced by a copy of the new start.
+                std::vector<Key> outside, moved;
+                Key first;
+                for (const Key& k : c.keys) {
+                    if (k.frame < a - 1e-9 || k.frame > b + 1e-9) {
+                        outside.push_back(k);
+                        continue;
+                    }
+                    if (same_frame(k.frame, b)) continue;
+                    Key m = k;
+                    shift_frame(m, k.frame >= f - 1e-9 ? -(f - a) : (b - f));
+                    if (same_frame(k.frame, f)) first = m;
+                    moved.push_back(m);
                 }
-                if (same_frame(k.frame, b)) continue;
-                Key m = k;
-                shift_frame(m, k.frame >= f - 1e-9 ? -(f - a) : (b - f));
-                if (same_frame(k.frame, f)) first = m;
-                moved.push_back(m);
+                Key end = first;
+                shift_frame(end, b - a);
+                moved.push_back(end);
+                c.keys = std::move(outside);
+                c.keys.insert(c.keys.end(), moved.begin(), moved.end());
+                std::sort(c.keys.begin(), c.keys.end(), [](const Key& x, const Key& y) { return x.frame < y.frame; });
+                c.recompute_handles();
             }
-            Key end = first;
-            shift_frame(end, b - a);
-            moved.push_back(end);
-            c.keys = std::move(outside);
-            c.keys.insert(c.keys.end(), moved.begin(), moved.end());
-            std::sort(c.keys.begin(), c.keys.end(), [](const Key& x, const Key& y) { return x.frame < y.frame; });
-            c.recompute_handles();
-        }
+    });
     return true;
 }
 

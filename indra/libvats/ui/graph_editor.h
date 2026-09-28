@@ -52,6 +52,7 @@ public:
 
     void draw(GraphContext& ctx);
     bool hovered() const { return hovered_; }
+    bool has_copied_keys() const { return !clipboard_.keys.empty(); }  // Ctrl+C over the graph or dope sheet
     bool snap_frames() const { return snap_; }  // the toolbar's Snap frames (also used by retime markers, 08 TE-5)
     // True once after Escape cancelled a graph drag this frame, so the app can skip its own Escape action.
     bool take_escape() { return std::exchange(escape_used_, false); }
@@ -102,7 +103,8 @@ private:
     std::vector<int> shown_channels() const;
     bool selected(const Channel& c, int key) const;
     void reconcile(const Clip& clip);
-    void fit_bounds(double f0, double f1, double v0, double v1, bool pad_small);
+    void fit_bounds(double f0, double f1, double v0, double v1, double min_span);
+    double min_value_span(const Clip& clip) const;
 
     float x_of(double f) const { return float(canvas_min_.x + (f - view_.t0) / (view_.t1 - view_.t0) * canvas_w_); }
     float y_of(double v) const { return float(canvas_min_.y + ruler_ + (view_.v1 - v) / (view_.v1 - view_.v0) * plot_h_); }

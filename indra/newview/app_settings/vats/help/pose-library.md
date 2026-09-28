@@ -83,6 +83,7 @@ The **Starter poses** section lists the poses that ship with VATs, each marked *
 |---|---|
 | Hand | Relaxed, Rest, Open (Spread), Flat, Fist, Loose Fist, Point, Point (Thumb Up), Peace (V), Thumbs Up, OK, Pinch, Pinch (Loose), Grip (Cylinder), Hold Glass (Stem), Hold Phone, Cup (C-Shape), Claw, Rock (Horns), Call Me, Pistol (Finger Gun), Salute, Wave, Typing, Resting on Surface, Holding Pen, Counting 1 to Counting 5 |
 | Body | Relaxed Stand, Hands on Hips, Arms Crossed, Thinking, Waving, Sitting, Contrapposto |
+| Body, under **Fitting stances** | T-Pose; Arms Down, Legs Together; Arms Down, Sitting; Arms Downward, Legs Apart; Arms Downward, Legs Together; Arms Forward, Legs Apart; Arms Forward, Legs Together; Arms Straight, Legs Apart; Arms Straight, Sitting; Arms Upward, Legs Apart; Arms Upward, Legs Together |
 
 - **Click** a hand pose to put it on the left hand, **Shift+click** for the right hand.
 - **Click** a body pose to apply it at the current frame.
@@ -90,6 +91,45 @@ The **Starter poses** section lists the poses that ship with VATs, each marked *
 - **Right-click** a hand pose for **Left Hand**, **Right Hand** or **Both Hands**; right-click a body pose for **Apply at This Frame**. Both have **Show as Ghost**.
 
 Starter poses can't be renamed or deleted.
+
+### Fitting stances
+
+The **Fitting stances** are the reference stances of a pose stand: hold one to fit clothes and mesh on the
+avatar, or to check how a rig bends. They are listed together under their own heading in **Starter poses**
+(type `fitting` in the filter box to show just them), and in their own **Fitting stances** submenu under the
+viewport's right-click **Poses → Starter poses**. From the command line, `--pose body-t-pose` applies one (see
+[[Command line]]).
+
+![The Inventory filtered to "fitting": the Fitting stances heading and the stances, each with a thumbnail of the body in that stance](images/pose-library/fitting-stances.png)
+*The **Fitting stances** in the **Inventory**, filtered by `fitting`.*
+
+Every stance is the same on both sides, with the spine and head straight, the eyes forward and both hands in
+the **Rest** shape. It keys every body bone and the hip position, so it replaces whatever pose was at the frame.
+
+| Stance | Slug | Arms | Legs |
+|---|---|---|---|
+| T-Pose | `body-t-pose` | straight out to the sides, palms down | together |
+| Arms Down, Legs Together | `body-arms-down-legs-together` | at the sides, palms in | together |
+| Arms Down, Sitting | `body-arms-down-sitting` | at the sides, palms in | sitting |
+| Arms Downward, Legs Apart | `body-arms-downward-legs-apart` | 45° below level, palms down | apart |
+| Arms Downward, Legs Together | `body-arms-downward-legs-together` | 45° below level, palms down | together |
+| Arms Forward, Legs Apart | `body-arms-forward-legs-apart` | level in front, palms down | apart |
+| Arms Forward, Legs Together | `body-arms-forward-legs-together` | level in front, palms down | together |
+| Arms Straight, Legs Apart | `body-arms-straight-legs-apart` | straight out to the sides, palms down | apart |
+| Arms Straight, Sitting | `body-arms-straight-sitting` | straight out to the sides, palms down | sitting |
+| Arms Upward, Legs Apart | `body-arms-upward-legs-apart` | 45° above level, palms forward | apart |
+| Arms Upward, Legs Together | `body-arms-upward-legs-together` | 45° above level, palms forward | together |
+
+- **Together**: the feet under the hips, as the avatar stands at rest.
+- **Apart**: the feet about shoulder width apart, flat on the ground.
+- **Sitting**: thighs level and knees at 90°, the hips lowered so the feet stay on the ground: the height of
+  the starter **Chair**'s seat.
+
+Use the stances with **Arms Down** or **Arms Downward** for sleeves and tops, the **Apart** ones for skirts,
+trousers and anything between the legs, **Arms Upward** to see how a top stretches over the shoulders, and the
+**Sitting** ones for how a skirt or trousers fold at the hips and knees. The stances are within the
+[[Ragdoll]]'s joint limits and pass the [[Animation check]]'s self-contact and ground rules on both the
+**Female** and **Male** bodies.
 
 ### Worked example: a starter pose between two others
 

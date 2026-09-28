@@ -10,6 +10,7 @@
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "vats/tween.h"
 
 namespace vats {
@@ -77,21 +78,23 @@ void App::draw_tween_controls(bool compact) {
     ImGui::SameLine(0, 16);
     const bool none = selection_.empty() && handles_.empty();
     ImGui::BeginDisabled(none && modal_ != Modal::Tween);
-    ImGui::SetNextItemWidth(em * 7);
+    ImGui::SetNextItemWidth(em * (compact ? 9 : 12));
     const std::string fmt = tween_relax_ ? std::string(icon::kRelax) + " Relax %.0f%%" : std::string(icon::kTween) + " Tween %.0f%%";
-    const bool changed = ImGui::SliderFloat("##tween", &tween_pct_, float(kTweenMin * 100), float(kTweenMax * 100), fmt.c_str());
+    const bool changed = slider_float("##tween", &tween_pct_, float(kTweenMin * 100), float(kTweenMax * 100), fmt.c_str());
     const std::string k = key_hint("tween");
     std::string tip = tween_relax_ ? "Relax: pull the selected items' keys at this frame toward the curve their neighbouring "
                                      "keys make (100% = on it)"
                                    : "Tween: key the selected items at this frame, part of the way from the pose at the previous "
                                      "key to the pose at the next (0% = previous, 100% = next)";
     if (!k.empty()) tip += ". Or press " + k + " and move the mouse";
-    ImGui::SetItemTooltip("%s. Ctrl+click to type a value", tip.c_str());
+    ImGui::SetItemTooltip("%s. Double-click to type a value", tip.c_str());
     if (ImGui::IsItemActivated()) {
         tween_on_.clear();  // a drag's tracks are its own
         if (modal_ == Modal::None && !doc_.history.is_open() && !begin_tween()) status("Select a bone first");
     }
-    if (changed && ImGui::IsItemActive() && !tween_on_.empty() && doc_.history.is_open()) apply_tween();
+    // A typed value (Ctrl+click, Enter) arrives as the field lets go, no longer active: it applies as a drag does,
+    // and Enter on the value already shown keys it too.
+    if ((changed || item_entered()) && !tween_on_.empty() && doc_.history.is_open()) apply_tween();
     if (ImGui::IsItemDeactivated() && modal_ == Modal::None && doc_.history.is_open() && !tween_on_.empty()) {
         if (doc_.history.commit("Tween", doc_.clip())) mark_dirty();
         tween_on_.clear();
@@ -112,7 +115,7 @@ void App::draw_tween_controls(bool compact) {
     ImGui::SameLine(0, 16);
     if (ImGui::GetContentRegionAvail().x < em * 7) ImGui::NewLine();  // past the panel's edge: the row below
     ImGui::SetNextItemWidth(em * 7);
-    const bool moved = ImGui::SliderFloat("##blend", &b.pct, 0, 150, (std::string(icon::kBlend) + " Blend %.0f%%").c_str());
+    const bool moved = slider_float("##blend", &b.pct, 0, 150, (std::string(icon::kBlend) + " Blend %.0f%%").c_str());
     ImGui::SetItemTooltip("Blend the pose just applied with the pose before it: 0%% = as before, 100%% = as applied, "
                           "150%% = pushed further");
     if (ImGui::IsItemHovered() || ImGui::IsItemActive()) b.until = ImGui::GetTime() + kBlendSeconds;

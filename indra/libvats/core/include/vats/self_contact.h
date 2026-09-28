@@ -38,6 +38,12 @@ private:
     std::vector<int> volume_body_;              // per volume: the capsule joint it rides with
 };
 
+// Two bodies against each other (a hug, a handshake): every capsule of the check's hull on one pose against every one
+// on the other, `other` already moved into the first one's space. The deepest hit of each pair deeper than tol; a is a
+// joint of the first body, b of the other, push moves a out of b.
+std::vector<SelfContact> cross_contacts(const Skeleton& skel, const std::vector<Xform>& globals,
+                                        const std::vector<Xform>& other, double tol = 0.01);
+
 // Push Out: on each of frames where a and b overlap, the arm among them (shoulder, elbow or wrist capsule) is moved
 // out through its IK: the arm's target is keyed when it is in IK, else the shoulder, elbow and wrist are keyed with
 // the rotations IK gives for the moved target. Repeated while they still overlap (a few passes). Pairs with no arm are

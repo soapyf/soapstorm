@@ -6,6 +6,7 @@
 #include "app.h"
 #include "theme.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "vats/ragdoll.h"
 
 namespace vats {
@@ -30,7 +31,7 @@ void App::apply_ragdoll_preview(Evaluation& e) {
 
 void App::draw_ragdoll_panel() {
     if (!show_ragdoll_) return;
-    place_tool_window(1, 24, 30);
+    place_tool_window(24, 30);
     if (!ImGui::Begin("Ragdoll", &show_ragdoll_)) return ImGui::End();
     help_button("ragdoll");
     Clip& clip = doc_.clip();
@@ -114,7 +115,7 @@ void App::draw_ragdoll_panel() {
         const double v0 = v;
         float f = float(v);
         label(name);
-        if (ImGui::SliderFloat((std::string("##") + name).c_str(), &f, lo, hi, fmt)) v = f;
+        if (slider_float((std::string("##") + name).c_str(), &f, lo, hi, fmt)) v = f;
         ImGui::SetItemTooltip("%s", tip);
         track("Ragdoll Settings", v, v0);
     };
@@ -135,7 +136,7 @@ void App::draw_ragdoll_panel() {
         ImGui::SetItemTooltip("Which way a standing body topples when it goes limp (random is repeatable)");
     }
 
-    // Limbs in IK keep following their IK targets, so baked keys would not show there.
+    // Limbs in IK or pinned would keep to their targets; the bake switches them to FK over the fall.
     std::vector<std::string> ik_limbs;
     {
         RagdollSolver probe(skel_, rd, {});
@@ -144,18 +145,20 @@ void App::draw_ragdoll_panel() {
         for (int l = 0; l < int(rig_->limbs().size()); ++l) {
             const LimbInfo& li = rig_->limbs()[l];
             if (std::find(nodes.begin(), nodes.end(), li.root) == nodes.end()) continue;
-            for (int f = rd.start; f <= stop; f += 5)
-                if (vats::evaluate(*rig_, clip, f, export_shape()).limbs[l].ik_on) {
-                    ik_limbs.push_back(li.label);
-                    break;
-                }
+            bool held = false;
+            for (const Pin& p : clip.pins)
+                held |= pin_limb(*rig_, p) == l && p.from <= stop && (p.to < 0 || p.to >= rd.start);
+            for (int f = rd.start; !held && f <= stop; f += 5) held = vats::evaluate(*rig_, clip, f, export_shape()).limbs[l].ik_on;
+            if (held) ik_limbs.push_back(li.label);
         }
     }
     if (!ik_limbs.empty()) {
         std::string list;
         for (auto& l : ik_limbs) list += (list.empty() ? "" : ", ") + l;
-        ImGui::TextColored(ImVec4(1, 0.75f, 0.35f, 1), "Uses IK in this range: %s. Switch to FK first, or the baked "
-                                                        "keys will not show there.", list.c_str());
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextWrapped("In IK or pinned in this range: %s. The bake switches them to FK over the fall and back "
+                           "after; Clear puts the IK and pins back.", list.c_str());
+        ImGui::PopStyleColor();
     }
 
     ImGui::Separator();

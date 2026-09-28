@@ -39,20 +39,25 @@ vats walk.vat --frame 12 --select mPelvis
 | `--light <name>` | Lights the view with a preset of the **Light** menu: `noon`, `key` (Three-Quarter Key), `rim`, `dusk`, `night` or `studio`. An unknown name prints `unknown light <name>`. |
 | `--backdrop` | Shows **Light → Plain Backdrop**. |
 | `--reference <file.png>` | Loads a PNG as the [[Reference images|reference image]], as **Load Picture...** in **View → Reference...**, and opens that window. |
+| `--target <file>` | Loads a project (`.vat`) or a Second Life animation (`.anim`) as the [[Target ghost|target ghost]], as **View → Target Ghost → Load Target...** does: drawn in green over your avatar at the same frame. The open project is not changed. |
 | `--listing <file>` | Once the first frames are drawn, writes [[Listing media]] with the window's first settings (512 x 512, the animation's frame rate, turntable on): an animated GIF, or numbered PNG pictures when `<file>` ends in `.png`. Prints `listing: <n> frames at <w> x <h>` on standard output. |
 | `--preset <name>` | Selects a [[Control presets|control preset]]: `industry`, `blender`, `qavimator` or `secondlife`. An unknown name prints `unknown preset <name>`. |
 | `--body <id>` | Shows a body for this run only: `sl-default`, `sl-default-male`, `female`, `male`, or `none` (also `off`) for the skeleton only. It replaces a mesh body too. The body saved in `settings.json` is kept unless you pick another in **View → Body**. Unknown ids are ignored. |
 | `--frame <n>` | Moves to frame `<n>`, clamped to the animation's length. Fractions are allowed. |
 | `--select <bone>` | Selects a bone by its skeleton name, for example `mPelvis` or `mHandLeft`. Unknown names are ignored. |
 | `--select-all` | Runs **Select All**. |
+| `--select-group <name>` | Selects a [[Picker]] group by its name as the picker's tooltips give it: `Right Arm`, `Left Leg`, `Head`, `Spine`, `Right Hand`, `Left Index finger`, `Knuckle row 2`, `Brows`, `Wings`, `Tail`, `Hind Limbs`, ... A hidden group is shown first. An unknown name prints `unknown picker group <name>`. |
 | `--select-prop <n>` | Selects the project's prop number `<n>`, counting from 0. Out of range is ignored. |
 | `--pose <slug>` | Applies a starter pose at the current frame, for example `body-sit` or `hand-fist`. An unknown slug prints `no built-in pose <slug>`. |
 | `--tool <name>` | Picks a tool: `select`, `move`, `rotate` or `scale`. Any other value picks `rotate`. |
 | `--focus` | Frames the selection once the first frame is drawn, as **Frame Selected**. |
-| `--view <name>` | Runs a **View** menu command, with the camera already turned: `front`, `back`, `right`, `left`, `top` or `ortho` (**Orthographic**). Repeat it to combine, for example `--view ortho --view top`. An unknown name prints `unknown view <name>`. |
+| `--view <name>` | Runs a **View → Camera** menu command, with the camera already turned: `front`, `back`, `right`, `left`, `top` or `ortho` (**Orthographic**). Repeat it to combine, for example `--view ortho --view top`. An unknown name prints `unknown view <name>`. |
 | `--distance <m>` | Sets the camera's distance from its target, in metres, on the first frame. |
-| `--points` | Shows the attachment points, as **View → Show Attachment Points**. |
-| `--tab <name>` | Brings a left panel to the front: `bones` for **Bones**; `poses` for **Inventory** scrolled to its poses; `actors` opens the **Actors** window instead, `check` the **Animation Check** window, `face` the **Face** window, `export` the **Export SL .anim** dialog, `sl-preview` **View → Preview as SL Plays It**; any other value for **Inventory**. |
+| `--points` | Shows the attachment points, as **View → Bones → Show Attachment Points**. |
+| `--tab <name>` | Brings a left panel to the front: `bones` for **Bones**; `poses` for **Inventory** scrolled to its poses; `props` for **Inventory** scrolled to its meshes and starter props; `actors` opens the **Actors** window instead, `check` the **Animation Check** window, `face` the **Face** window, `export` the **Export SL .anim** dialog, `sl-preview` **View → Preview as SL Plays It**; any other value for **Inventory**. |
+| `--picker <page>[/<view>]` | Brings the **Picker** to the front at a page (`body`, `hands`, `face`, `extras`) and view (`front`, `back`; `back`, `palm`; `wings`, `tail`, `hind`), for example `hands/palm`. An unknown page prints `unknown picker page <page>`. |
+| `--picker-style <name>` | The Picker's backdrop for this run: `silhouette`, `avatar` (following the pose) or `rest` (the avatar in its rest pose). It is not saved. |
+| `--filter <text>` | Types `<text>` into the **Inventory**'s **Filter by name...** box, for example `fitting` for the [[Pose library#Fitting stances|fitting stances]]. |
 | `--import-prop <file>` | Imports a `.dae` or `.fbx` file as a prop, as **File → Import Prop / Mesh (.dae, .fbx)...**. |
 | `--retarget <file>` | Opens a motion file in the retarget dialog, as **File → Import Animation (Retarget)...**. |
 | `--batch-retarget <folder>` | Opens **File → Batch Retarget Folder...** on the folder and runs it with the default settings, writing into `<folder>/retargeted/`. |
@@ -113,7 +118,8 @@ The help's example projects are installed with VATs, in `help/examples/` next to
    settings.
 3. `wave.png` has the window's size, 1200 × 1000 at 100% display scale, and shows the picture below: the arm-wave example at frame 22 with
    **mElbowRight** selected, its curves in the **Graph** panel fitted to the whole clip, and "Opened
-   graph-basics.vat" in the status bar.
+   graph-basics.vat (an example: Save As to keep your changes)" in the status bar: a shipped example opens as
+   an untitled copy, so a later **Ctrl+S** asks for a new name instead of writing over it.
 
 ![The whole VATs window as --screenshot writes it: the wave example at frame 22 with mElbowRight selected and the Graph panel open](images/command-line/screenshot-command.png)
 *The PNG the command in the example writes.*

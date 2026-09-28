@@ -8,6 +8,7 @@ add_library(vats_core STATIC
     src/image_decoders.c
     src/anim_file.cpp
     src/avatar_mesh.cpp
+    src/bone_glyph.cpp
     src/bvh.cpp
     src/clip.cpp
     src/curve_filter.cpp
@@ -57,6 +58,7 @@ add_library(vats_core STATIC
     src/tween.cpp
     src/key_tags.cpp
     src/picker.cpp
+    src/picker_silhouette.cpp
     src/selection_sets.cpp
     src/onion.cpp
     src/pose_match.cpp

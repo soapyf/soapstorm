@@ -15,10 +15,11 @@ and buttons below the list apply to the selected chain.
 ### Adding a chain
 
 1. Select the first bone of the chain, for example `mTail1`. Tail, wing and face bones are hidden by
-   default; show them from the **View** menu (for example **View → Show Tail Bones**, see [[Skeleton]]).
+   default; show them from the **View** menu (for example **View → Bones → Show Tail Bones**, see [[Skeleton]]).
 2. Click **Add Chain from Selected Bone**. VATs picks a preset from the bone's name: **Jiggle** for a
    collision volume, **Ears** for a bone with `Ear` in its name, otherwise **Tail**. The chain starts
-   with every bone down the first-child path from the selected bone.
+   with every bone down the first-child path from the selected bone, and takes the bones that fan out from
+   the same point as a bone on that path: a chain from `mWing2Left` swings `mWing4FanLeft` beside the tip.
 3. Adjust the settings (see Configuration below), or press **Tail**, **Ears**, **Jiggle** or **Overlap**
    to load another preset. A preset changes the physical settings and keeps **Bones**.
 
@@ -38,8 +39,8 @@ bones, so it has no **Bones** setting and is baked as position keys.
 
 ### Previewing
 
-Tick **Preview while playing** and play the clip. Chains that are not baked yet are simulated during
-playback. When playback stops or you scrub, the view shows the keyed pose.
+**Preview while playing** is ticked when the window opens; play the clip. Chains that are not baked yet are
+simulated during playback. When playback stops or you scrub, the view shows the keyed pose.
 
 ### Baking
 
@@ -63,9 +64,12 @@ keys.
 | **Damping** | 0–1 | 0.2 | 0.12 | 0.25 | 0.08 | 0.35 | how quickly swinging calms down |
 | **Drag** | 0–0.5 | 0.02 | 0.03 | 0.02 | 0 | 0.02 | air resistance: slows all motion, not only the swing |
 | **Gravity** | 0–3 g | 0 | 0.3 | 0.1 | 0 | 0 | pull downwards, in multiples of Earth's gravity |
-| **Radius** | 0–0.15 m | 0.02 | 0.03 | 0.01 | 0 | 0.02 | how far the chain keeps from the body's collision volumes |
+| **Radius** | 0–0.15 m | 0.02 | 0.03 | 0.01 | 0 | 0.02 | how far the chain keeps from the body's collision volumes; where the animation itself goes closer, it keeps as far as the animation does |
+| **Bend limit** | 0–180° | off (0) | off | off | off | off | how far each bone may bend away from its animated pose, relative to its parent; off lets it swing freely |
 
-The simulation runs at 120 steps per second, whatever the clip's frame rate. A looping clip (see
+The simulation runs at 120 steps per second, whatever the clip's frame rate. However high **Stiffness** or low
+**Damping** is set, no bone turns more than 720° a second faster than the animation turns it, so extreme settings
+swing hard but never flail. A looping clip (see
 [[Loop tools]]) is simulated around the loop twice before recording, so the end of the baked loop matches
 its start.
 
@@ -74,11 +78,11 @@ its start.
 [Open the example](example:dynamics-tail.vat): a four-second loop in which the hips turn 35° to each
 side, with a **Tail** chain already added on `mTail1` and not yet baked.
 
-1. Choose **View → Show Tail Bones**, so the tail is drawn, then **Tools → Dynamics...**. The list shows
+1. Choose **View → Bones → Show Tail Bones**, so the tail is drawn, then **Tools → Dynamics...**. The list shows
    `mTail1 +5`: the chain runs from `mTail1` through five more bones to `mTail6`. Click it: the settings
    read the Tail preset, **Stiffness** 0.08, **Damping** 0.12, **Drag** 0.03, **Gravity** 0.3 g,
    **Radius** 0.03 m, with **Bones** at 6.
-2. Tick **Preview while playing** and play. The tail lags behind each turn of the hips and swings back
+2. Play (**Preview while playing** is ticked). The tail lags behind each turn of the hips and swings back
    through the middle; stop, and it snaps to the keyed pose.
 3. Press **Bake**. The status bar says "Baked mTail1 to keys", the list reads `mTail1 +5  (baked)` and
    the button now reads **Re-bake**. Scrub: the tail keeps swinging without the preview, because the
@@ -87,10 +91,15 @@ side, with a **Tail** chain already added on `mTail1` and not yet baked.
    the unkeyed tail, so settings can be tried as often as you like. **Unbake** puts the unkeyed tail
    back.
 
+For a longer worked example, with every setting compared side by side, wings, jiggle and export, see
+[[Dynamics: tails, ears and hair]] and the tutorials after it.
+
 ## Tips and tricks
 
 - Use **Radius** to keep a tail out of the legs; the chain is pushed out of every collision volume by
-  that distance.
+  that distance, or as far as the animation keeps it where that is less. A volume the animated bone is inside
+  (ears in the head) is not an obstacle.
+- Use **Bend limit** to keep a soft chain from folding: at 30° no bone bends more than 30° from its animated pose.
 - Lower **Stiffness** and **Damping** for a lazy, heavy swing; raise both for a short, springy one.
 - Bake last: bake after the body motion is final, since the bake follows the animation it was baked from.
   Re-bake after changing the body.

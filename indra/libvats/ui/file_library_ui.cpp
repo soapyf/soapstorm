@@ -13,6 +13,7 @@
 #include <sstream>
 
 #include "app.h"
+#include "widgets.h"
 #include "icon_button.h"
 #include "icons.h"
 #include "vats/anim_file.h"
@@ -74,7 +75,7 @@ std::string meta_line(const LibFile& f) {
     if (!f.error.empty()) return "Cannot read: " + f.error;
     char b[160];
     if (f.kind == LibKind::Anim)
-        std::snprintf(b, sizeof b, "%.2f s, %d keys, priority %d%s", f.seconds, f.keys, f.priority, f.loop ? ", loops" : "");
+        std::snprintf(b, sizeof b, "%.2f s, %s, priority %d%s", f.seconds, count_noun(f.keys, "key").c_str(), f.priority, f.loop ? ", loops" : "");
     else
         std::snprintf(b, sizeof b, "%.2f s, %d fps, priority %d%s, %d %s", f.seconds, f.fps, f.priority, f.loop ? ", loops" : "",
                       f.actors, f.actors == 1 ? "actor" : "actors");
@@ -210,7 +211,7 @@ void App::draw_file_library() {
         const LibKind kind = LibKind(k);
         const bool anim = kind == LibKind::Anim;
         ImGui::PushID(k);
-        if (!section_header(anim ? "Animations" : "Projects")) {
+        if (!inventory_section(anim ? "Animations" : "Projects")) {
             ImGui::PopID();
             continue;
         }

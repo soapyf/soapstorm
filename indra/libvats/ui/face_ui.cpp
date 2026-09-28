@@ -11,6 +11,7 @@
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "theme.h"
 #include "vats/face_anim.h"
 
@@ -111,7 +112,7 @@ void App::draw_face_panel() {
     if (!show_face_) return;
     if (!face_ui_) face_ui_ = std::make_shared<FaceUi>();
     FaceUi& ui = *face_ui_;
-    place_tool_window(4, 24, 40);
+    place_tool_window(24, 40);
     if (!ImGui::Begin("Face", &show_face_)) return ImGui::End();
     help_button("face-animation");
     Clip& clip = doc_.clip();
@@ -251,7 +252,7 @@ void App::draw_face_panel() {
             double& w = ui.weights[name];
             float v = float(w);
             label(name.c_str());
-            const bool changed = ImGui::SliderFloat("##w", &v, 0, 1, "%.2f");
+            const bool changed = slider_float("##w", &v, 0, 1, "%.2f");
             if (ImGui::IsItemActivated()) doc_.history.begin(clip);  // before the first key of the drag
             if (changed) {
                 const std::map<std::string, double> before = ui.weights;
@@ -407,7 +408,7 @@ void App::draw_face_panel() {
                 const double l0 = L.blink_length;
                 float len = float(L.blink_length);
                 label("Blink length");
-                if (ImGui::SliderFloat("##blinklen", &len, 0.1f, 0.6f, "%.2f s")) L.blink_length = len;
+                if (slider_float("##blinklen", &len, 0.1f, 0.6f, "%.2f s")) L.blink_length = len;
                 ImGui::SetItemTooltip("From the lids starting to close to open again");
                 track("Face Layer", L.blink_length, l0);
             }
@@ -421,11 +422,11 @@ void App::draw_face_panel() {
                 const double i0 = L.saccade_interval, e0 = L.eye_limit;
                 float iv = float(L.saccade_interval), el = float(L.eye_limit);
                 label("Hold");
-                if (ImGui::SliderFloat("##darthold", &iv, 0.2f, 4, "%.2f s")) L.saccade_interval = iv;
+                if (slider_float("##darthold", &iv, 0.2f, 4, "%.2f s")) L.saccade_interval = iv;
                 ImGui::SetItemTooltip("The typical time the eyes rest between darts (half are shorter)");
                 track("Face Layer", L.saccade_interval, i0);
                 label("Eye limit");
-                if (ImGui::SliderFloat("##eyelimit", &el, 1, 30, "%.0f\xc2\xb0")) L.eye_limit = el;
+                if (slider_float("##eyelimit", &el, 1, 30, "%.0f\xc2\xb0")) L.eye_limit = el;
                 ImGui::SetItemTooltip("No dart takes the eyes further than this from where they look");
                 track("Face Layer", L.eye_limit, e0);
             }
@@ -438,11 +439,11 @@ void App::draw_face_panel() {
                 const double s0 = L.head_share, m0 = L.head_max;
                 float share = float(L.head_share), hm = float(L.head_max);
                 label("Head turns");
-                if (ImGui::SliderFloat("##headshare", &share, 0, 1, "%.2f")) L.head_share = share;
+                if (slider_float("##headshare", &share, 0, 1, "%.2f")) L.head_share = share;
                 ImGui::SetItemTooltip("The share of the turn the head takes; the eyes turn the rest (0 = eyes only)");
                 track("Face Layer", L.head_share, s0);
                 label("Head limit");
-                if (ImGui::SliderFloat("##headmax", &hm, 0, 90, "%.0f\xc2\xb0")) L.head_max = hm;
+                if (slider_float("##headmax", &hm, 0, 90, "%.0f\xc2\xb0")) L.head_max = hm;
                 ImGui::SetItemTooltip("The head turns at most this far from straight ahead");
                 track("Face Layer", L.head_max, m0);
             }
@@ -477,10 +478,10 @@ void App::draw_face_panel() {
         label("Frames");
         ImGui::DragIntRange2("##lookframes", &ui.tool_from, &ui.tool_to, 0.2f, 0, clip.end_frame);
         label("Max turn");
-        ImGui::SliderFloat("##lookmax", &ui.tool_max, 0, 90, "%.0f\xc2\xb0");
+        slider_float("##lookmax", &ui.tool_max, 0, 90, "%.0f\xc2\xb0");
         ImGui::SetItemTooltip("Each bone turns at most this far from straight ahead");
         label("Weight");
-        ImGui::SliderFloat("##lookweight", &ui.tool_weight, 0, 1, "%.2f");
+        slider_float("##lookweight", &ui.tool_weight, 0, 1, "%.2f");
         ImGui::SetItemTooltip("How far from the animation towards the target: 1 looks straight at it");
         ImGui::BeginDisabled(selection_.empty());
         if (icon_label_button(icon::kLookAt, "Look at Target")) {

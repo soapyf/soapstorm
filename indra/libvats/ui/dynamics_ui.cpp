@@ -6,6 +6,7 @@
 #include "app.h"
 #include "theme.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "vats/dynamics.h"
 
 namespace vats {
@@ -72,7 +73,7 @@ void App::apply_dynamics_preview(Evaluation& e) {
 
 void App::draw_dynamics_panel() {
     if (!show_dynamics_) return;
-    place_tool_window(0, 24, 40);
+    place_tool_window(24, 40);
     if (!ImGui::Begin("Dynamics", &show_dynamics_)) return ImGui::End();
     help_button("dynamics");
     Clip& clip = doc_.clip();
@@ -155,22 +156,27 @@ void App::draw_dynamics_panel() {
             const int len0 = d.length;
             int len = d.length;
             label("Bones");
-            if (ImGui::SliderInt("##bones", &len, 1, chain_depth(skel_, root))) d.length = len;
+            if (slider_int("##bones", &len, 1, chain_depth(skel_, root))) d.length = len;
             track("Chain Length", d.length, len0);
         }
-        auto slider = [&](const char* name, double& v, float lo, float hi, const char* fmt, const char* tip) {
+        auto slider = [&](const char* name, double& v, float lo, float hi, const char* fmt, const char* tip,
+                          SliderCurve curve = SliderCurve::Linear) {
             const double v0 = v;
             float f = float(v);
             label(name);
-            if (ImGui::SliderFloat((std::string("##") + name).c_str(), &f, lo, hi, fmt)) v = f;
+            if (slider_float((std::string("##") + name).c_str(), &f, lo, hi, fmt, 0, curve)) v = f;
             ImGui::SetItemTooltip("%s", tip);
             track("Dynamics Settings", v, v0);
         };
         slider("Stiffness", d.stiffness, 0.f, 1.f, "%.3f", "How hard the chain pulls back to the animated pose");
         slider("Damping", d.damping, 0.f, 1.f, "%.3f", "How quickly swinging calms down");
-        slider("Drag", d.drag, 0.f, 0.5f, "%.3f", "Air resistance: slows all motion, not just the swing");
+        slider("Drag", d.drag, 0.f, 0.5f, "%.3f", "Air resistance: slows all motion, not just the swing",
+               SliderCurve::Log);  // useful values are small: 0.01 to 0.1
         slider("Gravity", d.gravity, 0.f, 3.f, "%.2f g", "Pull downwards, in multiples of Earth's gravity");
-        slider("Radius", d.radius, 0.f, 0.15f, "%.3f m", "How far the chain keeps from the body's collision volumes");
+        slider("Radius", d.radius, 0.f, 0.15f, "%.3f m",
+               "How far the chain keeps from the body's collision volumes (never further than the animation does)");
+        slider("Bend limit", d.bend, 0.f, 180.f, d.bend > 0 ? "%.0f deg" : "off",
+               "How far each bone may bend away from its animated pose, in degrees; 0 = no limit");
 
         if (ImGui::Button(d.baked ? "Re-bake" : "Bake")) {
             graph_.snapshot_curves(doc_.clip());  // PT-4

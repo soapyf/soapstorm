@@ -40,7 +40,7 @@ the file.
 
 ### Read the table
 
-![The As SL Plays It window for the loop-walk example: 1,897 bytes, 8 bones, 182 rotation and 27 position keys, and the table sorted by mm with the wing bones first at about 1.2 mm](images/sl-preview/as-sl-plays-it.png)
+![The As SL Plays It window for the loop-walk example: 4,012 bytes, 14 bones, 426 rotation and 31 position keys, and the table sorted by mm with the wing bones first at about 0.9 mm](images/sl-preview/as-sl-plays-it.png)
 *The loop walk as Second Life plays it: every bone within about a millimetre of the animation.*
 
 **Largest difference per bone** lists each bone with the largest distance (**mm**) and the largest

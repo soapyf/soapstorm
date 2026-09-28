@@ -78,7 +78,7 @@
 	"props": [],
 	"anchors": [],
 	"audio": {
-		"path": "",
+		"path": "beat-120bpm.wav",
 		"offset": 0,
 		"volume": 1,
 		"bpm": 120,

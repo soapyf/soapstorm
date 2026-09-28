@@ -47,8 +47,7 @@ void App::save_ao_notecard(const std::string& path) {
 
 void App::draw_clips_panel() {
     if (!show_clips_) return;
-    ImGui::SetNextWindowSize(window_size(24, 40), ImGuiCond_FirstUseEver);
-    place_tool_window(2);
+    place_tool_window(24, 40);
     if (!ImGui::Begin("Clips", &show_clips_)) return ImGui::End();
     help_button("clips");
     Project& p = doc_.project;

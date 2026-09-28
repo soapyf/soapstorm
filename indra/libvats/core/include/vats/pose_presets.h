@@ -1,4 +1,4 @@
-// Viewport Avatar Toolset - the built-in starter poses: hand shapes and a few body poses.
+// Viewport Avatar Toolset - the built-in starter poses: hand shapes, body poses and the fitting stances.
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 //
 // Hand poses are written as per-finger curls and spreads and turned into Euler keys with the hand

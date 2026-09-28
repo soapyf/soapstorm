@@ -22,4 +22,10 @@ struct ExportNaming {
 std::string export_file_name(const ExportNaming& naming, const std::string& project_stem, bool mirrored,
                              const std::string& ext);
 
+// A file name typed in the export's Save dialog (UI-32): the naming that writes it. The name the pattern offered
+// leaves the naming as it is; any other becomes the Name, with pattern "[NAME]" and no side, so that exact file is
+// written (a mirrored export still ends in "_mirrored", which is taken off a typed name first; actors and clips
+// still add theirs). typed: the file name, with or without its extension.
+ExportNaming typed_export_naming(ExportNaming naming, const std::string& project_stem, bool mirrored, const std::string& typed);
+
 }  // namespace vats

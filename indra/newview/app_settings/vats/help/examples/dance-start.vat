@@ -513,5 +513,14 @@
 	},
 	"props": [],
 	"anchors": [],
+	"audio": {
+		"path": "beat-120bpm.wav",
+		"offset": 0,
+		"volume": 1,
+		"bpm": 0,
+		"beat_offset": 0,
+		"beats": [],
+		"snap": false
+	},
 	"meta": {}
 }

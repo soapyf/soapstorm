@@ -359,20 +359,37 @@ static bool apply_rokoko_packet(const std::uint8_t* data, size_t size, VmcState&
     const Json* scene = j.find("scene");
     const Json* actors = scene ? scene->find("actors") : nullptr;
     if (!actors || !actors->is_array()) return err = "no scene.actors: set Studio's custom streaming to JSON v3", false;
+    // An actor's face: ARKit weights 0..100 in actors[i].face, sent when meta.hasFace (Rokoko Face Capture).
+    auto face_of = [](const Json& c) -> const Json* {
+        const Json* meta = c.find("meta");
+        const Json* has = meta ? meta->find("hasFace") : nullptr;
+        const Json* face = c.find("face");
+        return has && has->is_bool() && has->b && face && face->is_object() ? face : nullptr;
+    };
     const Json* a = nullptr;
-    for (const Json& c : actors->arr) {
-        const Json* name = c.find("name");
-        const Json* body = c.find("body");
-        if (!body || !body->is_object()) continue;
-        if (actor.empty() || (name && name->is_string() && name->str == actor)) {
-            a = &c;
-            break;
+    for (int pass = 0; pass < 2 && !a; ++pass)  // an actor with a body first, else a face-only one
+        for (const Json& c : actors->arr) {
+            const Json* name = c.find("name");
+            const Json* body = c.find("body");
+            if (pass == 0 ? !body || !body->is_object() : !face_of(c)) continue;
+            if (actor.empty() || (name && name->is_string() && name->str == actor)) {
+                a = &c;
+                break;
+            }
         }
-    }
-    if (!a) return err = actor.empty() ? "no actor with a body in the stream" : "actor " + actor + " is not in the stream", false;
+    if (!a) return err = actor.empty() ? "no actor with a body or face in the stream" : "actor " + actor + " is not in the stream", false;
     const Json* name = a->find("name");
     actor_out = name && name->is_string() ? name->str : "";
+    if (const Json* face = face_of(*a)) {
+        std::map<std::string, float> blend;
+        for (auto& [k, v] : face->obj)  // other members (faceId) are not numbers
+            if (v.is_number() && std::isfinite(v.num) && k.size() <= 64 && blend.size() < 128)
+                blend[k] = float(std::clamp(v.num / 100, 0.0, 1.0));
+        s.blend = std::move(blend);
+    }
+    s.loaded = 1;
     const Json* body = a->find("body");
+    if (!body || !body->is_object()) return true;  // face only
     std::map<std::string, Xform> world;
     for (auto& [r, u] : rokoko_bones()) {
         const Json* jn = body->find(r.c_str());
@@ -395,7 +412,6 @@ static bool apply_rokoko_packet(const std::uint8_t* data, size_t size, VmcState&
         s.bones[b.name] = p ? world[p].inverse() * it->second : it->second;
     }
     s.root = Xform{};
-    s.loaded = 1;
     return true;
 }
 
@@ -510,8 +526,8 @@ std::vector<std::string> filter_take(Clip& take, int last, const FilterSettings&
     for (size_t i = 0; i < before.size(); ++i) b += before[i].rot, a += after[i].rot, order.push_back(i);
     std::sort(order.begin(), order.end(), [&](size_t x, size_t y) { return before[x].rot > before[y].rot; });
     char buf[160];
-    std::snprintf(buf, sizeof buf, "%s filter: shake %.0f -> %.0f deg/s3 (mean of %zu bones)", filter_name(s.kind),
-                  b / double(before.size()), a / double(before.size()), before.size());
+    std::snprintf(buf, sizeof buf, "%s filter: shake %.0f -> %.0f deg/s3 (mean of %zu bone%s)", filter_name(s.kind),
+                  b / double(before.size()), a / double(before.size()), before.size(), before.size() == 1 ? "" : "s");
     std::vector<std::string> out{buf};
     for (size_t k = 0; k < order.size() && k < 3; ++k) {
         std::snprintf(buf, sizeof buf, "shake of %s: %.0f -> %.0f deg/s3", before[order[k]].track.c_str(),
@@ -695,8 +711,8 @@ std::vector<std::string> merge_recording(Clip& clip, const Skeleton& skel, const
         if (fl.left || fl.right) locked = lock_feet(clip, Rig(skel), fl);
     }
     char buf[128];
-    std::snprintf(buf, sizeof buf, "recorded %zu frames (%.2f s) into %d bones, frames %d to %d", frames.size(),
-                  (frames.size() - 1) / double(fps), tracks, from, last);
+    std::snprintf(buf, sizeof buf, "recorded %zu frame%s (%.2f s) into %d bone%s, frames %d to %d", frames.size(),
+                  frames.size() == 1 ? "" : "s", (frames.size() - 1) / double(fps), tracks, tracks == 1 ? "" : "s", from, last);
     report.push_back(buf);
     report.insert(report.end(), shake.begin(), shake.end());
     report.insert(report.end(), locked.begin(), locked.end());

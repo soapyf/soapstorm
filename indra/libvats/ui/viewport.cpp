@@ -7,7 +7,9 @@
 #include "imgui_internal.h"  // the dockspace's central node (world view)
 #include "box_select.h"
 #include "profile.h"
+#include "vats/bone_glyph.h"
 #include "vats/edit.h"
+#include "vats/height_variant.h"
 #include "theme.h"
 
 namespace vats {
@@ -28,22 +30,16 @@ void push_triangle(std::vector<Vertex>& out, const Vec3& a, const Vec3& b, const
         out.push_back({{float(p->x), float(p->y), float(p->z)}, {float(n.x), float(n.y), float(n.z)}, {col.r, col.g, col.b, 1}});
 }
 
-// A four-sided double pyramid from head to tail, widest (9 % of the length) at 15 % along (spec VP-6).
-// rot is the bone's display frame (SK-21), so its X (or Z) axis gives the roll.
-void bone_glyph(std::vector<Vertex>& out, const Vec3& head, const Vec3& tail, const Quat& rot, Rgb col) {
-    Vec3 d = tail - head;
-    double len = d.length();
-    Vec3 dir = d * (1.0 / len);
-    Vec3 roll = rot.rotate({1, 0, 0});
-    if (std::fabs(roll.dot(dir)) > 0.9) roll = rot.rotate({0, 0, 1});
-    Vec3 u = (roll - dir * roll.dot(dir)).normalized(), v = dir.cross(u);
-    Vec3 mid = head + dir * (0.15 * len);
-    double w = 0.09 * len;
-    Vec3 ring[4] = {mid + u * w, mid + v * w, mid - u * w, mid - v * w};
-    for (int k = 0; k < 4; ++k) {
-        push_triangle(out, head, ring[(k + 1) % 4], ring[k], col);
-        push_triangle(out, tail, ring[k], ring[(k + 1) % 4], col);
-    }
+// Node i's glyph (vats/bone_glyph.h): its spike, or a ring at its joint where kind says it folds onto an earlier
+// bone. frame is the bone's display frame (SK-21), which rolls the spike.
+void node_glyph(std::vector<Vertex>& out, const Skeleton& skel, const std::vector<Xform>& g, const Shape* sh, int i,
+                int kind, const Quat& frame, Rgb col) {
+    static std::vector<Vec3> tris;
+    tris.clear();
+    const Vec3 head = g[i].pos, tail = glyph_tail(skel, g, sh, i);
+    if (kind >= 0) joint_ring(tris, head, tail - head, ring_radius(kind, (tail - head).length()));
+    else if (kind == -1) bone_glyph(tris, head, tail, frame);
+    for (size_t k = 0; k + 2 < tris.size(); k += 3) push_triangle(out, tris[k], tris[k + 1], tris[k + 2], col);
 }
 
 double segment_distance(ImVec2 p, ImVec2 a, ImVec2 b) {
@@ -201,8 +197,8 @@ void App::draw_avatar(bool view, const std::vector<Xform>& globals, const SceneC
             verts[i] = {{pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]}, {nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]},
                         {c.r, c.g, c.b, 1}};
     }
-    host_.scene_triangles(verts, skin_idx, true, 0.04f);
-    host_.scene_triangles(verts, eye_idx, true, 0.6f);
+    scene_triangles(verts, skin_idx, true, 0.04f);  // App::scene_triangles: the Picker's render gathers them
+    scene_triangles(verts, eye_idx, true, 0.6f);
 }
 
 // The onion ghosts while onion skin is on and, while Filter Curves is open (08 MC-4a), the pose before filtering
@@ -241,12 +237,9 @@ void App::draw_ghost(const std::vector<Xform>& globals, const Rgb& c, float alph
     const Shape* sh = shape();
     if (bones) {
         verts.clear();
-        for (int i = 0; i < skel_.joint_count(); ++i) {
-            if (!node_visible(i)) continue;
-            Vec3 end = sh ? skel_[i].end.mul(sh->scale[i]) : skel_[i].end;
-            if (end.length() < 1e-5) continue;
-            bone_glyph(verts, globals[i].pos, globals[i].apply(end), globals[i].rot * skel_.bone_frame(i), c);
-        }
+        const std::vector<int> kinds = glyph_kinds(skel_, globals, sh);
+        for (int i = 0; i < skel_.joint_count(); ++i)
+            if (node_visible(i)) node_glyph(verts, skel_, globals, sh, i, kinds[i], globals[i].rot * skel_.bone_frame(i), c);
         for (Vertex& vx : verts) vx.c[3] = alpha;
         host_.scene_triangles(verts, {}, true, 0.1f, true);
     } else if (const MeshBody* mb = mesh_body()) {
@@ -267,6 +260,35 @@ void App::draw_ghost(const std::vector<Xform>& globals, const Rgb& c, float alph
     }
 }
 
+// The edited actor's bone glyphs (VP-6), coloured by category and state. Shared: the viewer's world view can send
+// them through the same scene triangles (spec 09).
+void App::draw_bones() {
+    static std::vector<Vertex> bones;
+    bones.clear();
+    const Shape* sh = shape();
+    const std::vector<int> kinds = glyph_kinds(skel_, globals_, sh);
+    // Farthest first: in X-ray there is no depth test, so nearer glyphs must paint over farther ones.
+    static std::vector<std::pair<double, int>> order;
+    order.clear();
+    for (int i = 0; i < skel_.size(); ++i)
+        if (node_visible(i) && kinds[i] != -2)
+            order.emplace_back(-(globals_[i].pos + glyph_tail(skel_, globals_, sh, i)).dot(camera_.forward()), i);
+    std::sort(order.begin(), order.end());
+    for (auto [depth, i] : order) {
+        Rgb c = kCategoryColour[int(skel_[i].category)];
+        planner_colour(i, c);  // 08 PP-2: the winning clip's colour
+        bool sel = std::find(selection_.begin(), selection_.end(), i) != selection_.end();
+        if (i == primary()) c = kSelected;
+        else if (sel) c = mix(kSelected, c, 0.45f);
+        else if (contact_bone(i)) c = kContact;
+        else if (hot(i)) c = mix(c, {1, 1, 1}, 0.5f);
+        node_glyph(bones, skel_, globals_, sh, i, kinds[i], local_axes(i), c);
+    }
+    // X-ray culls back faces (the translucent path), so each closed glyph shows only its outside; with depth
+    // testing the depth buffer does that.
+    host_.scene_triangles(bones, {}, !xray_, 0.25f, xray_);
+}
+
 ImTextureID App::render_scene(int w, int h) {
     const SceneColours& colours = scene_colours();
     { VATS_PROFILE("vp begin+ground");
@@ -283,6 +305,7 @@ ImTextureID App::render_scene(int w, int h) {
     }
     { VATS_PROFILE("vp other actors"); draw_other_actors(colours); }  // couples and groups (GR-1)
     { VATS_PROFILE("vp onion"); draw_onion(colours); }  // ghosts (08 ON)
+    draw_target(colours);  // the target ghost, to match by eye
     if (!sl_ghost_.empty())  // the SL preview's original (08 SP-2): green, bones when the onion ghosts are bones
         draw_ghost(sl_ghost_, mix({0.4f, 0.9f, 0.55f}, colours.body, 0.2f), 0.3f,
                    onion_view().bones_only || (body_ == Body::SkeletonOnly && !mesh_body()));
@@ -296,34 +319,21 @@ ImTextureID App::render_scene(int w, int h) {
     draw_collision_volumes(volumes);
     host_.scene_triangles(volumes, {}, !xray_, 0.1f, true);
 
-    static std::vector<Vertex> bones;
-    bones.clear();
-    const Shape* sh = shape();
-    for (int i = 0; i < skel_.size(); ++i) {
-        if (!node_visible(i)) continue;
-        Vec3 end = sh ? skel_[i].end.mul(sh->scale[i]) : skel_[i].end;
-        if (end.length() < 1e-5) continue;
-        Rgb c = kCategoryColour[int(skel_[i].category)];
-        planner_colour(i, c);  // 08 PP-2: the winning clip's colour
-        bool sel = std::find(selection_.begin(), selection_.end(), i) != selection_.end();
-        if (i == primary()) c = kSelected;
-        else if (sel) c = mix(kSelected, c, 0.45f);
-        else if (contact_bone(i)) c = kContact;
-        else if (hot(i)) c = mix(c, {1, 1, 1}, 0.5f);
-        bone_glyph(bones, globals_[i].pos, globals_[i].apply(end), local_axes(i), c);
-    }
-    host_.scene_triangles(bones, {}, !xray_, 0.25f);
+    draw_bones();
 
     // Other actors shown as a skeleton (GR): the body bones only, dimmed towards their colour.
+    static std::vector<Vertex> bones;
     bones.clear();
-    for (const OtherSkeleton& s : other_skeletons_)
+    for (const OtherSkeleton& s : other_skeletons_) {
+        const auto& g = s.globals;
+        const std::vector<int> other_kinds = glyph_kinds(skel_, g, nullptr);
         for (int i = 0; i < skel_.joint_count(); ++i) {
-            if (!node_visible(i) || skel_[i].end.length() < 1e-5) continue;
-            const auto& g = s.globals;
+            if (!node_visible(i)) continue;
             Rgb c = mix(kCategoryColour[int(skel_[i].category)], {s.colour[0], s.colour[1], s.colour[2]}, 0.5f);
             c = {c.r * 0.7f, c.g * 0.7f, c.b * 0.7f};
-            bone_glyph(bones, g[i].pos, g[i].apply(skel_[i].end), g[i].rot * skel_.bone_frame(i), c);
+            node_glyph(bones, skel_, g, nullptr, i, other_kinds[i], g[i].rot * skel_.bone_frame(i), c);
         }
+    }
     host_.scene_triangles(bones, {}, true, 0.25f);
     return host_.scene_end();
 }
@@ -333,15 +343,20 @@ int App::pick_bone(ImVec2 m, std::vector<int>* ranked) const { return pick_node(
 // with_points: attachment points count even while hidden (Inventory drops, VP-83).
 int App::pick_node(ImVec2 m, std::vector<int>* ranked, bool with_points) const {
     const Shape* sh = shape();
+    const std::vector<int> kinds = glyph_kinds(skel_, globals_, sh);
     std::vector<std::pair<double, int>> hits;
     for (int i = 0; i < skel_.size(); ++i) {
         if (!node_visible(i) && !(with_points && skel_[i].attachment && !skel_[i].volume)) continue;
-        Vec3 end = sh ? skel_[i].end.mul(sh->scale[i]) : skel_[i].end;
-        if (end.length() < 1e-5) continue;
+        if (kinds[i] == -2) continue;
         double hx, hy, tx, ty;
-        if (!projector_.to_screen(globals_[i].pos, hx, hy) || !projector_.to_screen(globals_[i].apply(end), tx, ty))
+        if (!projector_.to_screen(globals_[i].pos, hx, hy) ||
+            !projector_.to_screen(glyph_tail(skel_, globals_, sh, i), tx, ty))
             continue;
         ImVec2 a{float(hx), float(hy)}, b{float(tx), float(ty)};
+        if (kinds[i] >= 0) {  // a ring at the joint: the joint is the target, and wins over the spike it sits on
+            if (double d = std::hypot(m.x - a.x, m.y - a.y); d <= 14) hits.emplace_back(d, i);
+            continue;
+        }
         double d = segment_distance(m, a, b);
         if (skel_[i].attachment) d = std::min(d, std::max(0.0, double(std::hypot(m.x - a.x, m.y - a.y)) - 6.0));  // the dot
         if (d > 14) continue;
@@ -372,6 +387,105 @@ bool App::pick_surface(ImVec2 m, Vec3& point) const {
         return true;
     }
     return false;
+}
+
+// The avatar as SL's camera sees it (slcam::Focus): a box at the agent, the middle of the body height, whatever the
+// animation does to the body, as LLVOAvatar's position and scale are.
+slcam::Focus App::sl_avatar_focus(int actor) const {
+    slcam::Focus f;
+    f.size.z = avatar_height(skel_, actor < 0 ? shape() : actor_shape(actor)) - kShapeEditorExtra;  // mBodySize.z
+    Xform place;  // the view is the edited actor's space
+    const Project& p = doc_.project;
+    if (actor >= 0 && actor < int(p.actors.size()) && p.active >= 0 && p.active < int(p.actors.size()))
+        place = p.actors[p.active].placement().inverse() * p.actors[actor].placement();
+    f.avatar = {place.rot, place.apply({0, 0, f.size.z / 2})};
+    return f;
+}
+
+double App::ray_prop(int i, const Vec3& o, const Vec3& d) const {
+    const Prop& p = doc_.clip().props[i];
+    auto it = prop_models_.find(p.path);
+    const DaeModel* mdl = it != prop_models_.end() ? it->second.get() : nullptr;
+    if (!p.visible || !mdl) return 1e30;
+    if (p.rigged) {
+        std::vector<float> pos, nrm;
+        skin_prop(*mdl, skel_, globals_, shape(), pos, nrm);
+        return ray_triangles(o, d, pos, mdl->indices);
+    }
+    // Into the mesh's own space, undoing what draw_prop does: re-centred on its box, scaled, then placed (VP-81).
+    // The map is affine, so the ray parameter of the hit is the same in both spaces.
+    const Xform inv = prop_frame(p).inverse();
+    const Vec3 c = (mdl->bounds_min + mdl->bounds_max) * 0.5;
+    auto unscale = [&](const Vec3& v) { return Vec3{v.x / p.scale.x, v.y / p.scale.y, v.z / p.scale.z}; };
+    return ray_triangles(unscale(inv.apply(o)) + c, unscale(inv.rot.rotate(d)), mdl->positions, mdl->indices);
+}
+
+// Second Life's Alt press: LLToolCamera::handleMouseDown picks under the cursor and pickCallback puts the focus on what
+// was hit (lltoolfocus.cpp:117-303), with Ctrl and Shift too. The focus is the surface point itself: for an avatar
+// that is LLAgentCamera::calcFocusOffset's "don't do any funk heuristics" (llagentcamera.cpp:456-466). SL tests an
+// avatar's collision volumes (LLVOAvatar::lineSegmentIntersect); VATs tests the mesh drawn, so the focus lands on the
+// skin you clicked. Nothing hit, the sky: "invalid point", the focus stays and the drag moves nothing
+// (lltoolfocus.cpp:205-210, 412-420).
+bool App::sl_focus_at(ImVec2 m) {
+    Vec3 o, d;
+    projector_.ray(camera_, m.x, m.y, o, d);
+    double best = 1e30;
+    slcam::Focus f = sl_avatar_focus(-1);
+    if (body_ != Body::SkeletonOnly && !skin_pos_.empty()) best = ray_triangles(o, d, skin_pos_, mesh_.indices());
+    for (size_t i = 0; i < actor_pick_pos_.size(); ++i)  // other actors (GR)
+        if (actor_pick_idx_[i])
+            if (double t = ray_triangles(o, d, actor_pick_pos_[i], *actor_pick_idx_[i]); t < best)
+                best = t, f = sl_avatar_focus(int(i));
+    const auto& props = doc_.clip().props;
+    for (int i = 0; i < int(props.size()); ++i)
+        if (double t = ray_prop(i, o, d); t < best) {
+            best = t;
+            f = sl_avatar_focus(-1);
+            // Worn (rigged, on a bone or a point) is an attachment: SL focuses on its avatar (llagentcamera.cpp:3171-3179).
+            if (!props[i].rigged && props[i].bone.empty() && props[i].point.empty()) f.kind = slcam::Focus::Object;
+        }
+    if (best >= 1e30)  // skeleton only: the bone glyphs are the body; the point of the bone nearest the ray
+        if (int b = pick_bone(m); b >= 0) {
+            const Shape* sh = shape();
+            const Vec3 a = globals_[b].pos, u = globals_[b].apply(sh ? skel_[b].end.mul(sh->scale[b]) : skel_[b].end) - a;
+            const Vec3 w = a - o;
+            const double du = d.dot(u), den = u.dot(u) - du * du;
+            const double s = den > 1e-12 ? std::clamp((d.dot(w) * du - w.dot(u)) / den, 0.0, 1.0) : 0.0;
+            best = std::max(1e-3, d.dot(a + u * s - o));
+        }
+    // The ground, as far as the stock pick reaches (512 m, lltoolfocus.cpp:171).
+    if (best >= 1e30 && d.z < -1e-6 && -o.z / d.z <= 512) best = -o.z / d.z, f.kind = slcam::Focus::Land;
+    if (best >= 1e30) return false;
+    sl_focus_ = f;
+    focus_camera_on(o + d * best);
+    return true;
+}
+
+// LLToolCamera::handleHover (lltoolfocus.cpp:384-505). Nothing moves until the pointer has gone SLOP_RANGE (4) pixels
+// along an axis; then Ctrl orbits (MASK_ORBIT, lltoolmgr.h:39), Ctrl+Shift pans (MASK_PAN, :40) and anything else,
+// plain Alt included, is the zoom tool: sideways orbits, up and down zooms. The modifiers count as they are now, not
+// as they were at the press. SL's mouse deltas are in GL coordinates (y up), hence dy = -delta.y.
+void App::sl_camera_drag(ImVec2 delta, float view_width) {
+    const ImGuiIO& io = ImGui::GetIO();
+    if (!sl_valid_click_) return;
+    constexpr float kSlopRange = 4;  // lltoolfocus.cpp:65
+    sl_accum_x_ += std::fabs(delta.x), sl_accum_y_ += std::fabs(delta.y);
+    sl_outside_slop_x_ = sl_outside_slop_x_ || sl_accum_x_ >= kSlopRange;
+    sl_outside_slop_y_ = sl_outside_slop_y_ || sl_accum_y_ >= kSlopRange;
+    if (!sl_outside_slop_x_ && !sl_outside_slop_y_) return;
+    const double dx = delta.x, dy = -delta.y;
+    const double radians_per_pixel = 2 * kPi / std::max(1.f, view_width);  // 360 degrees across the view
+    if (io.KeyCtrl && !io.KeyShift) {
+        if (dx != 0) slcam::orbit_around(camera_, sl_focus_, -dx * radians_per_pixel);
+        if (dy != 0) slcam::orbit_over(camera_, sl_focus_, -dy * radians_per_pixel);
+    } else if (io.KeyCtrl && io.KeyShift) {
+        // "Fudge factor for pan": 3 x the distance to the focus across the view.
+        const double meters_per_pixel = 3 * (camera_.eye() - camera_.target).length() / std::max(1.f, view_width);
+        slcam::pan(camera_, sl_focus_, dx * meters_per_pixel, -dy * meters_per_pixel);
+    } else {
+        if (dx != 0) slcam::orbit_around(camera_, sl_focus_, -dx * radians_per_pixel);
+        if (dy != 0 && sl_outside_slop_y_) slcam::zoom_in(camera_, sl_focus_, std::pow(0.99, dy));  // IN_FACTOR
+    }
 }
 
 Tool App::effective_tool() const {
@@ -517,21 +631,43 @@ bool App::place_gizmo() {
     return gizmo_on;
 }
 
-// The viewer's keyboard camera: Alt + Left/Right orbits and Alt + Up/Down zooms; with Ctrl, Up/Down orbits
-// up and down; with Ctrl + Shift the arrows pan. Works wherever the pointer is, like the viewer.
+// The viewer's keyboard camera, its third-person bindings (app_settings/key_bindings.xml:62-93), wherever the pointer is:
+//   Alt + Left/A, Right/D   spin_around_cw / _ccw     Alt + Up/W, Down/S   move_forward / _backward
+//   Alt + PgUp/E, PgDn/C    spin_over / _under        Ctrl+Alt + Up/W, Down/S   spin_over / _under
+//   Ctrl+Alt+Shift + arrows or A D W S   pan_left / _right / _up / _down
+// at LLAgentCamera::updateCamera's rates (llagentcamera.cpp:1411-1456): orbits 90 degrees a second, zoom the distance
+// to the focus a second, pan 5 m a second. Not in the viewer's own world view, where these keys are the viewer's.
 void App::keyboard_camera() {
     ImGuiIO& io = ImGui::GetIO();
     cam_keys_held_ = false;
-    if (settings_.preset != Preset::SecondLife || !io.KeyAlt || io.WantTextInput) return;
-    const int x = ImGui::IsKeyDown(ImGuiKey_RightArrow) - ImGui::IsKeyDown(ImGuiKey_LeftArrow);
-    const int y = ImGui::IsKeyDown(ImGuiKey_UpArrow) - ImGui::IsKeyDown(ImGuiKey_DownArrow);
-    if (!x && !y) return;
+    if (settings_.preset != Preset::SecondLife || host_.world_view() || !io.KeyAlt || io.WantTextInput) return;
+    // get_orbit_rate (llviewerinput.cpp:388-402): a tap nudges, 5% of full speed rising to all of it over 0.25 s.
+    auto rate = [](ImGuiKey a, ImGuiKey b) {
+        double r = 0;
+        for (ImGuiKey k : {a, b})
+            if (ImGui::IsKeyDown(k)) {
+                const double t = ImGui::GetKeyData(k)->DownDuration;
+                r = std::max(r, t < 0.25 ? 0.05 + t * (1 - 0.05) / 0.25 : 1.0);
+            }
+        return r;
+    };
+    const double left = rate(ImGuiKey_LeftArrow, ImGuiKey_A), right = rate(ImGuiKey_RightArrow, ImGuiKey_D);
+    const double up = rate(ImGuiKey_UpArrow, ImGuiKey_W), down = rate(ImGuiKey_DownArrow, ImGuiKey_S);
+    const double over = rate(ImGuiKey_PageUp, ImGuiKey_E) - rate(ImGuiKey_PageDown, ImGuiKey_C);
+    if (!left && !right && !up && !down && !over) return;
     cam_keys_held_ = true;
-    cam_anim_t_ = -1;
-    const double px = 150 * io.DeltaTime;  // about 70 degrees a second, like a steady 150 px/s mouse drag
-    if (io.KeyCtrl && io.KeyShift) camera_.pan(-x * px, y * px);  // the camera goes the way the arrow points
-    else if (io.KeyCtrl) camera_.orbit(x * px, -y * px);
-    else camera_.orbit(x * px, 0), camera_.zoom(std::exp(-0.005 * y * px));
+    update_camera_animation(1);  // a focus swing in progress lands first
+    const double dt = io.DeltaTime, orbit_rate = 90 * kDegToRad, pan_rate = 5;
+    if (io.KeyCtrl && io.KeyShift) {
+        slcam::pan(camera_, sl_focus_, (left - right) * pan_rate * dt, (up - down) * pan_rate * dt);
+    } else if (io.KeyCtrl) {
+        if (up != down) slcam::orbit_over(camera_, sl_focus_, (up - down) * orbit_rate * dt);
+    } else if (!io.KeyShift) {
+        if (left != right) slcam::orbit_around(camera_, sl_focus_, (right - left) * orbit_rate * dt);
+        if (over != 0) slcam::orbit_over(camera_, sl_focus_, over * orbit_rate * dt);
+        if (up != down)
+            slcam::orbit_in(camera_, sl_focus_, (up - down) * (camera_.eye() - camera_.target).length() * dt);
+    }
 }
 
 void App::start_box(ImVec2 m, bool from_b, bool click_clears) {
@@ -630,13 +766,23 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
             if (nav_moved && cam_anim_t_ >= 0) update_camera_animation(1);  // a drag finishes the focus swing first
             if (nav_mode == 0) camera_.orbit(d.x, d.y);
             else if (nav_mode == 1) camera_.pan(d.x, d.y);
-            else if (nav_mode == 3) camera_.orbit(d.x, 0), camera_.zoom(std::exp(0.005 * d.y));  // SL focus drag
+            else if (nav_mode == 3) sl_camera_drag(d, size.x);  // Second Life's Alt drag
             else camera_.zoom(std::exp(0.005 * (d.y - d.x)));
         }
         return;
     }
     if (box_input(m, hovered)) return;
-    if (hovered && io.MouseWheel != 0) camera_.zoom(std::pow(0.9, io.MouseWheel));
+    if (hovered && io.MouseWheel != 0) {
+        if (preset == Preset::SecondLife && !host_.world_view()) {
+            // LLAgentCamera::handleScrollWheel, focus off the avatar (llagentcamera.cpp:2562-2566): each click in takes
+            // the distance to the focus down by the fourth root of 2 (ROOT_ROOT_TWO), through cameraOrbitIn and so its
+            // limits; blocked while the camera animates (:2512-2516). SL's clicks count towards you, the wheel's away.
+            if (cam_anim_t_ < 0)
+                slcam::orbit_in(camera_, sl_focus_, camera_.distance * (1 - std::pow(std::sqrt(std::sqrt(2.0)), -io.MouseWheel)));
+        } else {
+            camera_.zoom(std::pow(0.9, io.MouseWheel));
+        }
+    }
     // The viewer's world view: its own camera controls get those clicks (spec 09 U3).
     if (hovered && !dragging_gizmo_ && euler_drag_bone_ < 0 && !host_.world_view()) {
         auto start = [&](int button, int mode) {
@@ -652,14 +798,10 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
         } else if (preset == Preset::QAvimator && ImGui::IsMouseClicked(2)) {
             start(2, 1);
         } else if (preset == Preset::SecondLife && io.KeyAlt && ImGui::IsMouseClicked(0)) {
-            if (io.KeyCtrl) {
-                start(0, io.KeyShift ? 1 : 0);  // Ctrl+Alt orbit, Ctrl+Alt+Shift pan
-            } else {
-                // Alt+click: look at what was clicked, then drag sideways to orbit and up/down to zoom.
-                Vec3 hit;
-                if (pick_surface(m, hit)) focus_camera_on(hit);
-                start(0, 3);
-            }
+            // Alt, Ctrl+Alt or Ctrl+Alt+Shift: focus on what was clicked, then the drag zooms, orbits or pans.
+            sl_valid_click_ = sl_focus_at(m);
+            sl_accum_x_ = sl_accum_y_ = 0, sl_outside_slop_x_ = sl_outside_slop_y_ = false;
+            start(0, 3);
         }
         if (preset == Preset::SecondLife && ImGui::IsMouseClicked(2)) start(2, 1);
         if (nav_button >= 0) return;
@@ -877,6 +1019,7 @@ void App::render_world_scene() {
     static std::vector<Vertex> verts;
     static std::vector<std::uint32_t> indices;
     draw_other_actors(colours);
+    draw_target(colours);  // the target ghost: through the world's scene triangles, as the other actors
     // Editing another actor than yours: it stands at its place with its body, posed live (None: its bones only).
     if (editing_other() && !doc_.project.actors[doc_.project.active].body.empty() && !globals_.empty())
         draw_actor_body(doc_.project.active, globals_, colours, true);
@@ -976,9 +1119,12 @@ void App::draw_viewport() {
         if (size.x < 8 || size.y < 8) return;
         viewport_max_ = ImVec2(origin.x + size.x, origin.y + size.y);
         const ImVec2 m = ImGui::GetIO().MousePos;
+        // AllowWhenBlockedByActiveItem: while another window's item is held (dragging the Face Cam, a title bar, a
+        // slider) IsWindowHovered would say no window is hovered, and the press would also start a box or a pick.
         hovered = m.x >= origin.x && m.y >= origin.y && m.x < viewport_max_.x && m.y < viewport_max_.y &&
-                  !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) &&
-                  !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) && host_.pointer_on_world();
+                  !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
+                  !ImGui::IsAnyItemActive() && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) &&
+                  host_.pointer_on_world();
         projector_ = host_.projector(origin, size);
         if (ui::Host::HostUi* h = host_.host_ui()) h->place_view(origin, viewport_max_);  // the viewer's toasts stay in here
     } else {
@@ -997,7 +1143,10 @@ void App::draw_viewport() {
 
         ImGui::InvisibleButton("##view", size, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight |
                                                    ImGuiButtonFlags_MouseButtonMiddle);
-        hovered = ImGui::IsItemHovered();
+        // NoNavOverride: letting go of Alt (an Alt+click, the Second Life camera) wakes ImGui's keyboard navigation,
+        // which would otherwise say not hovered until the pointer next moves, and the wheel would do nothing.
+        // Only the view itself: no other window or popup over it, and no other item held.
+        hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_NoNavOverride) && (ImGui::IsItemActive() || !ImGui::IsAnyItemActive());
     }
     // The view cube takes the pointer while it is over the cube or dragging it.
     ImVec2 vmax(origin.x + size.x, origin.y + size.y);
@@ -1032,6 +1181,7 @@ void App::draw_viewport() {
 
     dl->PushClipRect(origin, ImVec2(origin.x + size.x, origin.y + size.y), true);
     if (world) draw_world_extras(dl), draw_bone_lines(dl);
+    draw_target_bones(dl);  // the target ghost's bones, thin lines in both hosts
     // Attachment points get a dot so they can be seen and clicked (their glyphs are only 4 cm).
     for (int i = skel_.joint_count(); i < skel_.volume_start(); ++i) {
         if (!node_visible(i) && i != hover_bone_) continue;  // a hidden point shows while a drop targets it

@@ -126,7 +126,9 @@ them on all. Priority, ease, hand pose and expression are set per actor.
 To keep a hand of one actor on another actor (holding hands, a hand on a shoulder):
 
 1. Select the point that should follow, such as the active actor's hand.
-2. Under **Contact with another actor**, choose **Other actor** and **Their bone**.
+2. Under **Contact with another actor**, choose **Other actor** and **Their bone**. **Their bone** starts on the
+   partner's **mChest**; its list groups the bones as **View → Bones** does (body, hands, face, ...), and typing in
+   the box at its top narrows it to the names that contain the text.
 3. Press **Bind Selected Point to This Bone from Here**.
 
 The bind works like any other pin (see [[Hold and bind]]); release it later with **Release from Here**.
@@ -251,8 +253,8 @@ chosen under **View**.
 
 1. Go to frame 15. In the **Actors** window, **Lead (you)** is highlighted: you are editing Lead.
 2. Select **mWristRight** in the **Bones** list, or click Lead's right wrist in the view.
-3. Under **Contact with another actor**, keep **Other actor** on **Partner** and **Their bone** on
-   **mWristRight**, then press **Bind Selected Point to This Bone from Here**. The status bar says
+3. Under **Contact with another actor**, keep **Other actor** on **Partner**, open **Their bone**, type `wristr` and
+   choose **mWristRight**, then press **Bind Selected Point to This Bone from Here**. The status bar says
    "mWristRight now follows Partner's mWristRight", and **Properties → Bone** reads **Pinned to mWristRight
    from frame 15**.
 4. Click **Partner** in the **Actors** window and drag its **Turn (deg)**: as Partner turns, Lead's hand

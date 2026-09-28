@@ -29,8 +29,9 @@ If a rigged mesh covers most of the skeleton, VATs asks whether it is an avatar 
 
 ### Add a prop from the Inventory
 
-**Inventory → Meshes** shows your imported meshes as a grid of thumbnails, followed by **Starter props**
-grouped by category. Hover a thumbnail to see its parent, category and file.
+**Inventory → Meshes** shows your imported meshes as a grid of thumbnails, and the **Starter props** section
+below it the props that come with VATs, grouped by category. Both come after the poses; fold **Poses** and
+**Starter poses** away (click their titles) to bring them up. Hover a thumbnail to see its parent, category and file.
 
 ![The Meshes section of the Inventory: the Import button, then the Starter props grid starting with Seating](images/props/starter-props.png)
 *Starter props ship with VATs, grouped by category; your own imports appear above them.*
@@ -64,16 +65,30 @@ Starter props cannot be renamed, saved over or deleted.
 | Floor | Rug |
 
 Hand-held props sit in the fist of the **Right Hand** point; the Round Shield, the Bow and the Magazine go on
-the **Left Hand**. The guns' grip runs up through the fist with the muzzle along the fingers. Two-handed
-props leave room for the other hand: the Rifle's wooden handguard, the Shotgun's pump, the Greatsword's
-grip below the right hand, and the Spear's shaft half a metre up from the right hand.
+the **Left Hand**. Each one's grip fits a starter hand pose from the [[Pose library]], so apply that pose to the
+same hand (**Shift+click** for the right):
+
+| Hand pose | Props |
+|---|---|
+| **Grip (Cylinder)** | Sword, Greatsword, Knife, Spear, Axe, Staff, Bow, Round Shield, Umbrella, Pistol, Rifle, Shotgun, Magazine, Mug, Tankard, Wine Bottle, Microphone, Flashlight |
+| **Hold Glass (Stem)** | Wine Glass, Cocktail Glass |
+| **Cup (C-Shape)** | Soda Can |
+| **Hold Phone** | Phone |
+| **Flat** | Book (lying on the palm) |
+| **Holding Pen** | Pen |
+
+Blades and hafts are held just below the guard or near the end of the handle, the blade out of the thumb side;
+the guns' grip runs up through the fist with the muzzle along the fingers; cups and tankards are held by the
+handle, the bottle by its neck, the shield by its centre grip behind the boss. Two-handed props leave room for
+the other hand: the Rifle's wooden handguard, the Shotgun's pump, the Greatsword's grip below the right hand, and
+the Spear's shaft half a metre up from the right hand.
 
 ### Place a static prop
 
 Click a prop in the view to select it. **Properties → Prop** shows its name and:
 
 ![The Prop section of the Properties panel for a mug on the Right Hand attachment point](images/props/prop-properties.png)
-*The starter Mug at its grip: **Parent** Right Hand, offset (0.005, 0, −0.062) m from the point and turned 90° about Y.*
+*The starter Mug at its grip: **Parent** Right Hand, offset (−0.005, −0.012, −0.083) m from the point, its handle in the fist.*
 
 | Field | Meaning |
 |---|---|
@@ -99,14 +114,15 @@ Pasting a size sets the scale so the prop has that size.
 ### Worked example: a mug in the hand
 
 [Open the example](example:prop-in-hand.vat): the starter **Mug** on the **Right Hand** attachment point,
-with the arm bent to hold it up.
+with the arm bent to hold it up in front of the stomach and the fingers closed round the handle in **Grip
+(Cylinder)**.
 
 ![The right hand holding the mug, seen from the front](images/props/mug-in-hand.png)
 
 1. Click the mug in the view. **Properties → Prop** shows **Mug** (**static**), **Parent** **Right Hand**,
-   **Position** `0.005`, `0.000`, `-0.062` and **Rotation** `0.0°`, `90.0°`, `0.0°`: the grip the starter
+   **Position** `-0.005`, `-0.012`, `-0.083` and **Rotation** `-90.0°`, `0.0°`, `-90.0°`: the grip the starter
    prop was saved with.
-2. Press **Copy for SL → Position**. The status bar says "Copied <0.00500, 0.00000, -0.06200>", and the
+2. Press **Copy for SL → Position**. The status bar says "Copied <-0.00500, -0.01200, -0.08300>", and the
    clipboard holds that vector, ready for the build window of a mug worn on the right hand in Second Life.
 3. Drag the first **Position** field to the right: the mug slides along the hand. **Ctrl+Z** puts it back
    (**Move Prop** is one undo step).

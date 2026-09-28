@@ -23,11 +23,11 @@ down 20° at frame 8, straight again at frame 18. Frames 18 to 30 hold still.
 
 1. Choose **File → New** (**Ctrl+N**); answer **Don't Save** if it asks.
 2. Right-click empty space in the viewport and choose **Poses → Starter poses → Relaxed Stand**.
-3. Press **3** (**View → Right**) to see the avatar from the side. A nod reads best in profile.
+3. Press **3** (**View → Camera → Right**) to see the avatar from the side. A nod reads best in profile.
 
 ### 2. Key the starting pose
 
-1. Open the **Picker** tab and click the head: **mHead** is selected.
+1. Open the **Picker** tab and click the top dot, on the head: **mHead** is selected.
 2. Press **S** (**Edit → Set Key**). The status bar says `Keyed 1 item(s) at frame 0`, and a
    diamond appears at frame 0 on the timeline.
 
@@ -168,12 +168,6 @@ box to `0` (this keys it), and play again.
 Only one key was selected. Drag the box again from empty space so that it covers all three keys;
 clicking a key selects just that one.
 
-### Check shows 1 on the status bar
-
-The **Check** chip at the bottom reports `Ease in plus ease out (1.60 s) is longer than the animation
-(1.00 s)`. That is Second Life's blend-in and blend-out, not the easing of this tutorial; it matters
-only when you export, and the next tutorial deals with it.
-
 ## Next
 
 [[A breathing idle that loops]]: slow, subtle motion that repeats forever, and your first export.
@@ -186,3 +180,4 @@ only when you export, and the next tutorial deals with it.
 - [[Motion paths]]: the path a bone travels, with a dot per frame, shows spacing in the viewport
 
 Category: Getting started
+Order: 11

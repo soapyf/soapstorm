@@ -12,6 +12,7 @@
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "theme.h"
 #include "vats/lip_sync.h"
 
@@ -87,7 +88,7 @@ void App::draw_lip_sync(bool positions) {
     ImGui::SeparatorText("From the audio");
     label("Quietest");
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 9);
-    ImGui::SliderFloat("##liprange", &ui.range_db, 12, 48, "-%.0f dB");
+    slider_float("##liprange", &ui.range_db, 12, 48, "-%.0f dB");
     ImGui::SetItemTooltip("The loudest moment opens the mouth fully; sound this far below it keeps the mouth shut");
     const bool has_audio = clip.audio && audio_data_.frames() > 0;
     ImGui::BeginDisabled(!has_audio);

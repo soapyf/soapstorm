@@ -11,6 +11,7 @@
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "theme.h"
 #include "vats/retarget.h"
 #include "vats/sl_preview.h"
@@ -122,7 +123,7 @@ void App::apply_sl_preview(Evaluation& e) {
 
 void App::draw_sl_preview_window() {
     if (!sl_preview_) return;
-    place_tool_window(4, 24, 28);
+    place_tool_window(24, 28);
     if (!ImGui::Begin("As SL Plays It", &sl_preview_)) return ImGui::End();
     help_button("sl-preview");
     SlExport* x = sl_export_.get();
@@ -139,8 +140,8 @@ void App::draw_sl_preview_window() {
          "interpolated as the viewer does. The green ghost is your animation.");
     size_t rot = 0, pos = 0;
     for (const AnimJoint& j : x->played.joints) rot += j.rot.size(), pos += j.pos.size();
-    ImGui::Text("%s bytes, %zu bones, %zu rotation and %zu position keys", thousands(x->bytes).c_str(),
-                x->played.joints.size(), rot, pos);
+    ImGui::Text("%s bytes, %s, %zu rotation and %s", thousands(x->bytes).c_str(), count_noun(x->played.joints.size(), "bone").c_str(),
+                rot, count_noun(pos, "position key").c_str());
     if (x->raw) ImGui::TextDisabled("Unchanged since import: plays the file as it came in");
 
     if (!x->dev_done) {  // once per export; rig_ carries this actor's cross-actor pin targets (evaluate())

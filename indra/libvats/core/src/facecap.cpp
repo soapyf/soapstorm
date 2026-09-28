@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <charconv>
 #include <cmath>
+#include <cstring>
 #include <set>
 
 #include "vats/edit.h"
@@ -38,7 +39,16 @@ bool read_weights(const Json& j, std::map<std::string, double>& out) {
     return true;
 }
 
-// "#rx,ry,rz[,...]" after a field name: Unity Euler degrees (applied Z, then X, then Y) -> SL rotation.
+// Unity Euler degrees (applied Z, then X, then Y) -> SL rotation.
+Quat unity_euler(double rx, double ry, double rz) {
+    const double k = kPi / 360;
+    const Quat qx{std::cos(rx * k), std::sin(rx * k), 0, 0}, qy{std::cos(ry * k), 0, std::sin(ry * k), 0},
+        qz{std::cos(rz * k), 0, 0, std::sin(rz * k)};
+    // The axis signs follow the Unity convention iFacialMocap states; confirmed with a real iPhone (2026-09-27).
+    return unity_to_sl(qy * qx * qz).normalized();
+}
+
+// "#rx,ry,rz[,...]" after a field name: Unity Euler degrees.
 Quat unity_euler_field(std::string_view rest) {
     double a[3] = {0, 0, 0};
     for (int i = 0; i < 3 && !rest.empty(); ++i) {
@@ -47,12 +57,34 @@ Quat unity_euler_field(std::string_view rest) {
         if (r.ec != std::errc() || !std::isfinite(a[i])) a[i] = 0;
         rest = c == std::string_view::npos ? std::string_view{} : rest.substr(c + 1);
     }
-    const double k = kPi / 360;
-    const Quat qx{std::cos(a[0] * k), std::sin(a[0] * k), 0, 0}, qy{std::cos(a[1] * k), 0, std::sin(a[1] * k), 0},
-        qz{std::cos(a[2] * k), 0, 0, std::sin(a[2] * k)};
-    // The axis signs follow the Unity convention the format states; confirmed with a real iPhone (2026-09-27).
-    return unity_to_sl(qy * qx * qz).normalized();
+    return unity_euler(a[0], a[1], a[2]);
 }
+
+// {"x":..,"y":..,"z":..} as Unity Euler degrees; false when o is not such an object.
+bool unity_euler_json(const Json* o, Quat& out) {
+    if (!o || !o->is_object()) return false;
+    double a[3];
+    const char* keys[] = {"x", "y", "z"};
+    for (int i = 0; i < 3; ++i) {
+        const Json* v = o->find(keys[i]);
+        if (!v || !v->is_number() || !std::isfinite(v->num)) return false;
+        a[i] = v->num;
+    }
+    out = unity_euler(a[0], a[1], a[2]);
+    return true;
+}
+
+// ARKit order, as PyLiveLinkFace (MIT) lists the Live Link Face stream; the head and eye angles follow.
+constexpr const char* kLiveLinkShapes[52] = {
+    "eyeBlinkLeft", "eyeLookDownLeft", "eyeLookInLeft", "eyeLookOutLeft", "eyeLookUpLeft", "eyeSquintLeft",
+    "eyeWideLeft", "eyeBlinkRight", "eyeLookDownRight", "eyeLookInRight", "eyeLookOutRight", "eyeLookUpRight",
+    "eyeSquintRight", "eyeWideRight", "jawForward", "jawRight", "jawLeft", "jawOpen", "mouthClose", "mouthFunnel",
+    "mouthPucker", "mouthRight", "mouthLeft", "mouthSmileLeft", "mouthSmileRight", "mouthFrownLeft",
+    "mouthFrownRight", "mouthDimpleLeft", "mouthDimpleRight", "mouthStretchLeft", "mouthStretchRight",
+    "mouthRollLower", "mouthRollUpper", "mouthShrugLower", "mouthShrugUpper", "mouthPressLeft", "mouthPressRight",
+    "mouthLowerDownLeft", "mouthLowerDownRight", "mouthUpperUpLeft", "mouthUpperUpRight", "browDownLeft",
+    "browDownRight", "browInnerUp", "browOuterUpLeft", "browOuterUpRight", "cheekPuff", "cheekSquintLeft",
+    "cheekSquintRight", "noseSneerLeft", "noseSneerRight", "tongueOut"};
 
 double to_double(std::string_view s) {
     double v = 0;
@@ -208,6 +240,56 @@ bool apply_ifacialmocap(std::string_view p, VmcState& s) {
             blend[std::string(field.substr(0, sep))] = float(std::clamp(to_double(field.substr(sep + 1)) / 100.0, 0.0, 1.0));
     }
     s.blend = std::move(blend);
+    return true;
+}
+
+std::string vts_request(int reply_port) {
+    return "{\"messageType\":\"iOSTrackingDataRequest\",\"time\":" + std::to_string(int(kVtsRequestSeconds)) +
+           ",\"sentBy\":\"VATs\",\"ports\":[" + std::to_string(reply_port) + "]}";
+}
+
+bool apply_vts(std::string_view packet, VmcState& s) {
+    Json j;
+    std::string err;
+    if (!parse_json(packet, j, err) || !j.is_object()) return false;
+    const Json* shapes = j.find("BlendShapes");
+    if (!shapes || !shapes->is_array()) return false;
+    std::map<std::string, float> blend;
+    for (const Json& e : shapes->arr) {
+        const Json* k = e.find("k");
+        const Json* v = e.find("v");
+        if (!k || !k->is_string() || k->str.size() > 64 || !v || !v->is_number() || !std::isfinite(v->num)) continue;
+        if (blend.size() < 128) blend[k->str] = float(std::clamp(v->num, 0.0, 1.0));  // untrusted: bounded
+    }
+    s.blend = std::move(blend);
+    // Position (head travel) is dropped, as iFacialMocap's is: the body sender owns the hips.
+    if (unity_euler_json(j.find("Rotation"), s.face_head)) s.has_face_head = true;
+    if (unity_euler_json(j.find("EyeLeft"), s.eye_left) && unity_euler_json(j.find("EyeRight"), s.eye_right))
+        s.has_eyes = true;
+    return true;
+}
+
+bool apply_live_link_face(const std::uint8_t* data, size_t size, VmcState& s) {
+    // The tail is a count byte (61) and 61 big-endian floats. The header before it (version, device id, name, frame
+    // time, rate) has changed between app versions, so it is only required to be long enough to exist.
+    constexpr size_t kTail = 1 + 61 * 4, kMinHeader = 4 + 4 + 16;  // version, name length, frame time and rate
+    if (!data || size < kTail + kMinHeader || data[size - kTail] != 61) return false;
+    float v[61];
+    for (int i = 0; i < 61; ++i) {
+        const std::uint8_t* p = data + size - kTail + 1 + 4 * i;
+        const std::uint32_t u = std::uint32_t(p[0]) << 24 | std::uint32_t(p[1]) << 16 | std::uint32_t(p[2]) << 8 | p[3];
+        std::memcpy(&v[i], &u, 4);
+        // Shapes are 0..1 and the angles small: anything wild is another format or a damaged packet.
+        if (!std::isfinite(v[i]) || std::fabs(v[i]) > 100) return false;
+    }
+    std::map<std::string, float> blend;
+    for (int i = 0; i < 52; ++i) blend[kLiveLinkShapes[i]] = std::clamp(v[i], 0.0f, 1.0f);
+    s.blend = std::move(blend);
+    // Yaw, pitch, roll -> Unity Euler (x pitch, y yaw, z roll), the convention of iFacialMocap's angles.
+    const double k = kLiveLinkFaceDegreesPerUnit;
+    auto angles = [&](int at) { return unity_euler(v[at + 1] * k, v[at] * k, v[at + 2] * k); };
+    s.face_head = angles(52), s.has_face_head = true;
+    s.eye_left = angles(55), s.eye_right = angles(58), s.has_eyes = true;
     return true;
 }
 

@@ -511,15 +511,17 @@ void retime_clip(Clip& clip, int new_fps) {
         return std::abs(x - n) <= 1e-6 ? n : x;
     };
     auto whole = [&](int f) { return f < 0 ? f : int(std::lround(f * r)); };  // -1 = none stays -1
-    for (auto& [track, channels] : clip.curves)
-        for (auto& [ch, c] : channels) {
-            for (Key& k : c.keys) {
-                k.frame = frame(k.frame);
-                k.lx = frame(k.lx);
-                k.rx = frame(k.rx);
+    for_each_track_map(clip, [&](std::map<std::string, Track>& curves) {
+        for (auto& [track, channels] : curves)
+            for (auto& [ch, c] : channels) {
+                for (Key& k : c.keys) {
+                    k.frame = frame(k.frame);
+                    k.lx = frame(k.lx);
+                    k.rx = frame(k.rx);
+                }
+                c.recompute_handles();
             }
-            c.recompute_handles();
-        }
+    });
     clip.end_frame = whole(clip.end_frame);
     clip.loop_in = whole(clip.loop_in);
     clip.loop_out = whole(clip.loop_out);
@@ -534,27 +536,29 @@ void retime_clip(Clip& clip, int new_fps) {
 
 void reverse_clip(Clip& clip) {
     const int end = clip.end_frame;
-    for (auto& [name, track] : clip.curves) {
-        for (auto& [channel, c] : track) {
-            if (c.empty()) continue;
-            // Keys beyond the end would land on negative frames (E-2): cut the curve at the end first.
-            if (c.keys.back().frame > end && !same_frame(c.keys.back().frame, end)) {
-                insert_on_curve(c, end);
-                c.keys.erase(std::remove_if(c.keys.begin(), c.keys.end(),
-                                            [&](const Key& k) { return k.frame > end && !same_frame(k.frame, end); }),
-                             c.keys.end());
+    for_each_track_map(clip, [&](std::map<std::string, Track>& curves) {
+        for (auto& [name, track] : curves) {
+            for (auto& [channel, c] : track) {
+                if (c.empty()) continue;
+                // Keys beyond the end would land on negative frames (E-2): cut the curve at the end first.
+                if (c.keys.back().frame > end && !same_frame(c.keys.back().frame, end)) {
+                    insert_on_curve(c, end);
+                    c.keys.erase(std::remove_if(c.keys.begin(), c.keys.end(),
+                                                [&](const Key& k) { return k.frame > end && !same_frame(k.frame, end); }),
+                                 c.keys.end());
+                }
+                auto hs = fold(c.keys);
+                for (auto& h : hs) {
+                    h.key.frame = end - h.key.frame;
+                    h.key.lx = end - h.key.lx;
+                    h.key.rx = end - h.key.rx;
+                }
+                reverse_rules(hs);
+                c.keys = unfold(std::move(hs));
+                c.recompute_handles();
             }
-            auto hs = fold(c.keys);
-            for (auto& h : hs) {
-                h.key.frame = end - h.key.frame;
-                h.key.lx = end - h.key.lx;
-                h.key.rx = end - h.key.rx;
-            }
-            reverse_rules(hs);
-            c.keys = unfold(std::move(hs));
-            c.recompute_handles();
         }
-    }
+    });
 
     int in = clip.loop_in, out = clip.loop_out;
     clip.loop_in = std::max(0, end - out);

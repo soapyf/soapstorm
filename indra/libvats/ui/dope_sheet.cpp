@@ -60,6 +60,8 @@ std::vector<DopeSheet::Line> DopeSheet::lines(const GraphContext& ctx) const {
     for (const std::string& item : ctx.items) add(item.substr(0, item.find('#')));
     if (graph_.mode_ == GraphEditor::Mode::AllAnimated)
         for (const auto& [name, t] : ctx.clip.curves) add(name);
+    else if (ctx.rig)  // a selected limb's IK target and pole keys go with its bones' (scaling a leg keeps its foot)
+        tracks = with_limb_controls(*ctx.rig, ctx.clip, std::move(tracks));
     std::vector<Line> out{{"Summary", tracks, 0}};
     for (DopeRow& r : dope_rows(ctx.skel, tracks)) {
         out.push_back({r.label, r.tracks, 1});
@@ -149,6 +151,7 @@ void DopeSheet::draw(GraphContext& ctx, const std::function<void(const std::vect
         const bool major = std::fmod(std::fabs(f / tstep), 5.0) < 0.5;
         dl->AddLine(ImVec2(x_of(f), top), ImVec2(x_of(f), bottom), major ? tc.grid_major : tc.grid);
     }
+    draw_beat_grid(dl, clip, [&](double f) { return x_of(f); }, view.t0, view.t1, top, bottom);  // AU-2, as the timeline
     dl->PopClipRect();
 
     // Rows: label, pin bands (TG-100), keys.
@@ -250,6 +253,7 @@ void DopeSheet::draw(GraphContext& ctx, const std::function<void(const std::vect
             drag_ = Drag::Scale;
             scale_pivot_ = h < 0 ? smax : smin;
             scale_w_ = h < 0 ? smin - smax : smax - smin;
+            press_whole_ = same_frame(smin, 0) && same_frame(smax, clip.end_frame);  // Last frame and the loop go along
             press_clip_ = clip;
             press_sel_ = sel;
             ctx.history.begin(clip);
@@ -302,9 +306,16 @@ void DopeSheet::draw(GraphContext& ctx, const std::function<void(const std::vect
                 move_keys(clip, press_clip_, sel, df, 0, graph_.snap_);
                 break;
             case Drag::Scale: {
-                const double sx = std::fabs(scale_w_) > 1e-9 ? (scale_w_ + df) / scale_w_ : 1;
+                // The dragged edge lands on a beat while Snap to Beats is on (AU-2), else on whole frames with Snap.
+                const double edge = beat_snapped_frame(clip, scale_pivot_ + scale_w_ + df);
+                const double sx = std::fabs(scale_w_) > 1e-9 ? (edge - scale_pivot_) / scale_w_ : 1;
                 sel = press_sel_;
                 scale_keys(clip, press_clip_, sel, scale_pivot_, 0, sx, 1, graph_.snap_);
+                const bool whole = press_whole_ && sx > 0;  // reversed past the other handle: the length stays
+                if (press_whole_) clip.end_frame = press_clip_.end_frame, clip.loop_in = press_clip_.loop_in, clip.loop_out = press_clip_.loop_out;
+                if (whole) scale_length_with_keys(clip, press_clip_, scale_pivot_, sx);
+                ImGui::SetTooltip(whole ? "Scale to %.0f frames: Last frame and the loop go along" : "Edge at frame %.1f",
+                                  whole ? double(clip.end_frame) : edge);
                 break;
             }
             case Drag::Box:

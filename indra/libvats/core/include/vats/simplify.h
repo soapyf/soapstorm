@@ -21,16 +21,17 @@ struct SimplifyOptions {
 
 struct SimplifyResult {
     int before = 0, after = 0;          // keys in the range on the curves simplified
-    std::vector<std::string> skipped;   // "mHipLeft: near gimbal lock", one line per track or curve left alone
+    std::vector<std::string> skipped;   // "mHipLeft rot_x: stepped keys...", one line per track or curve left alone
 };
 
 // Simplifies the rot_* and pos_* curves of tracks (empty = every track) over from..to. Keys are kept at the
 // range's ends, at `keep`, at the extrema (turns by more than the tolerance) and at the steepest frame between
 // two of them (the inflection), then added where the fit misses. Between keys the curve is Auto (clamped) where
-// that fits, else Free handles on the curve's own slope. A curve whose fit would not have fewer keys, one with
-// stepped keys in the range, and the rotation of a track whose rot_y comes within 5 degrees of +-90 (gimbal
-// lock: X and Z swing wildly there) are left as they are. Keys just outside the range hold the curve there, as
-// Filter Curves does.
+// that fits, else Free handles on the curve's own slope. The rotation of a track whose rot_y comes within 5 degrees
+// of +-90 (gimbal lock: X and Z swing wildly there while the bone turns smoothly; a knee bent past a right angle) is
+// fitted as a rotation: its channels together, with keys on the same frames, to the turn between the rotations. A
+// curve whose fit would not have fewer keys and one with stepped keys in the range are left as they are. Keys just
+// outside the range hold the curve there, as Filter Curves does.
 SimplifyResult simplify_curves(Clip& clip, const std::vector<std::string>& tracks, const SimplifyOptions& opt);
 
 }  // namespace vats

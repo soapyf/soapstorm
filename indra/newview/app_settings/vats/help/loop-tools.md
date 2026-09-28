@@ -44,8 +44,9 @@ Scrub to the frame that should begin the loop, for example a contact pose, then 
 | **Length** | Frames and seconds, for example "30 (1.00 s)" |
 | **Distance** | How far apart the two poses are, a weighted average in degrees; 0 means the same pose |
 
-![The Loop Assist window for the loop-walk example: Shortest Loop 20 and three candidates, 0 to 30 at distance 5.35, 4 to 30 at 13.72 and 8 to 30 at 22.17, each with a Use button](images/loop-tools/loop-assist.png)
-*The loop walk's best loop points: its own loop, 0 to 30, matches best.*
+![The Loop Assist window for the loop-walk example: Shortest Loop 20 and five candidates, 2 to 30 at distance 26.82, 1 to 25 at 27.75, 5 to 25 at 33.99, 9 to 29 at 35.83 and 0 to 20 at 38.58, each with a Use button](images/loop-tools/loop-assist.png)
+*The loop walk's best loop points. Its own loop, 0 to 30, is not listed: frame 30 is deliberately off (see the
+worked example below), so 2 to 30 matches better.*
 
 Press **Use** on a row: **Loop** turns on with those loop points, and VATs asks whether to make the loop seamless as well (**Make Seamless** or **Not Now**). Each is one undo step. The list is from the last **Find**; press it again after editing.
 
@@ -69,7 +70,7 @@ It is saved with the project: on for new projects and imported animations, off f
 
 **View → Treadmill → Show Treadmill** draws blue lines on the ground around the avatar that scroll backwards at the chosen speed while the animation plays or you scrub, like a treadmill under a walk that stays in place. Choose the speed in the same menu:
 
-![The loop walk seen from the right at frame 8, with the treadmill's lines across the ground under the feet](images/loop-tools/treadmill.png)
+![The loop walk seen from the right at frame 0, the left heel striking the ground, with the treadmill's lines across the ground under the feet](images/loop-tools/treadmill.png)
 *The loop walk on the treadmill, from the right.*
 
 
@@ -79,21 +80,25 @@ It is saved with the project: on for new projects and imported animations, off f
 | **SL Run** | 5.13 |
 | **SL Crouch Walk** | 2.00 |
 | **SL Fly** | 16.00 |
-| **Custom** | 0–30, 1.50 by default |
+| **Custom** | 0.1–30 (the **Custom speed** slider under it), 1.50 by default |
 
 These are Second Life's default speeds on level ground, from [Second Life Wiki: Default Avatar Movement Speeds](https://wiki.secondlife.com/wiki/Default_Avatar_Movement_Speeds). The speed and the treadmill are not saved.
 
-Under **The cycle**, the menu measures the walk from its foot contacts (a foot counts as planted while it is near its lowest point):
+Second Life moves an avatar much faster than people walk: its 3.20 m/s walk is more than twice a real walk's
+1.4 m/s. A walk whose feet should keep pace with the ground there needs a longer, quicker stride than real life
+(the loop walk example takes 1.6 m strides, two a second).
+
+Under **The cycle**, the menu measures the walk from its soles, eight times a frame (a foot is down while the lowest of its heel, ball and toe tip is within 3 cm of the ground):
 
 - **Stride**: how far the body moves in one cycle, in metres.
 - **Cycle**: the loop's length divided by the number of steps one foot takes in it, in seconds.
-- **Implied speed**: how fast the body moves over a planted foot, and what share of the treadmill's speed that is. At 100% the feet stay on the treadmill's lines.
+- **Implied speed**: how fast the body moves over the part of the sole that is on the floor (heel, ball or toe tip, within 1.5 cm of it), the middle value over the time it is down, and what share of the treadmill's speed that is. Touch-down and lift-off are found between frames, so the reading does not jump when a stretch moves them. At 100% the feet stay on the treadmill's lines.
 
 "No foot contacts found" means neither foot comes to rest near the ground.
 
 **Match Cycle to Speed**:
 
-- **Stretch Time** stretches or squashes the loop so its implied speed is the treadmill's. The stride stays; the steps get faster or slower.
+- **Stretch Time** stretches or squashes the loop so its implied speed is the treadmill's. The stride stays; the steps get faster or slower. The loop is a whole number of frames, so it lands on the nearest one: within about 1% of the speed when that length fits, otherwise up to half a frame off (about 3% on a 16-frame loop). The status bar says the speed it landed on.
 - **Scale Hip Travel** is for a walk whose hips move forward: it makes them travel at the treadmill's speed. The timing stays, so planted feet slide by the difference; **Tools → Clean Up Foot Sliding...** plants them again. It is greyed out when the hips do not travel.
 
 Each is one undo step.
@@ -130,14 +135,14 @@ stops.
 
 ## Worked example: a walk made seamless and in place
 
-[Open the example](example:loop-walk.vat): one second of walking at 30 fps with **Loop** on from frame 0 to 30. The hips travel 1.2 m forward, and frame 30 does not quite match frame 0 on the legs.
+[Open the example](example:loop-walk.vat): one second of walking at 30 fps with **Loop** on from frame 0 to 30: two strides at Second Life's walking speed, 3.2 m/s, the left heel striking at frames 0, 15 and 30. The hips travel 3.2 m forward, and frame 30 does not quite match frame 0 on the legs.
 
-1. Hover the red tick at frame 30 on the timeline. The tooltip lists four channels: `mHipLeft rot_y (+5)`, `mHipRight rot_y (-5)`, `mKneeLeft rot_y (+5)` and `mPelvis pos_x (+1.2)`. The last one is the travel: the hips end 1.2 m from where they start.
-2. Choose **Tools → Loop Tools → Remove Hip Travel (In Place)**. The status bar says "Removed hip travel: 1.20 m/s forward, 0.00 m/s sideways (1.20 m/s)". Select **mPelvis** and open the [[Graph editor]]: **Translate X** is now flat at 0 while **Translate Y** keeps its sway. Hover the tick again: only the three rotation channels are left.
+1. Hover the red tick at frame 30 on the timeline. The tooltip lists four channels: `mHipLeft rot_y (+5)`, `mHipRight rot_y (-5)`, `mKneeLeft rot_y (+5)` and `mPelvis pos_x (+3.2)`. The last one is the travel: the hips end 3.2 m from where they start.
+2. Choose **Tools → Loop Tools → Remove Hip Travel (In Place)**. The status bar says "Removed hip travel: 3.20 m/s forward, 0.00 m/s sideways (3.20 m/s)". Select **mPelvis** and open the [[Graph editor]]: **Translate X** is now flat at 0 while **Translate Y** keeps its sway. Hover the tick again: only the three rotation channels are left.
 3. Leave **Blend** at **end key only** and choose **Tools → Loop Tools → Make Loop Seamless**. The status bar says "Loop made seamless on 3 channels" and the red tick is gone.
-4. Play. The avatar walks on the spot, and the loop wraps at frame 30 without a pop. Select **mHipLeft**: in the graph, **Rotate Y** reads −25° at frame 0 and −25° at frame 30, where it was −20°.
+4. Play. The avatar walks on the spot, and the loop wraps at frame 30 without a pop. Select **mHipLeft**: in the graph, **Rotate Y** reads −24° at frame 0 and −24° at frame 30, where it was −19°.
 
-An AO's walk set to 1.20 m/s now matches this cycle.
+The walk now plays in place at Second Life's walking speed: tick **View → Treadmill → Show Treadmill** with **SL Walk**, play, and the planted feet move back with the lines. **The cycle** reads a stride of about 1.6 m in 0.50 s, at about 102% of the treadmill's speed.
 
 ## Tips and tricks
 

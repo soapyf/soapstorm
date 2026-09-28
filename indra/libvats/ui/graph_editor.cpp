@@ -1,6 +1,7 @@
 // Viewport Avatar Toolset - the graph editor: curves of the selected bones, key editing.
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 #include "graph_editor.h"
+#include "widgets.h"
 
 #include <algorithm>
 #include <cmath>
@@ -147,9 +148,21 @@ void GraphEditor::edit(GraphContext& ctx, const char* label, const std::function
 // ---------------------------------------------------------------------------------------------
 // Framing
 
-void GraphEditor::fit_bounds(double f0, double f1, double v0, double v1, bool) {
+// The least value range framing shows for the shown channels: a millimetre for positions (metres), a tenth of a
+// degree for rotations, so a 2 cm jiggle fills the view instead of looking flat.
+double GraphEditor::min_value_span(const Clip& clip) const {
+    double span = 1e-3;
+    for (int c : shown_channels()) {
+        const std::string& ch = channels_[c].channel;
+        if (!curve(clip, channels_[c])) continue;  // an unkeyed channel is not drawn
+        span = std::max(span, ch.rfind("pos_", 0) == 0 || ch.rfind("pole_", 0) == 0 ? 1e-3 : ch == "blend" ? 1e-2 : 0.1);
+    }
+    return span;
+}
+
+void GraphEditor::fit_bounds(double f0, double f1, double v0, double v1, double min_span) {
     if (f1 - f0 < 4) f0 -= 2, f1 += 2;
-    if (v1 - v0 < 2) v0 -= 5, v1 += 5;
+    ensure_span(v0, v1, min_span);
     double pf = (f1 - f0) * 0.08, pv = (v1 - v0) * 0.08;
     view_ = {f0 - pf, f1 + pf, v0 - pv, v1 + pv};
 }
@@ -162,8 +175,8 @@ void GraphEditor::frame_all(const GraphContext& ctx) {
                 f0 = std::min({f0, k.frame, k.lx}), f1 = std::max({f1, k.frame, k.rx});
                 v0 = std::min({v0, k.value, k.ly, k.ry}), v1 = std::max({v1, k.value, k.ly, k.ry});
             }
-    if (f0 > f1) fit_bounds(0, std::max(ctx.clip.end_frame, 1), -45, 45, true);
-    else fit_bounds(f0, f1, v0, v1, true);
+    if (f0 > f1) fit_bounds(0, std::max(ctx.clip.end_frame, 1), -45, 45, 1);
+    else fit_bounds(f0, f1, v0, v1, min_value_span(ctx.clip));
 }
 
 void GraphEditor::frame_selected(const GraphContext& ctx) {
@@ -173,7 +186,7 @@ void GraphEditor::frame_selected(const GraphContext& ctx) {
         const Key& k = ctx.clip.curves.at(s.track).at(s.channel).keys[s.index];
         f0 = std::min(f0, k.frame), f1 = std::max(f1, k.frame), v0 = std::min(v0, k.value), v1 = std::max(v1, k.value);
     }
-    fit_bounds(f0, f1, v0, v1, true);
+    fit_bounds(f0, f1, v0, v1, min_value_span(ctx.clip));
 }
 
 void GraphEditor::fit_values(const GraphContext& ctx) {
@@ -191,7 +204,7 @@ void GraphEditor::fit_values(const GraphContext& ctx) {
             if (k.frame >= a && k.frame <= b) lo = std::min(lo, k.value), hi = std::max(hi, k.value);
     }
     if (lo > hi) return;
-    double mid = (lo + hi) / 2, span = std::max(hi - lo, 0.5) * 1.24;
+    double mid = (lo + hi) / 2, span = std::max(hi - lo, min_value_span(ctx.clip)) * 1.24;
     view_.v0 = mid - span / 2;
     view_.v1 = mid + span / 2;
 }
@@ -754,17 +767,15 @@ void GraphEditor::draw_canvas(GraphContext& ctx) {
         ImGui::SetMouseCursor(cursors[cursor_handle]);
     }
 
-    // Wheel zoom about the cursor: Shift = values only, Ctrl = time only (TG-66).
-    if (hovered_ && io.MouseWheel != 0) {
-        double k = std::pow(0.85, io.MouseWheel), fm = f_at(m.x), vm = v_at(m.y);
-        if (!io.KeyShift) {
-            double span = std::clamp((view_.t1 - view_.t0) * k, 0.5, 1e5), r = (fm - view_.t0) / (view_.t1 - view_.t0);
-            view_.t0 = fm - span * r, view_.t1 = view_.t0 + span;
-        }
-        if (!io.KeyCtrl) {
-            double span = std::clamp((view_.v1 - view_.v0) * k, 1e-4, 1e7), r = (vm - view_.v0) / (view_.v1 - view_.v0);
-            view_.v0 = vm - span * r, view_.v1 = view_.v0 + span;
-        }
+    // Wheel zoom about the cursor: Shift = values only, Ctrl = time only (TG-66). Some systems turn Shift+wheel into
+    // a sideways wheel, so that counts as the wheel with Shift.
+    const float wheel = io.MouseWheel != 0 ? io.MouseWheel : io.KeyShift ? io.MouseWheelH : 0.f;
+    if (hovered_ && wheel != 0) {
+        const double k = std::pow(0.85, wheel);
+        if (!io.KeyShift && (view_.t1 - view_.t0) * k >= 0.5 && (view_.t1 - view_.t0) * k <= 1e5)
+            zoom_about(view_.t0, view_.t1, f_at(m.x), k);
+        if (!io.KeyCtrl && (view_.v1 - view_.v0) * k >= 1e-4 && (view_.v1 - view_.v0) * k <= 1e7)
+            zoom_about(view_.v0, view_.v1, v_at(m.y), k);
     }
 
     // Presses, by precedence (TG-76).

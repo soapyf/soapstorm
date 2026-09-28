@@ -33,7 +33,7 @@ avatar's side.*
 | **Show** | Shows or hides the picture without removing it |
 | **Backdrop** | Behind everything, fixed to the screen: it stays put while the camera moves. Centred; at scale 1 it is as tall as the view |
 | **In the Scene** | A plane standing on the ground 1.5 m behind the avatar, 2 m tall at scale 1, facing the view it is locked to (**Front** with **Every View**). Locked to **Top**, it lies just under the ground with its top towards where the avatar faces. The avatar hides it where it stands in front |
-| **Show in** | **Every View**, or one of **Front**, **Back**, **Right**, **Left** and **Top**: the picture then shows only while the camera looks from within 15 degrees of that side, as **View → Front** and the other view keys put it |
+| **Show in** | **Every View**, or one of **Front**, **Back**, **Right**, **Left** and **Top**: the picture then shows only while the camera looks from within 15 degrees of that side, as **View → Camera → Front** and the other view keys put it |
 
 Locking a side-on picture to **Right** and a front-on one to **Front** keeps each out of the way in the other
 views.

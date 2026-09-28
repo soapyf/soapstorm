@@ -28,9 +28,11 @@ blocked the way a first pass usually is, and three problems a beginner would not
 ### 1. Look at the problem
 
 1. Open the start example with the button above. Choose **Tools → Actors (Couples and Groups)...**: the list shows
-   **Lead (you)** and **Partner**, and **Lead (you)** is highlighted, so you are editing Lead.
+   **Lead (you)** and **Partner**, and **Lead (you)** is highlighted, so you are editing Lead. To edit the other one,
+   click its name here (or its body in the view).
 2. Press **Space** to play, and watch Lead's hands on Partner's back from frame 24 on. Partner sways from side to
-   side (the waist 7° and the chest 4° more each way), and the hands stay put while the back moves under them.
+   side, and the hands stay put while the back moves under them. To look closer, stop and drag the playhead slowly
+   along the timeline from the start of the blue loop band (frame 24) to the end.
 
 ![From behind Partner: its back sways from side to side while Lead's hands stay still and slide across it](images/tutorial-a-hug-for-two/slide.gif)
 *Before the fix: seen from behind Partner, the hands keep their own place while the back sways under them.*
@@ -41,59 +43,89 @@ blocked the way a first pass usually is, and three problems a beginner would not
 
 ### 2. Check where the body passes through itself
 
-The status bar shows **Check: 1** in blue: the [[Animation check]] has a finding.
+The status bar shows **Check: 2** in blue: the [[Animation check]] has two findings.
 
-1. Choose **Tools → Animation Check...**, or click the badge. The finding reads "mWristLeft and mWristRight pass
-   4.8 cm into each other (their capsules: a hint, not the mesh)".
+1. Click the badge (or choose **Tools → Animation Check...**). The first finding reads "mWristLeft and mWristRight pass
+   4.8 cm into each other (their capsules: a hint, not the mesh)". The second compares Lead's body with Partner's:
+   "This body and Partner's pass up to 14.6 cm into each other: mChest and mElbowLeft, ..." (see the note below).
 2. Look at the timeline: short red lines along its foot mark the frames of the finding, from 16 on. On those
    frames both wrists are drawn red in the view.
 3. Press **Go to Frame 16** to see the first one, then **Fix**. The fix is **Push Out**: on each listed frame it
-   moves the hands apart through the arm's IK, by the overlap and 5 mm more. The window then says "No problems
-   found."
-4. Click **Partner** in the **Actors** window and do the same for it: its finding reads "mWristLeft and
-   mWristRight pass 2.7 cm into each other"; press **Fix**.
+   moves the hands apart through the arm's IK, by the overlap and 5 mm more. The first finding goes; the one about
+   Partner stays.
+4. Close the window, click **Partner** in the **Actors** window and do the same for it: its badge opens a finding
+   of its own crossed wrists; press **Fix**.
 
-![The Animation Check window with one blue finding: mWristLeft and mWristRight pass 4.8 cm into each other, with Fix, Select Bones and Go to Frame 16](images/tutorial-a-hug-for-two/check.png)
-*Lead's crossed wrists. A blue ring means Info: often a mistake, sometimes meant.*
+![The Animation Check window with two blue findings: mWristLeft and mWristRight pass 4.8 cm into each other, with Fix, Select Bones and Go to Frame 16; and Lead's body and Partner's passing up to 14.6 cm into each other, with Select Bones and Go to Frame 0](images/tutorial-a-hug-for-two/check.png)
+*Lead's crossed wrists, and where Lead's body meets Partner's. A blue ring means Info: often a mistake, sometimes meant.*
 
 > **Why:** in a hug the arms are close to the other body and to each other, and it is easy to key a pose that
 > looks right from the front while a hand is buried in the other hand, or in your own hip. The check measures
 > simple rods (capsules) round each bone, not the mesh, so read it as "look here", and judge in the view.
 
-> **Note:** the check looks at the actor you are editing. It does not compare one actor's body with the other's;
-> judge the contact between the two by eye, from several views (**1**, **3** and **7** in the Industry preset).
+> **Note:** the second finding compares the actor you are editing with each other actor, capsule against capsule.
+> In a hug the arms wrap round the other body and the feet stand between the other's, so it lists every frame, and
+> the capsules are rounder than the bodies: read it as where the two meet, not as a mistake. It has no **Fix**: which
+> of the two should give way is yours to judge, by eye, from several views (**1**, **3** and **7** in the Industry
+> preset).
 
 ### 3. Turn the heads aside
 
-1. With **Lead (you)** highlighted in the **Actors** window, type `mHead` in the filter at the top of the **Bones**
-   tab and click **mHead**.
-2. Go to frame `0` (type it in the **Frame** box on the timeline bar and press **Enter**), point at the view and
-   press **S** (**Edit → Set Key**). The status bar says "Keyed 1 item(s) at frame 0": the head is keyed straight
-   ahead, so it only starts to turn after this frame.
-3. Go to frame `18`. In **Properties → Bone**, double-click the third **Rotation** field (Z), type `30` and press
-   **Enter**. The head turns to Lead's left and the frame is keyed.
-4. Click **Partner** in the **Actors** window and repeat: **mHead**, **S** at frame 0, Rotation Z `30` at frame 18.
+The heads meet face to face. Turn each one to its own left, so the cheek goes past the other's shoulder:
+
+[Show the target](target:hug-finished.vat)
+
+The target lays the finished hug over yours as two see-through green bodies, each actor on its own. Drag the
+playhead to 18: the green heads are turned; yours are not yet.
+
+1. Click **Lead (you)** in the **Actors** window. In the **Picker** tab (beside **Bones**), on the **Body** page,
+   click the dot where the head meets the neck: the tooltip says **Head**, and the line under the chart reads
+   **Head**. (Clicking the head in the view picks the skull or the neck instead; the picker's dot is the sure way.)
+2. Drag the playhead back to frame 0, the left end of the timeline, and press **Set Key** on the timeline bar (**S**,
+   **Edit → Set Key**). A yellow diamond appears at 0: the head is keyed straight ahead, so it only starts to turn
+   after this frame.
+3. Drag the playhead to frame 18, a little before the blue loop band starts at 24, and press **E** for the Rotate
+   tool. Press **F** with the pointer over the view to frame the head.
+4. Point at the blue ring: it lights up yellow. Drag along it until the face turns to Lead's left, about a third of
+   the way from straight ahead to the shoulder. The angle shows beside the gizmo while you drag, and letting go
+   keys frame 18. The status bar's **Target: hug-finished** chip counts down the degrees still to go and turns
+   green under 5°, when your head sits inside the green one. If the blue ring is a flat line, orbit the view a
+   little first (**Alt+drag** up or down) so you see it as an oval.
+5. Click **Partner** in the **Actors** window and do the same for its head: **Set Key** at 0, then at 18 the blue
+   ring, to Partner's own left, until the chip turns green: the distance is now to Partner's ghost. The head usually stays selected when you switch actors; if the line under the chart
+   already reads **Head**, don't click the dot again, since a second click on the same spot selects the bone under
+   it (the neck).
+
+![The Rotate tool on Lead's head at frame 18: the blue ring lights yellow under the pointer, is dragged, the readout climbs to about Z 30 degrees and the face turns towards the camera](images/tutorial-a-hug-for-two/head-turn.gif)
+*Dragging the blue ring at frame 18: the face turns towards you, Lead's left, and the frame is keyed.*
+
+Play: both heads turn aside while the arms come in, and the faces pass each other.
+
+> **Check:** the turn reads well anywhere between about 25° and 35°. **Properties → Bone** shows it as the third
+> **Rotation** value (Z), around `30.0°`; hold **Ctrl** while dragging to step in 5° if you want it round.
 
 > **Why:** faces never meet in a hug; each head turns to one side so the cheek rests past the other's shoulder.
-> Small turns sell a pose: 30° is enough to read from any camera, and it starts before the hug closes, so the head
-> leads and the arms follow.
+> Small turns sell a pose: a third of the way is enough to read from any camera, and it starts before the hug closes,
+> so the head leads and the arms follow.
 
 ### 4. Keep the hands on the other body
 
 Bind each hand to the other actor's chest from the frame the hug closes. A bind is a pin on another actor's bone
 (see [[Hold and bind]]): the hand keeps the distance and angle it has now from that bone, whatever the bone does.
 
-1. Click **Lead (you)** in the **Actors** window. Go to frame `24`.
-2. Select **mWristRight** (type it in the **Bones** filter and click it).
-3. In the **Actors** window, scroll down to **Contact with another actor**. **Other actor** already reads
-   **Partner**. Open **Their bone** and choose **mChest**, near the top of the list.
+1. Click **Lead (you)** in the **Actors** window. Drag the playhead to frame 24, where the blue loop band starts:
+   the arms' keys (the yellow diamonds on the picker's arm dots) are there.
+2. In the **Picker**, click the dot at the end of the arm on the left of the chart (**R ARM**: the avatar faces you,
+   so its right is on your left). The tooltip says **Right Hand**.
+3. In the **Actors** window, scroll down to **Contact with another actor**. **Other actor** reads **Partner** and
+   **Their bone** reads **mChest**, the partner's chest, which is what the hug needs.
 4. Press **Bind Selected Point to This Bone from Here**. The status bar says "mWristRight now follows Partner's
-   mChest"; **Properties → Bone** says **Pinned to mChest from frame 24**, and the **Bones** tab shows
-   **mWristRight [pinned]** in light blue.
-5. Select **mWristLeft** and press **Bind Selected Point to This Bone from Here** again (**Their bone** keeps
-   **mChest**).
-6. Click **Partner** in the **Actors** window. **Other actor** now reads **Lead**. Bind Partner's **mWristRight**
-   and **mWristLeft** to Lead's **mChest** the same way, at frame 24.
+   mChest"; **Properties → Bone** says **Pinned to mChest from frame 24**, and the wrist's dot in the picker turns
+   light blue.
+5. Click the matching dot on the **L ARM** side (**Left Hand**) and press **Bind Selected Point to This Bone from
+   Here** again (**Their bone** keeps **mChest**).
+6. Click **Partner** in the **Actors** window. **Other actor** now reads **Lead**. Bind Partner's two hands to
+   Lead's **mChest** the same way, at frame 24.
 7. Play. Lead's hands now rock with Partner's back, and the elbows bend and open to follow.
 
 > **Why:** contact is the thing people notice first in a couples animation. A hand that floats a centimetre off a
@@ -148,23 +180,31 @@ XANIM|2|Hug_01_Partner|<0.3, 0, 0>|<0, 0, 180>
 
 ## Check your result
 
-[Open the example](example:hug-finished.vat) to compare with the finished hug.
+[Open the example](example:hug-finished.vat) to compare with the finished hug, or
+[show it as the target](target:hug-finished.vat) over your own and play with **Lead (you)** highlighted: where
+Lead and the green body part, look closer.
 
-| Where | What to look for |
-|---|---|
-| **Animation Check**, for each actor | "No problems found." |
-| **Bones** tab, each actor | **mWristLeft [pinned]** and **mWristRight [pinned]** |
-| **Properties → Bone**, a wrist at frame 30 | **Pinned to mChest from frame 24** |
-| **mHead** at frame 18, each actor | Rotation `0.0°`, `0.0°`, `30.0°` |
-| **Properties → Animation** | Last frame `84`, **Loop** on, Loop in `24`, Loop out `84`, Priority `4` |
-| Export folder | `Hug_01_Lead.anim` and `Hug_01_Partner.anim`, about 3 KB each, and `Hug_01_placement.txt` |
-| Playing | From frame 24 on, every hand moves with the back it rests on |
+- **Playing, from frame 24 on:** every hand moves with the back it rests on; nothing slides.
+- **The heads:** turned aside by frame 18, each cheek past the other's shoulder; Lead's head inside the green target's (a
+  few degrees either way does not show).
+- **The picker, each actor:** both wrist dots light blue from frame 24; **Properties → Bone** on a wrist says
+  **Pinned to mChest from frame 24**.
+- **The Check badge:** **Check: 1** for each actor, the finding that the two bodies meet; no crossed wrists.
+- **The export folder:** `Hug_01_Lead.anim` and `Hug_01_Partner.anim`, about 3 KB each, and `Hug_01_placement.txt`.
+
+> **Check:** the finished example has each head at about `30°` on Rotation Z at frame 18, Last frame `84`, **Loop**
+> on from `24` to `84`, and Priority `4`.
 
 ## Troubleshooting
 
 ### Bind Selected Point to This Bone from Here is greyed out
 
-No bone is selected. Select the wrist first, in the **Bones** tab or the view.
+No bone is selected. Click the wrist's dot in the **Picker** first.
+
+### Clicking the head selects the neck
+
+The picker's dots cycle: a click on a dot that is already selected takes the next bone under it. Click once more to
+come back round to **Head**, and check the line under the chart before you drag.
 
 ### The hand jumps when the bind starts
 
@@ -189,3 +229,4 @@ Export SL .anim...** (step 5).
 Next: [[Dance to the beat]]
 
 Category: Getting started
+Order: 20

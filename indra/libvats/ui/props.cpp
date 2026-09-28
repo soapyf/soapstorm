@@ -50,11 +50,9 @@ const DaeModel* App::prop_model(const std::string& path) {
     return (prop_models_[path] = std::move(model)).get();
 }
 
-// World transform of a static prop's mesh (without scale): parent x (rotation, position).
+// World transform of a static prop's mesh (without scale): parent x (rotation, position), vats::prop_frame.
 Xform App::prop_frame(const Prop& p, const std::vector<Xform>* globals, const Xform& world) const {
-    int parent = !p.point.empty() ? skel_.find(p.point) : !p.bone.empty() ? skel_.find(p.bone) : -1;
-    Xform base = parent >= 0 ? (globals ? *globals : globals_)[parent] : world;
-    return base * Xform{euler_to_quat(p.rot), p.pos};
+    return vats::prop_frame(p, skel_, globals ? *globals : globals_, world);
 }
 
 namespace {
@@ -128,7 +126,6 @@ void App::draw_prop(const Prop& p, std::vector<Vertex>& verts, std::vector<std::
     const std::vector<float>* pos = &m->positions;
     const std::vector<float>* nrm = &m->normals;
     Xform frame;
-    Vec3 centre = (m->bounds_min + m->bounds_max) * 0.5;
     if (p.rigged) {
         skin_prop(*m, skel_, globals ? *globals : globals_, globals ? shape_override : shape(), prop_skin_pos_,
                   prop_skin_nrm_);
@@ -142,7 +139,7 @@ void App::draw_prop(const Prop& p, std::vector<Vertex>& verts, std::vector<std::
         for (std::uint32_t v = g.first_vertex; v < g.first_vertex + g.vertex_count; ++v) {
             Vec3 x{(*pos)[v * 3], (*pos)[v * 3 + 1], (*pos)[v * 3 + 2]}, n{(*nrm)[v * 3], (*nrm)[v * 3 + 1], (*nrm)[v * 3 + 2]};
             if (!p.rigged) {  // re-centred on the bounding box, scaled, then placed (VP-81)
-                x = frame.apply((x - centre).mul(p.scale));
+                x = frame.apply(prop_local(p, *m, x));
                 n = frame.rot.rotate(Vec3{n.x / p.scale.x, n.y / p.scale.y, n.z / p.scale.z}).normalized();
             }
             if (tint)
@@ -155,7 +152,7 @@ void App::draw_prop(const Prop& p, std::vector<Vertex>& verts, std::vector<std::
         indices.insert(indices.end(), m->indices.begin() + g.first_index,
                        m->indices.begin() + g.first_index + g.index_count);
     }
-    host_.scene_triangles(verts, indices, true, 0.15f, tint != nullptr);
+    scene_triangles(verts, indices, true, 0.15f, tint != nullptr);  // gathered by the Picker's render
 }
 
 // The nearest static prop under the cursor: the ray against each mesh's box in prop space (VP-22).
@@ -172,8 +169,8 @@ int App::pick_prop(ImVec2 m) const {
         const DaeModel* mdl = it != prop_models_.end() ? it->second.get() : nullptr;
         Xform inv = prop_frame(p).inverse();
         // A missing mesh is picked by its 10 cm placeholder box (IO-42).
-        Vec3 lo = mdl ? (mdl->bounds_min - (mdl->bounds_min + mdl->bounds_max) * 0.5).mul(p.scale) : Vec3{-0.05, -0.05, -0.05};
-        Vec3 hi = mdl ? (mdl->bounds_max - (mdl->bounds_min + mdl->bounds_max) * 0.5).mul(p.scale) : Vec3{0.05, 0.05, 0.05};
+        Vec3 lo = mdl ? prop_local(p, *mdl, mdl->bounds_min) : Vec3{-0.05, -0.05, -0.05};
+        Vec3 hi = mdl ? prop_local(p, *mdl, mdl->bounds_max) : Vec3{0.05, 0.05, 0.05};
         Vec3 lo2{std::min(lo.x, hi.x), std::min(lo.y, hi.y), std::min(lo.z, hi.z)};
         Vec3 hi2{std::max(lo.x, hi.x), std::max(lo.y, hi.y), std::max(lo.z, hi.z)};
         Vec3 ro = inv.apply(o), rd = inv.rot.rotate(d);

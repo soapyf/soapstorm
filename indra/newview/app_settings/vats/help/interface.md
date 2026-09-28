@@ -14,7 +14,7 @@ between sessions.
 | Panel | Default place | Holds |
 |---|---|---|
 | **Bones** | left | the skeleton as a list, with a filter box and selection buttons |
-| **Picker** | left, a tab beside **Bones** | an avatar outline to click body parts, and selection sets; see [[Picker]] |
+| **Picker** | left, a tab beside **Bones** | joint dots and bone lines over the avatar or its silhouette, on four pages (**Body**, **Hands**, **Face**, **Extras**); labels that select whole groups; selection sets folded under it; see [[Picker]] |
 | **Inventory** | left, a tab beside **Bones** | projects, animations, mesh bodies, props, poses and clips |
 | **Viewport** | centre | the avatar, the gizmo, the view cube |
 | **Properties** | right | the selected bone or prop, the animation settings, the export settings |
@@ -24,7 +24,8 @@ between sessions.
 
 The **status bar** runs along the bottom of the window. On the left it shows what the last command
 did, how many items are selected when there is more than one, **Ortho** while the view is
-orthographic, and **Check: N** when the [[Animation check]] has found problems. On the right it shows the mouse
+orthographic, **Target:** and the target's name while a [[Target ghost]] is loaded (with how far the selected bone
+is from it), and **Check: N** when the [[Animation check]] has found problems. On the right it shows the mouse
 controls of the active [[Control presets|control preset]], or the graph's or dope sheet's controls while
 the pointer is over the **Graph** or **Dope Sheet** panel.
 
@@ -39,7 +40,7 @@ unsaved changes, and the VATs version.
 - **Select All** selects every visible bone; **Keyed on Frame** selects the bones with a key on the
   current frame; **All Keyed** selects every bone with a key anywhere in the animation.
 - **Show** (closed by default) picks which groups of bones are listed and drawn, and has
-  **Collision Volumes**. The same switches are in the **View** menu.
+  **Collision Volumes**. The same switches are in **View → Bones**.
 
 A bone with a key on the current frame is listed in amber, a bone animated anywhere in tan, and
 attachment points in green. See [[Skeleton]].
@@ -51,8 +52,10 @@ attachment points in green. See [[Skeleton]].
 - **Projects** and **Animations**: your `.vat` and `.anim` files, from the library folders, recent
   projects and folders you add ([[Project library]]).
 - **Bodies**: your [[Mesh bodies]].
-- **Meshes**: the prop library ([[Props]]).
-- **Poses**, **Clips** and **Starter poses**: the [[Pose library]].
+- **Poses** (your poses and clips) and **Starter poses**: the [[Pose library]].
+- **Meshes** and **Starter props**: the prop library ([[Props]]).
+
+Click a section's title to fold it away; VATs remembers which sections you folded, next time too.
 
 Drag or double-click an item to use it; right-click it for the rest.
 
@@ -65,7 +68,7 @@ Drag or double-click an item to use it; right-click it for the rest.
 - The cube at the top left turns the view: click a face to look from that side, or drag the cube to
   orbit.
 - The axis marker at the bottom left shows the world axes.
-- **View → Orthographic** (**Num 5** in every [[Control presets|control preset]]) switches between
+- **View → Camera → Orthographic** (**Num 5** in every [[Control presets|control preset]]) switches between
   perspective and an orthographic view, and back. See [[Interface#Orthographic view]].
 
 ### Orthographic view
@@ -77,7 +80,7 @@ silhouette, or where a hand is against the body, from **Front**, **Right** or **
 ![The waving avatar from the front in an orthographic view, with no floor grid](images/interface/orthographic.png)
 *The [[First steps]] example at frame 10, **Front** and orthographic.*
 
-- **View → Orthographic** or **Num 5** turns it on; the menu item is ticked and the status bar shows
+- **View → Camera → Orthographic** or **Num 5** turns it on; the menu item is ticked and the status bar shows
   **Ortho**. The same key or item turns it off. The camera keeps its place and its direction.
 - At the orbit target the view is as tall as the perspective view, so turning it on keeps the framing.
   Zoom (the wheel, drag zoom, **Zoom In** / **Zoom Out**) makes the view taller or shorter; **Frame
@@ -150,11 +153,18 @@ slider and **Blend** stay in view.
 | **File** | **New**, **Open...**, **Open Recent**, **Save**, **Save As...**, the imports (BVH, SL `.anim`, retarget, prop / mesh, audio), the exports (`.anim`, BVH, **Export Listing Media...**: see [[Listing media]]), **Quit** |
 | **Edit** | **Undo**, **Redo**, keys, resets, copy and paste pose, **Save Clip of Selected Bones...**, **Time**, mirror and flip, **Reverse Animation**, **Simplify Curves...**, **Preferences...** |
 | **Playback** | play, frame and key stepping, start and end |
-| **View** | view directions, **Orthographic**, framing and zoom, **Reset Camera**, **Camera Views**, **Graph Editor**, **Dope Sheet**, the bone group switches, **Show Collision Volumes**, **Centre of Mass**, **Onion Skin**, **Motion Path**, **Reference...** (a picture behind the avatar: [[Reference images]]), **Preview as SL Plays It**, **Treadmill**, **Body**, **Bones in Front (X-ray)** |
+| **View** | **Camera** (view directions, **Orthographic**, framing and zoom, **Reset Camera**, **Camera Views**), **Graph Editor**, **Dope Sheet**, **Bones** (the bone group switches, **Show Collision Volumes**, **Bones in Front (X-ray)**), **Centre of Mass**, **Onion Skin**, **Target Ghost**, **Motion Path**, **Treadmill**, **Reference...** (a picture behind the avatar: [[Reference images]]), **Preview as SL Plays It**, **Face Cam**, **Body** |
 | **Light** | the lighting presets **Flat Noon**, **Three-Quarter Key**, **Rim / Back**, **Dusk** and **Night**, **Studio (Default)**, and **Plain Backdrop**: a grey wall and floor behind the actor that turn with the camera. They are for looking at the animation only; nothing is saved |
 | **Select** | **Select All**, **Select Keyed on Frame**, **Select All Keyed**, **Select None**, parent, child and siblings |
 | **Tools** | the four tools, the axes, IK and pins, **Clean Up Foot Sliding...**, **Loop Tools**, **Hand Poser**, **Dynamics...**, **Idle Layer...**, **Overlap...**, **Auto-Balance...**, **Jump Arc...**, **Ragdoll...**, **Face...**, **Actors (Couples and Groups)...**, **Motion Capture...**, **Split Dance at Beats...**, **Animation Check...**, **Motion Quality...** |
 | **Help** | **Help Contents**, **Tutorials**, **Controls**, **Welcome**, **About Viewport Avatar Toolset** |
+
+Choosing a command in a menu closes it, sub-menus and all; so does **Esc** or a click anywhere outside it. Settings
+inside a menu, such as the **Onion Skin** sliders or **Treadmill → Custom speed**, keep it open while you change them.
+
+Every slider in VATs drags from where its value is: press anywhere on it and move the mouse, and a click alone
+never changes it. Double-click it (or **Ctrl+click**) to type a value, then **Enter**; hold **Shift** while
+dragging to go faster and **Alt** to go slower. A slider's tooltip waits until you let go.
 
 Every **Tools** item has an icon, the same as its button where it has one:
 
@@ -217,7 +227,7 @@ or pressing **Page** goes back to the page.
 - Colour theme, interface size and gizmo size: see [[Preferences]].
 - **View → Body** picks the avatar drawn in the viewport: **SL Default**, **SL Default (Male)**,
   **Female**, **Male**, **Skeleton Only**, or a mesh body from your library.
-- **View → Camera Views** recalls and stores four camera positions; see
+- **View → Camera → Camera Views** recalls and stores four camera positions; see
   [[Keyboard shortcuts#Camera views]].
 
 VATs keeps the panel layout in `layout.ini` in the data folder. See

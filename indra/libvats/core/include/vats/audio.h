@@ -31,5 +31,8 @@ bool load_audio_file(const std::string& path, AudioData& out, std::string& err);
 std::vector<double> beat_times(const AudioTrack& a, double from, double to);
 // The nearest beat to t within tolerance seconds, else t.
 double snap_to_beat(const AudioTrack& a, double t, double tolerance);
+// A timeline frame on the nearest beat within 3 frames while the clip's audio has Snap to Beats on (AU-2), else
+// unchanged: scrubbing, range picks and the dope sheet's scale handle.
+double beat_snapped_frame(const Clip& c, double frame);
 
 }  // namespace vats

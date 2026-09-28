@@ -95,3 +95,4 @@ Another program owns the file type, or the VATs entry points at a folder that ha
 - [[Troubleshooting]]
 
 Category: Getting started
+Order: 2

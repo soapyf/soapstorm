@@ -51,9 +51,11 @@ struct FileFilter {
 // The chosen paths; empty when cancelled or failed.
 using FilesChosen = std::function<void(std::vector<std::string> files)>;
 
-// The scene targets: the 3D view, the offscreen picture thumbnails are rendered into, and the face cam's own
-// offscreen picture (spec 09 build 20, item 53), kept apart so a thumbnail in the same frame never overwrites it.
-enum class SceneTarget { View, Thumbnail, FaceCam };
+// The scene targets: the 3D view, the offscreen picture thumbnails are rendered into, the face cam's own offscreen
+// picture (spec 09 build 20, item 53) and the Picker's (08 PK-3: the avatar behind its dots), each kept apart so a
+// thumbnail in the same frame never overwrites them. A host that has no Picker target returns false from scene_begin
+// for it; the Picker then shows its silhouette instead.
+enum class SceneTarget { View, Thumbnail, FaceCam, Picker };
 
 class Host {
 public:
@@ -122,7 +124,7 @@ public:
     // --- Camera and picking ---------------------------------------------------------------------
     // The camera the view shows and the UI's navigation edits (orbit, pan, zoom, view cube, focus,
     // camera views). The viewer keeps it in step with its own camera, fov included.
-    // camera().ortho is the view's projection (View > Orthographic, spec 04 VP-67). Ortho or not, distance is the
+    // camera().ortho is the view's projection (View > Camera > Orthographic, spec 04 VP-67). Ortho or not, distance is the
     // zoom and fov the lens: the ortho view is 2 x distance x tan(fov / 2) tall, as tall at the target as the
     // perspective one, so zoom and framing mean the same in both. A host keeping camera() in step with its own
     // camera writes these logical values back, not the lens it draws ortho with.

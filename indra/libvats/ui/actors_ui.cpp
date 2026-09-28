@@ -457,8 +457,7 @@ void App::draw_actors_panel() {
     if (scene_busy() && !actor_dragging_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::GetIO().WantTextInput)
         finish_scene_drags();
     if (!show_actors_) return;
-    ImGui::SetNextWindowSize(window_size(22, 45), ImGuiCond_FirstUseEver);  // tall enough for every section
-    place_tool_window(2);
+    place_tool_window(22, 45);  // tall enough for every section, capped to the screen
     if (!ImGui::Begin("Actors", &show_actors_)) return ImGui::End();
     help_button("couples-and-groups");
     Project& p = doc_.project;
@@ -671,10 +670,31 @@ void App::draw_actors_panel() {
             if (ImGui::Selectable(p.actors[k].name.c_str(), k == pin_actor_)) pin_actor_ = k;
         ImGui::EndCombo();
     }
-    if (pin_bone_ < 0 || pin_bone_ >= skel_.size()) pin_bone_ = skel_.find("mWristRight");
+    // Their chest by default: a hug or a hand on the partner starts there more often than anywhere else.
+    if (pin_bone_ < 0 || pin_bone_ >= skel_.size()) pin_bone_ = std::max(skel_.find("mChest"), 0);
     if (ImGui::BeginCombo("Their bone", skel_[pin_bone_].name.c_str(), ImGuiComboFlags_HeightLarge)) {
-        for (int k = 0; k < skel_.size(); ++k)
-            if (!skel_[k].volume && ImGui::Selectable(skel_[k].name.c_str(), k == pin_bone_)) pin_bone_ = k;
+        if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+        ImGui::SetNextItemWidth(-1);
+        char buf[64];
+        std::snprintf(buf, sizeof buf, "%s", pin_bone_filter_.c_str());
+        if (ImGui::InputTextWithHint("##bonefilter", "Filter bones...", buf, sizeof buf)) pin_bone_filter_ = buf;
+        auto matches = [&](const std::string& name) {
+            auto low = [](char c) { return char(std::tolower(static_cast<unsigned char>(c))); };
+            return std::search(name.begin(), name.end(), pin_bone_filter_.begin(), pin_bone_filter_.end(),
+                               [&](char a, char b) { return low(a) == low(b); }) != name.end();
+        };
+        // Grouped as the Bones list's Show groups: body first, then hands, face and the rest.
+        static const char* const groups[] = {"Body", "Hands", "Face", "Wings", "Tail", "Hind limbs", "Groin", "Attachment points"};
+        for (int g = 0; g < 8; ++g) {
+            bool header = false;
+            for (int k = 0; k < skel_.size(); ++k) {
+                const Node& n = skel_[k];
+                if (n.volume || int(n.category) != g || !matches(n.name)) continue;
+                if (!std::exchange(header, true)) ImGui::SeparatorText(groups[g]);
+                if (ImGui::Selectable(n.name.c_str(), k == pin_bone_)) pin_bone_ = k;
+                if (k == pin_bone_ && ImGui::IsWindowAppearing()) ImGui::SetScrollHereY();
+            }
+        }
         ImGui::EndCombo();
     }
     int sel = primary();

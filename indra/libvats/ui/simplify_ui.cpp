@@ -7,6 +7,7 @@
 
 #include "app.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "vats/footlock.h"
 
 namespace vats {
@@ -61,11 +62,11 @@ void App::draw_simplify_dialog() {
     ImGui::SetItemTooltip("Off: only the %zu selected track(s)", simplify_tracks_.size());
     float deg = float(simplify_.tol_deg), mm = float(simplify_.tol_mm);
     label("Rotation");
-    if (ImGui::SliderFloat("##sdeg", &deg, 0.01f, 5.f, "%.2f deg", ImGuiSliderFlags_Logarithmic))
+    if (slider_float("##sdeg", &deg, 0.01f, 5.f, "%.2f deg", 0, SliderCurve::Log))
         simplify_.tol_deg = std::clamp(double(deg), 0.01, 5.0), changed = true;
     ImGui::SetItemTooltip("How far a rotation curve may move from where it was, at any whole frame");
     label("Position");
-    if (ImGui::SliderFloat("##smm", &mm, 0.05f, 20.f, "%.2f mm", ImGuiSliderFlags_Logarithmic))
+    if (slider_float("##smm", &mm, 0.05f, 20.f, "%.2f mm", 0, SliderCurve::Log))
         simplify_.tol_mm = std::clamp(double(mm), 0.05, 20.0), changed = true;
     ImGui::SetItemTooltip("The same for position curves (the hips' travel)");
     label("From");
@@ -86,7 +87,7 @@ void App::draw_simplify_dialog() {
     // Scrub here: the dialog holds the rest of the app while it is open.
     label("Frame");
     float fr = float(frame_);
-    if (ImGui::SliderFloat("##sframe", &fr, 0, float(std::max(doc_.clip().end_frame, 1)), "%.0f")) set_frame(std::round(fr));
+    if (slider_float("##sframe", &fr, 0, float(std::max(doc_.clip().end_frame, 1)), "%.0f")) set_frame(std::round(fr));
     if (changed) preview_simplify();
 
     ImGui::Separator();
@@ -104,7 +105,7 @@ void App::draw_simplify_dialog() {
     if (ImGui::Button("OK") || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
         if (doc_.history.commit("Simplify Curves", doc_.clip())) mark_dirty();
         graph_.clip_replaced();  // the range's keys were replaced
-        status("Simplified: " + std::to_string(simplify_result_.before) + " keys to " + std::to_string(simplify_result_.after));
+        status("Simplified: " + count_noun(simplify_result_.before, "key") + " to " + std::to_string(simplify_result_.after));
         close();
     }
     ImGui::SameLine();

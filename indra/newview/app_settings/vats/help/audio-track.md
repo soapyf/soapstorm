@@ -46,7 +46,9 @@ There are two ways to get beats onto the timeline; they can be used together:
 - **A beat grid**: type the song's **BPM**, scrub to a frame that is on a beat, and choose **Beat Grid Starts Here**. Grid lines appear every beat.
 - **Tapped beats**: play the animation and press **B** on each beat. **Mark a Beat Here** marks the current frame, so it works while stopped too.
 
-With **Snap to Beats** on, the playhead, **Shift+drag** ranges and [[Time editing#Retiming with markers|retime markers]] snap to a beat within 3 frames of the mouse.
+With **Snap to Beats** on, the playhead, **Shift+drag** ranges, [[Time editing#Retiming with markers|retime markers]] and the [[Dope sheet]]'s scale handles snap to a beat within 3 frames of the mouse.
+
+The beat grid and the tapped beats show on the timeline and in the dope sheet whenever the track has them, even while its sound is not loaded (an example without the music, or a file that has moved).
 
 ![The timeline with a waveform and beat grid lines every 15 frames](images/audio-track/timeline-beats.png)
 *A 120 BPM click track at 30 fps: the waveform shows each click, and the grid puts a line every 15 frames.*
@@ -57,9 +59,9 @@ The audio is saved in the project as a path to the file, relative to the project
 
 ## Worked example: keys on the beat
 
-[Open the example](example:audio-beats.vat): four seconds at 30 fps, **BPM** already set to 120 with the grid starting at frame 0 and **Snap to Beats** on, and a head nod keyed on every beat. The project carries no sound, so the grid does not show until you load some.
+[Open the example](example:audio-beats.vat): four seconds at 30 fps, **BPM** already set to 120 with the grid starting at frame 0 and **Snap to Beats** on, and a head nod keyed on every beat. It comes with a 120 BPM click loop, `beat-120bpm.wav` (CC0), so it plays with sound at once.
 
-1. Choose **File → Load Audio...** and pick any song or click track you have; the numbers below do not depend on it. The status bar reports its name and length, and the waveform appears along the timeline with a grid line every 15 frames: 60 / 120 BPM is 0.5 s, which is 15 frames at 30 fps.
+1. The click loop's waveform runs along the timeline with a grid line every 15 frames: 60 / 120 BPM is 0.5 s, which is 15 frames at 30 fps. To use a song of your own instead, choose **File → Load Audio...**; the numbers below do not depend on it.
 2. Scrub to frame 13 and let go: the playhead lands on 15, the nearest beat. The keys where the head dips sit on the grid lines, frames 0, 15, 30 and so on to 120; the keys in between (8, 23, ...) bring it back up.
 3. Play. The head dips on each beat of the grid. If the song's own beat does not line up, **Ctrl+drag** the timeline until a beat of the song sits on a grid line, or set **Start (s)**; the marks slide with the audio.
 4. Press **B** on a beat while it plays: a marker is added at the current frame, on top of the grid.

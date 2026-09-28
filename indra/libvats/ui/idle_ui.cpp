@@ -8,6 +8,7 @@
 #include "icons.h"
 #include "theme.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "vats/idle.h"
 #include "vats/loop_tools.h"
 
@@ -29,7 +30,7 @@ void App::apply_idle_preview(Evaluation& e) {
 
 void App::draw_idle_panel() {
     if (!show_idle_) return;
-    place_tool_window(4, 24, 36);
+    place_tool_window(24, 36);
     if (!ImGui::Begin("Idle Layer", &show_idle_)) return ImGui::End();
     help_button("idle-layer");
     Clip& clip = doc_.clip();
@@ -55,7 +56,7 @@ void App::draw_idle_panel() {
         for (int i = 0; i < int(clip.idle.size()); ++i) {
             const IdleLayer& l = clip.idle[i];
             std::string label = std::string(l.kind == "breath" ? "Breath" : "Sway") + ", " +
-                                std::to_string(idle_nodes(skel_, l).size()) + " bones" + (l.baked ? "  (baked)" : "") +
+                                count_noun(idle_nodes(skel_, l).size(), "bone") + (l.baked ? "  (baked)" : "") +
                                 "##" + std::to_string(i);
             if (ImGui::Selectable(label.c_str(), idle_selected_ == i)) idle_selected_ = i;
         }
@@ -89,7 +90,7 @@ void App::draw_idle_panel() {
             const double v0 = v;
             float f = float(v);
             label(name);
-            if (ImGui::SliderFloat((std::string("##idle_") + name).c_str(), &f, lo, hi, fmt)) v = f;
+            if (slider_float((std::string("##idle_") + name).c_str(), &f, lo, hi, fmt)) v = f;
             ImGui::SetItemTooltip("%s", tip);
             track("Idle Layer Settings", v, v0);
         };

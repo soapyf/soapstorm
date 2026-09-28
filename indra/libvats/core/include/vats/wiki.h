@@ -5,7 +5,8 @@
 // `code`, fenced code blocks, bullet and numbered lists (one level of nesting), pipe tables, the Note / Tip /
 // Warning boxes and the "Related articles" line, [[Page#Section|label]] and [text](https://...) links, images
 // (![alt](images/<page>/<name>.png or .gif) on a line of its own, an optional *caption* line under it), example links
-// ([text](example:<file>.vat), a project in examples/) and a closing "Category: ..." line. No UI here: the app (ImGui) and the viewer (LLUI) draw the same blocks.
+// ([text](example:<file>.vat), a project in examples/), target links ([text](target:<file>.vat), the same project
+// shown as the target ghost) and closing "Category: ..." and "Order: <n>" lines. No UI here: the app (ImGui) and the viewer (LLUI) draw the same blocks.
 #pragma once
 
 #include <functional>
@@ -19,8 +20,9 @@ struct Span {
     std::string text;
     bool bold = false, italic = false, code = false;
     // Links: a wiki page (target = page title, anchor = heading, may be empty) or an external URL.
-    // Example links: target = the project's file name in <help>/examples/.
-    bool link = false, external = false, example = false;
+    // Example links: target = the project's file name in <help>/examples/. A target link ([text](target:<file>.vat))
+    // is an example link with ghost set: the button shows that example as the target ghost, the open project stays.
+    bool link = false, external = false, example = false, ghost = false;
     std::string target, anchor;
 };
 
@@ -39,6 +41,7 @@ struct Page {
     std::string file;      // stem, e.g. "graph-editor"
     std::string title;     // from the first "# " line
     std::string category;  // from the "Category: " line, "" when absent
+    int order = 0;         // from an "Order: <n>" line: its place within the category (0 = after those with one)
     std::vector<Block> blocks;
     std::vector<std::string> headings;  // "##" and "###" headings, in order (anchors)
     std::string plain;                  // lower-case text of the whole page, for search
@@ -101,7 +104,8 @@ public:
     const std::vector<Page>& pages() const { return pages_; }
     // By title (case-insensitive) or by file stem.
     const Page* find(std::string_view title_or_file) const;
-    // Categories in the fixed order of the style guide, then any others alphabetically; pages by title.
+    // Categories in the fixed order of the style guide, then any others alphabetically; within one, pages by their
+    // Order, then those without one by title.
     std::vector<std::pair<std::string, std::vector<const Page*>>> contents() const;
     // Every word of the query must appear; title matches first, then headings, then body.
     std::vector<Hit> search(std::string_view query, size_t max_hits = 30) const;

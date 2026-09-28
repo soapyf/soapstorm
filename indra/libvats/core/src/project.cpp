@@ -222,12 +222,12 @@ struct Loader {
         return true;
     }
 
-    // Spec 08 DY-1: [{root, length, stiffness, damping, drag, gravity, radius, baked, source}]; source is a
-    // curves object; unknown fields are kept.
+    // Spec 08 DY-1: [{root, length, stiffness, damping, drag, gravity, radius, bend, baked, source}]; bend is
+    // optional (0); source is a curves object; unknown fields are kept.
     bool dynamics(const Json& v, Clip& clip) {
         if (!expect(v, Json::Type::Array, "dynamics")) return false;
         static constexpr const char* known_keys[] = {"root", "length", "stiffness", "damping", "drag",
-                                                     "gravity", "radius", "baked", "source"};
+                                                     "gravity", "radius", "bend", "baked", "source"};
         for (size_t n = 0; n < v.arr.size(); ++n) {
             std::string w = "dynamics[" + std::to_string(n) + "]";
             const Json& e = v.arr[n];
@@ -237,6 +237,7 @@ struct Loader {
                 !get(e, "damping", d.damping) || !get(e, "drag", d.drag) || !get(e, "gravity", d.gravity) ||
                 !get(e, "radius", d.radius) || !get(e, "baked", d.baked))
                 return fail(w + "." + err);
+            if (e.find("bend") && !get(e, "bend", d.bend)) return fail(w + "." + err);
             if (const Json* s = e.find("source")) {
                 Clip tmp;
                 if (!curves(*s, tmp)) return fail(w + ".source." + err);
@@ -747,6 +748,7 @@ static void write_clip(Json& j, const Clip& c) {
             e.set("drag", d.drag);
             e.set("gravity", d.gravity);
             e.set("radius", d.radius);
+            if (d.bend > 0) e.set("bend", d.bend);
             e.set("baked", d.baked);
             if (d.baked) e.set("source", curves_to_json(d.source));
             for (auto& [k, x] : d.extra.obj)

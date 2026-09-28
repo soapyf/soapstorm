@@ -22,6 +22,9 @@ struct RagdollSolver::Joint {
     enum Kind { Root, Cone, Hinge } kind = Cone;
     Vec3 bend{1, 0, 0};                // Cone: direction the centre tilts to; Hinge: direction the bone bends to
     double tilt = 0, max = 45, twist = 45;  // degrees; Hinge uses 0..max
+    // A second neutral pose for the twist (parent frame, 0 = none): the bone swung straight here from rest. The twist
+    // is then within limits when it is within +-twist of either neutral (see clamp_local).
+    Vec3 hang{};
 };
 
 namespace {
@@ -56,7 +59,10 @@ std::vector<Joint> make_table() {
     t.push_back({"mHead", "", 2.0, {}, Joint::Cone, fwd, 0, 45, 70});
     for (const char* side : {"Left", "Right"}) {
         auto n = [&](const char* base) { return std::string(base) + side; };
-        t.push_back({n("mShoulder"), n("mElbow"), 0, {}, Joint::Cone, fwd, 20, 110, 90});
+        // The arm's cone is centred forward of the T-pose and a little down (flexion and abduction reach overhead;
+        // extension stops about 60 degrees behind the hanging arm, horizontal abduction just behind the shoulder
+        // line); its twist is measured from the T-pose and from the arm hanging at the side (see clamp_local).
+        t.push_back({n("mShoulder"), n("mElbow"), 0, {}, Joint::Cone, Vec3{1, 0, -0.8}.normalized(), 25, 110, 90, down});
         t.push_back({n("mElbow"), n("mWrist"), 0, {}, Joint::Hinge, fwd, 0, 150, 90});
         t.push_back({n("mWrist"), "", 2.5, {}, Joint::Cone, fwd, 0, 70, 90});
         t.push_back({n("mHip"), n("mKnee"), 0, {}, Joint::Cone, fwd, 35, 80, 45});
@@ -106,14 +112,6 @@ Vec3 perpendicular(const Vec3& v) {
     return v.cross(a).normalized();
 }
 
-// Swing-twist split of q about a unit axis: q = swing * twist.
-Quat twist_of(const Quat& q, const Vec3& axis) {
-    double proj = Vec3{q.x, q.y, q.z}.dot(axis);
-    Quat tw{q.w, axis.x * proj, axis.y * proj, axis.z * proj};
-    double l = std::sqrt(tw.dot(tw));
-    return l < 1e-12 ? Quat{} : Quat{tw.w / l, tw.x / l, tw.y / l, tw.z / l};
-}
-
 // Brings a bone direction d (parent frame, unit) inside a joint's swing limits: the cone, or the hinge's bend
 // range with a little sideways give (the limb's own roll).
 Vec3 limit_direction(const Joint& j, const Vec3& r0, Vec3 d) {
@@ -149,12 +147,35 @@ Vec3 limit_direction(const Joint& j, const Vec3& r0, Vec3 d) {
 
 // Clamps a joint's local rotation (parent frame) to its limits: swing as limit_direction, twist about the
 // bone within +-twist.
+//
+// The twist is how far q turns about the bone past the neutral frame for its direction: rest swung straight to that
+// direction. Swings do not commute (Codman's paradox), so for the arm one neutral is not enough: the T-pose swung
+// forward keeps the palm down, the hanging arm raised forward keeps it facing in, 90 degrees apart, and both are a
+// relaxed arm. A joint with a `hang` is within limits when the twist from either neutral is; a raise that passes
+// through the hanging arm (arm forward and up, overhead) is measured from it. Right overhead the hanging neutral is
+// undefined (the raise could come from any side), so its allowance opens up to any twist over the last 45 degrees.
 Quat clamp_local(const Joint& j, const Vec3& axis, const Quat& q) {
-    Quat tw = twist_of(q, axis);
-    double twist = std::remainder(2 * std::atan2(Vec3{tw.x, tw.y, tw.z}.dot(axis), tw.w), 2 * kPi);
-    twist = std::clamp(twist, -j.twist * kDegToRad, j.twist * kDegToRad);
-    Vec3 d = limit_direction(j, axis, (q * tw.conj()).rotate(axis).normalized());
-    return arc(axis, d) * Quat::axis_angle(axis, twist);
+    auto twist_from = [&](const Quat& neutral) {  // q = neutral * about(axis, twist)
+        const Quat t = neutral.conj() * q;
+        return std::remainder(2 * std::atan2(Vec3{t.x, t.y, t.z}.dot(axis), t.w), 2 * kPi);
+    };
+    const Vec3 d = q.rotate(axis).normalized();
+    const double lim = j.twist * kDegToRad;
+    const double tw = twist_from(arc(axis, d));
+    const Vec3 dl = limit_direction(j, axis, d);
+    if (j.hang.length() > 0) {
+        const Quat N = arc(axis, j.hang);
+        auto allowance = [&](const Vec3& dir) {
+            const double from_hang = std::acos(std::clamp(dir.dot(j.hang), -1.0, 1.0));
+            return lim + (kPi - lim) * std::clamp((from_hang - 0.75 * kPi) / (0.25 * kPi), 0.0, 1.0);
+        };
+        const double th = twist_from(arc(j.hang, d) * N);
+        if (std::fabs(th) - allowance(d) < std::fabs(tw) - lim) {
+            const double a = allowance(dl);
+            return arc(j.hang, dl) * N * Quat::axis_angle(axis, std::clamp(th, -a, a));
+        }
+    }
+    return arc(axis, dl) * Quat::axis_angle(axis, std::clamp(tw, -lim, lim));
 }
 
 // The limit axis of a table joint: towards its child, its tip, or its first group member, from the rest pose.
@@ -583,17 +604,9 @@ std::vector<Pose> simulate_ragdoll(const Rig& rig, const Clip& clip, const Shape
     if (!clip.ragdoll) return {};
     const Ragdoll& rd = *clip.ragdoll;
     const Skeleton& skel = rig.skeleton();
-    // Always driven by the pre-bake tracks, so re-baking never feeds on its own output.
+    // Always driven by the pre-bake tracks, IK and pins, so re-baking never feeds on its own output.
     Clip drive = clip;
-    if (rd.baked)
-        for (int n = 0; n < skel.size(); ++n) {
-            auto it = rd.source.find(skel[n].name);
-            if (it != rd.source.end()) drive.curves[it->first] = it->second;
-        }
-    RagdollSolver probe(skel, rd, boxes);
-    if (rd.baked)
-        for (int n : probe.nodes())
-            if (!rd.source.count(skel[n].name)) drive.curves.erase(skel[n].name);
+    unbake_ragdoll(drive, skel);
 
     const int end = std::max(drive.end_frame, 0), fps = std::max(drive.fps, 1);
     const int sub = std::max(1, int(std::lround(double(kStepsPerSecond) / fps)));
@@ -626,26 +639,96 @@ std::vector<Pose> simulate_ragdoll(const Rig& rig, const Clip& clip, const Shape
     return frames;
 }
 
+namespace {
+
+// The pin fields a bake leaves on the pins it cuts round the fall, so unbaking can put them back.
+constexpr const char* kPinRange = "ragdoll_range";  // on a cut pin: its range before the bake, [from, to]
+constexpr const char* kPinSplit = "ragdoll_split";  // on the part after the fall that the bake added
+
+bool chain_in(const LimbInfo& l, const std::vector<int>& nodes) {
+    for (int b : {l.root, l.mid, l.end})
+        if (b >= 0 && std::find(nodes.begin(), nodes.end(), b) != nodes.end()) return true;
+    return false;
+}
+
+}  // namespace
+
 void bake_ragdoll(Clip& clip, const Rig& rig, const Shape* shape, const std::vector<RagdollBox>& boxes) {
     if (!clip.ragdoll) return;
     const Skeleton& skel = rig.skeleton();
+    unbake_ragdoll(clip, skel);  // a re-bake starts again from the original keys, IK and pins
     std::vector<Pose> frames = simulate_ragdoll(rig, clip, shape, boxes);
     Ragdoll& rd = *clip.ragdoll;
     RagdollSolver probe(skel, rd, boxes);
     std::vector<int> nodes = probe.nodes(), with_position;
     if (probe.moves_pelvis()) with_position.push_back(skel.find("mPelvis"));
-    if (rd.baked) {
-        for (int n : nodes) {  // back to the source before re-baking over it
-            auto it = rd.source.find(skel[n].name);
-            if (it == rd.source.end()) clip.curves.erase(skel[n].name);
-            else clip.curves[it->first] = it->second;
-        }
-    } else {
-        rd.source.clear();
-        for (int n : nodes)
-            if (auto it = clip.curves.find(skel[n].name); it != clip.curves.end()) rd.source[it->first] = it->second;
+    rd.source.clear();
+    for (int n : nodes)
+        if (auto it = clip.curves.find(skel[n].name); it != clip.curves.end()) rd.source[it->first] = it->second;
+
+    // IK and pins would hold the limbs the ragdoll moves where they were. Over the fall those limbs go FK: their
+    // bones are baked from the evaluated pose (IK and pins included), so the switch does not jump, and IK comes
+    // back after the fall if it was on. Pins are cut round the fall.
+    const int end = std::max(clip.end_frame, 0);
+    const int start = std::clamp(rd.start, 0, end), stop = std::clamp(rd.start + std::max(rd.frames, 0), start, end);
+    const auto& limbs = rig.limbs();
+    std::vector<bool> ik(limbs.size()), freed(limbs.size());
+    for (int f = start; f <= stop; ++f) {
+        const Evaluation e = evaluate(rig, clip, f, shape);
+        for (size_t l = 0; l < limbs.size(); ++l) ik[l] = ik[l] || (e.limbs[l].blend > 0 && chain_in(limbs[l], nodes));
     }
-    bake_samples(clip, skel, nodes, frames, 0.1, 0.0005, with_position);
+    const Evaluation after = evaluate(rig, clip, stop + 1, shape);
+    for (size_t l = 0; l < limbs.size(); ++l) {
+        if (!ik[l]) continue;
+        freed[l] = true;
+        const std::string track = "ik." + limbs[l].name;
+        rd.source[track] = clip.curves[track];
+        FCurve& blend = clip.curves[track]["blend"];
+        std::erase_if(blend.keys, [&](const Key& k) { return k.frame >= start - 1e-6 && k.frame <= stop + 1 + 1e-6; });
+        blend.set_key(start, 0, Interp::Constant);
+        if (stop < end) blend.set_key(stop + 1, after.limbs[l].blend, Interp::Constant);
+        blend.recompute_handles();
+    }
+    for (size_t k = 0, count = clip.pins.size(); k < count; ++k) {
+        Pin& p = clip.pins[k];
+        if (p.from > stop || (p.to >= 0 && p.to < start)) continue;
+        const int limb = pin_limb(rig, p), via = skel.find(p.via);
+        if (limb >= 0 ? !chain_in(limbs[limb], nodes) : std::find(nodes.begin(), nodes.end(), via) == nodes.end())
+            continue;
+        if (limb >= 0) freed[limb] = true;
+        Json range = Json::array();
+        range.push(p.from);
+        range.push(p.to);
+        p.extra.set(kPinRange, range);
+        const bool past = p.to < 0 || p.to > stop;
+        if (p.from < start) {
+            if (past) {
+                Pin rest = p;
+                rest.from = stop + 1;
+                rest.start_key = rest.release_key = -1;
+                rest.extra.erase(kPinRange);
+                rest.extra.set(kPinSplit, true);
+                p.to = start - 1;
+                clip.pins.push_back(rest);  // p is not used after this
+            } else {
+                p.to = start - 1;
+            }
+        } else {
+            p.from = stop + 1;
+            if (!past) p.to = stop;  // held only inside the fall: an empty range
+        }
+    }
+    // The freed limbs' bones take the evaluated pose too, even where the ragdoll leaves them (a selected hand).
+    std::vector<int> baked = nodes;
+    for (size_t l = 0; l < limbs.size(); ++l)
+        if (freed[l])
+            for (int b : {limbs[l].root, limbs[l].mid, limbs[l].end})
+                if (b >= 0 && std::find(baked.begin(), baked.end(), b) == baked.end()) {
+                    baked.push_back(b);
+                    auto it = clip.curves.find(skel[b].name);
+                    rd.source[skel[b].name] = it != clip.curves.end() ? it->second : Track{};  // empty = none
+                }
+    bake_samples(clip, skel, baked, frames, 0.1, 0.0005, with_position);
     rd.baked = true;
 }
 
@@ -658,6 +741,20 @@ void unbake_ragdoll(Clip& clip, const Skeleton& skel) {
         if (it == rd.source.end()) clip.curves.erase(skel[n].name);
         else clip.curves[it->first] = it->second;
     }
+    // The IK tracks and the freed limbs' other bones.
+    for (auto& [name, track] : rd.source) {
+        const int n = skel.find(name);
+        if (n >= 0 && std::find(probe.nodes().begin(), probe.nodes().end(), n) != probe.nodes().end()) continue;
+        if (track.empty()) clip.curves.erase(name);
+        else clip.curves[name] = track;
+    }
+    std::erase_if(clip.pins, [](const Pin& p) { return p.extra.find(kPinSplit) != nullptr; });
+    for (Pin& p : clip.pins)
+        if (const Json* r = p.extra.find(kPinRange); r && r->is_array() && r->arr.size() == 2) {
+            p.from = int(r->arr[0].num);
+            p.to = int(r->arr[1].num);
+            p.extra.erase(kPinRange);
+        }
     rd.source.clear();
     rd.baked = false;
 }

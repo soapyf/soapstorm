@@ -23,6 +23,9 @@ void remove_time(Clip& clip, int a, int b, const std::vector<std::string>& track
 void scale_time(Clip& clip, int a, int b, int length, const std::vector<std::string>& tracks = {});
 // The same on fractional frames: a..b becomes a..to, later keys move by to - b; the length rounds (TE-5).
 void scale_time_to(Clip& clip, double a, double b, double to, const std::vector<std::string>& tracks = {});
+// Keys that span the whole animation (0 to Last frame) scaled about pivot by sx, as the dope sheet's scale handle
+// does: Last frame and the loop points map with them from at_press, rounded, as Stretch Range moves them.
+void scale_length_with_keys(Clip& clip, const Clip& at_press, double pivot, double sx);
 
 // Keys of a..b (inclusive), frames relative to a.
 struct KeyRange {

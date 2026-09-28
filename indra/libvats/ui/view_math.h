@@ -82,16 +82,33 @@ struct Camera {
     static constexpr double kOrthoBack = 10;
     double ortho_half_height() const { return distance * std::tan(fov / 2); }
 
-    Vec3 forward() const {  // from the camera towards the target
+    // The lowest the eye may go, a render-time clamp that leaves yaw, pitch and distance alone: Second Life's
+    // "don't let camera go underground" (llagentcamera.cpp:2338-2347, camera z >= land + getCameraMinOffGround()).
+    // The Second Life preset sets it; off (very low) elsewhere and in ortho.
+    double min_eye_z = -1e30;
+
+    Vec3 orbit_dir() const {  // from the unclamped eye towards the target: yaw and pitch alone
         return Vec3{-std::cos(pitch) * std::cos(yaw), -std::cos(pitch) * std::sin(yaw), -std::sin(pitch)};
     }
-    Vec3 eye() const { return target - forward() * distance; }
+    Vec3 eye() const {
+        Vec3 e = target - orbit_dir() * distance;
+        if (!ortho && e.z < min_eye_z) e.z = min_eye_z;
+        return e;
+    }
+    Vec3 forward() const {  // from the camera towards the target
+        if (ortho || min_eye_z <= -1e29) return orbit_dir();
+        Vec3 f = target - eye();
+        return f.length() > 1e-9 ? f.normalized() : orbit_dir();
+    }
     Vec3 right() const { return forward().cross({0, 0, 1}).normalized(); }
     Vec3 up() const { return right().cross(forward()); }
 
     Mat4 view() const { return look_at(eye(), target, {0, 0, 1}); }
     Mat4 projection(double aspect) const {
-        if (!ortho) return perspective(fov, aspect, 0.01, 200.0);
+        // Near 0.01 m is the floor the viewer drops its near plane to when the camera is focused within 0.5 m
+        // (llviewerdisplay.cpp:815-822, MIN_NEAR_PLANE llcamera.h:49), so a close zoom never slices the face. Far
+        // reaches past the Second Life preset's 240 m zoom limit.
+        if (!ortho) return perspective(fov, aspect, 0.01, 512.0);
         const double h = ortho_half_height();
         return orthographic(h * aspect, h, -kOrthoBack, 200.0);
     }
@@ -107,17 +124,125 @@ struct Camera {
         target += right() * (-dx * k) + up() * (dy * k);
     }
     void zoom(double factor) { distance = std::clamp(distance * factor, 0.1, 30.0); }
-    // Keeps the camera where it is and turns it to look at a new target (Second Life's Alt+click).
-    void focus_on(const Vec3& point) {
-        Vec3 e = eye(), d = e - point;
+    // Keeps the camera where it is and turns it to look at a new target (Second Life's Alt+click): the offset
+    // becomes camera minus the new focus, as LLAgentCamera::setFocusGlobal does (llagentcamera.cpp:3125-3131).
+    void focus_on(const Vec3& point) { look(eye(), point); }
+    void look(const Vec3& e, const Vec3& point) {
+        Vec3 d = e - point;
         double len = d.length();
         if (len < 1e-4) return;
         target = point;
-        distance = std::clamp(len, 0.1, 30.0);
-        pitch = std::clamp(std::asin(d.z / len), -1.5, 1.5);
+        distance = len;
+        pitch = std::clamp(std::asin(d.z / len), -kPi / 2 + kDegToRad, kPi / 2 - kDegToRad);  // cameraOrbitOver's 1..179
         yaw = std::atan2(d.y, d.x);
     }
 };
+
+// Second Life's Alt camera, for the Second Life control preset: LLAgentCamera (llagentcamera.cpp) with the
+// focus not on the avatar, which is where an Alt+click leaves it. SL's mCameraFocusOffsetTarget (camera minus
+// focus) is -orbit_dir() * distance here and its focus is target. Every move ends in cameraZoomIn(1), which is what
+// stops the camera at the focus object instead of passing through it.
+namespace slcam {
+
+constexpr double kLandMinZoom = 0.15, kAvatarMinZoom = 0.5, kObjectMinZoom = 0.02;  // llagentcamera.cpp:95-98
+// calcCameraMinDistance's fudge "that lets you zoom in on avatars a bit more" (llagentcamera.cpp:81-83).
+constexpr double kAvatarZoomMinX = 0.55, kAvatarZoomMinY = 0.7, kAvatarZoomMinZ = 1.15;
+constexpr double kObjectExtentsPadding = 0.5;  // llagentcamera.cpp:108
+// getCameraMaxZoomDistance (llagentcamera.cpp:2470): min(MAX_CAMERA_DISTANCE_FROM_OBJECT 496, draw distance 256 - 1,
+// region width 256 - CAMERA_FUDGE_FROM_OBJECT 16).
+constexpr double kMaxZoom = 240;
+constexpr double kNear = 0.01;         // the near plane at the distances where the minimum bites (Camera::projection)
+constexpr double kMinOffGround = 0.5;  // getCameraMinOffGround, llagentcamera.cpp:2586; the ground is z 0
+constexpr double kAgentDepth = 0.45, kAgentWidth = 0.60;  // DEFAULT_AGENT_DEPTH / WIDTH, indra_constants.h:43-44
+
+// What the focus is on (SL's mFocusObject): the land, an avatar (its body, or something attached to it, which SL
+// swaps for the avatar, llagentcamera.cpp:3171-3179), or an object.
+struct Focus {
+    enum Kind { Land, Avatar, Object } kind = Avatar;
+    // The avatar object: LLVOAvatar's position is the middle of its box (llvoavatar.cpp:5825), turned with the agent,
+    // and its scale is the agent size: depth, width, body height.
+    Xform avatar{Quat{}, {0, 0, 0.84}};
+    Vec3 size{kAgentDepth, kAgentWidth, 1.68};
+};
+
+// LLAgentCamera::calcCameraMinDistance (llagentcamera.cpp:623-787), line for line: how close the camera may come
+// to the focus given where it looks from, from the avatar's box shrunk or grown by the focus's offset in it.
+inline bool min_distance(const Camera& cam, const Focus& f, double& obj_min_distance) {
+    const bool soft_limit = true;  // avatars
+    const Quat inv_object_rot = f.avatar.rot.conj();
+    const Vec3 target_offset_origin = inv_object_rot.rotate(cam.target - f.avatar.pos);
+    const Vec3 camera_offset_target = inv_object_rot.rotate(cam.eye() - cam.target);
+    Vec3 object_extents = f.size.mul({kAvatarZoomMinX, kAvatarZoomMinY, kAvatarZoomMinZ});
+    bool target_outside_object_extents = false;
+    for (int i = 0; i < 3; ++i) {
+        if (std::fabs(target_offset_origin[i]) * 2 > object_extents[i] + kObjectExtentsPadding)
+            target_outside_object_extents = true;
+        object_extents[i] += camera_offset_target[i] > 0 ? -target_offset_origin[i] * 2 : target_offset_origin[i] * 2;
+    }
+    for (int i = 0; i < 3; ++i) object_extents[i] = std::max(object_extents[i], 0.001);  // "so far that the object inverts"
+    Vec3 cam_abs_norm{std::fabs(camera_offset_target.x), std::fabs(camera_offset_target.y), std::fabs(camera_offset_target.z)};
+    for (int i = 0; i < 3; ++i) cam_abs_norm[i] = std::max(cam_abs_norm[i], 0.001);
+    cam_abs_norm = cam_abs_norm.normalized();
+    const Vec3 scaled{cam_abs_norm.x / object_extents.x, cam_abs_norm.y / object_extents.y, cam_abs_norm.z / object_extents.z};
+    const int axis = scaled.x > scaled.y && scaled.x > scaled.z ? 0 : scaled.y > scaled.z ? 1 : 2;
+    obj_min_distance = cam_abs_norm[axis] < 0.001 ? object_extents[axis] * 0.5 : object_extents[axis] * 0.5 / cam_abs_norm[axis];
+
+    Vec3 ts{std::fabs(target_offset_origin.x), std::fabs(target_offset_origin.y), std::fabs(target_offset_origin.z)};
+    ts = ts.length() > 1e-6 ? ts.normalized() : Vec3{};  // LLVector3::normalize zeroes a tiny vector
+    ts = {ts.x / object_extents.x, ts.y / object_extents.y, ts.z / object_extents.z};
+    const int split = ts.x > ts.y && ts.x > ts.z ? 0 : ts.y > ts.z ? 1 : 2;
+    // As in SL, the camera's offset from the object is not turned into the object's frame before the dot product.
+    const double camera_offset_clip = (cam.eye() - f.avatar.pos)[split], target_offset_clip = target_offset_origin[split];
+    if (target_outside_object_extents &&
+        ((camera_offset_clip > 0 && target_offset_clip > 0) || (camera_offset_clip < 0 && target_offset_clip < 0)))
+        return false;
+    obj_min_distance = std::min(obj_min_distance, 10 * std::sqrt(3.0));  // "diagonal of 10 by 10 cube"
+    obj_min_distance += kNear + (soft_limit ? 0.1 : 0.2);
+    return true;
+}
+
+// LLAgentCamera::cameraZoomIn (llagentcamera.cpp:996-1061): scales the distance to the focus, never nearer than
+// the focus allows ("Don't move through focus point") and never beyond 240 m or four times the distance now.
+inline void zoom_in(Camera& cam, const Focus& f, double fraction) {
+    const double current = cam.distance;
+    double d = current * fraction, min_zoom = kLandMinZoom;
+    if (f.kind == Focus::Avatar) min_distance(cam, f, min_zoom);  // SL ignores the bool: min_zoom may be set anyway
+    else if (f.kind == Focus::Object) min_zoom = kObjectMinZoom;
+    d = std::max(d, min_zoom);
+    d = std::min(d, std::min(kMaxZoom, current * 4));  // MAINT-3154
+    cam.distance = d;
+}
+
+// LLAgentCamera::cameraOrbitIn (llagentcamera.cpp:1092-1143), the wheel and Alt+Up/Down: moves meters towards the
+// focus, stopping 0.5 m from an avatar, 2 cm from an object, 15 cm from the land; then cameraZoomIn(1).
+inline void orbit_in(Camera& cam, const Focus& f, double meters) {
+    const double min_zoom = f.kind == Focus::Avatar ? kAvatarMinZoom : f.kind == Focus::Object ? kObjectMinZoom : kLandMinZoom;
+    cam.distance = std::min(std::max(cam.distance - meters, min_zoom), kMaxZoom);
+    zoom_in(cam, f, 1);
+}
+
+// LLAgentCamera::cameraOrbitAround (llagentcamera.cpp:903-921): the offset turns about world Z.
+inline void orbit_around(Camera& cam, const Focus& f, double radians) {
+    cam.yaw += radians;
+    zoom_in(cam, f, 1);
+}
+
+// LLAgentCamera::cameraOrbitOver (llagentcamera.cpp:927-953): up or down about the camera's left axis, the angle
+// from straight up kept within 1..179 degrees.
+inline void orbit_over(Camera& cam, const Focus& f, double angle) {
+    const double from_up = kPi / 2 - cam.pitch;
+    cam.pitch = kPi / 2 - std::clamp(from_up - angle, 1 * kDegToRad, 179 * kDegToRad);
+    zoom_in(cam, f, 1);
+}
+
+// LLAgentCamera::cameraPanLeft / cameraPanUp (llagentcamera.cpp:1167-1206): the focus moves along the camera's
+// left and up axes and the camera with it.
+inline void pan(Camera& cam, const Focus& f, double left, double up) {
+    cam.target += cam.right() * -left + cam.up() * up;
+    zoom_in(cam, f, 1);
+}
+
+}  // namespace slcam
 
 // Nearest hit distance of a ray on a triangle mesh (3 floats per vertex), or 1e30 (Moller-Trumbore).
 template <class Index>

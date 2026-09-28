@@ -219,9 +219,10 @@ How the keys are chosen, per curve:
 
 Every whole frame of the range stays within the tolerance of the curve as it was. Frames in between may differ a little more; export samples whole frames only.
 
+The rotation of a bone whose Y rotation comes within 5° of ±90° anywhere in the range (a knee bent past a right angle, for example) is fitted as a rotation instead: near this gimbal lock the X and Z curves swing wildly while the bone turns smoothly, so its three curves get keys on the same frames and the tolerance is how far the bone turns from where it was.
+
 Some curves are left as they are, and the dialog lists them:
 
-- the rotation of a bone whose Y rotation comes within 5° of ±90° anywhere in the range: near this gimbal lock the X and Z curves swing wildly and do not simplify well;
 - curves with **Stepped** keys in the range;
 - curves the fit would not give fewer keys, such as curves that are already hand-keyed.
 

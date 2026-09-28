@@ -18,7 +18,7 @@ Posing is setting the rotation (and sometimes the position) of bones at the curr
 - **Esc** clears the selection (in the Second Life preset, **Esc** resets the camera instead).
 - **Up** / **Down**, or **[** / **]**, walk to the parent or child bone (**Select → Select Parent**, **Select Child**). **Select → Next Sibling** and **Previous Sibling** step sideways.
 - In the **Bones** tab, click a name. Picking a bone in the view opens the list at that bone.
-- In the **Picker** tab beside it, click a body part on the avatar outline; **Shift+click** adds one. Save a selection you use often as a selection set there. See [[Picker]].
+- In the **Picker** tab beside it, click a joint dot or bone line on the chart of the avatar; **Shift+click** adds one, and a label such as **R ARM** selects the whole group. Save a selection you use often as a selection set there. See [[Picker]].
 - **Select → Select All** (**Ctrl+A** in the Industry preset), **Select Keyed on Frame** (**Ctrl+Shift+A**), **Select All Keyed** and **Select None** select in bulk.
 
 Selecting is not an undo step: **Ctrl+Z** takes back edits, not selections.
@@ -50,7 +50,7 @@ Pick a tool from the timeline bar or the **Tools** menu. The keys below are the 
 
 ### Typing exact values
 
-The **Bone** section of **Properties** shows the primary bone's **Rotation** in degrees around X, Y and Z; type or drag to change it. Under it, **Keyed at this frame** or **Not keyed at this frame** tells you whether the values are a key or are interpolated.
+The **Bone** section of **Properties** shows the primary bone's **Rotation** in degrees around X, Y and Z; type or drag to change it. Every change keys the bone at the current frame; **Ctrl+click** a value and press **Enter** without changing it to key the pose as it is (a hold). **Offset** works the same way. Under it, **Keyed at this frame** or **Not keyed at this frame** tells you whether the values are a key or are interpolated.
 
 ![The Bone section of Properties: mHead, Rotation 0.0, 15.0 and 0.0 degrees, Keyed at this frame](images/posing/bone-properties.png)
 *The **Bone** section on a keyed frame. Type into a field to key that value.*
@@ -80,6 +80,11 @@ Right-click empty space for selection commands, **Copy Pose**, **Paste Pose**, *
 | **Edit → Reset Whole Pose** | **Alt+Shift+R** | Resets every bone at this frame |
 | **Edit → Copy Pose** | **Ctrl+C** | Copies the pose of the selected bones, or the whole pose when nothing is selected |
 | **Edit → Paste Pose** | **Ctrl+V** | Pastes it at the current frame |
+
+**Ctrl+C** and **Ctrl+V** follow the pointer: over the **Graph** or the **Dope Sheet** they copy and paste keys,
+anywhere else the pose. With no pose copied, **Ctrl+V** says which clipboard is loaded: `Nothing to paste: Ctrl+C
+over the viewport copies the pose; over the Graph or Dope Sheet it copies keys`, or, after copying keys, `Copied keys,
+not a pose: paste them with the pointer over the Graph or Dope Sheet`.
 
 For mirroring, see [[Mirror, flip and reverse]].
 
@@ -136,7 +141,7 @@ Mouse and key behaviour depends on the control preset (Industry, Blender, QAvima
 
 - Place hands and feet with [[IK]] instead of rotating each joint.
 - Curl fingers with the [[Hand poser]], or apply a starter hand shape from the [[Pose library]].
-- **View → Bones in Front (X-ray)** makes bones inside the body clickable.
+- **View → Bones → Bones in Front (X-ray)** makes bones inside the body clickable.
 
 ## Troubleshooting
 

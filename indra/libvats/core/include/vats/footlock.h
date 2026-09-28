@@ -44,6 +44,14 @@ struct FootContact {
 
 std::vector<FootContact> find_foot_contacts(const Rig& rig, const Clip& clip, const FootLockOptions& opt);
 
+// The bottom of a foot (08 CK ground, 08 LA treadmill, tools/example_review): the back of the heel (fixed to the
+// ankle), the ball (to mFoot) and the toe tip (to mToe), where the SL default body mesh's sole is at rest. The joints
+// alone miss a heel that sinks while the toes lift: the ankle barely moves. side: 0 left, 1 right.
+std::vector<Vec3> sole_points(const Skeleton& skel, const std::vector<Xform>& globals, int side);
+// The lowest sole point of both feet (z), and that height at rest: the ground every foot check measures from.
+double sole_height(const Skeleton& skel, const std::vector<Xform>& globals);
+double sole_floor(const Skeleton& skel, const Shape* shape);
+
 // The ground over the range, in metres above the rest pose's floor (its lowest ankle, foot or toe).
 double foot_ground(const Rig& rig, const Clip& clip, const FootLockOptions& opt);
 

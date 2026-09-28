@@ -2,7 +2,7 @@
 
 Onion skinning draws faint ghosts of the pose a few frames before and after the current frame, so you can judge arcs and spacing without scrubbing back and forth. Earlier ghosts are cool (blue) and later ones warm (orange); nearer ghosts are stronger.
 
-> Related articles: [[Keys and timeline]], [[Graph editor]], [[Posing]]
+> Related articles: [[Keys and timeline]], [[Graph editor]], [[Posing]], [[Target ghost]]
 
 ## Usage
 
@@ -41,6 +41,13 @@ Pinned ghosts show whether **Show Ghosts** is on or not, and while the animation
 to them too. Each is drawn from the animation as it is now, so it follows your edits and undo. They are not
 saved with the project and not part of undo: opening or starting another project clears them, and so does
 closing the program. A ghost of an actor that has been removed or renamed is not drawn. Another actor's ghost is drawn in the edited actor's body.
+
+### Target ghost
+
+The target ghost is another animation, a project or a `.anim`, drawn in green over your avatar at the same frame:
+a pose to match by eye while you drag. The status bar says how far the selected bone is from it. Load one with
+**View → Target Ghost → Load Target...**, or with a help page's **Show the target** button. Unlike the onion
+ghosts it plays along while the animation plays. See [[Target ghost]].
 
 ## Configuration
 
@@ -85,6 +92,7 @@ The pose doesn't change around this frame. Raise **Every** to spread the ghosts 
 ## See also
 
 - [[Keys and timeline]]
+- [[Target ghost]]
 - [[Motion paths]]
 - [[Loop tools]]
 

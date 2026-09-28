@@ -2,7 +2,8 @@
 
 Face tracking turns the blendshapes a tracking app sends into motion of the Bento face bones: jaw, lips,
 eyelids, brows, cheeks and tongue, plus the eyes. It is part of [[Motion capture]] and works with
-iFacialMocap on an iPhone and with VMC apps that send blendshapes.
+iFacialMocap, VTube Studio and Live Link Face on an iPhone, Rokoko Face Capture through Rokoko Studio, and
+VMC apps that send blendshapes.
 
 > Related articles: [[Motion capture]], [[Skeleton]], [[Mesh bodies]]
 
@@ -28,13 +29,84 @@ on by default. **Shapes** shows how many blendshapes the sender sends, or **none
    starts sending to this computer.
 
 iFacialMocap sends the face and the head. **Head from iPhone** (on by default) keys the head's turn from
-its head tracking; untick it to keep the head from another take.
+its head tracking; untick it to keep the head from another take. The same tick is there for VTube Studio
+and Live Link Face.
+
+### Connecting VTube Studio
+
+VTube Studio is free, and its face stream needs no paid upgrade. Only the iPhone and iPad version can
+stream to a computer; the Android version cannot.
+
+1. Install VTube Studio on an iPhone or iPad with Face ID, on the same Wi-Fi as the computer, and open it.
+2. Set **Source** to **VTube Studio (iPhone)**. The port changes to `21413` and **Allow Other Devices**
+   is on.
+3. Click **Listen**.
+4. Type the phone's address into **Phone address**. On the phone it is under **Settings → Wi-Fi**, in
+   the details of your network.
+5. Press **Connect to iPhone**. VATs asks the phone for its tracking, and asks again every 3 seconds
+   while it listens; the phone keeps streaming as long as it hears these requests. **Stop Listening**
+   stops them.
+
+VTube Studio sends the 52 ARKit shapes, the head's turn and both eyes. Any free port works in **Port**:
+VATs tells the phone which one to send to.
+
+> **Note:** Built from VTube Studio's published format and tested with a simulated phone only, not yet
+> with a real iPhone. If the head or eyes turn the wrong way, please report it.
+
+### Connecting Live Link Face
+
+Live Link Face is Epic Games' free iPhone app. VATs reads its **Live Link (ARKit)** mode, not the
+MetaHuman Animator mode.
+
+1. Set **Source** to **Live Link Face (iPhone)**. The port changes to `11111` and **Allow Other Devices**
+   is on.
+2. Click **Listen**.
+3. In Live Link Face, choose **Live Link (ARKit)**. In its settings, under Live Link, add a target with
+   the address under **Your computer** and port `11111`.
+
+The app sends the 52 ARKit shapes and the head and eye turns. When a packet does not fit the ARKit
+format, the window says **Live Link Face: a packet did not fit. Set the app to Live Link (ARKit).**
+
+> **Note:** Built from public descriptions of the format and tested with a simulated phone only, not
+> yet with a real iPhone. The head and eye angles are read as radians; if the head turns far too little
+> or too much, or the wrong way, please report it.
+
+### Rokoko Face Capture
+
+Rokoko Face Capture on an iPhone streams through Rokoko Studio. With **Source** set to **Rokoko Studio
+Live** (see [[Motion capture#Connecting Rokoko Studio]]), an actor's face arrives with its body, and an
+actor with only a face is used when no actor has a body. Streaming the face from Studio needs Rokoko's
+Pro plan. Tested with a simulated Studio stream only.
 
 ### VMC apps
 
 VMC apps that send blendshapes, such as VSeeFace with a perfect-sync model, need no extra step. ARKit
 names are used directly; the VRM names (`a`, `i`, `u`, `e`, `o` and the other VRM expressions) are
 converted to ARKit shapes first.
+
+### Other phone apps
+
+These face apps send a protocol VATs already receives. Their steps come from the apps' own settings and
+have not been checked with VATs on a real phone yet.
+
+| App | Phone | Price | VATs **Source** |
+|---|---|---|---|
+| **Waidayo** | iPhone or iPad with Face ID | free | **VMC protocol** |
+| **AndroidMoCap** | Android 11 or later | free | **VMC protocol**, or **iFacialMocap (iPhone)** in its iFacialMocap mode |
+| **MeowFace** | Android | pay what you want | **iFacialMocap (iPhone)** |
+
+**Waidayo** (iPhone) sends ARKit ("perfect sync") shapes and the head over VMC:
+
+1. In VATs, set **Source** to **VMC protocol**, port `39539`, tick **Allow Other Devices** and click
+   **Listen**.
+2. In Waidayo, set the VMC send address to the address under **Your computer** and the port to `39539`.
+
+**AndroidMoCap** tracks 52 ARKit shapes and the gaze with the phone's front camera. Either send VMC as for
+Waidayo, or switch the app to its iFacialMocap mode and follow [[Face tracking#Connecting iFacialMocap]]
+with the Android phone's address.
+
+**MeowFace** sends the iFacialMocap protocol: follow [[Face tracking#Connecting iFacialMocap]] with the
+phone's address. It is no longer maintained and crashes on Android 13 and later; prefer AndroidMoCap.
 
 ### Setting the neutral face
 
@@ -97,7 +169,7 @@ to **Your avatar**: the moved bones are written at your head's own positions plu
 ### Eyes and eyelids
 
 The eyes turn `mEyeLeft`/`mEyeRight` and `mFaceEyeAltLeft`/`mFaceEyeAltRight` together. The eye angles
-come from the sender when it sends them (the iFacialMocap eye values, or the VMC `LeftEye` and `RightEye`
+come from the sender when it sends them (the iFacialMocap, VTube Studio and Live Link Face eye values, or the VMC `LeftEye` and `RightEye`
 bones); otherwise they come from the `eyeLook` shapes. The eyelids follow the eyes up and down: the upper
 lid follows 40 % of the eye's pitch and the lower lid 15 %.
 
@@ -124,13 +196,14 @@ the same setting in both windows.
 ### Shapes shows none received
 
 The sender sends no blendshapes. For a VMC app, use a model with blendshapes and switch on the app's
-blendshape sending. Rokoko face data is ignored.
+blendshape sending. For Rokoko Studio, the actor needs a face from Rokoko Face Capture.
 
 ### The iPhone does not start sending
 
 **Connect to iPhone** needs VATs to be listening and a **Phone address**. Check the address the app
 shows, the same Wi-Fi on both devices and the firewall line of the setup checklist (see
-[[Motion capture#The setup checklist]]).
+[[Motion capture#The setup checklist]]). Live Link Face has no **Connect to iPhone**: check the target
+address and port in the app, and that it is in **Live Link (ARKit)** mode.
 
 ### The face looks tense at rest
 

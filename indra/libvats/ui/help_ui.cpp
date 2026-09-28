@@ -19,6 +19,7 @@ struct HelpUi {
     std::string dir;
     ui::Host* host = nullptr;  // opens web links, loads images
     std::function<void(const std::string&)> open_example;  // an example link's project file, in <dir>/examples
+    std::function<void(const std::string&)> show_target;   // a target link's: shown as the target ghost
     bool loaded = false, open = false, focus = false;
     bool modal = false;  // opened from a modal dialog: drawn as a nested modal there, not as a window
     bool pages = false;  // docked narrow: the contents list shows in place of the page
@@ -151,7 +152,8 @@ const wiki::Span* draw_spans(HelpUi& ui, const std::vector<wiki::Span>& spans, f
             dl->AddRectFilled(bb.Min, bb.Max, ImGui::GetColorU32(held ? ImGuiCol_ButtonActive : hov ? ImGuiCol_ButtonHovered : ImGuiCol_Button),
                               ImGui::GetStyle().FrameRounding);
             dl->AddText(font, size, ImVec2(x + button_pad, y + text_dy), text, p, q);
-            if (hov) ImGui::SetTooltip("Opens %s as a new, untitled project", s.target.c_str());
+            if (hov && s.ghost) ImGui::SetTooltip("Shows %s as a green see-through target over your avatar; your project stays open", s.target.c_str());
+            else if (hov) ImGui::SetTooltip("Opens %s as a new, untitled project", s.target.c_str());
             continue;
         }
         const bool broken = s.link && !s.external && !s.target.empty() && !ui.lib.find(s.target);
@@ -405,7 +407,9 @@ void draw_page(HelpUi& ui, const wiki::Page& page) {
         ui.scroll = false;
     }
     if (clicked) {
-        if (clicked->example) {
+        if (clicked->ghost) {
+            if (ui.show_target) ui.show_target(clicked->target);
+        } else if (clicked->example) {
             if (ui.open_example) ui.open_example(clicked->target);
         } else if (clicked->external) {
             // Only web pages leave the app, never file: or other schemes.
@@ -516,6 +520,11 @@ void App::open_help(const std::string& page, const std::string& anchor) {
         if (file.empty() || file.find_first_of("/\\") != std::string::npos || file.find("..") != std::string::npos) return;
         const std::string path = host_.paths().help + "/examples/" + file;
         guard_unsaved([this, path] { guarded(path, [&] { load_project_file(path, true); }); });
+    };
+    // A target link loads the same folder's project as the target ghost; the open project is not touched.
+    ui.show_target = [this](const std::string& file) {
+        if (file.empty() || file.find_first_of("/\\") != std::string::npos || file.find("..") != std::string::npos) return;
+        cli_target(host_.paths().help + "/examples/" + file);
     };
     ui.load();
     const wiki::Page* p = page.empty() ? ui.home() : ui.lib.find(page);

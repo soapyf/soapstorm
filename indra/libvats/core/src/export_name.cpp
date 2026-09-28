@@ -47,4 +47,13 @@ std::string export_file_name(const ExportNaming& n, const std::string& project_s
     return out + "." + ext;
 }
 
+ExportNaming typed_export_naming(ExportNaming n, const std::string& project_stem, bool mirrored, const std::string& typed) {
+    std::string stem = typed.substr(0, typed.rfind('.'));
+    if (stem.empty() || export_file_name(n, project_stem, mirrored, "x") == stem + ".x") return n;
+    const std::string suffix = "_mirrored";
+    if (mirrored && stem.size() > suffix.size() && stem.ends_with(suffix)) stem.resize(stem.size() - suffix.size());
+    n.name = stem, n.pattern = "[NAME]", n.side = "";
+    return n;
+}
+
 }  // namespace vats

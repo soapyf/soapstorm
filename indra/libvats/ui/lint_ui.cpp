@@ -5,6 +5,7 @@
 // and shows the findings. Host calls only, so the viewer has it too.
 #include <algorithm>
 #include <cmath>
+#include <optional>
 
 #include "app.h"
 #include "icon_button.h"
@@ -17,6 +18,7 @@ namespace vats {
 
 struct CheckUi {
     Clip seen;                 // the clip as last seen, to notice edits
+    std::string ao_state;      // and its AO state (the priority rule reads it)
     bool have = false, due = true, at_once = false;
     std::uint64_t changed_ns = 0;  // when seen last changed
     unsigned generation = ~0u;     // the document seen: a new one (open, import) is checked at once
@@ -69,21 +71,52 @@ void App::update_check() {
     if (doc_.history.is_open() || playing_ || dragging_gizmo_ || modal_ != Modal::None) return;
     const std::uint64_t now = host_.ticks_ns();
     const Clip& clip = doc_.clip();
-    if (!ui.have || !(clip == ui.seen)) {
+    if (!ui.have || !(clip == ui.seen) || ui.ao_state != active_ao_state()) {
         ui.seen = clip;
+        ui.ao_state = active_ao_state();
         ui.have = ui.due = true;
         ui.changed_ns = now;
         ui.at_once = ui.generation != doc_generation_;
         ui.generation = doc_generation_;
     }
     if (!ui.due || (!ui.at_once && now - ui.changed_ns < kIdleNs)) return;
+    run_check();
+}
+
+std::string App::active_ao_state() const {
+    const Project& p = doc_.project;
+    return p.active_clip >= 0 && p.active_clip < int(p.clips.size()) ? p.clips[p.active_clip].ao_state : "";
+}
+
+void App::run_check() {
+    CheckUi& ui = *check_ui_;
+    ui.seen = doc_.clip();
+    ui.have = true;
     ui.due = ui.at_once = false;
+    const Clip& clip = doc_.clip();
     AnimExportOptions opt;  // as anim_bytes builds them; the clip's own reduce and leave_static are read by lint_clip
     opt.shape = export_shape();
     opt.positions = export_positions();
     opt.worn_overrides = host_.joint_overrides();
     if (multi_actor()) opt.external = actor_resolver(doc_.project.active);
-    ui.findings = lint_clip(skel_, clip, opt, settings_.check_off, mesh_body() ? view_body_shape() : nullptr);
+    ui.ao_state = active_ao_state();
+    // The other actors of a scene, frame by frame in this one's space, for the cross-actor contact rule.
+    std::vector<LintPartner> partners;
+    const Project& p = doc_.project;
+    if (multi_actor() && std::find(settings_.check_off.begin(), settings_.check_off.end(), "actor_contact") == settings_.check_off.end())
+        for (int i = 0; i < int(p.actors.size()); ++i) {
+            if (i == p.active || p.actors[i].hidden) continue;
+            LintPartner other{p.actors[i].name, {}};
+            const Xform rel = actor_rel(i);
+            for (int f = 0; f <= std::max(clip.end_frame, 1); ++f) {
+                std::vector<Xform> g = evaluate_actor(i, f).globals;
+                for (Xform& x : g) x = rel * x;
+                other.frames.push_back(std::move(g));
+            }
+            partners.push_back(std::move(other));
+        }
+    ui.findings = lint_clip(skel_, clip, opt, settings_.check_off, mesh_body() ? view_body_shape() : nullptr, ui.ao_state,
+                            partners);
 }
 
 // The self-penetration findings (08 SX) at a whole frame: their bones are tinted in the view.
@@ -124,7 +157,7 @@ void App::draw_check_badge() {
 void App::draw_check_panel() {
     update_check();
     if (!show_check_ || ImGui::GetFrameCount() < 3) return;  // placed beside the view once its size is known (--tab)
-    place_tool_window(4, 30, 32);
+    place_tool_window(30, 32);
     if (!ImGui::Begin("Animation Check", &show_check_)) return ImGui::End();
     help_button("animation-check");
     CheckUi& ui = *check_ui_;
@@ -144,11 +177,25 @@ void App::draw_check_panel() {
         ImGui::SameLine();
         ImGui::TextWrapped("%s", f.message.c_str());
         ImGui::Indent(ImGui::GetFontSize() + ImGui::GetStyle().ItemSpacing.x);
-        ImGui::BeginDisabled(!f.fix.apply || ui.due);  // stale until the re-check
+        ImGui::BeginDisabled(!f.fix.apply);
         if (icon_label_small_button(icon::kFix, "Fix")) {
-            edit(f.fix.label, [&](Clip& c) { f.fix.apply(c); });
-            status("Animation Check: " + f.fix.label);
-            ui.seen = doc_.clip(), ui.due = ui.at_once = true;  // the result shows at once
+            // A list made before the latest edit is stale: check now and take the same finding's fix from the fresh
+            // list, so the first click always applies (it used to be greyed out until the idle re-check).
+            std::optional<LintFix> fix = f.fix;
+            if (ui.due) {
+                run_check();
+                fix.reset();
+                for (const LintFinding& g : ui.findings)
+                    if (g.rule == f.rule && g.bones == f.bones && g.fix.apply) fix = g.fix;
+            }
+            if (fix) {
+                edit(fix->label, [&](Clip& c) { fix->apply(c); });
+                run_check();  // the result shows at once
+                const size_t left = ui.findings.size();
+                status("Animation Check: " + fix->label + (left ? " (" + std::to_string(left) + " left)" : " (no problems left)"));
+            } else {
+                status("Animation Check: that problem is gone since the last edit");
+            }
         }
         ImGui::EndDisabled();
         ImGui::SetItemTooltip("%s", f.fix.apply ? f.fix.label.c_str() : "No automatic fix: see the help page");
@@ -163,13 +210,14 @@ void App::draw_check_panel() {
             }
         }
         if (!f.frames.empty()) {
-            // The first of the finding's frames after the current one, wrapping: repeated clicks step through them.
-            const int here = int(std::lround(frame_));
-            auto next = std::upper_bound(f.frames.begin(), f.frames.end(), here);
-            const int to = next == f.frames.end() ? f.frames.front() : *next;
+            // The start of the next run of the finding's frames, wrapping: repeated clicks step through the runs.
+            const int to = lint_goto_frame(f.frames, int(std::lround(frame_)));
             ImGui::SameLine();
             if (icon_label_small_button(icon::kGoTo, ("Go to Frame " + std::to_string(to) + "###goto").c_str())) set_frame(to);
-            if (f.frames.size() > 1) ImGui::SetItemTooltip("%zu frames; click again for the next", f.frames.size());
+            if (const int runs = lint_frame_runs(f.frames); runs > 1)
+                ImGui::SetItemTooltip("%zu frames in %d stretches; click again for the next", f.frames.size(), runs);
+            else if (f.frames.size() > 1)
+                ImGui::SetItemTooltip("Frames %d to %d", f.frames.front(), f.frames.back());
         }
         ImGui::Unindent(ImGui::GetFontSize() + ImGui::GetStyle().ItemSpacing.x);
         ImGui::Spacing();

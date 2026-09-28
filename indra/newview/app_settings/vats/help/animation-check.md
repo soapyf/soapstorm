@@ -15,7 +15,7 @@ Choose **Tools → Animation Check...**. The status bar shows **Check: N** while
 the colour of the worst one (red, amber or blue); click it to open the window. With no findings the
 badge is hidden and the window says "No problems found."
 
-![The Animation Check window for the retarget-walk example: two blue findings for the elbows, and amber findings for the feet 8.9 cm below the ground and the hips and legs below priority 4, each with Fix, Select Bones and Go to Frame buttons](images/animation-check/check-window.png)
+![The Animation Check window for the retarget-walk example: two blue findings for the elbows, and amber findings for the feet 8.0 cm below the ground and the hips and legs below priority 4, each with Fix, Select Bones and Go to Frame buttons](images/animation-check/check-window.png)
 *The [[Retargeting]] example's walk: four findings, and **Rules...** at the bottom.*
 
 The check runs by itself: half a second after the last edit, once no drag, field edit or playback is
@@ -39,11 +39,13 @@ Each finding has a severity icon and a message:
 Under the message:
 
 - **Fix** applies the suggested change; its tooltip names it. It is one undo step with the same name,
-  so **Ctrl+Z** takes it back. It is greyed out while a re-check is pending, and when the finding has no
-  automatic fix.
+  so **Ctrl+Z** takes it back. If you edited the animation since the last check, the click checks it again
+  first and applies the fix for the problem as it is now. The status bar names the fix and how many problems
+  are left. It is greyed out when the finding has no automatic fix.
 - **Select Bones** selects the bones the finding names.
-- **Go to Frame N** moves to the first of the finding's frames after the current one. Click it again to
-  step through the others; the tooltip says how many there are.
+- **Go to Frame N** moves to the first frame of the next stretch of frames the finding is on (frames in a
+  row count as one stretch, so a held pose flagged on every frame goes to its first frame). Click it again to
+  step through the other stretches; the tooltip says how many there are.
 
 ### The rules
 
@@ -56,7 +58,7 @@ Under the message:
 | Zero ease pops | Ease in or ease out of 0: the avatar snaps into the first pose or back when it stops. Info. | **Set the Zero Ease to 0.30 s**, less when the loop or the animation is too short for that. |
 | Keys between frames | Keys more than 0.1 frame from a whole frame. Second Life plays whole frames only and never shows them. Warning. | **Snap Keys to Whole Frames**. A key that lands on a frame that already has a key replaces it. |
 | Turns over 90 degrees between keys | A bone that turns more than 90° between two keys the export keeps. Second Life blends rotations in a way that runs uneven over such a turn. Warning. | **Add Keys Along the Turn** keys the bone's rotation curves, without changing their shape, so each step turns 45° or less; export keeps every keyed frame. No fix when the turn happens within one frame, or when IK turns the bone. |
-| Whole body below priority 4 | The torso, head or arms and the hips or legs are animated, and the hips or legs play below priority 4. A walking or standing AO then wins them. Warning. | **Set Priority 4**: the clip's priority becomes 4 if it was lower, and bone priorities below 4 on the hips and legs are removed. See [[Animation priority]]. |
+| Whole body below priority 4 | The torso, head or arms and the hips or legs are animated, and the hips or legs play below priority 4. A walking or standing AO then wins them. Not for a clip with an **AO state** (see [[Clips]]) other than Typing or Always: the AO plays one animation per state and stops the one before, so its own stands and walks never compete with it. A Typing or Always clip plays over them, and the message says so. Warning. | **Set Priority 4**: the clip's priority becomes 4 if it was lower, and bone priorities below 4 on the hips and legs are removed. See [[Animation priority]]. |
 | Hip and leg position keys | Position keys that move `mSpine1`, the hips or any bone below them. They change the leg length, so the avatar pops up or down as the animation starts. Warning. | **Remove Their Position Keys**. |
 | Bones that never move | Tail, wing, face or finger bones (not the eyes) exported with rotation keys only, that stay within the rotation reduction tolerance of rest on every frame. They freeze the wearer's own tail, wings, face or hands. Warning. | **Leave Out Bones That Don't Move**: turns on that export setting; see [[Export to Second Life#Bones that don't move]]. |
 | Face position keys on the default face | Face bones exported with position keys while **Bake shape** is not **Your avatar**. The keys hold the SL Default face's joint positions and pull a mesh head towards it. Warning. | **Remove the Face Position Keys**. In the viewer, **Bake shape: Your avatar** is the other way out. |
@@ -64,8 +66,9 @@ Under the message:
 | Expression with face bones | An **Expression** is set while face bones are keyed. Warning. | **Set Expression to None**. |
 | Hand pose with finger bones | A **Hand pose** other than Relaxed is set while finger bones are keyed. Warning. | **Set Hand Pose to Relaxed**. |
 | Joints past their limits | A joint that goes more than 5° past the joint limits the [[Ragdoll]] uses, on any frame. Info. | **Key the Joint Inside Its Limits** keys the joint at its limit on each frame it is past it. |
-| Feet off the ground | The lowest ankle, foot or toe compared with where it is at rest, on the bake shape. More than 2 cm below on any frame is a Warning; never coming within 2 cm of it is Info. | **Raise the Hips by N cm** or **Drop the Hips by N cm**: every hip height key moves by that much (one held key is added when there are none), and so do the height keys of legs in IK. |
+| Feet off the ground | The lowest point of the soles (the back of each heel, the ball and the toe tip, where the body's soles are) compared with where it is at rest, on the bake shape, so a heel that sinks while the toes lift counts too. More than 2 cm below on any frame is a Warning; never coming within 2 cm of it is Info. | **Raise the Hips by N cm** or **Drop the Hips by N cm**: every hip height key moves by that much (one held key is added when there are none), and so do the height keys of legs in IK. |
 | Body parts pass through each other | Two body parts overlap by more than 1 cm on a frame, measured with the [[Ragdoll]]'s capsules (one rounded rod per major bone: head, neck, chest, torso, hips, and each upper arm, forearm, hand, thigh, shin and foot). A bone and the one it hangs from are not compared, nor parts that already touch in the rest pose, such as the two thighs or the chest and the head: those are never compared with each other. With a mesh body shown, the check uses its proportions and also tests the capsules against its collision volumes. One finding per pair, naming both bones. Info: capsules are not the mesh, so this is a hint, not a guarantee. | **Push Out**, when one of the two is a shoulder, elbow or wrist: on each listed frame the hand is moved away from the other part through the arm's IK, by the overlap plus 5 mm, and again (up to four times) while the two still overlap by more than 1 cm. An arm in IK gets its target keyed; an arm in FK gets its shoulder, elbow and wrist keyed with the rotations IK finds. No fix when neither is an arm. |
+| Actors pass through each other | In a scene with two actors or more, the body of the actor you edit against each other actor's, on every frame: the same capsules as the rule above, capsule against capsule. One finding per other actor, naming the deepest pairs. Info: a hug or a handshake meets on purpose. | None: judge which of the two should give way, and move it. |
 | Upload size | A file of 250,000 bytes or more, which Second Life refuses. Error. | **Thin Out Keys** re-keys every keyed bone from its own samples with linear keys, at the smallest tolerance that fits: twice the export's rotation tolerance, doubled until it fits (1 cm of position per degree). |
 | Duration | An animation longer than 60 s, which Second Life refuses. The other rules wait until it fits. Error. | **Trim to 60 s**: the last frame becomes 60 s; loop points past it move in. |
 

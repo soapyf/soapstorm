@@ -72,8 +72,10 @@ void App::store_library_item(LibraryItem item) {
 }
 
 // The user's prop library (library.json beside poses.json) and the read-only starter props shipped in
-// assets/props/props.json: [{slug, name, file, category, suggested_point, pos, rot}]. A two-handed prop may add
-// support_grip: where the other hand's fist goes, in metres in the suggested point's frame (for tutorials).
+// assets/props/props.json: [{slug, name, file, category, suggested_point, pos, rot}]. A hand-held prop adds
+// hand_pose, the starter hand pose its grip fits (hand-grip for most), and a two-handed one support_grip: where the
+// other hand's fist goes, in metres in the suggested point's frame (for tutorials). pos is where the centre of the
+// mesh's bounding box goes (vats::prop_frame), not its origin.
 void App::load_prop_libraries() {
     std::string path = library_dir() + "library.json", err;
     if (std::ifstream f{path, std::ios::binary}) {
@@ -142,7 +144,8 @@ void App::draw_prop_grid(std::vector<PropLibraryItem>& items, bool user) {
         }
         ImGui::PushID(it.id.c_str());
         if (col++ % cols) ImGui::SameLine();
-        ImTextureID tex = prop_thumbnail(it);
+        // Only cells in sight ask for a thumbnail: the few rendered each frame go to what is on screen.
+        ImTextureID tex = ImGui::IsRectVisible(ImVec2(cell, cell_h)) ? prop_thumbnail(it) : 0;
         ImVec2 p0 = ImGui::GetCursorScreenPos();
         if (ImGui::Selectable("##cell", false, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(cell, cell_h)) &&
             ImGui::IsMouseDoubleClicked(0))
@@ -257,7 +260,7 @@ void App::draw_library_icon(ImDrawList* dl, ImVec2 at, float size, const Library
     const ImU32 col = ImGui::GetColorU32(ImGuiCol_TextDisabled);
     ImVec2 b(at.x + size, at.y + size);
     dl->AddRectFilled(at, b, ImGui::GetColorU32(ImGuiCol_FrameBg), 4);
-    if (ImTextureID tex = pose_thumbnail(it)) {
+    if (ImTextureID tex = ImGui::IsRectVisible(at, b) ? pose_thumbnail(it) : 0) {  // in sight only, as the props
         dl->AddImage(ImTextureID(tex), at, b);
     } else {
         auto P = [&](float x, float y) { return ImVec2(at.x + x * size, at.y + y * size); };
@@ -305,6 +308,23 @@ bool App::library_row(const LibraryItem& it, const std::string& label) {
     return clicked;
 }
 
+// An Inventory section whose open or closed state is kept in the settings, so it stays as left across sessions.
+bool App::inventory_section(const char* name) {
+    std::vector<std::string>& closed = settings_.inventory_closed;
+    ImGui::SetNextItemOpen(std::find(closed.begin(), closed.end(), name) == closed.end(), ImGuiCond_Once);
+    const bool open = section_header(name);
+    if (inv_scroll_to_ == name) {  // --tab poses or props: the panel is docked to size after the first frames
+        ImGui::SetScrollHereY(0);  // the header just drawn at the top
+        if (ImGui::GetFrameCount() > 3) inv_scroll_to_.clear();
+    }
+    if (ImGui::IsItemToggledOpen()) {
+        std::erase(closed, std::string(name));
+        if (!open) closed.push_back(name);
+        save_settings();
+    }
+    return open;
+}
+
 void App::draw_inventory_panel() {
     if (!ImGui::Begin("Inventory")) return ImGui::End();
     {
@@ -315,110 +335,70 @@ void App::draw_inventory_panel() {
     }
     draw_file_library();  // Projects and Animations (file_library_ui.cpp)
     draw_bodies_section();
-    if (section_header("Meshes")) {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-        ImGui::TextWrapped("Drag onto a bone to attach, double-click to add, right-click for more.");
-        ImGui::PopStyleColor();
-        draw_prop_grid(prop_library_, true);
-        if (icon_label_button(icon::kImport, "Import .dae / .fbx...")) run_action("import_prop");
-        if (!starter_props_.empty()) {
-            ImGui::SeparatorText("Starter props");
-            draw_prop_grid(starter_props_, false);
-        }
-    }
-    ImGui::SeparatorText("Poses");
-    if (inv_scroll_poses_) {  // --tab poses: the panel is docked to size after the first frames
-        ImGui::SetScrollHereY(0);
-        if (ImGui::GetFrameCount() > 3) inv_scroll_poses_ = false;
-    }
-    if (icon_label_button(icon::kAddToLibrary, "Save Pose...")) {
-        name_prompt_ = selection_.empty() ? "Whole pose" : "Selected bones";
-        name_action_ = NameAction::SavePose;
-    }
-    ImGui::SetItemTooltip("Save the pose at this frame: the selected bones, or the whole body when nothing is selected");
-    ImGui::SameLine();
-    double a, b;
-    bool range = clip_range(a, b);
-    ImGui::BeginDisabled(!range || selection_.empty());
-    if (icon_label_button(icon::kAddToLibrary, "Save Clip...")) {
-        name_prompt_ = "Clip";
-        name_action_ = NameAction::SaveClip;
-    }
-    ImGui::EndDisabled();
-    ImGui::SetItemTooltip("%s", range && !selection_.empty() ? "Save the selected bones over the chosen frames"
-                                                             : "Select bones, then Shift-drag a frame range on the timeline "
-                                                               "or select keys in the graph");
-    ImGui::Checkbox("Apply mirrored", &apply_mirrored_);
-    ImGui::Separator();
-
     int remove = -1, rename = -1;
-    for (int pass = 0; pass < 2; ++pass) {
-        ImGui::TextDisabled(pass == 0 ? "Poses" : "Clips");
-        for (int i = 0; i < int(library_.items.size()); ++i) {
-            LibraryItem& it = library_.items[i];
-            if (it.clip != (pass == 1) || !inv_match(it.name)) continue;
-            ImGui::PushID(i);
-            std::string label = it.name + "   ";
-            if (!it.side.empty()) label += it.side + " ";
-            label += it.kind;
-            if (it.clip) label += " (" + std::to_string(int(it.length)) + " f)";
-            if (library_row(it, label) && ImGui::IsMouseDoubleClicked(0)) use_library_item(i, apply_mirrored_);
-            ImGui::SetItemTooltip("Double-click to %s at frame %d, or drag onto the view", it.clip ? "paste" : "apply", int(frame_));
-            if (ImGui::BeginDragDropSource()) {
-                ImGui::SetDragDropPayload("VATS_POSE", it.id.c_str(), it.id.size() + 1);
-                ImGui::TextUnformatted(it.name.c_str());
-                ImGui::EndDragDropSource();
-            }
-            if (ImGui::BeginPopupContextItem()) {
-                if (ImGui::MenuItem(it.clip ? "Paste at This Frame" : "Apply at This Frame")) use_library_item(i, false);
-                if (ImGui::MenuItem(it.clip ? "Paste Mirrored" : "Apply Mirrored")) use_library_item(i, true);
-                if (it.clip && ImGui::MenuItem("Paste, Matching Poses...")) open_match_poses(library_clip(it, apply_mirrored_), it.name);
-                if (!it.clip && ImGui::MenuItem("Show as Ghost")) pin_pose_ghost(it);  // 08 ON-5
-                ImGui::Separator();
-                if (menu_item_icon(icon::kRename, "Rename...")) rename = i;
-                if (menu_item_icon(icon::kDelete, "Delete")) remove = i;
-                ImGui::EndPopup();
-            }
-            ImGui::PopID();
+    if (inventory_section("Poses")) {
+        if (icon_label_button(icon::kAddToLibrary, "Save Pose...")) {
+            name_prompt_ = selection_.empty() ? "Whole pose" : "Selected bones";
+            name_action_ = NameAction::SavePose;
         }
-        ImGui::Spacing();
-    }
-    // Rename (06 section 4.2): a small prompt of its own, so it never mixes with the save prompt.
-    static int renaming = -1;
-    static bool renaming_prop = false;
-    static char rename_buf[128];
-    if (rename >= 0 || prop_to_rename >= 0) {
-        renaming_prop = prop_to_rename >= 0;
-        renaming = renaming_prop ? prop_to_rename : rename;
-        prop_to_rename = -1;
-        const std::string& name = renaming_prop ? prop_library_[renaming].prop.name : library_.items[renaming].name;
-        std::snprintf(rename_buf, sizeof rename_buf, "%s", name.c_str());
-        ImGui::OpenPopup("Rename");
-    }
-    if (ImGui::BeginPopupModal("Rename", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
-        bool ok = ImGui::InputText("##rename", rename_buf, sizeof rename_buf, ImGuiInputTextFlags_EnterReturnsTrue);
-        ok = ImGui::Button("Rename", ImVec2(90, 0)) || ok;
+        ImGui::SetItemTooltip("Save the pose at this frame: the selected bones, or the whole body when nothing is selected");
         ImGui::SameLine();
-        bool cancel = ImGui::Button("Cancel", ImVec2(90, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape);
-        bool valid = renaming >= 0 && renaming < int(renaming_prop ? prop_library_.size() : library_.items.size());
-        if (ok && rename_buf[0] && valid) {
-            if (renaming_prop) {
-                prop_library_[renaming].prop.name = rename_buf;
-                save_prop_library();
-            } else {
-                library_.items[renaming].name = rename_buf;
-                save_library();
-            }
+        double a, b;
+        bool range = clip_range(a, b);
+        ImGui::BeginDisabled(!range || selection_.empty());
+        if (icon_label_button(icon::kAddToLibrary, "Save Clip...")) {
+            name_prompt_ = "Clip";
+            name_action_ = NameAction::SaveClip;
         }
-        if ((ok && rename_buf[0]) || cancel || !valid) ImGui::CloseCurrentPopup();
-        ImGui::EndPopup();
+        ImGui::EndDisabled();
+        ImGui::SetItemTooltip("%s", range && !selection_.empty() ? "Save the selected bones over the chosen frames"
+                                                                 : "Select bones, then Shift-drag a frame range on the timeline "
+                                                                   "or select keys in the graph");
+        ImGui::Checkbox("Apply mirrored", &apply_mirrored_);
+        ImGui::Separator();
+
+        for (int pass = 0; pass < 2; ++pass) {
+            ImGui::TextDisabled(pass == 0 ? "Poses" : "Clips");
+            for (int i = 0; i < int(library_.items.size()); ++i) {
+                LibraryItem& it = library_.items[i];
+                if (it.clip != (pass == 1) || !inv_match(it.name)) continue;
+                ImGui::PushID(i);
+                std::string label = it.name + "   ";
+                if (!it.side.empty()) label += it.side + " ";
+                label += it.kind;
+                if (it.clip) label += " (" + std::to_string(int(it.length)) + " f)";
+                if (library_row(it, label) && ImGui::IsMouseDoubleClicked(0)) use_library_item(i, apply_mirrored_);
+                ImGui::SetItemTooltip("Double-click to %s at frame %d, or drag onto the view", it.clip ? "paste" : "apply", int(frame_));
+                if (ImGui::BeginDragDropSource()) {
+                    ImGui::SetDragDropPayload("VATS_POSE", it.id.c_str(), it.id.size() + 1);
+                    ImGui::TextUnformatted(it.name.c_str());
+                    ImGui::EndDragDropSource();
+                }
+                if (ImGui::BeginPopupContextItem()) {
+                    if (ImGui::MenuItem(it.clip ? "Paste at This Frame" : "Apply at This Frame")) use_library_item(i, false);
+                    if (ImGui::MenuItem(it.clip ? "Paste Mirrored" : "Apply Mirrored")) use_library_item(i, true);
+                    if (it.clip && ImGui::MenuItem("Paste, Matching Poses...")) open_match_poses(library_clip(it, apply_mirrored_), it.name);
+                    if (!it.clip && ImGui::MenuItem("Show as Ghost")) pin_pose_ghost(it);  // 08 ON-5
+                    ImGui::Separator();
+                    if (menu_item_icon(icon::kRename, "Rename...")) rename = i;
+                    if (menu_item_icon(icon::kDelete, "Delete")) remove = i;
+                    ImGui::EndPopup();
+                }
+                ImGui::PopID();
+            }
+            ImGui::Spacing();
+        }
     }
     // Built-in starter poses: hand shapes (authored for the left hand) and a few body poses.
-    if (section_header("Starter poses")) {
+    if (inventory_section("Starter poses")) {
         hint("Click a hand pose for the left hand, Shift+click for the right.");
+        std::string category;
         for (const LibraryItem& it : builtin_poses(skel_)) {
-            if (!inv_match(it.name)) continue;
+            if (!inv_match(it.name) && !(it.category.size() && inv_match(it.category))) continue;
+            if (it.category != category) {  // a category's poses come together, under its name
+                category = it.category;
+                if (!category.empty()) ImGui::TextDisabled("%s", category.c_str());
+            }
             ImGui::PushID(it.id.c_str());
             std::string label = it.name + (it.kind == "hand" ? "   hand" : "   body");
             if (library_row(it, label)) {
@@ -450,6 +430,45 @@ void App::draw_inventory_panel() {
             }
             ImGui::PopID();
         }
+    }
+    if (inventory_section("Meshes")) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextWrapped("Drag onto a bone to attach, double-click to add, right-click for more.");
+        ImGui::PopStyleColor();
+        draw_prop_grid(prop_library_, true);
+        if (icon_label_button(icon::kImport, "Import .dae / .fbx...")) run_action("import_prop");
+    }
+    if (!starter_props_.empty() && inventory_section("Starter props")) draw_prop_grid(starter_props_, false);
+    // Rename (06 section 4.2): a small prompt of its own, so it never mixes with the save prompt.
+    static int renaming = -1;
+    static bool renaming_prop = false;
+    static char rename_buf[128];
+    if (rename >= 0 || prop_to_rename >= 0) {
+        renaming_prop = prop_to_rename >= 0;
+        renaming = renaming_prop ? prop_to_rename : rename;
+        prop_to_rename = -1;
+        const std::string& name = renaming_prop ? prop_library_[renaming].prop.name : library_.items[renaming].name;
+        std::snprintf(rename_buf, sizeof rename_buf, "%s", name.c_str());
+        ImGui::OpenPopup("Rename");
+    }
+    if (ImGui::BeginPopupModal("Rename", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+        bool ok = ImGui::InputText("##rename", rename_buf, sizeof rename_buf, ImGuiInputTextFlags_EnterReturnsTrue);
+        ok = ImGui::Button("Rename", ImVec2(90, 0)) || ok;
+        ImGui::SameLine();
+        bool cancel = ImGui::Button("Cancel", ImVec2(90, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape);
+        bool valid = renaming >= 0 && renaming < int(renaming_prop ? prop_library_.size() : library_.items.size());
+        if (ok && rename_buf[0] && valid) {
+            if (renaming_prop) {
+                prop_library_[renaming].prop.name = rename_buf;
+                save_prop_library();
+            } else {
+                library_.items[renaming].name = rename_buf;
+                save_library();
+            }
+        }
+        if ((ok && rename_buf[0]) || cancel || !valid) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
     }
     if (remove >= 0) {
         std::string name = library_.items[remove].name;

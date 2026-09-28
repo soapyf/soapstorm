@@ -114,17 +114,18 @@ drops a little below the left.
 
 ### 8. Tilt the head with the picker
 
-1. Open the **Picker** tab, beside **Bones**. It shows an outline of the body from the front.
-2. Click the head. It fills with the accent colour and **mHead** is selected; parts that are keyed
-   are drawn amber.
+1. Open the **Picker** tab, beside **Bones**. Its **Body** page shows the body from the front, with a
+   dot on every joint.
+2. Click the top dot, on the head. It turns the accent colour and **mHead** is selected; joints keyed
+   at this frame show a yellow diamond.
 3. Set **Rotation** to `-8`, `-12`, `0`: the first box tilts the head to the side, the second lifts
    the chin.
 
-![The Picker tab: the Front outline with the head selected, the keyed arms amber](images/tutorial-your-first-pose/picker.png)
-*The picker, with **mHead** selected. Shift+click adds a part to the selection.*
+![The Picker tab: the Body page with the head selected and key diamonds on the posed joints](images/tutorial-your-first-pose/picker.png)
+*The picker, with **mHead** selected. Shift+click adds a bone to the selection.*
 
 You have now picked a bone three ways: by name in **Bones**, by clicking it in the viewport, and on
-the outline in **Picker**. Use whichever is quickest; they all select the same bone.
+its dot in **Picker**. Use whichever is quickest; they all select the same bone.
 
 ### 9. Make fists
 
@@ -214,3 +215,4 @@ pick it in **Bones** or **Picker**.
 - [[Pose library]]
 
 Category: Getting started
+Order: 10

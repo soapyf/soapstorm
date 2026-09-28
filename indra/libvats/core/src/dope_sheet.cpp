@@ -33,6 +33,21 @@ BodyPart part_of(const Skeleton& skel, const std::string& track, int& order) {
 
 }  // namespace
 
+std::vector<std::string> with_limb_controls(const Rig& rig, const Clip& clip, std::vector<std::string> tracks) {
+    const Skeleton& skel = rig.skeleton();
+    auto has = [&](const std::string& t) { return std::find(tracks.begin(), tracks.end(), t) != tracks.end(); };
+    for (const LimbInfo& l : rig.limbs()) {
+        const std::string ik = "ik." + l.name;
+        if (has(ik) || !clip.curves.count(ik)) continue;
+        for (int b : {l.root, l.mid, l.end})
+            if (b >= 0 && has(skel[b].name)) {
+                tracks.push_back(ik);
+                break;
+            }
+    }
+    return tracks;
+}
+
 std::vector<DopeRow> dope_rows(const Skeleton& skel, const std::vector<std::string>& tracks) {
     struct Entry {
         std::string part, track;

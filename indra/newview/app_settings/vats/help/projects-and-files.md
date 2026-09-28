@@ -68,6 +68,7 @@ When you close the window or press **Ctrl+Q**, VATs asks the same question.
 
 | Case | What VATs does |
 |---|---|
+| A project that ships with VATs (the help's examples, anything in the installed `help`, `data` or `assets` folders) | opens as an untitled copy, however it is opened (**File → Open**, **Open Recent**, a dropped file, the [[Command line]], the help's **Open the example**), and is not added to **Open Recent**. The status bar says `Opened <file> (an example: Save As to keep your changes)`; **Save** asks for a new name, so the shipped file never changes. |
 | A project saved by a newer VATs | opens what it can and shows **Newer project file**. **Save** asks for a new name, so the original stays whole. |
 | Prop meshes missing | opens anyway and lists them in **Some prop meshes are missing**. The props show as orange boxes until the files are back. |
 | An unreadable file | shows **Could not open project** with the reason; the open project is unchanged. |
@@ -159,3 +160,4 @@ missing**, then open the project again.
 - [[Troubleshooting]]
 
 Category: Getting started
+Order: 4

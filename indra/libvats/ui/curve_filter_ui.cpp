@@ -7,6 +7,7 @@
 #include <cmath>
 
 #include "graph_editor.h"
+#include "widgets.h"
 
 namespace vats {
 
@@ -25,13 +26,13 @@ bool filter_params_ui(FilterSettings& s, const std::function<void(const char*)>&
                       bool log = false) {
         label(name);
         float f = float(v);
-        if (ImGui::SliderFloat(id, &f, float(lo), float(hi), fmt, log ? ImGuiSliderFlags_Logarithmic : 0))
+        if (slider_float(id, &f, float(lo), float(hi), fmt, 0, log ? SliderCurve::Log : SliderCurve::Linear))
             v = std::clamp(double(f), lo, hi), changed = true;
         ImGui::SetItemTooltip("%s", tip);
     };
-    auto slider_int = [&](const char* name, const char* id, int& v, int lo, int hi, const char* fmt, const char* tip) {
+    auto int_slider = [&](const char* name, const char* id, int& v, int lo, int hi, const char* fmt, const char* tip) {
         label(name);
-        if (ImGui::SliderInt(id, &v, lo, hi, fmt)) v = std::clamp(v, lo, hi), changed = true;
+        if (vats::slider_int(id, &v, lo, hi, fmt)) v = std::clamp(v, lo, hi), changed = true;
         ImGui::SetItemTooltip("%s", tip);
     };
     switch (s.kind) {
@@ -42,15 +43,15 @@ bool filter_params_ui(FilterSettings& s, const std::function<void(const char*)>&
             slider("Speed cutoff", "##fdcut", s.d_cutoff, 0.1, 10, "%.2f Hz", "Smooths the speed estimate that drives the cutoff.", true);
             break;
         case FilterKind::SavitzkyGolay: {
-            slider_int("Window", "##fhalf", s.sg_half, 1, 15, "+-%d frames", "Frames fitted either side of each frame.");
-            slider_int("Degree", "##forder", s.sg_order, 0, 5, "%d", "The fitted polynomial's degree: higher keeps peaks sharper and calms less.");
+            int_slider("Window", "##fhalf", s.sg_half, 1, 15, "+-%d frames", "Frames fitted either side of each frame.");
+            int_slider("Degree", "##forder", s.sg_order, 0, 5, "%d", "The fitted polynomial's degree: higher keeps peaks sharper and calms less.");
             s.sg_order = std::min(s.sg_order, 2 * s.sg_half - 1);
             break;
         }
         case FilterKind::Butterworth: {
             slider("Cutoff", "##fcut", s.cutoff, 0.5, 15, "%.1f Hz", "Motion faster than this is removed; run forward and back so nothing lags.", true);
             int sections = s.order / 2;
-            slider_int("Sections", "##fsec", sections, 1, 4, "%d", "Second-order sections per pass: more cut off more sharply.");
+            int_slider("Sections", "##fsec", sections, 1, 4, "%d", "Second-order sections per pass: more cut off more sharply.");
             s.order = sections * 2;
             break;
         }
@@ -123,7 +124,7 @@ void GraphEditor::draw_filter_dialog(GraphContext& ctx) {
     // Scrub here: the dialog holds the rest of the app while it is open.
     label("Frame");
     float fr = float(ctx.frame);
-    if (ImGui::SliderFloat("##fframe", &fr, 0, float(std::max(ctx.clip.end_frame, 1)), "%.0f")) ctx.frame = std::round(fr);
+    if (slider_float("##fframe", &fr, 0, float(std::max(ctx.clip.end_frame, 1)), "%.0f")) ctx.frame = std::round(fr);
     if (changed) preview_filter(ctx);
 
     // Shake score per bone: the RMS of the jerk (third difference), before and after.

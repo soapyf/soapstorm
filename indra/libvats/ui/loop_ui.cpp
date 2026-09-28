@@ -10,6 +10,7 @@
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "vats/loop_tools.h"
 
 namespace vats {
@@ -51,13 +52,13 @@ void App::draw_onion_settings() {
     ImGui::SetItemTooltip("Faint copies of the pose before (cool) and after (warm) the current frame");
     ImGui::BeginDisabled(!v.on);
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
-    changed |= ImGui::SliderInt("Before", &v.s.before, 0, 5);
+    changed |= slider_int("Before", &v.s.before, 0, 5);
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
-    changed |= ImGui::SliderInt("After", &v.s.after, 0, 5);
+    changed |= slider_int("After", &v.s.after, 0, 5);
     changed |= ImGui::Checkbox("Keyed Frames Only", &v.s.keyed_only);
     ImGui::BeginDisabled(v.s.keyed_only);
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
-    changed |= ImGui::SliderInt("Every", &v.s.step, 1, 10, v.s.step == 1 ? "frame" : "%d frames");
+    changed |= slider_int("Every", &v.s.step, 1, 10, v.s.step == 1 ? "frame" : "%d frames");
     ImGui::EndDisabled();
     changed |= ImGui::Checkbox("Bones Only", &v.bones_only);
     ImGui::SetItemTooltip("Draw the ghosts as bones instead of the body");
@@ -81,7 +82,7 @@ void App::draw_loop_tools_menu() {
     const LoopRange r = loop_range(doc_.clip());
     ImGui::TextDisabled("Frames %d to %d%s", r.in, r.out, doc_.clip().loop ? " (loop)" : " (whole clip)");
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
-    ImGui::SliderInt("Blend", &loop_blend_, 0, 15, loop_blend_ ? "%d frames" : "end key only");
+    slider_int("Blend", &loop_blend_, 0, 15, loop_blend_ ? "%d frames" : "end key only");
     ImGui::SetItemTooltip("Ease the last frames into the start pose instead of only changing the end key");
     if (menu_item_icon(icon::kSeamless, "Make Loop Seamless")) {
         int n = 0;
@@ -97,8 +98,9 @@ void App::draw_loop_tools_menu() {
         graph_.snapshot_curves(doc_.clip());  // PT-4
         edit("Remove Hip Travel", [&](Clip& c) { t = remove_travel(c); });
         char buf[160];
-        std::snprintf(buf, sizeof buf, "Removed hip travel: %.2f m/s forward, %.2f m/s sideways (%.2f m/s)", t.vx, t.vy,
-                      t.speed());
+        auto shown = [](double v) { return std::fabs(v) < 0.005 ? 0.0 : v; };  // never "-0.00"
+        std::snprintf(buf, sizeof buf, "Removed hip travel: %.2f m/s forward, %.2f m/s sideways (%.2f m/s)", shown(t.vx),
+                      shown(t.vy), t.speed());
         status(buf);
     }
     ImGui::SetItemTooltip("Keeps the hips' sway and height; the walk speed is shown so an AO can match it");

@@ -7,6 +7,7 @@
 // iFacialMocap's own UDP text) and are keyed into the same takes as body capture (MC-3).
 #pragma once
 
+#include <cstdint>
 #include <map>
 #include <string>
 #include <string_view>
@@ -90,5 +91,36 @@ constexpr const char* kIFacialMocapHello = "iFacialMocap_sahuasouryya9218sauhuia
 // Applies one packet: weights into s.blend (0..1), the head rotation into s.face_head. False when it
 // is not an iFacialMocap packet.
 bool apply_ifacialmocap(std::string_view packet, VmcState& s);
+
+// --- VTube Studio (iPhone) ----------------------------------------------------------------------
+// Format from the public VTube Studio docs and their MIT receiver example (VTubeStudioBlendshapeUDPReceiverTest):
+// the PC sends vts_request(port) as JSON over UDP to the phone's port 21412; the phone then streams JSON frames to
+// that port for the requested time, so the PC repeats the request well inside it. A frame: {"Timestamp", "Hotkey",
+// "FaceFound", "Rotation":{x,y,z}, "Position":{x,y,z}, "EyeLeft":{x,y,z}, "EyeRight":{x,y,z},
+// "BlendShapes":[{"k":"EyeBlinkLeft","v":0..1}, ...]}, angles in degrees.
+constexpr int kVtsPhonePort = 21412;
+constexpr int kVtsPort = 21413;  // VATs' default listening port; any free port works, as the request names it
+constexpr double kVtsRequestSeconds = 10;
+constexpr double kVtsResendSeconds = 3;
+
+std::string vts_request(int reply_port);
+
+// Applies one frame: weights into s.blend (0..1), the head and eye rotations (taken as Unity Euler degrees, like
+// iFacialMocap's) into s.face_head and s.eye_left/right. Unknown fields are ignored. False when it is not a
+// VTube Studio frame.
+bool apply_vts(std::string_view packet, VmcState& s);
+
+// --- Live Link Face (iPhone, "Live Link (ARKit)" mode) ------------------------------------------
+// Format from PyLiveLinkFace (MIT) and public descriptions: a binary UDP packet whose tail is a count byte (61)
+// and 61 big-endian floats: the 52 ARKit shapes in ARKit order, then head yaw, pitch, roll, left eye yaw, pitch,
+// roll, and right eye yaw, pitch, roll. The app sends to the address and port typed into it.
+constexpr int kLiveLinkFacePort = 11111;
+// ASSUMPTION, untested with a real phone: the angles are radians. If heads turn far too little, they are degrees
+// (use 1); if they are normalised -1..1 half turns, use 180.
+constexpr double kLiveLinkFaceDegreesPerUnit = 180 / kPi;
+
+// Applies one packet: weights into s.blend, the head and eye angles into s.face_head and s.eye_left/right, as Unity
+// Euler (pitch x, yaw y, roll z; the signs are also an untested assumption). False for a packet that does not fit.
+bool apply_live_link_face(const std::uint8_t* data, size_t size, VmcState& s);
 
 }  // namespace vats

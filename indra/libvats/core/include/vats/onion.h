@@ -40,4 +40,12 @@ std::vector<OnionGhost> onion_ghosts(const Rig& rig, const Clip& clip, double fr
 // (a part pose over the rest of the body as it is), fully evaluated. The clip is not changed.
 std::vector<Xform> pose_ghost(const Rig& rig, const Clip& clip, double frame, const Shape* shape, const LibraryItem& pose);
 
+// The target ghost: another animation drawn over the avatar as a pose to match by eye. Its frame at the edited
+// clip's frame: the same frame number, held at 0 before its start and at its last frame after its end.
+double target_frame(const Clip& target, double frame);
+// How far a bone is from where the target has it, in degrees (0..180): the angle between its rotations relative to
+// its parent in two poses of one skeleton (globals), so a bone matches once its own rotation does, whatever its
+// parent does. The root bone's is its world rotation.
+double bone_angle_apart(const Skeleton& skel, const std::vector<Xform>& a, const std::vector<Xform>& b, int bone);
+
 }  // namespace vats

@@ -76,6 +76,8 @@ void Settings::load(const std::string& file) {
     boolean("mirror_centre", mirror_centre);
     boolean("scratch_existing_only", scratch_existing_only);
     str("scratch_scrub", scratch_scrub);
+    str("picker_style", picker_style);
+    boolean("picker_live", picker_live);
     boolean("show_graph", show_graph);
     str("theme", theme);
     boolean("show_welcome", show_welcome);
@@ -105,7 +107,7 @@ void Settings::load(const std::string& file) {
         for (auto& e : r->arr)
             if (e.is_string() && recent.size() < 10) recent.push_back(e.str);
     for (auto [key, list] : {std::pair{"project_folders", &project_folders}, std::pair{"anim_folders", &anim_folders},
-                             std::pair{"check_off", &check_off}})
+                             std::pair{"check_off", &check_off}, std::pair{"inventory_closed", &inventory_closed}})
         if (auto* r = j.find(key); r && r->is_array())
             for (auto& e : r->arr)
                 if (e.is_string()) list->push_back(e.str);
@@ -127,6 +129,8 @@ void Settings::save(const std::string& file) const {
     j.set("mirror_centre", mirror_centre);
     j.set("scratch_existing_only", scratch_existing_only);
     j.set("scratch_scrub", scratch_scrub);
+    j.set("picker_style", picker_style);
+    j.set("picker_live", picker_live);
     j.set("show_graph", show_graph);
     j.set("theme", theme);
     j.set("show_welcome", show_welcome);
@@ -152,7 +156,7 @@ void Settings::save(const std::string& file) const {
     for (auto& f : recent) r.push(f);
     j.set("recent", r);
     for (auto [key, list] : {std::pair{"project_folders", &project_folders}, std::pair{"anim_folders", &anim_folders},
-                             std::pair{"check_off", &check_off}}) {
+                             std::pair{"check_off", &check_off}, std::pair{"inventory_closed", &inventory_closed}}) {
         Json a = Json::array();
         for (auto& f : *list) a.push(f);
         j.set(key, a);

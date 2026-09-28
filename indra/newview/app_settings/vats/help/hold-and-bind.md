@@ -8,7 +8,7 @@ Pins keep a point in place while the rest of the body moves. **Hold in World** k
 
 ### What can be pinned
 
-- **Attachment points** (Right Hand, Left Hand, Chest and so on). Whatever someone wears on the point moves with it in Second Life. Show them with **View → Show Attachment Points**.
+- **Attachment points** (Right Hand, Left Hand, Chest and so on). Whatever someone wears on the point moves with it in Second Life. Show them with **View → Bones → Show Attachment Points**.
 - **The ends of limbs**: a wrist, an ankle, a fingertip, a hind foot or a wing tip. The pin holds the end through the limb's [[IK]], so the whole arm or leg bends to keep it on its target. See "Pinning hands and feet" below.
 - **Other bones**, such as the spine or the head. The pin moves just that bone.
 

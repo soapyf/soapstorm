@@ -91,10 +91,11 @@ with a whole-body ragdoll already set up from frame 10 for 60 frames.
 
 ## Troubleshooting
 
-### The window warns "Uses IK in this range"
+### A limb in IK or pinned during the fall
 
-Limbs that are in [[IK]] during the fall keep following their IK targets, so their baked keys do not show
-there. Switch the named limbs to FK first.
+The window names limbs that are in [[IK]] or held by a pin during the fall. **Bake** switches them to FK over
+the fall, from the pose they have, so nothing jumps, and back to IK after it if they were in IK; pins are cut
+round the fall. **Clear** puts the IK and the pins back as they were.
 
 ### The body lands on air above a prop
 

@@ -110,11 +110,12 @@ unsaved changes. See [[Projects and files]] for autosave and backups.
 ### 9. Export for Second Life
 
 1. Press **Ctrl+E** (**File → Export SL .anim...**). The **Export SL .anim** window opens with
-   `Length 1.00 s, priority 3, looping, ease 0.80 / 0.80 s` at the top, the export settings, and
+   `Length 1.00 s, priority 3, looping, ease 0.30 / 0.30 s` at the top, the export settings, and
    **Saves as** `first-wave_01.anim`: the project's name, the **Number** and the **Pattern**
    `[NAME]_[#]_[SIDE]`.
 2. Press **Export SL .anim**. The first time, a save dialog asks where to write the file; the folder
-   you choose becomes the project's export **Folder**, and later exports write straight into it.
+   you choose becomes the project's export **Folder**, and later exports write straight into it. Keep the name it
+   offers here (a name typed there becomes the export **Name**).
 3. The status bar says `Exported first-wave_01.anim: 8 bones, 1.00 s, priority 3, 572 bytes`.
 
 ![The Export SL .anim window: length and priority line, naming fields, bake shape, options, Saves as first-wave_01.anim](images/first-steps/export-window.png)
@@ -182,3 +183,4 @@ The selection was another bone, or the **Move** tool was active. Click the forea
 - [[Export to Second Life]]
 
 Category: Getting started
+Order: 3

@@ -168,7 +168,7 @@ void App::draw_mesh_body(std::vector<Vertex>& verts, std::vector<std::uint32_t>&
 }
 
 void App::draw_bodies_section() {
-    if (!section_header("Bodies")) return;
+    if (!inventory_section("Bodies")) return;
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
     ImGui::TextWrapped("Pose on your own mesh body by importing its devkit's rigged parts. Double-click to switch.");
     ImGui::PopStyleColor();

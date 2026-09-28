@@ -8,23 +8,29 @@ VATs animates the Second Life avatar skeleton: 133 joints (the classic body plus
 
 ### Showing and hiding bone groups
 
-Bones are grouped into categories. Show or hide each group from the **View** menu:
+Bones are grouped into categories. Show or hide each group from **View → Bones**:
 
 | Menu item | Bones |
 |---|---|
-| **View → Show Body Bones** | The classic body: pelvis, torso, neck, head, arms, legs |
-| **View → Show Hand Bones** | The Bento fingers of both hands |
-| **View → Show Face Bones** | The Bento face: brows, eyelids, eyes, nose, cheeks, lips, jaw, tongue |
-| **View → Show Wing Bones** | The Bento wings |
-| **View → Show Tail Bones** | The Bento tail |
-| **View → Show Hind Limb Bones** | The Bento hind legs |
-| **View → Show Groin Bones** | The Bento groin bone |
-| **View → Show Attachment Points** | Chest, Right Hand, Skull and the other attachment points |
-| **View → Show Collision Volumes** | The collision volumes |
+| **View → Bones → Show Body Bones** | The classic body: pelvis, torso, neck, head, arms, legs |
+| **View → Bones → Show Hand Bones** | The Bento fingers of both hands |
+| **View → Bones → Show Face Bones** | The Bento face: brows, eyelids, eyes, nose, cheeks, lips, jaw, tongue |
+| **View → Bones → Show Wing Bones** | The Bento wings |
+| **View → Bones → Show Tail Bones** | The Bento tail |
+| **View → Bones → Show Hind Limb Bones** | The Bento hind legs |
+| **View → Bones → Show Groin Bones** | The Bento groin bone |
+| **View → Bones → Show Attachment Points** | Chest, Right Hand, Skull and the other attachment points |
+| **View → Bones → Show Collision Volumes** | The collision volumes |
 
 Body and Hands are shown by default; the rest are hidden. The **Bones** tab has the same switches in its **Show** section. Hidden bones keep their keys and still play; hiding only stops you picking them in the view.
 
-**View → Bones in Front (X-ray)** draws the bones over the body so that bones inside the mesh can be clicked.
+**View → Bones → Bones in Front (X-ray)** draws the bones over the body so that bones inside the mesh can be clicked.
+
+Some Bento bones fold back on themselves. `mSpine1` goes up from the hips and `mSpine2` comes straight back down,
+so each would lie on top of `mPelvis`; `mSpine3` and `mSpine4` do the same over `mTorso`. They are drawn as small
+rings at their joints instead: one at the hips' joint, two nested ones where `mTorso` starts and one where `mChest`
+starts. Click a ring to select that bone; click the same spot again for the next bone there. Bend one of them and
+it is drawn as a bone again. `mFaceEyeAltLeft` and `mFaceEyeAltRight` are rings on the eyes for the same reason.
 
 ### Choosing a body
 
@@ -42,13 +48,13 @@ The body is only for display. It changes nothing in the exported animation.
 Attachment points are bones too: select, rotate, move and key them like any other bone. Whatever is worn on a point moves with it in Second Life, so an animation can wave a worn sword or pass a worn glass from one hand to the other ([[Hold and bind]]).
 
 ![The skeleton drawn without a body, in the Relaxed Stand pose, with a green dot at each attachment point](images/skeleton/attachment-points.png)
-*The skeleton with **View → Body → Skeleton Only** and **View → Show Attachment Points**: each green dot is an attachment point, clickable like a bone.*
+*The skeleton with **View → Body → Skeleton Only** and **View → Bones → Show Attachment Points**: each green dot is an attachment point, clickable like a bone.*
 
 A rotation key on an attachment point replaces the point's default rotation, the way Second Life applies it in-world. On export VATs writes the rest rotation combined with your pose, so a worn object sits the same in-world as in VATs.
 
 ### Collision volumes
 
-Collision volumes are the shapes Second Life uses for physics and for fitting some clothing. **View → Show Collision Volumes** draws them so you can check where the body is; they are hidden by default.
+Collision volumes are the shapes Second Life uses for physics and for fitting some clothing. **View → Bones → Show Collision Volumes** draws them so you can check where the body is; they are hidden by default.
 
 ## Tips and tricks
 
@@ -59,7 +65,7 @@ Collision volumes are the shapes Second Life uses for physics and for fitting so
 
 ### A bone can't be clicked
 
-The bone's category is hidden, or it sits inside the body. Turn its group on in **View**, or switch on **View → Bones in Front (X-ray)**. Clicking the same spot again selects the next bone underneath.
+The bone's category is hidden, or it sits inside the body. Turn its group on in **View → Bones**, or switch on **View → Bones → Bones in Front (X-ray)**. Clicking the same spot again selects the next bone underneath.
 
 ### A worn object sits at the wrong angle in-world
 

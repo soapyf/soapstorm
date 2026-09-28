@@ -61,12 +61,13 @@ using ExternalTarget = std::function<bool(const Pin& pin, double frame, Xform& o
 // simulation lives in dynamics.h; the settings live here so they save with the project and undo covers them.
 struct DynChain {
     std::string root;         // first simulated node; its parent drives it
-    int length = 1;           // joints down the first-child path (a collision volume is always 1)
+    int length = 1;           // joints deep down the first-child path, with its fans (a volume: always 1)
     double stiffness = 0.25;  // 0..1 per sub-step: pull back towards the animated pose
     double damping = 0.2;     // 0..1 per sub-step: loss of motion relative to the animated pose
     double drag = 0.02;       // 0..1 per sub-step: loss of world-space motion (air)
     double gravity = 0.0;     // multiples of 9.81 m/s^2, downwards
-    double radius = 0.02;     // metres kept outside the collision volumes
+    double radius = 0.02;     // metres kept outside the collision volumes (never more than the animation keeps)
+    double bend = 0;          // degrees each bone may bend away from its animated pose; 0 = no limit
     bool baked = false;       // the chain's tracks hold a bake; source has what they held before
     std::map<std::string, Track> source;  // pre-bake tracks (absent = the track did not exist)
     Json extra = Json::object();          // unknown fields, written back
@@ -211,7 +212,20 @@ struct Clip {
     bool operator==(const Clip&) const = default;
 };
 
+// File > New's clip: loop tangents on (08 LP-7) and 0.3 s eases, which fit its one second (the struct's 0.8 s
+// defaults, the file format's, do not).
+Clip new_project_clip();
+// Last frame set to last: Loop out follows it when it was at the old last frame, and both loop points stay inside.
+void set_last_frame(Clip& c, int last);
+// Loop turned on or off. Turning it on with Loop out at 0, or at its untouched default (0 to 30) in a longer clip,
+// loops the whole animation.
+void set_loop(Clip& c, bool on);
+
 // The pose the curves describe at a frame (FK only: no IK, no pins).
 Pose evaluate_curves(const Skeleton& skel, const Clip& clip, double frame);
+
+// The clip's curves and every baked layer's pre-bake tracks (dynamics, idle, ragdoll, face). A time edit moves them
+// all alike, so a re-bake starts from keys in the same time as the rest of the clip.
+void for_each_track_map(Clip& clip, const std::function<void(std::map<std::string, Track>&)>& fn);
 
 }  // namespace vats

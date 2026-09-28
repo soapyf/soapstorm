@@ -24,13 +24,22 @@ bool with_active(bool active, const auto& draw) {
     return pressed;
 }
 
+// A button pressed in a menu is an action, so it closes the menu, every level, as a menu item does (ImGui closes
+// menus only for its own menu items).
+bool closes_menu(bool pressed) {
+    if (pressed && (ImGui::GetCurrentWindow()->Flags & ImGuiWindowFlags_ChildMenu) &&
+        (GImGui->CurrentItemFlags & ImGuiItemFlags_AutoClosePopups))
+        ImGui::CloseCurrentPopup();
+    return pressed;
+}
+
 }  // namespace
 
 float icon_button_width() { return ImGui::GetFontSize() + 2 * ImGui::GetStyle().FramePadding.x; }
 
 bool icon_button(const char* id, const char* icon, const std::string& tooltip, bool active) {
     bool pressed = with_active(active, [&] {
-        return ImGui::Button((std::string(icon) + "##" + id).c_str(), ImVec2(icon_button_width(), 0));
+        return closes_menu(ImGui::Button((std::string(icon) + "##" + id).c_str(), ImVec2(icon_button_width(), 0)));
     });
     ImGui::SetItemTooltip("%s", tooltip.c_str());
     return pressed;
@@ -44,13 +53,13 @@ bool icon_small_button(const char* id, const char* icon, const std::string& tool
 }
 
 bool icon_label_button(const char* icon, const char* label, const std::string& tooltip, bool active) {
-    bool pressed = with_active(active, [&] { return ImGui::Button((std::string(icon) + " " + label).c_str()); });
+    bool pressed = with_active(active, [&] { return closes_menu(ImGui::Button((std::string(icon) + " " + label).c_str())); });
     if (!tooltip.empty()) ImGui::SetItemTooltip("%s", tooltip.c_str());
     return pressed;
 }
 
 bool icon_label_small_button(const char* icon, const char* label, const std::string& tooltip) {
-    bool pressed = ImGui::SmallButton((std::string(icon) + " " + label).c_str());
+    bool pressed = closes_menu(ImGui::SmallButton((std::string(icon) + " " + label).c_str()));
     if (!tooltip.empty()) ImGui::SetItemTooltip("%s", tooltip.c_str());
     return pressed;
 }
@@ -142,7 +151,8 @@ const char* action_icon(const char* action_id) {
                  {"tool_select", icon::kSelect}, {"tool_move", icon::kMove}, {"tool_rotate", icon::kRotate},
                  {"tool_scale", icon::kScale}, {"orientation", icon::kGimbal}, {"ik_toggle", icon::kIkFk},
                  {"follow_target", icon::kFollow}, {"pin_world", icon::kPin}, {"pin_bone", icon::kBind},
-                 {"unpin", icon::kRelease}, {"delete_pin", icon::kDelete}, {"hands", icon::kHand}};
+                 {"unpin", icon::kRelease}, {"delete_pin", icon::kDelete}, {"hands", icon::kHand},
+                 {"target_show", icon::kShown}, {"target_load", icon::kOpen}, {"target_clear", icon::kClear}};
     for (const auto& i : icons)
         if (std::strcmp(i.id, action_id) == 0) return i.icon;
     return nullptr;

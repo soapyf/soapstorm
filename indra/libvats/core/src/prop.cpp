@@ -1,6 +1,9 @@
 // Viewport Avatar Toolset - props in a project, and the prop library.
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 #include "vats/prop.h"
+
+#include "vats/dae.h"
+#include "vats/skeleton.h"
 #ifdef VATS_LEGACY_IMPORT
 #include "vats/legacy_import.h"
 #endif
@@ -106,6 +109,7 @@ Json props_to_json(const std::vector<Prop>& props) {
 }
 
 std::string prop_path_to_stored(const std::string& absolute, const std::string& project_dir) {
+    if (absolute.empty()) return {};  // no file (an audio track with only a BPM)
     fs::path a = fs::path(absolute).lexically_normal();
     if (project_dir.empty() || !a.is_absolute()) return a.generic_string();
     fs::path d = fs::path(project_dir).lexically_normal();
@@ -115,9 +119,29 @@ std::string prop_path_to_stored(const std::string& absolute, const std::string& 
 }
 
 std::string prop_path_from_stored(const std::string& stored, const std::string& project_dir) {
+    if (stored.empty()) return {};  // no file, not the project's folder
     fs::path s(stored);
     if (s.is_absolute() || project_dir.empty()) return s.lexically_normal().string();
     return (fs::path(project_dir) / s).lexically_normal().string();
+}
+
+bool path_inside(const std::string& path, const std::string& dir) {
+    if (path.empty() || dir.empty()) return false;
+    bool ok = true;
+    auto resolved = [&](const std::string& s) {  // UTF-8 on every system
+        std::error_code ec;
+        fs::path r = fs::weakly_canonical(fs::absolute(fs::path(std::u8string(s.begin(), s.end())), ec), ec);
+        ok = ok && !ec;
+        return r;
+    };
+    const fs::path p = resolved(path);
+    fs::path d = resolved(dir);
+    if (!ok) return false;
+    if (!d.has_filename()) d = d.parent_path();  // "dir/" as "dir"
+    auto a = p.begin();
+    for (auto b = d.begin(); b != d.end(); ++b, ++a)
+        if (a == p.end() || *a != *b) return false;
+    return true;
 }
 
 bool load_prop_library(std::string_view text, std::vector<PropLibraryItem>& out, std::string& err) {
@@ -193,5 +217,23 @@ bool parse_sl_vector(std::string_view text, Vec3& out) {
     out = {v[0], v[1], v[2]};
     return true;
 }
+
+Xform prop_frame(const Prop& p, const Skeleton& skel, const std::vector<Xform>& globals, const Xform& world) {
+    const int parent = !p.point.empty() ? skel.find(p.point) : !p.bone.empty() ? skel.find(p.bone) : -1;
+    const Xform base = parent >= 0 && parent < int(globals.size()) ? globals[parent] : world;
+    return base * Xform{euler_to_quat(p.rot), p.pos};
+}
+
+Vec3 prop_local(const Prop& p, const DaeModel& m, const Vec3& model_point) {
+    return (model_point - (m.bounds_min + m.bounds_max) * 0.5).mul(p.scale);
+}
+
+Vec3 prop_pos_for(const Prop& p, const DaeModel& m, const Vec3& model_point, const Vec3& target) {
+    return target - euler_to_quat(p.rot).rotate(prop_local(p, m, model_point));
+}
+
+// Measured on the skinned SL default bodies in hand-grip: the circle the curled fingers close round, 1.2 cm
+// towards the fingers and 1.5 cm below the attachment point, midway across the four fingers.
+Vec3 grip_hole(bool left) { return {0, left ? 0.012 : -0.012, -0.015}; }
 
 }  // namespace vats

@@ -51,4 +51,13 @@ std::vector<Xform> pose_ghost(const Rig& rig, const Clip& clip, double frame, co
     return evaluate(rig, posed, frame, shape).globals;
 }
 
+double target_frame(const Clip& target, double frame) { return std::clamp(frame, 0.0, double(std::max(target.end_frame, 0))); }
+
+double bone_angle_apart(const Skeleton& skel, const std::vector<Xform>& a, const std::vector<Xform>& b, int bone) {
+    if (bone < 0 || bone >= int(a.size()) || bone >= int(b.size())) return 0;
+    const int parent = skel[bone].parent;
+    auto local = [&](const std::vector<Xform>& g) { return parent >= 0 ? g[parent].rot.conj() * g[bone].rot : g[bone].rot; };
+    return (local(a).conj() * local(b)).angle() * kRadToDeg;
+}
+
 }  // namespace vats

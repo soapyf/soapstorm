@@ -66,6 +66,16 @@ inline constexpr const char* kBodyNames[kBodyCount] = {"Female", "Male", "Skelet
 enum class Tool { Select, Move, Rotate, Scale };  // Scale: static props only (VP-40)
 enum class Orientation { Local, World, Gimbal };
 
+// The audio track's beats between frames f0 and f1 as lines from y0 to y1 (AU-2): the timeline's and the dope
+// sheet's grid. x_of maps a timeline frame to a pixel.
+void draw_beat_grid(ImDrawList* dl, const Clip& c, const std::function<float(double)>& x_of, double f0, double f1, float y0, float y1);
+
+// The last item was let go with Enter: a value typed in and confirmed, whether or not it changed (a deliberate
+// "key it as it is"). ImGui reports the deactivation in the frame the key goes down.
+inline bool item_entered() {
+    return ImGui::IsItemDeactivated() && (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false));
+}
+
 // A command with its menu label and shortcut, shared by the menus and the key dispatcher.
 struct Action {
     const char* label;
@@ -116,6 +126,7 @@ public:
             if (aid == id) return run_action(id.c_str()), update_camera_animation(1), true;
         return false;
     }
+    void set_inventory_filter(const std::string& text) { inv_filter_ = text; }  // --filter
     void set_headless(bool h) { headless_ = h, show_welcome_ = show_welcome_ && !h; }  // scripted runs: no dialogs
     void start_playing() { playing_ = true; }  // --bench
     void select_all() { run_action("select_all"); }  // --select-all
@@ -133,7 +144,7 @@ public:
         clear_selection();
         selected_prop_ = index;
     }
-    // library = Inventory; poses = Inventory at Poses; actors, check open the Actors, Animation Check windows,
+    // library = Inventory; poses, props = Inventory at Poses, Meshes; actors, check open the Actors, Animation Check windows,
     // face the Face window, export the Export dialog, sl-preview the SL preview
     void show_tab(const std::string& tab) {
         if (tab == "actors") show_actors_ = true;
@@ -142,7 +153,7 @@ public:
         else if (tab == "export") show_export_dialog_ = true;
         else if (tab == "sl-preview") sl_preview_ = true;
         else pending_tab_ = tab == "bones" ? "Bones" : "Inventory";
-        inv_scroll_poses_ = tab == "poses";
+        inv_scroll_to_ = tab == "poses" ? "Poses" : tab == "props" ? "Meshes" : "";
     }
     void planner_add(const std::string& path);           // --plan-clip: the Priority Planner with this context clip
     void batch_retarget_folder(const std::string& dir);  // --batch-retarget: Batch Retarget run on this folder
@@ -165,12 +176,18 @@ public:
         graph_.frame_all(g);
     }
     void show_points() { show_category_[7] = true; }
+    // --picker <page>[/<view>] and --picker-style <silhouette|avatar|rest> (08 PK): the Picker tab at a page and view
+    // ("hands/palm"), and its backdrop for this run; false when unknown.
+    bool cli_picker(const std::string& page_view);
+    bool cli_picker_style(const std::string& style);
+    bool cli_select_group(const std::string& name);  // --select-group: a picker group by its name ("Right Arm")
     // --light <noon|key|rim|dusk|night|studio> and --backdrop (08 LT): the Light menu from the command line.
     bool set_light(const std::string& id);
     void show_backdrop() { backdrop_ = true; }
     // --reference <png> (08 RF): a picture as the backdrop; --listing <file.gif|file.png> (08 LM): writes listing
     // media with the window's settings (its size, turntable on) and says what it wrote.
     void cli_reference(const std::string& path) { guarded(path, [&] { load_reference(path, false); }); }
+    void cli_target(const std::string& path) { guarded(path, [&] { load_target(path); }); }  // --target: the target ghost
     bool export_listing_media(const std::string& path);
     void select_by_name(const std::string& name) {
         int i = skel_.find(name);
@@ -218,11 +235,11 @@ private:
     // File dialogs run asynchronously; results come back through this queue.
     enum class Dialog { Open, SaveAs, ImportAnim, ImportBvh, ImportProp, ImportBody, ImportRetarget, LoadAudio, ExportFolder,
                         LoadActor, SaveActor, ExportActor, SitLines, AoNotecard, ExpressionPack, Rhubarb, LoadReference,
-                        ListingMedia };
+                        ListingMedia, LoadTarget, ExportFile };
     // the *Actor ones act on file_actor_; SitLines on sit_format_, AoNotecard on ao_format_
     // A dialog's answer, queued for the next frame (hosts may answer on another thread). Several files
     // (body parts) arrive joined with newlines; "" = cancelled.
-    ui::FilesChosen dialog_result(Dialog kind, bool folder_of_file = false);
+    ui::FilesChosen dialog_result(Dialog kind);
     std::string export_summary_;
     std::optional<RawAnim> raw_import_;  // IO-22: the last .anim import, for byte-exact re-export
     // Autosave and crash recovery (UI-9): a dirty document is written to autosave/<session>.vat a minute
@@ -316,6 +333,7 @@ private:
     void draw_graph_panel();
     void draw_hand_poser();
     void draw_inventory_panel();
+    bool inventory_section(const char* name);  // a section header that keeps its open state in the settings
     void open_context_menu(int node);  // node -1 = the whole avatar
     void draw_context_menu();
     std::vector<std::string> part_tracks(const BodyPart& part) const;
@@ -362,11 +380,21 @@ private:
     void update_camera_animation(double dt);
     // The first surface under the cursor: the skinned body, then the ground within 20 m.
     bool pick_surface(ImVec2 mouse, Vec3& point) const;
+    // Second Life preset (viewport.cpp): what an Alt+click focuses on, the drag and the wheel.
+    slcam::Focus sl_avatar_focus(int actor) const;  // actor -1: the one being edited
+    double ray_prop(int prop, const Vec3& origin, const Vec3& dir) const;  // the hit's ray parameter, or 1e30
+    bool sl_focus_at(ImVec2 mouse);
+    void sl_camera_drag(ImVec2 delta, float view_width);
+    slcam::Focus sl_focus_;
+    bool sl_valid_click_ = false, sl_outside_slop_x_ = false, sl_outside_slop_y_ = false;
+    float sl_accum_x_ = 0, sl_accum_y_ = 0;
+    bool cam_anim_fixed_eye_ = false;  // the Second Life focus swing: the eye stays, the focus slides
+    Vec3 cam_anim_eye_;
     void viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered);
     bool place_gizmo();
-    // First-open position of a tool window (windows.cpp); with a size in font units, also its first-open size,
-    // kept on screen below the window's top.
-    void place_tool_window(int slot, float w_em = 0, float h_em = 0);
+    // A tool window's first-open place and size (in font units, capped to the screen), from windows.cpp: fully on
+    // the screen, beside the view rather than over the avatar, and over other open windows as little as it can.
+    void place_tool_window(float w_em, float h_em);
     // Mesh bodies from devkits (bodies.cpp, spec 08 BD).
     struct MeshBody {
         std::string id, name;
@@ -467,6 +495,7 @@ private:
 
     std::vector<int> selection_;  // primary last
     double frame_ = 0;
+    double evaluated_frame_ = -1;  // the frame pose_ and globals_ were last evaluated at
     bool playing_ = false;
     std::uint64_t last_tick_ = 0;
     std::array<bool, 8> show_category_{true, true, false, false, false, false, false, false};
@@ -568,8 +597,9 @@ private:
     bool bones_clicked_ = false;   // the selection came from the tree itself: no scroll
     bool quit_ = false;
     bool skip_shortcuts_ = false;
+    bool menu_open_ = false;  // a menu or other non-modal popup was open at the end of the last frame
     std::string pending_tab_;           // --tab: focused once the panels exist
-    bool inv_scroll_poses_ = false;     // --tab poses: scroll the Inventory to its Poses section once laid out
+    std::string inv_scroll_to_;         // --tab poses or props: the Inventory section to scroll to once laid out
     // Undo/Redo pressed in a text field: the field is released first and commits its own step (UI-15).
     const char* deferred_action_ = nullptr;
     int deferred_frames_ = 0;
@@ -616,6 +646,7 @@ private:
     }
     // The Local gizmo frame of a bone: its global rotation x the display bone frame (SK-21).
     Quat local_axes(int node) const { return globals_[node].rot * skel_.bone_frame(node); }
+    void draw_bones();  // the bone glyphs, through scene_triangles
     void draw_collision_volumes(std::vector<Vertex>& verts);  // VP-10, SK-I5
 
     // --- formats/viewport ---
@@ -818,6 +849,7 @@ private:
     std::vector<const std::vector<std::uint32_t>*> actor_pick_idx_;
     std::map<std::string, std::unique_ptr<AvatarMesh>> actor_meshes_;  // Linden bodies other actors use
     int pin_actor_ = -1, pin_bone_ = -1;       // the actors panel's "Bind to" choice
+    std::string pin_bone_filter_;              // and its bone list's filter
     // Other actors with body "Skeleton Only": their globals (active space) and colour, drawn as bones.
     struct OtherSkeleton {
         std::vector<Xform> globals;
@@ -876,6 +908,35 @@ private:
     void pin_pose_ghost(const LibraryItem& pose);
     std::vector<std::vector<Xform>> pinned_ghost_poses();  // in the active actor's space
     void draw_pinned_ghost_menu();
+    // --- the target ghost (pinned_ghosts_ui.cpp): another animation over the avatar, a pose to match by eye ---
+    // A view aid like the pinned ghosts: not saved, not undone, kept when another project opens. Frame n of the edited
+    // clip shows frame n of the target (target_frame), and it plays along.
+    // A multi-actor target shows every actor at its own placement: the one named as the actor you edit (else the
+    // target's active one) over yours, the others where they stand from it.
+    struct TargetGhost {
+        std::string name;  // the file's name, for the status bar
+        struct Actor {
+            std::string name;  // "" for a one-actor target
+            Clip clip;         // a .vat's clip of this actor, or an imported .anim
+            Xform place;       // its placement in the target's scene
+        };
+        std::vector<Actor> actors;
+        int active = 0;  // the target's own active actor
+    };
+    std::optional<TargetGhost> target_;
+    bool target_on_ = false;
+    float target_opacity_ = 0.35f;
+    std::vector<Xform> target_globals_;  // the matching actor's pose at this frame while shown (evaluate), else empty
+    std::vector<std::vector<Xform>> target_others_;  // the target's other actors, in the view's space
+    int target_main_ = 0;                            // the target actor target_globals_ is
+    int target_actor_for_view() const;               // which target actor matches the one you edit
+    std::vector<std::pair<const Clip*, const std::vector<Xform>*>> target_ghosts() const;  // each shown, and its clip
+    void load_target(const std::string& path);  // app.cpp: a .vat or .anim, shown; a message when it cannot be read
+    void draw_target(const SceneColours& colours);  // the see-through body and its props
+    void draw_target_bones(ImDrawList* dl);         // thin lines over the view, for the shown bone groups
+    void draw_target_menu();                        // View > Target Ghost
+    void draw_target_status();                      // the status bar's chip and the selected bone's distance
+    void resolve_clip_paths(Clip& c, const std::string& dir);  // a loaded project's props, audio and reference files
     // --- pose-matched insertion and transitions (pose_match_ui.cpp; spec 08 PM) ---
     void open_match_poses(Clip incoming, const std::string& name);  // offers to join a clip where the poses match
     void draw_match_poses_window();
@@ -938,6 +999,9 @@ private:
     bool motion_path_input(bool hovered);  // before viewport_input; true when it took the mouse
     int treadmill_speed_ = 0;  // index into kSlSpeeds; its size = the custom speed
     float treadmill_custom_ = 1.5f;
+    Clip gait_seen_;  // the clip the treadmill last measured, and its gait (measured again when the clip changes)
+    Gait gait_;
+    bool gait_have_ = false;
     double treadmill_frame_ = 0, treadmill_scroll_ = 0;  // metres the ground has moved, modulo its spacing
     // --- audio track + time editing (audio_track.cpp; spec 08 AU, TE) ---
     void load_audio(const std::string& path);
@@ -1017,15 +1081,37 @@ private:
     bool blocking_ = false;
     // --- body picker and selection sets (picker_ui.cpp; spec 08 PK, SS) ---
     void draw_picker_panel();  // the Picker tab beside Bones
+    void draw_selection_sets();  // its Selection Sets section
     void load_library_sets();  // selection_sets.json beside the pose library, read once
     void save_library_sets();
+    // Selects nodes: mode 0 replaces the selection, 1 adds, 2 removes. Adding shows a hidden group (Bones > Show) first.
+    void select_nodes(const std::vector<int>& nodes, int mode);
+    int category_size(int category) const;  // the nodes of a Show list row (8 = collision volumes)
+    void select_category(int category, int mode);  // the Show list's select button
     std::vector<SelectionSet> library_sets_;
     bool library_sets_loaded_ = false;
-    int picker_view_ = 0;  // a PickerView
+    std::shared_ptr<struct PickerUi> picker_ui_;  // defined in picker_ui.cpp
     std::string set_name_;
     bool set_to_library_ = false;
+    // The Picker's avatar render gathers the body's triangles (draw_avatar, draw_prop) instead of sending them.
+    struct Triangles {
+        std::vector<Vertex> verts;
+        std::vector<std::uint32_t> indices;
+        float gloss = 0;
+    };
+    std::vector<Triangles>* capture_triangles_ = nullptr;
+    void scene_triangles(const std::vector<Vertex>& verts, const std::vector<std::uint32_t>& indices, bool depth_test,
+                         float gloss, bool translucent = false) {
+        if (capture_triangles_) {
+            if (!translucent) capture_triangles_->push_back({verts, indices, gloss});
+            return;
+        }
+        host_.scene_triangles(verts, indices, depth_test, gloss, translucent);
+    }
     // --- animation check (lint_ui.cpp; spec 08 CK) ---
     void update_check();       // re-runs the check once the clip is still after an edit (from draw_check_panel)
+    void run_check();          // checks the clip now and takes it as seen
+    std::string active_ao_state() const;  // the active clip's AO state, "" for none
     void draw_check_panel();   // Tools > Animation Check...; call every frame
     void draw_check_badge();   // the status bar's finding count
     bool contact_bone(int node) const;  // a self-contact finding names node at this frame: tint it (08 SX)

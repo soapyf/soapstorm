@@ -36,11 +36,28 @@ struct LintRule {
 // Every rule, for the per-rule switches.
 const std::vector<LintRule>& lint_rules();
 
+// Where the finding's Go to Frame button goes from frame `here`: the first frame of the next run of consecutive
+// frames after the run holding `here`, wrapping to the first run. A held pose flagged on every frame is one run, so
+// it goes to that run's first frame, not to here + 1. -1 when the finding has no frames.
+int lint_goto_frame(const std::vector<int>& frames, int here);
+// How many runs of consecutive frames there are (the stops Go to Frame steps through).
+int lint_frame_runs(const std::vector<int>& frames);
+
+// Another actor of the scene (08 GR), for the cross-actor contact rule: its name, and its joints' globals on every
+// whole frame the check samples (0 to the clip's last), already in the checked actor's space (its placement applied).
+struct LintPartner {
+    std::string name;
+    std::vector<std::vector<Xform>> frames;
+};
+
 // Checks the clip as export_anim would write it with opt. The clip's own export settings ("reduce", "leave_static")
 // win over opt's, so a fix that changes them clears its finding. Rules named in off are skipped. The fixes may keep
 // a pointer to skel: apply them before it goes. mesh_body: the shape of the mesh body shown, if any; the self-contact
-// rule then measures on its proportions and adds its collision volumes.
+// rule then measures on its proportions and adds its collision volumes. ao_state: the clip's AO state (ClipSlot), ""
+// for none; an AO plays its own state's animations in place of each other, so the priority rule skips them. partners:
+// the scene's other actors; the actor_contact rule checks this body against each of theirs (a hug, a handshake).
 std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const AnimExportOptions& opt,
-                                   const std::vector<std::string>& off = {}, const Shape* mesh_body = nullptr);
+                                   const std::vector<std::string>& off = {}, const Shape* mesh_body = nullptr,
+                                   const std::string& ao_state = {}, const std::vector<LintPartner>& partners = {});
 
 }  // namespace vats

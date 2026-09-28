@@ -26,7 +26,7 @@ bool quality_tool(const std::string& label) {
 // the window is open and has no clean-up step to show; measure on demand if long clips make edits stutter.
 void App::draw_quality_panel() {
     if (!show_quality_) return;
-    place_tool_window(6, 26, 17);
+    place_tool_window(26, 17);
     if (!ImGui::Begin("Motion Quality", &show_quality_)) return ImGui::End();
     help_button("motion-quality");
     const History& h = doc_.history;

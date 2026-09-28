@@ -38,10 +38,10 @@ To try a preset for one session, start VATs with `--preset`; see [[Command line]
 
 | | Industry (Maya-style) | Blender | QAvimator | Second Life |
 |---|---|---|---|---|
-| Orbit | **Alt + left drag** | **Middle drag** | **Left drag** on empty space | **Ctrl + Alt + drag**; or **Alt + click**, then drag sideways |
+| Orbit | **Alt + left drag** | **Middle drag** | **Left drag** on empty space | **Alt + click**, then drag sideways; **Ctrl + Alt + drag** |
 | Pan | **Alt + middle drag** | **Shift + middle drag** | **Shift + left drag** on empty space; **middle drag** | **Ctrl + Alt + Shift + drag**; **middle drag** |
-| Zoom | **Alt + right drag**; wheel | **Ctrl + middle drag**; wheel | **Alt + left drag** on empty space; wheel | **Alt + click**, then drag up or down; wheel |
-| Focus | **F** (Frame Selected) | **Num .** | **F** | **Alt + click** on the avatar |
+| Zoom | **Alt + right drag**; wheel | **Ctrl + middle drag**; wheel | **Alt + left drag** on empty space; wheel | **Alt + click**, then drag up or down; wheel (towards the focus) |
+| Focus | **F** (Frame Selected) | **Num .** | **F** | **Alt + click** on the body, a prop or the ground |
 | Snap while dragging | hold **Ctrl** | hold **Ctrl** | hold **Ctrl** | **G** toggles snapping |
 
 In every preset:
@@ -125,9 +125,42 @@ and **R** pick the Select, Move, Rotate and Scale tools as in Industry, and **A*
 - Hold **Ctrl** to switch the gizmo to rotation, **Ctrl+Shift** to scale (static props only).
 - **G** toggles snapping; the step is **Rotation snap (G)** in [[Preferences]].
 - **Esc** resets the camera instead of clearing the selection.
-- Keyboard camera, with the pointer anywhere: **Alt+Left** / **Alt+Right** orbit, **Alt+Up** /
-  **Alt+Down** zoom, **Ctrl+Alt+Up** / **Ctrl+Alt+Down** orbit up and down, **Ctrl+Alt+Shift+arrows**
-  pan.
+- **Reset Hip Position** is **Alt+H** only: **Alt+W** belongs to the camera.
+
+#### The camera, as in world
+
+The camera works as the Second Life viewer's own (Firestorm's too): the same moves, speeds and limits.
+
+- **Alt + click** focuses on the exact point you clicked: the skin of the body, another actor, a prop
+  or the ground. The camera stays where it is and turns to it over 0.4 s. Clicking a worn prop focuses
+  on its wearer, as with an attachment in world. A click on the empty sky changes nothing, and the
+  drag that follows moves nothing.
+- Keep the button down and drag. Sideways orbits round the focus, a full turn across the width of the
+  view; up zooms in and down zooms out, 1% a pixel. With **Ctrl** as well (**Ctrl+Alt**) the drag
+  orbits: sideways round, up and down over. With **Ctrl+Shift** as well it pans, three times the
+  distance to the focus across the view. **Ctrl+Alt+click** and **Ctrl+Alt+Shift+click** focus too.
+  The modifiers count as they are held during the drag, and nothing moves until the pointer has gone
+  4 pixels.
+- The camera never passes through the focus. Zooming in on a person stops a little in front of them,
+  by the same rule as in world: their body box (0.45 m deep, 0.6 m wide, as tall as they are), less how
+  far the focus sits off its middle, plus 11 cm. Alt+click the nose and zoom in hard: the camera stops
+  about 13 cm in front of it; orbit round and it keeps outside the head.
+- The wheel zooms towards the focus, a fourth root of two a click, and stops 0.5 m from a person, 2 cm
+  from a prop, 15 cm from the ground. It does nothing while the camera is swinging to a new focus.
+- The farthest is 240 m, and one step never goes more than four times as far out.
+- The camera stays at least 0.5 m above the ground; it still looks at the focus.
+- The view has the viewer's 60 degree lens.
+- Keys, with the pointer anywhere: **Alt+Left** / **Alt+Right** (or **Alt+A** / **Alt+D**) orbit 90
+  degrees a second; **Alt+Up** / **Alt+Down** (or **Alt+W** / **Alt+S**) zoom, the distance to the
+  focus a second; **Alt+Page Up** / **Alt+Page Down** (or **Alt+E** / **Alt+C**) and
+  **Ctrl+Alt+Up** / **Ctrl+Alt+Down** (or **W** / **S**) orbit up and down; **Ctrl+Alt+Shift** with the
+  arrows or **A D W S** pans 5 m a second. A tap nudges: a key starts at 5% of its speed and reaches
+  all of it in a quarter of a second.
+- **Esc** puts the camera back and its focus on the avatar.
+
+Not the same as in world: the pointer stays visible and stops at the edge of the screen, where the
+viewer hides it and keeps it in the middle; a middle drag also pans; and a person is clicked by the
+skin you see rather than by their collision shapes.
 
 ### Graph editor navigation
 

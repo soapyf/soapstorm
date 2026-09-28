@@ -6,7 +6,7 @@ move, stretch, copy and delete keys across many bones at once.
 
 > Related articles: [[Graph editor]], [[Keys and timeline]], [[Time editing]]
 
-![The Dope Sheet panel: a Summary row and rows for Torso, Head, Left Arm, Left Hand and Right Arm, with key diamonds at frames 0, 8, 15, 23 and 30](images/dope-sheet/dope-sheet-panel.png)
+![The Dope Sheet panel: a Summary row and rows for Torso, Head, Left Arm, Left Hand and Right Arm, with key diamonds on every frame in the Summary and Torso rows and every third frame in the others](images/dope-sheet/dope-sheet-panel.png)
 *The walk example with every bone selected: the Summary row gathers the keys of all the rows below it.*
 
 ## Usage
@@ -18,7 +18,8 @@ front. **View → Dope Sheet** shows or hides it; its **×** closes it until **V
 next start of VATs.
 
 The drop-down at the top is the graph's own: **Selected bones** shows the bones and [[IK]] controls that
-are selected, **All animated bones** adds every animated bone. Changing it in one panel changes it in the
+are selected, plus the keyed IK target and pole of every limb with a selected bone (so a leg's keys and its
+foot's move together); **All animated bones** adds every animated bone. Changing it in one panel changes it in the
 other. **Snap frames** is shared with the graph too.
 
 ### Reading the rows
@@ -62,6 +63,11 @@ pole's curves while the target is selected) drop out of the selection once the *
 - With two or more selected keys on different frames, a box with a handle on each side surrounds them.
   Drag the left handle to stretch or squeeze the keys about the rightmost one, the right handle about the
   leftmost (**Scale Keys**). Dragging a handle past the other side reverses the keys in time.
+- When the selected keys run from frame 0 to **Last frame**, **Last frame** and the loop points scale with them,
+  as **Edit → Time → Stretch Range...** moves them; the tooltip says `Scale to <n> frames: Last frame and the loop
+  go along`.
+- With **Snap to Beats** on (the [[Audio track]]), the dragged edge lands on a beat within 3 frames. The beat grid
+  shows in the dope sheet as on the timeline.
 - **Esc** during a drag puts the keys back.
 
 Keys that land on the frame of an unselected key replace it, as in the graph.

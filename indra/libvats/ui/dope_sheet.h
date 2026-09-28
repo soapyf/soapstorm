@@ -46,6 +46,7 @@ private:
     std::vector<KeyRef> press_sel_;
     double press_t0_ = 0, press_t1_ = 1;
     double scale_pivot_ = 0, scale_w_ = 1;
+    bool press_whole_ = false;  // the scaled keys span 0 to Last frame: the length scales with them
 };
 
 }  // namespace vats

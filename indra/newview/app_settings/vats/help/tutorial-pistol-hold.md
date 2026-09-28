@@ -10,7 +10,7 @@ values and play the timeline.
 
 ## What you will make
 
-![The avatar walks with the right arm straight out in front at shoulder height, holding the pistol, while the legs, hips and left arm keep walking](images/tutorial-pistol-hold/over-walk.gif)
+![The avatar walks forward with the right arm straight out and the pistol raised in front of the right eye, while the legs, hips and left arm keep walking](images/tutorial-pistol-hold/over-walk.gif)
 *The hold over a walk, as Second Life combines them: the hold wins the right arm, the walk keeps everything else.*
 
 A one-second loop at priority 4 that keys 18 bones: the right shoulder, elbow and wrist, and the 15 finger
@@ -30,9 +30,9 @@ Press **Ctrl+N** (**File → New**). In **Properties → Animation** set:
 | **Ease in** | `0.3` |
 | **Ease out** | `0.3` |
 
-Leave **Last frame** at 30: a static hold needs no length, but the loop must be longer than **Ease in** plus
-**Ease out** (the **Animation Check** says `The loop (1.00 s) is shorter than ease in plus ease out (1.60 s)`
-with the default 0.8 s eases).
+Leave **Last frame** at 30: a static hold needs no length, but the loop must not be shorter than **Ease in**
+plus **Ease out** (the **Animation Check** says `The loop (1.00 s) is shorter than ease in plus ease out` when it
+is).
 
 > **Note:** **Why priority 4.** AO walks, runs and stands usually play at priority 2 or 3. For each bone, Second
 > Life plays the animation with the higher priority (see [[Animation priority#How priorities stack per bone]]). At
@@ -43,7 +43,8 @@ with the default 0.8 s eases).
 
 Open the **Inventory** tab, scroll to **Meshes → Starter props → Weapons** and double-click **Pistol**. The status
 bar says `Added Pistol on Right Hand`, and **Properties → Prop** shows **Parent** **Right Hand**, **Position**
-`0.005`, `-0.069`, `-0.035` and **Rotation** `-90.0°`, `0.0°`, `-90.0°`: the grip the starter prop comes with.
+`0.020`, `-0.073`, `-0.015` and **Rotation** `-90.0°`, `0.0°`, `-90.0°`: the grip the starter prop comes with, set so
+the grip sits in the hollow of a closed fist.
 
 The pistol is a prop: it shows in VATs and saves with the project, but it is not part of the exported
 animation. In Second Life the wearer wears their own gun on the **Right Hand** attachment point, and it moves
@@ -68,26 +69,29 @@ type each **Rotation** box in **Properties → Bone**:
 
 | Bone | Rotation (X, Y, Z) |
 |---|---|
-| **mShoulderRight** | `0`, `0`, `90` |
-| **mElbowRight** | `0`, `-90`, `0` |
-| **mWristRight** | `0`, `0`, `0` |
+| **mShoulderRight** | `-18`, `3`, `98` |
+| **mElbowRight** | `0`, `-90`, `5` |
+| **mWristRight** | `-8`, `-4`, `-18` |
 
-The shoulder turns the arm 90° forward, level at shoulder height; the elbow turns the forearm thumb-up so the
-pistol stands upright; the wrist is keyed at rest.
+The shoulder turns the arm forward (Z), raises it 18° above level (X) and brings it a little in towards the
+middle, so the pistol comes up in front of the right eye; the elbow turns the forearm thumb-up (Y) so the pistol
+stands upright, and is only just short of straight (Z); the wrist sets the pistol level and pointing straight
+ahead.
 
-![The right hand from its thumb side: the fingers closed round the pistol's grip, the barrel pointing forward along the forearm](images/tutorial-pistol-hold/grip.png)
-*The grip: the pistol in line with the forearm.*
+![The right hand from its thumb side: the fingers closed round the pistol's grip, the web of the hand high under the slide, the barrel pointing forward](images/tutorial-pistol-hold/grip.png)
+*The grip: the pistol's grip deep in the fist.*
 
-Press **7** (**View → Top**). Shoulder, elbow, wrist and barrel make one straight line pointing along the red
-arrow on the ground, the avatar's forward direction.
+Press **7** (**View → Camera → Top**). The arm runs straight from the shoulder in towards the middle, and the barrel points
+along the red arrow on the ground, the avatar's forward direction.
 
-![The avatar from above: the right arm straight out in front, shoulder, elbow, wrist and pistol in one line along the forward arrow](images/tutorial-pistol-hold/aim-line.png)
+![The avatar from above: the right arm straight out in front, angled in towards the middle, the pistol pointing along the forward arrow](images/tutorial-pistol-hold/aim-line.png)
 *From above: the aim line.*
 
-> **Note:** **Why a straight line.** A one-handed aim reads as an aim when the arm is a straight line from the
-> shoulder through the hand to the target. A bent elbow or a wrist cocked up or down breaks the line and the
-> gun points somewhere else. The wrist is keyed at 0 on purpose: without a key, the AO's wrist motion would play
-> and tip the gun off the line.
+> **Note:** **Why the sights at the eye.** A one-handed aim reads as an aim when the arm is straight and the
+> sights sit on the line from the eye to the target: the pistol comes up to the eye, the head does not go down to
+> the pistol. An arm held level at shoulder height points the gun a hand's width below the eye line, and a bent
+> elbow or a loose wrist tips it off. The wrist is keyed on purpose: without a key, the AO's wrist motion would
+> play and tip the gun off the line.
 
 ### 5. Leave everything else unkeyed
 
@@ -109,7 +113,7 @@ Check it against a walk:
 3. Select **mShoulderRight**. The planner says `Wins: This project at 4` and `Loses: loop-walk at 3`, and under
    **Your clip**, `Wins every bone it keys.`
 
-![The Priority Planner with loop-walk at priority 3, 8 bones, and This project at 4, 18 bones; mShoulderRight: Wins: This project at 4, Loses: loop-walk at 3](images/tutorial-pistol-hold/planner.png)
+![The Priority Planner with loop-walk at priority 3, 14 bones, and This project at 4, 18 bones; mShoulderRight: Wins: This project at 4, Loses: loop-walk at 3](images/tutorial-pistol-hold/planner.png)
 *The hold against a walk. In the **Bones** list, the legs take the walk's colour and the right arm the hold's.*
 
 ### 6. Save the static hold
@@ -152,8 +156,8 @@ the breathing one for standing; see [[Export to Second Life]] and [[Clips]].
   hands. The finger keys drive Bento hands; set **Hand pose** to **Fist Right** as well if the hold should also
   close a system hand.
 - A low-ready variant (the gun pointing at the ground ahead) is the same arm with the shoulder lowered: on a
-  third clip, set **mShoulderRight** to `40`, `0`, `90`: the arm and the barrel tip 40° down. Add the head (**mHead** Z `-5`) only if you want the
-  eyes on the sights; it costs the AO's head motion.
+  third clip, set **mShoulderRight** to `27`, `3`, `98`: the arm and the barrel tip 45° down. Key the head only if
+  you want it to move with the gun; it costs the AO's head motion.
 - To see what Second Life will do with the file, tick **View → Preview as SL Plays It**: the window reads
   `843 bytes, 18 bones, 36 rotation and 0 position keys` for the static hold.
 
@@ -162,7 +166,7 @@ the breathing one for standing; see [[Export to Second Life]] and [[Clips]].
 [Open the example](example:pistol-hold.vat): the static hold.
 
 1. **Properties → Animation**: **Loop** ticked, **Priority** 4, **Ease in** and **Ease out** 0.30 s, **Last frame** 30.
-2. Select **mShoulderRight**: **Rotation** `0.0°`, `0.0°`, `90.0°`, **Keyed at this frame**, **Priority** **Clip (4)**.
+2. Select **mShoulderRight**: **Rotation** `-18.0°`, `3.0°`, `98.0°`, **Keyed at this frame**, **Priority** **Clip (4)**.
 3. **All Keyed** selects 18 bones.
 4. The status bar shows no **Check**.
 
@@ -173,8 +177,8 @@ Layer...** the list reads `Breath, 1 bones  (baked)`; **Last frame** and **Loop 
 
 ### The gun points up at the sky or sideways
 
-The forearm is not turned: check that **mElbowRight** reads `0`, `-90`, `0`. The elbow's Y value turns the
-forearm about its length, and the gun with it; its Z value would bend the elbow instead.
+The forearm is not turned: check that **mElbowRight** reads `0`, `-90`, `5`. The elbow's Y value turns the
+forearm about its length, and the gun with it; its Z value bends the elbow.
 
 ### Grip (Cylinder) closed the left hand
 
@@ -204,3 +208,4 @@ baked. Set **Loop out** to 120, then **Re-bake**.
 - [[Idle layer]]
 
 Category: Getting started
+Order: 16

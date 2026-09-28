@@ -8,6 +8,7 @@
 
 #include "app.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "theme.h"
 #include "vats/expression_pack.h"
 
@@ -85,7 +86,7 @@ void App::draw_expression_pack(const FaceTable& table, bool positions) {
     ImGui::InputText("##packprefix", ui.prefix, sizeof ui.prefix);
     ImGui::SetItemTooltip("Every file is <prefix>_<expression>, lower case with _ for spaces: Face_wink_l");
     label("Priority");
-    ImGui::SliderInt("##packprio", &ui.opt.priority, 0, 6);
+    slider_int("##packprio", &ui.opt.priority, 0, 6);
     ImGui::SetItemTooltip("Above the body animations the face should win over (an AO's are often 3 or 4)");
     float len = float(ui.opt.length), ein = float(ui.opt.ease_in), eout = float(ui.opt.ease_out);
     label("Length");
@@ -183,7 +184,7 @@ void App::export_expression_pack(const std::string& folder) {
     else if (!warnings.empty()) message("Exported with warnings", warnings);
     std::string note;
     for (auto& s : skipped) note += (note.empty() ? "" : ", ") + s;
-    status("Exported " + std::to_string(written) + " expressions to " + folder + (ui.to_library ? ", and to the Animations library" : "") +
+    status("Exported " + count_noun(written, "expression") + " to " + folder + (ui.to_library ? ", and to the Animations library" : "") +
            (note.empty() ? "" : " (left out, they move nothing without Move face bones: " + note + ")"));
 }
 

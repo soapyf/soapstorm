@@ -105,21 +105,29 @@ void App::look_from(const Vec3& dir) {
     cam_anim_from_target_ = cam_anim_to_target_ = camera_.target;
     cam_anim_from_dist_ = cam_anim_to_dist_ = camera_.distance;
     cam_anim_t_ = 0;
+    cam_anim_fixed_eye_ = false;
 }
 
-// The eye stays put and the camera turns to the new point; the swing is eased rather than cut.
+// Second Life's focus swing (LLAgentCamera::setFocusGlobal, then startCameraAnimation and updateCamera): the camera
+// stays where it is and the focus slides from the old point to the new over ZoomTime (0.4 s, settings.xml), smoothstep
+// eased (llagentcamera.cpp:1521, 1545, 1569-1570).
 void App::focus_camera_on(const Vec3& point) {
-    Camera to = camera_;
-    to.focus_on(point);
-    cam_anim_from_yaw_ = camera_.yaw, cam_anim_from_pitch_ = camera_.pitch;
-    cam_anim_to_yaw_ = camera_.yaw + std::remainder(to.yaw - camera_.yaw, 2 * kPi), cam_anim_to_pitch_ = to.pitch;
-    cam_anim_from_target_ = camera_.target, cam_anim_to_target_ = to.target;
-    cam_anim_from_dist_ = camera_.distance, cam_anim_to_dist_ = to.distance;
+    update_camera_animation(1);  // one in progress lands first
+    cam_anim_eye_ = camera_.eye();
+    cam_anim_from_target_ = camera_.target, cam_anim_to_target_ = point;
+    cam_anim_fixed_eye_ = true;
     cam_anim_t_ = 0;
 }
 
 void App::update_camera_animation(double dt) {
     if (cam_anim_t_ < 0) return;
+    if (cam_anim_fixed_eye_) {
+        cam_anim_t_ = std::min(1.0, cam_anim_t_ + dt / 0.4);
+        const double t = cam_anim_t_, e = t * t * (3 - 2 * t);  // llsmoothstep
+        camera_.look(cam_anim_eye_, cam_anim_from_target_ + (cam_anim_to_target_ - cam_anim_from_target_) * e);
+        if (cam_anim_t_ >= 1) cam_anim_t_ = -1;
+        return;
+    }
     cam_anim_t_ = std::min(1.0, cam_anim_t_ + dt / 0.3);
     double e = std::sin(cam_anim_t_ * kPi / 2);  // sine ease-out
     camera_.yaw = cam_anim_from_yaw_ + (cam_anim_to_yaw_ - cam_anim_from_yaw_) * e;

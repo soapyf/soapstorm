@@ -112,6 +112,12 @@ std::vector<double> beat_times(const AudioTrack& a, double from, double to) {
     return out;
 }
 
+double beat_snapped_frame(const Clip& c, double frame) {
+    if (!c.audio || !c.audio->snap) return frame;
+    const double fps = std::max(c.fps, 1);
+    return std::round(snap_to_beat(*c.audio, frame / fps, 3.0 / fps) * fps);
+}
+
 double snap_to_beat(const AudioTrack& a, double t, double tolerance) {
     double best = t, gap = tolerance;
     for (double b : beat_times(a, t - tolerance, t + tolerance))

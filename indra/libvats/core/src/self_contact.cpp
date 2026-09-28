@@ -132,6 +132,16 @@ std::vector<SelfContact> SelfContactCheck::find(const std::vector<Xform>& global
     return out;
 }
 
+std::vector<SelfContact> cross_contacts(const Skeleton& skel, const std::vector<Xform>& globals,
+                                        const std::vector<Xform>& other, double tol) {
+    const std::vector<RagdollCapsule> mine = contact_hull(skel, globals), theirs = contact_hull(skel, other);
+    std::vector<SelfContact> out;
+    for (const RagdollCapsule& A : mine)
+        for (const RagdollCapsule& B : theirs)
+            if (const Hit h = capsule_hit(A, B); h.depth > tol) out.push_back({A.node, B.node, h.depth, h.push});
+    return out;
+}
+
 void push_out(Clip& clip, const Rig& rig, int a, int b, const std::vector<int>& frames, const Shape* shape,
               const Shape* mesh_body) {
     const Skeleton& skel = rig.skeleton();

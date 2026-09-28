@@ -12,6 +12,7 @@
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "vats/loop_assist.h"
 
 namespace vats {
@@ -99,7 +100,9 @@ void App::draw_loop_assist_window() {
             ImGui::PopID();
         }
         ImGui::EndTable();
-        ImGui::TextDisabled("Distance: how far apart the two poses are, a weighted average in degrees (0 = the same)");
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));  // wrapped: wider than the window
+        ImGui::TextWrapped("Distance: how far apart the two poses are, a weighted average in degrees (0 = the same)");
+        ImGui::PopStyleColor();
     }
     if (use >= 0) {
         const LoopCandidate k = loop_candidates_[use];
@@ -145,7 +148,7 @@ void App::draw_loop_assist_window() {
         if (icon_label_button(icon::kStretch, ("Stretch to " + std::to_string(fit.frames) + " Frames").c_str())) {
             edit("Fit Loop to Beats", [&](Clip& c) { stretch_loop(c, fit.frames); });
             sync_actor_timing(doc_.project);
-            status("The " + std::string(clip.loop ? "loop" : "animation") + " is now " + std::to_string(loop_beats_) + " beats long");
+            status("The " + std::string(clip.loop ? "loop" : "animation") + " is now " + count_noun(loop_beats_, "beat") + " long");
         }
         ImGui::EndDisabled();
         ImGui::SetItemTooltip("Stretches or squashes the keys in the range; later keys move with its end");
@@ -161,17 +164,19 @@ void App::draw_treadmill_menu() {
     char label[64];
     for (int i = 0; i < kSpeedCount; ++i) {
         std::snprintf(label, sizeof label, "SL %s (%.2f m/s)", kSlSpeeds[i].name, kSlSpeeds[i].mps);
-        if (ImGui::RadioButton(label, treadmill_speed_ == i)) treadmill_speed_ = i;
+        if (ImGui::MenuItem(label, nullptr, treadmill_speed_ == i)) treadmill_speed_ = i;  // a pick closes the menu
     }
-    if (ImGui::RadioButton("Custom", treadmill_speed_ == kSpeedCount)) treadmill_speed_ = kSpeedCount;
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6);
-    if (ImGui::DragFloat("##custom", &treadmill_custom_, 0.01f, 0.f, 30.f, "%.2f m/s")) treadmill_speed_ = kSpeedCount;
+    if (ImGui::MenuItem("Custom", nullptr, treadmill_speed_ == kSpeedCount)) treadmill_speed_ = kSpeedCount;
+    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 9);  // editing the speed keeps the menu open, as any value does
+    if (slider_float("Custom speed", &treadmill_custom_, 0.1f, 30.f, "%.2f m/s", 0, SliderCurve::Log))
+        treadmill_speed_ = kSpeedCount;
     const double target = treadmill_speed_ < kSpeedCount ? kSlSpeeds[treadmill_speed_].mps : treadmill_custom_;
 
     ImGui::SeparatorText("The cycle");
-    // ponytail: measured every frame the menu is open (one pose per contact end plus the contact search).
-    const Gait g = measure_gait(*rig_, doc_.clip(), shape());
+    // Measured again only when the clip changes: eight poses a frame over the loop. ponytail: a new body shape shows
+    // at the next edit.
+    if (!gait_have_ || !(gait_seen_ == doc_.clip())) gait_seen_ = doc_.clip(), gait_ = measure_gait(*rig_, gait_seen_, shape()), gait_have_ = true;
+    const Gait g = gait_;
     if (g.speed <= 0) {
         ImGui::TextDisabled("No foot contacts found in the %s", doc_.clip().loop ? "loop" : "animation");
     } else {
@@ -186,7 +191,11 @@ void App::draw_treadmill_menu() {
         int frames = 0;
         edit("Match Cycle to Speed", [&](Clip& c) { frames = match_speed_by_time(c, g, target); });
         sync_actor_timing(doc_.project);
-        status("The cycle is now " + std::to_string(frames) + " frames long");
+        // The loop is a whole number of frames: the nearest one lands within half a frame of the speed.
+        const double now = measure_gait(*rig_, doc_.clip(), shape()).speed;
+        char buf[96];
+        std::snprintf(buf, sizeof buf, ": %.2f m/s, %.0f%% of %.2f", now, now / target * 100, target);
+        status("The cycle is now " + count_noun(frames, "frame") + " long" + buf);
     }
     ImGui::EndDisabled();
     ImGui::SetItemTooltip("Stretches or squashes the loop so its implied speed is the treadmill's; the stride stays");

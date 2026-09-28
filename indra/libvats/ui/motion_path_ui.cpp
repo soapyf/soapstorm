@@ -9,6 +9,7 @@
 
 #include "app.h"
 #include "imgui.h"
+#include "widgets.h"
 
 namespace vats {
 
@@ -29,9 +30,9 @@ void App::draw_motion_path_menu() {
     ImGui::Checkbox("Whole Clip", &v.s.whole_clip);
     ImGui::BeginDisabled(v.s.whole_clip);
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
-    ImGui::SliderInt("Before", &v.s.before, 1, 60, "%d frames");
+    slider_int("Before", &v.s.before, 1, 60, "%d frames");
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
-    ImGui::SliderInt("After", &v.s.after, 1, 60, "%d frames");
+    slider_int("After", &v.s.after, 1, 60, "%d frames");
     ImGui::EndDisabled();
     ImGui::Checkbox("Frame Numbers", &v.numbers);
     ImGui::SetItemTooltip("Number the keyed frames along the path");

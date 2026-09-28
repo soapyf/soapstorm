@@ -77,6 +77,7 @@ struct LibraryItem {
     double length = 0;
     std::map<std::string, Track> curves;
     std::vector<std::string> relative;
+    std::string category;  // built-in poses only, not saved: the heading they are listed under
 };
 
 struct Library {

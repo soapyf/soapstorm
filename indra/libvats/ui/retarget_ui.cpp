@@ -10,6 +10,7 @@
 
 #include "app.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "vats/batch_retarget.h"
 #include "vats/footlock.h"
 #include "vats/project.h"
@@ -203,7 +204,7 @@ void App::draw_retarget_dialog() {
         for (int i = 0; i < int(ui.tables.size()); ++i) {
             BoneMap m;
             int n = apply_rig_table(ui.tables[i], ui.src, m);
-            std::string label = ui.tables[i].name + "  (" + std::to_string(n) + " bones)";
+            std::string label = ui.tables[i].name + "  (" + count_noun(n, "bone") + ")";
             if (ImGui::Selectable(label.c_str(), ui.table == i)) ui.table = i, ui.map = m;
         }
         if (ImGui::Selectable("Manual", ui.table < 0)) ui.table = -1;

@@ -124,6 +124,7 @@ inline constexpr char kRim[] = "\xee\x8a\x99";          // sun-dim U+E299
 inline constexpr char kDusk[] = "\xee\x85\xba";         // sunset U+E17A
 inline constexpr char kNight[] = "\xee\x84\x9e";        // moon U+E11E
 inline constexpr char kBackdrop[] = "\xee\x91\x8b";     // wallpaper U+E44B
+inline constexpr char kTarget[] = "\xee\x82\xac";       // crosshair U+E0AC (as kGoTo): View > Target Ghost
 
 // Wave 3 and viewer build 20 (spec 08 sections 19-27, spec 09 build 20)
 inline constexpr char kBlocking[] = "\xee\x8d\x87";     // toy-brick U+E347

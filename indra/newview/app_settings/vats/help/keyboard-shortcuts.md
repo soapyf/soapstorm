@@ -63,7 +63,7 @@ active preset.*
 | Delete Key | Delete, Backspace | Alt+I, Delete | Delete, Backspace | Delete, Backspace |
 | Delete Keys on All Bones at Frame | Shift+Delete | Shift+Delete | Shift+Delete | Shift+Delete |
 | Reset Selected Bone | Alt+R | Alt+R | Alt+R | Alt+R |
-| Reset Hip Position | Alt+W, Alt+H | Alt+G, Alt+H | Alt+W, Alt+H | Alt+W, Alt+H |
+| Reset Hip Position | Alt+W, Alt+H | Alt+G, Alt+H | Alt+W, Alt+H | Alt+H |
 | Reset Whole Pose | Shift+Alt+R | Shift+Alt+R | Shift+Alt+R | Shift+Alt+R |
 | Copy Pose | Ctrl+C | Ctrl+C | Ctrl+C | Ctrl+C |
 | Paste Pose | Ctrl+V | Ctrl+V | Ctrl+V | Ctrl+V |
@@ -71,8 +71,8 @@ active preset.*
 | Flip Pose | – | Ctrl+Shift+V | – | – |
 | Mark a Beat Here | B | B | B | B |
 
-> **Note:** In the [[VATs Editor (viewer)|viewer]], **Alt+W** moves the viewer's camera; use **Alt+H** for
-> **Reset Hip Position** there.
+> **Note:** In the Second Life preset, and in the [[VATs Editor (viewer)|viewer]], **Alt+W** moves the
+> camera, so **Reset Hip Position** is **Alt+H** there.
 
 ### Playback
 
@@ -121,7 +121,7 @@ active preset.*
 Each slot stores the camera's target, direction and distance. **Store Camera View** saves the slot
 both in the project and in your settings; **Camera View** uses the project's slot, or the settings'
 slot when the project has none, so stored views carry over to new projects. Outside QAvimator the
-slots are in **View → Camera Views** only. An empty slot says `Camera view N is empty: store it first`.
+slots are in **View → Camera → Camera Views** only. An empty slot says `Camera view N is empty: store it first`.
 
 | Action | Industry (Maya-style) | Blender | QAvimator | Second Life |
 |---|---|---|---|---|
@@ -198,7 +198,7 @@ Selected**, **Frame All**...), so a change here applies there too.
 2. Click **Num 5** and press **Ctrl+5**. The key reads **Ctrl+5**, the row gets the accent bar, and
    the status bar says `Orthographic: Ctrl+5`.
 3. Close the window and press **Ctrl+5**: the status bar says `Orthographic view`; press it again for
-   `Perspective view`. **View → Orthographic** now shows **Ctrl+5**.
+   `Perspective view`. **View → Camera → Orthographic** now shows **Ctrl+5**.
 4. To undo it, click the reset button at the right of the row.
 
 ### Presets and your keys
@@ -211,7 +211,8 @@ Your keys replace the preset's keys for those commands only, and stay when you s
 
 - The keys inside a running operation, below: Blender's **X**, **Y**, **Z** during **G** and **R**, the
   tween's keys, **Esc** to cancel a drag.
-- The Second Life preset's held **Ctrl** and **Ctrl+Shift** and its **Alt**+arrow camera.
+- The Second Life preset's held **Ctrl** and **Ctrl+Shift** and its **Alt** camera keys (arrows, **Page Up**,
+  **Page Down**, **A**, **D**, **W**, **S**, **E**, **C**).
 - Mouse controls, which belong to the preset.
 
 ### In settings.json
@@ -242,9 +243,14 @@ These keys work only inside a running operation:
 
 - Blender preset, during a **G** move or **R** rotation over the viewport: **X**, **Y**, **Z**,
   **R**, **Ctrl**, **Enter**, **Space**, **Esc**; see [[Control presets#Blender]].
-- Second Life preset: hold **Ctrl** to rotate, **Ctrl+Shift** to scale props; **Alt** and **Ctrl+Alt**
-  with the arrow keys move the camera; see [[Control presets#Second Life]].
+- Second Life preset: hold **Ctrl** to rotate, **Ctrl+Shift** to scale props. The camera keys, as in the
+  Second Life viewer: **Alt+Left** / **Alt+Right** (or **Alt+A** / **Alt+D**) orbit, **Alt+Up** /
+  **Alt+Down** (or **Alt+W** / **Alt+S**) zoom, **Alt+Page Up** / **Alt+Page Down** (or **Alt+E** /
+  **Alt+C**) and **Ctrl+Alt+Up** / **Ctrl+Alt+Down** (or **W** / **S**) orbit up and down,
+  **Ctrl+Alt+Shift** with the arrows or **A D W S** pans, **Esc** resets the camera; see
+  [[Control presets#Second Life]].
 - Any drag in the viewport: **Esc** cancels it.
+- An open menu: **Esc** closes it, sub-menus and all, and does nothing else.
 - **Tween (Breakdown)** (**Shift+E**, every preset): move the mouse left or right, **Ctrl** for 10%
   steps, then a left click, **Enter** or **Space** keys it and a right-click, **Esc** or **Ctrl+Z**
   cancels; see [[Keys and timeline#Tweening between keys]].

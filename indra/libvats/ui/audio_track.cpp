@@ -11,6 +11,7 @@
 #include "icons.h"
 #include "vats/time_edit.h"
 #include "theme.h"
+#include "widgets.h"
 
 namespace vats {
 
@@ -90,21 +91,19 @@ void App::update_audio() {
     audio_frame_ = frame_;
 }
 
-double App::snapped_frame(double frame) const {
-    const Clip& c = doc_.clip();
-    if (!c.audio || !c.audio->snap) return frame;
-    const double fps = std::max(c.fps, 1);
-    return std::round(snap_to_beat(*c.audio, frame / fps, 3.0 / fps) * fps);
-}
+double App::snapped_frame(double frame) const { return beat_snapped_frame(doc_.clip(), frame); }
 
 // --- Timeline lane ---------------------------------------------------------------------------------
 
-// The waveform under the key rows and the beat grid (AU-2). x_of maps a timeline frame to a pixel.
+// The waveform under the key rows and the beat grid (AU-2). x_of maps a timeline frame to a pixel. The grid shows
+// whenever the track has a BPM or beats, even while its sound is not loaded (a missing file).
 void App::draw_audio_lane(ImDrawList* dl, float x0, float x1, float y0, float y1, double last_frame) {
     const Clip& c = doc_.clip();
-    if (!c.audio || audio_data_.frames() == 0) return;
+    if (!c.audio) return;
     const double fps = std::max(c.fps, 1);
     const double px_per_frame = (x1 - x0) / std::max(last_frame, 1.0);
+    draw_beat_grid(dl, c, [&](double f) { return float(x0 + f * px_per_frame); }, 0, last_frame, y0, y1);
+    if (audio_data_.frames() == 0) return;
     const float mid = (y0 + y1) / 2, half = (y1 - y0) * 0.42f;
     const double blocks_per_second = double(audio_data_.rate) / AudioData::kPeakBlock;
     const ImU32 wave = IM_COL32(120, 180, 230, 105);
@@ -119,9 +118,14 @@ void App::draw_audio_lane(ImDrawList* dl, float x0, float x1, float y0, float y1
         const float h = std::max(0.5f, std::min(1.f, peak * float(c.audio->volume)) * half);
         dl->AddLine(ImVec2(x, mid - h), ImVec2(x, mid + h), wave);
     }
+}
+
+void draw_beat_grid(ImDrawList* dl, const Clip& c, const std::function<float(double)>& x_of, double f0, double f1, float y0, float y1) {
+    if (!c.audio) return;
+    const double fps = std::max(c.fps, 1);
     const ImU32 beat = (accent_colour() & 0x00FFFFFF) | 0x90000000;
-    for (double t : beat_times(*c.audio, 0, last_frame / fps)) {
-        const float x = float(x0 + t * fps * px_per_frame);
+    for (double t : beat_times(*c.audio, std::max(f0, 0.0) / fps, f1 / fps)) {
+        const float x = x_of(t * fps);
         dl->AddLine(ImVec2(x, y0), ImVec2(x, y1), beat);
     }
 }
@@ -263,7 +267,7 @@ void App::draw_audio_menu_items() {
     AudioTrack& a = *c.audio;
     float vol = float(a.volume), bpm = float(a.bpm), off = float(a.offset);
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 9);
-    if (ImGui::SliderFloat("Volume", &vol, 0.f, 2.f, "%.2f")) a.volume = vol;
+    if (slider_float("Volume", &vol, 0.f, 2.f, "%.2f")) a.volume = vol;
     track("Audio Volume");
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 9);
     if (ImGui::DragFloat("Start (s)", &off, 0.01f, -600.f, 600.f, "%.2f")) a.offset = off;

@@ -7,6 +7,7 @@
 #include "icons.h"
 #include "theme.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "vats/dynamics.h"
 #include "vats/overlap.h"
 
@@ -14,7 +15,7 @@ namespace vats {
 
 void App::draw_overlap_panel() {
     if (!show_overlap_) return;
-    place_tool_window(5, 24, 26);
+    place_tool_window(24, 26);
     if (!ImGui::Begin("Overlap", &show_overlap_)) return ImGui::End();
     help_button("overlap");
     const Clip& clip = doc_.clip();
@@ -27,13 +28,13 @@ void App::draw_overlap_panel() {
     const int p = primary();
     DynChain whole;
     if (p >= 0) whole.root = skel_[p].name, whole.length = 64;
-    const int depth = p >= 0 ? int(dyn_nodes(skel_, whole).size()) : 0;
+    const int depth = p >= 0 ? int(dyn_nodes(skel_, whole, false).size()) : 0;
     std::vector<int> chain;
     if (depth >= 2) {
         overlap_length_ = std::clamp(overlap_length_, 2, depth);
         DynChain d = whole;
         d.length = overlap_length_;
-        chain = dyn_nodes(skel_, d);
+        chain = dyn_nodes(skel_, d, false);
     }
 
     const float label_w = ImGui::GetFontSize() * 5.5f;
@@ -49,14 +50,14 @@ void App::draw_overlap_panel() {
     ImGui::TextWrapped("%s", names.empty() ? "(select a bone with a child)" : names.c_str());
     if (depth >= 2) {
         label("Bones");
-        ImGui::SliderInt("##overlap_bones", &overlap_length_, 2, depth);
+        slider_int("##overlap_bones", &overlap_length_, 2, depth);
     }
     float shift = float(overlap_.shift), falloff = float(overlap_.falloff);
     label("Delay");
-    if (ImGui::SliderFloat("##overlap_delay", &shift, 0.5f, 3.f, "%.1f frames")) overlap_.shift = shift;
+    if (slider_float("##overlap_delay", &shift, 0.5f, 3.f, "%.1f frames", ImGui::GetFontSize() * 10)) overlap_.shift = shift;
     ImGui::SetItemTooltip("How many frames later each bone moves than the bone before it");
     label("Falloff");
-    if (ImGui::SliderFloat("##overlap_falloff", &falloff, 0.25f, 1.5f, "%.2f")) overlap_.falloff = falloff;
+    if (slider_float("##overlap_falloff", &falloff, 0.25f, 1.5f, "%.2f")) overlap_.falloff = falloff;
     ImGui::SetItemTooltip("Each bone swings this many times as far as the one before (1 = unchanged)");
     ImGui::BeginDisabled(clip.loop);
     ImGui::Checkbox("Settle at the end", &overlap_.settle);
@@ -68,7 +69,7 @@ void App::draw_overlap_panel() {
     ImGui::BeginDisabled(!why.empty());
     if (icon_label_button(icon::kApply, "Apply Overlap")) {
         edit("Overlap", [&](Clip& c) { apply_overlap(c, skel_, chain, overlap_); });
-        status("Overlap applied down " + std::to_string(chain.size()) + " bones");
+        status("Overlap applied down " + count_noun(chain.size(), "bone"));
     }
     ImGui::EndDisabled();
     if (!why.empty()) {

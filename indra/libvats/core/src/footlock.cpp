@@ -31,7 +31,7 @@ int toe_of(const Rig& rig, int limb, const FootLockOptions& opt) {
     return opt.heel_toe ? rig.skeleton().find(rig.limbs()[limb].name == "LegLeft" ? "mToeLeft" : "mToeRight") : -1;
 }
 
-// The rest pose's floor (its lowest ankle, foot or toe, as Animation Check takes it) and each point's height
+// The rest pose's floor (its lowest ankle, foot or toe joint; only differences from it matter) and each point's height
 // above it at rest: a point is on the ground when it is that high above it.
 struct Floor {
     double z = 0;
@@ -81,6 +81,33 @@ struct Stance {
 };
 
 }  // namespace
+
+std::vector<Vec3> sole_points(const Skeleton& skel, const std::vector<Xform>& g, int side) {
+    // Measured on the SL default bodies (female and male agree within 7 mm): the heel's back edge, the flat of the
+    // ball, the tip of the toes. ponytail: fixed offsets, not scaled by the shape's foot size; the body mesh would
+    // follow it.
+    static const struct {
+        const char* bone[2];
+        Vec3 at;
+    } kPoints[] = {{{"mAnkleLeft", "mAnkleRight"}, {-0.045, 0, -0.072}},
+                   {{"mFootLeft", "mFootRight"}, {0.06, 0, -0.009}},
+                   {{"mToeLeft", "mToeRight"}, {0, 0, -0.003}}};
+    std::vector<Vec3> out;
+    for (auto& p : kPoints)
+        if (const int n = skel.find(p.bone[side & 1]); n >= 0 && n < int(g.size())) out.push_back(g[n].apply(p.at));
+    return out;
+}
+
+double sole_height(const Skeleton& skel, const std::vector<Xform>& g) {
+    double z = std::numeric_limits<double>::max();
+    for (int side : {0, 1})
+        for (const Vec3& p : sole_points(skel, g, side)) z = std::min(z, p.z);
+    return z == std::numeric_limits<double>::max() ? 0 : z;
+}
+
+double sole_floor(const Skeleton& skel, const Shape* shape) {
+    return sole_height(skel, skel.global_pose(Pose(skel.size()), shape));
+}
 
 std::vector<FootContact> find_foot_contacts(const Rig& rig, const Clip& clip, const FootLockOptions& opt) {
     const int a = std::max(0, opt.from), b = last_frame(clip, opt);

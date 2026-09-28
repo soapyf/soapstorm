@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <climits>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -268,6 +270,7 @@ std::vector<Span> parse_inline(std::string_view text) {
                     l.target = std::string(text.substr(close + 2, end - close - 2));
                     l.external = l.target.find("://") != std::string::npos;
                     if (starts(l.target, "example:")) l.example = true, l.target.erase(0, 8);
+                    else if (starts(l.target, "target:")) l.example = l.ghost = true, l.target.erase(0, 7);
                     l.text = std::string(text.substr(i + 1, close - i - 1));
                     flush();
                     out.push_back(l);
@@ -333,6 +336,12 @@ Page parse_page(std::string_view markdown, std::string file) {
         if (starts(t, "Category:")) {
             close();
             page.category = trim(t.substr(9));
+            continue;
+        }
+        auto number = [](char c) { return c == ' ' || std::isdigit(static_cast<unsigned char>(c)); };
+        if (starts(t, "Order:") && std::all_of(t.begin() + 6, t.end(), number)) {
+            close();
+            page.order = std::atoi(t.c_str() + 6);
             continue;
         }
         if (t[0] == '#') {
@@ -470,7 +479,10 @@ std::vector<std::pair<std::string, std::vector<const Page*>>> Library::contents(
     std::map<std::string, std::vector<const Page*>> by;
     for (const Page& p : pages_) by[p.category.empty() ? "Other" : p.category].push_back(&p);
     for (auto& [cat, list] : by)
-        std::sort(list.begin(), list.end(), [](const Page* a, const Page* b) { return lower(a->title) < lower(b->title); });
+        std::sort(list.begin(), list.end(), [](const Page* a, const Page* b) {
+            const int oa = a->order > 0 ? a->order : INT_MAX, ob = b->order > 0 ? b->order : INT_MAX;
+            return oa != ob ? oa < ob : lower(a->title) < lower(b->title);
+        });
     std::vector<std::pair<std::string, std::vector<const Page*>>> out;
     for (const char* c : order)
         if (auto it = by.find(c); it != by.end()) out.emplace_back(it->first, it->second), by.erase(it);

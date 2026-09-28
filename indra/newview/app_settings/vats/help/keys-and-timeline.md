@@ -37,7 +37,7 @@ Tick **Relax** next to the slider to work on existing keys instead: the slider t
 
 Instead of the slider, press **Shift+E** and move the mouse left or right; the bottom left of the viewport shows the amount. Hold **Ctrl** for 10% steps. A left click, **Enter** or **Space** keys it; a right-click, **Esc** or **Ctrl+Z** cancels. The drag starts from the slider's last value.
 
-Each use, a slider drag or a **Shift+E** drag, is one undo step, **Tween**. **Ctrl+click** the slider to type a value.
+Each use, a slider drag or a **Shift+E** drag, is one undo step, **Tween**. Double-click the slider (or **Ctrl+click** it) to type a value; **Enter** keys it as a drag would, even when the value is the one already shown.
 
 The keys a tween sets are tagged **Breakdown** (see below). **Relax** leaves tags as they are.
 
@@ -109,7 +109,7 @@ In **Properties → Animation**:
 
 Tick **Loop** in **Properties → Animation**, or press the **Loop** button on the timeline bar (two arrows chasing each other, after **Go to end**; highlighted while looping). The loop is the frames between **Loop in** and **Loop out**, shown as two flags on the timeline:
 
-- Drag a flag to move it. Dragging a flag also turns **Loop** on.
+- Drag a flag to move it; press on the flag itself. Dragging a flag never turns **Loop** on or off, and a **Shift+drag** (a range) or **Ctrl+drag** (the audio) starting on a flag does its own job instead.
 - **Alt+drag** inside the loop band moves both flags together.
 
 Second Life plays the part before **Loop in** once, then repeats the loop. For tools that fix loop seams and walk cycles, see [[Loop tools]].

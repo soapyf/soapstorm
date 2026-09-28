@@ -7,6 +7,7 @@
 
 #include "app.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "vats/pose_presets.h"
 
 namespace vats {
@@ -52,7 +53,7 @@ void App::open_match_poses(Clip incoming, const std::string& name) {
 
 void App::draw_match_poses_window() {
     if (!show_match_) return;
-    place_tool_window(5, 26, 26);
+    place_tool_window(26, 26);
     if (!ImGui::Begin("Match Poses", &show_match_)) return ImGui::End();
     help_button("project-library");
     const float em = ImGui::GetFontSize();
@@ -60,10 +61,10 @@ void App::draw_match_poses_window() {
     MatchOptions& o = match_.o;
     bool changed = false;
     ImGui::SetNextItemWidth(em * 8);
-    changed |= ImGui::SliderInt("Search", &o.search, 2, 60, "%d frames");
+    changed |= slider_int("Search", &o.search, 2, 60, "%d frames");
     ImGui::SetItemTooltip("How many frames at the end of the clip and at the start of %s are compared", match_.name.c_str());
     ImGui::SetNextItemWidth(em * 8);
-    changed |= ImGui::SliderInt("Blend", &o.blend, 0, 30, o.blend ? "%d frames" : "a straight cut");
+    changed |= slider_int("Blend", &o.blend, 0, 30, o.blend ? "%d frames" : "a straight cut");
     ImGui::SetItemTooltip("Frames over which the clip's motion eases into the new one's");
     changed |= ease_combo("Ease", o.ease);
     changed |= ImGui::Checkbox("Align the hips", &o.align);
@@ -94,7 +95,7 @@ void App::draw_match_poses_window() {
 
 void App::draw_transition_window() {
     if (!show_transition_) return;
-    place_tool_window(5, 26, 26);
+    place_tool_window(26, 26);
     if (!ImGui::Begin("Make Transition", &show_transition_)) return ImGui::End();
     help_button("pose-library");
     const float em = ImGui::GetFontSize();

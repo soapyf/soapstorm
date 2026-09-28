@@ -202,13 +202,15 @@ bone or a panel takes the click, not the editor.
 - **[[Props]]** are drawn with the world, lit simply and hidden where the world is in front of them: add,
   attach, place and move them as in the app. They are on your screen only; nothing is rezzed.
 - **[[Onion skin]]** ghosts are bone lines, blue before the current frame and orange after.
-- **Collision volumes** are three rings each, with **View → Show Collision Volumes** on.
+- **[[Target ghost]]**: drawn in the world as the other actors' bodies are, see-through green, in the body chosen
+  under **View → Body** (the viewer can't draw a copy of the avatar you wear), with its bones as thin green lines.
+- **Collision volumes** are three rings each, with **View → Bones → Show Collision Volumes** on.
 - **Attachment points.** Hover a point's dot: the label lists what you wear there, by name. When the point
   is keyed, it also warns that in-world the animation moves what you wear there.
 - **[[Reference images]]** in the scene stand in the world: your avatar and anything in front of the
   picture hide it. A backdrop picture is drawn over the world, see-through.
 
-**View → Orthographic** (**Numpad 5**): the viewer can't draw a true orthographic view, so the camera
+**View → Camera → Orthographic** (**Numpad 5**): the viewer can't draw a true orthographic view, so the camera
 switches to its longest lens (5 degrees) and backs away until your avatar is framed as before; the draw
 distance grows by as much, so the scenery behind stays. Zooming moves the camera in and out the same way.
 Choose it again, or close the editor, for the viewer's own lens and camera. The long lens is close to

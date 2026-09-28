@@ -1,8 +1,8 @@
 # Melee: a sword swing
 
-An advanced tutorial: a one-handed overhead cut with the starter **Sword**, from a ready stance through
-anticipation, a fast strike on an arc, impact, follow-through and recovery, with the hips shifting over planted
-feet and the free arm trailing behind. It is blocked pose to pose, then smoothed, checked with a motion path and
+An advanced tutorial: a one-handed diagonal cut with the starter **Sword**, from a ready stance through
+anticipation, a fast strike on an arc, impact, follow-through and recovery, with the hips turning and shifting
+over planted feet and the free arm pulling back. It is blocked pose to pose, then smoothed, checked with a motion path and
 exported as a non-looping attack at priority 4. It assumes the Beginner tutorials: you can select a bone, type
 rotation values and play the timeline.
 
@@ -10,16 +10,16 @@ rotation values and play the timeline.
 
 ## What you will make
 
-![The finished swing from the front right: the sword drawn back behind the head, lifted overhead, cut down across the body and carried past the left hip, then brought back to the ready pose](images/tutorial-sword-swing/swing.gif)
+![The finished swing from the front right: the sword in one hand is cocked above the right shoulder, lifted overhead, cut down on the diagonal across the front of the body and carried down past the left hip, outside the leg, then brought back to the ready pose](images/tutorial-sword-swing/swing.gif)
 *The finished swing, 48 frames at 30 frames per second (1.6 s), played twice.*
 
 | Frames | Phase | What happens |
 |---|---|---|
-| 0 | Ready | Sword up in front of the body, left foot forward |
-| 0–12 | Anticipation | The sword draws back behind the head; the hips sink back over the rear foot |
-| 12–18 | Strike | Six frames: the sword rises overhead (frame 15) and cuts down |
-| 18 | Impact | Arm extended, blade across the front of the body, weight forward |
-| 18–30 | Follow-through | The sword carries on past the left hip and settles |
+| 0 | Ready | Sword in front of the belly, point up and forward; left foot forward |
+| 0–12 | Anticipation | Hips and chest turn to the right, the weight goes back; the sword is cocked above the right shoulder |
+| 12–18 | Strike | Six frames: the hips turn first, the sword rises overhead (frame 15) and cuts down on the diagonal |
+| 18 | Impact | Arm extended in front, blade crossing to the left, weight on the front foot |
+| 18–30 | Follow-through | The blade carries on down past the left hip, outside the leg, point back, and settles |
 | 30–48 | Recovery | Back to the ready pose |
 
 ## Usage
@@ -28,12 +28,15 @@ rotation values and play the timeline.
 
 [Open the example](example:sword-start.vat): the start of this tutorial. It has:
 
-- the ready pose keyed at frame 0 and again at frame 48, so the swing ends where it begins;
-- a fighting stance: left foot forward, right foot back on its toes;
+- the ready pose keyed at frame 0 and again at frame 48, so the swing ends where it begins: the sword held in
+  front of the belly, point up at head height, the left hand loosely closed;
+- a fighting stance: left foot forward, right foot back on its toes, the hips turned a little to the right;
 - both ankles held in the world from frame 0 (see [[Hold and bind]]), so when the hips move, the knees bend and
   the feet stay planted;
-- the starter **Sword** on the **Right Hand** attachment point, with the right hand in the **Grip (Cylinder)**
-  starter shape;
+- the starter **Sword** on the **Right Hand** attachment point, its grip in the right hand, closed in the
+  **Grip (Cylinder)** starter shape: a one-handed sword, about a metre long, held in one fist just below the guard
+  (click it: **Properties → Prop** shows **Position** `0.280`, `-0.012`, `-0.015` and **Rotation** `0.0°`, `90.0°`,
+  `0.0°`, the grip the starter prop comes with);
 - every key **Stepped**, as **Blocking** keys them (see [[Keys and timeline#Blocking and key tags]]).
 
 Click the **Bones** tab and scroll down: **mAnkleLeft [pinned]** and **mAnkleRight [pinned]** are light blue. The
@@ -83,20 +86,21 @@ Click frame **12** in the timeline, then key these seven bones:
 
 | Bone | Rotation (X, Y, Z) | Offset (m) |
 |---|---|---|
-| **mPelvis** | `0`, `0`, `-10` | `-0.04`, `-0.02`, `-0.05` |
-| **mTorso** | `0`, `-5`, `-25` | |
-| **mShoulderRight** | `-55`, `0`, `-20` | |
-| **mElbowRight** | `0`, `0`, `110` | |
-| **mWristRight** | `0`, `-20`, `0` | |
-| **mShoulderLeft** | `-45`, `0`, `-50` | |
-| **mElbowLeft** | `0`, `0`, `-40` | |
+| **mPelvis** | `0`, `0`, `-32` | `-0.04`, `-0.02`, `-0.07` |
+| **mTorso** | `0`, `-5`, `-20` | |
+| **mShoulderRight** | `51`, `-56`, `4` | |
+| **mElbowRight** | `0`, `-59`, `96` | |
+| **mWristRight** | `19`, `-25`, `-24` | |
+| **mShoulderLeft** | `-28`, `16`, `18` | |
+| **mElbowLeft** | `0`, `0`, `-112` | |
 
-![Frame 12 from the front: the torso turned to the avatar's right, the sword drawn back behind the head, the left arm reaching forward](images/tutorial-sword-swing/anticipation.png)
+![Frame 12 from the front: the hips and chest turned to the avatar's right, the sword cocked up beside the head, the left fist forward in front of the chest](images/tutorial-sword-swing/anticipation.png)
 *Frame 12, the anticipation.*
 
 > **Note:** **Why anticipation.** A move reads when it is prepared: the body winds up the opposite way first. The
-> torso turns away from the target, the sword goes back behind the head and the hips sink back over the rear
-> foot, so the cut has somewhere to come from. The left arm reaches forward to balance the sword arm.
+> hips and chest turn away from the target, the sword is cocked above and behind the right shoulder, point up
+> and back, and the hips sink back over the rear foot, so the cut has somewhere to come from. The left fist comes
+> forward, guarding and balancing the sword arm.
 
 ### 5. Key the impact at frame 18
 
@@ -104,21 +108,26 @@ Click frame **18** and key:
 
 | Bone | Rotation (X, Y, Z) | Offset (m) |
 |---|---|---|
-| **mPelvis** | `0`, `0`, `10` | `0.03`, `0`, `-0.07` |
-| **mTorso** | `0`, `5`, `20` | |
-| **mShoulderRight** | `20`, `0`, `75` | |
-| **mElbowRight** | `0`, `0`, `10` | |
-| **mWristRight** | `0`, `-30`, `-30` | |
-| **mShoulderLeft** | `-70`, `0`, `30` | |
-| **mElbowLeft** | `0`, `0`, `-15` | |
+| **mPelvis** | `0`, `0`, `10` | `0.04`, `0.01`, `-0.08` |
+| **mTorso** | `0`, `12`, `15` | |
+| **mShoulderRight** | `-13`, `29`, `79` | |
+| **mElbowRight** | `0`, `-17`, `5` | |
+| **mWristRight** | `57`, `12`, `-35` | |
+| **mShoulderLeft** | `-71`, `9`, `34` | |
+| **mElbowLeft** | `0`, `0`, `-44` | |
 
-![Frame 18 from the front: the sword arm extended, the blade across the front of the body, the left arm swung back](images/tutorial-sword-swing/impact.png)
+![Frame 18 from the front: the sword arm extended in front, the blade crossing the front of the body down to the avatar's left, the left arm pulled back to the hip](images/tutorial-sword-swing/impact.png)
 *Frame 18, the impact.*
 
 > **Note:** **Why only six frames.** Timing is the number of frames a move takes. The wind-up took 12 frames
 > (0.4 s); the strike takes 6 (0.2 s). The contrast is what makes a hit look fast and heavy. Watch the dot at the
-> hips in the view: the hips moved 7 cm forward over the front foot, and the dot stays green because the weight
+> hips in the view: the hips moved 8 cm forward over the front foot, and the dot stays green because the weight
 > is still over the feet (see [[Balance]]).
+
+> **Note:** **Why the hips go first.** A real cut starts from the ground: the hips turn towards the target, then
+> the chest, then the arm straightens and the wrist turns the edge through, each part a little after the one
+> before, and the weight moves onto the front foot. Here the hips turn 42° and the chest 35° more between frames 12
+> and 18, while the left arm pulls back to help the turn.
 
 ### 6. Key the follow-through at frame 24 and hold it to 30
 
@@ -126,13 +135,13 @@ Click frame **18** and key:
 
 | Bone | Rotation (X, Y, Z) | Offset (m) |
 |---|---|---|
-| **mPelvis** | `0`, `0`, `15` | `0.04`, `0.01`, `-0.07` |
-| **mTorso** | `0`, `6`, `30` | |
-| **mShoulderRight** | `55`, `0`, `105` | |
-| **mElbowRight** | `0`, `0`, `20` | |
-| **mWristRight** | `0`, `20`, `-30` | |
-| **mShoulderLeft** | `-70`, `0`, `40` | |
-| **mElbowLeft** | `0`, `0`, `-30` | |
+| **mPelvis** | `0`, `0`, `20` | `0.05`, `0.02`, `-0.09` |
+| **mTorso** | `0`, `25`, `28` | |
+| **mShoulderRight** | `28`, `26`, `145` | |
+| **mElbowRight** | `0`, `20`, `5` | |
+| **mWristRight** | `10`, `3`, `-35` | |
+| **mShoulderLeft** | `-78`, `4`, `35` | |
+| **mElbowLeft** | `0`, `0`, `-62` | |
 
 2. With the pointer over the view, press **Ctrl+Shift+A** (**Select → Select Keyed on Frame**). The status bar
    says `Selected 7 bones and 0 IK handles`.
@@ -141,23 +150,31 @@ Click frame **18** and key:
 5. Click frame **30** and press **Ctrl+V** (**Edit → Paste Pose**): `Pasted the pose at frame 30`.
 6. Choose **Edit → Tag Keys Here → Hold** again. The timeline shows violet bars at 24 and 30.
 
-![Frame 24 from the front: the sword carried down past the left hip, the torso turned to the avatar's left](images/tutorial-sword-swing/follow-through.png)
+![Frame 24 from the front: the sword carried down past the left hip, outside the left leg with the point down and back, the body turned to the avatar's left](images/tutorial-sword-swing/follow-through.png)
 *Frame 24, the follow-through.*
 
-> **Note:** **Why follow-through.** A heavy blade does not stop at the target: the arm carries on and the body
-> turns after it, then it settles. The two **Hold** keys keep that settled pose from 24 to 30; a hold that is
-> exactly still looks frozen, so the next step makes it drift.
+> **Note:** **Why follow-through.** A blade does not stop at the target: the arm carries on and the body turns
+> after it, then it settles. The cut finishes low on the left, the arm across the body and the forearm rolled
+> over, the blade down outside the left leg with its point back, clear of both thighs. The two **Hold** keys keep
+> that settled pose from 24 to 30; a hold that is exactly still looks frozen, so the next step makes it drift.
+
+> **Note:** **Where the poses come from.** They were checked against a real cut: a free motion capture take of
+> swordplay from the CMU Graphics Lab database, looked at only, not copied. The hand travels the same path, from
+> high on the right, through the front at belt to chest height, to low beside the left hip; the hips wind 30° to
+> 40° away and turn 20° past the front at the end, and the chest bends over the follow-through. The capture is a
+> slow rehearsal, about half a second from the top of the wind-up to the hit; a cut in earnest takes the 6 frames
+> used here.
 
 ### 7. Play the blocking, then convert it
 
 Press **Home**, then **Space**. The avatar snaps from ready to wind-up to impact to follow-through and back to
 ready at 48. Judge the timing now: it is the cheapest moment to change it.
 
-> **Tip:** While blocked, **Check** may list `mShoulderRight turns 122 degrees between two kept keys`. Those
-> jumps are the stepped keys; they go when you convert.
+> **Tip:** While blocked, **Check** may list a bone that `turns` a large number of `degrees between two kept keys`.
+> Those jumps are the stepped keys; they go when you convert.
 
 Choose **Edit → Convert Blocking to Spline**. The status bar says
-`Every key is Auto now; 10 hold(s) got a 1° drift. Blocking is off`. Play again: the poses now flow into each other,
+`Every key is Auto now; 15 hold(s) got a 1° drift. Blocking is off`. Play again: the poses now flow into each other,
 easing in and out of every key, and the settled pose drifts slightly from 24 to 30.
 
 If you skipped the steps so far, [Open the example](example:sword-keys.vat): this is the project at this point.
@@ -169,22 +186,22 @@ If you skipped the steps so far, [Open the example](example:sword-keys.vat): thi
    orange after.
 3. Press **1** for the front view and click frame **15**.
 
-![The front view at frame 15 before the breakdown: the hand out to the right at head height, the blade pointing out flat, and the path running straight down across the chest](images/tutorial-sword-swing/path-flat.png)
+![The front view at frame 15 before the breakdown: the hand out to the right at shoulder height, the blade upright beside it, and the path running from beside the head across the front of the chest](images/tutorial-sword-swing/path-flat.png)
 *Frame 15 before the breakdown: the sword swings in from the side.*
 
-Between the wind-up and the impact the computer takes the shortest way, so the hand comes round at head height
-with the blade pointing out to the side, and the path runs straight across the chest. A cut needs an arc: the
-sword should rise over the head and come down on the target.
+Between the wind-up and the impact the computer takes the shortest way, so the hand drops out to the right at
+shoulder height and the path runs straight across the chest. A cut needs an arc: the sword should rise over the
+head and come down on the target.
 
 4. At frame **15**, key a breakdown on the arm:
 
 | Bone | Rotation (X, Y, Z) |
 |---|---|
-| **mShoulderRight** | `-65`, `0`, `30` |
-| **mElbowRight** | `0`, `0`, `40` |
-| **mWristRight** | `0`, `-40`, `-10` |
+| **mShoulderRight** | `-46`, `-45`, `56` |
+| **mElbowRight** | `0`, `-88`, `101` |
+| **mWristRight** | `-6`, `-25`, `-26` |
 
-![The front view at frame 15 after the breakdown: the sword held horizontally above the head, the path rising up from behind the head and curving down towards the body](images/tutorial-sword-swing/path-arc.png)
+![The front view at frame 15 after the breakdown: the fist above the head, the sword pointing straight up, the path rising from beside the head over it and curving down across the body](images/tutorial-sword-swing/path-arc.png)
 *Frame 15 after the breakdown: the path rises over the head, then curves down.*
 
 > **Note:** **Why a breakdown.** Key poses say *where*; the breakdown between them says *how it gets there*.
@@ -220,13 +237,13 @@ The file is `sword-swing_01.anim`. See [[Export to Second Life]].
   whole clip on the timeline with **Shift+drag** from frame 0 to 48, and choose **Edit → Save Clip of Selected
   Bones...**; name it `sword swing`. In **Inventory → Poses → Clips**, right-click **sword swing** and choose
   **Paste, Matching Poses...**. Untick **Align the hips** (the feet are pinned, so the hips must not turn) and
-  press **Insert**. The window says `Cut at frame 42, where sword swing's frame 0 lands.` and the clip becomes 90
+  press **Insert**. The window says `Cut at frame 42, where sword swing's frame 1 lands.` and the clip becomes 89
   frames long: the second cut starts from the recovery of the first. See [[Project library#Inserting with matched poses]].
 - **Attacking on the move.** This swing keys the legs (the pins become leg keys on export), so an AO walk loses
   them while it plays. For a swing while walking, leave the pelvis and legs out and key only the torso and arms,
   as in [[One-handed gun hold]].
-- **Eyes on the target.** Key **mHead** against the torso's turn (for example Z `15` at frame 12 and `-15` at
-  frame 18), so the head stays on the target while the shoulders wind up and unwind.
+- **Eyes on the target.** Key **mHead** against the body's turn (for example Z `30` at frame 12 and `-20` at
+  frame 18), so the head stays on the target while the hips and shoulders wind up and unwind.
 
 ## Check your result
 
@@ -235,11 +252,12 @@ The file is `sword-swing_01.anim`. See [[Export to Second Life]].
 1. **Properties → Animation**: **Last frame** 48 (**1.60 seconds**), **Loop** off, **Priority** 4, **Ease in** 0.20 s,
    **Ease out** 0.40 s.
 2. Select **mShoulderRight** and press **.** (**Next Key**) from frame 0: keys at 12, 15, 18, 24, 30 and 48. At
-   frame 15, **Rotation** reads `-65.0°`, `0.0°`, `30.0°`.
-3. Select **mPelvis** at frame 18: **Offset (m)** reads `0.030`, `0.000`, `-0.070`.
+   frame 15, **Rotation** reads `-46.0°`, `-45.0°`, `56.0°`.
+3. Select **mPelvis** at frame 18: **Offset (m)** reads `0.040`, `0.010`, `-0.080`.
 4. The status bar shows no **Check**.
-5. Tick **View → Preview as SL Plays It**: the **As SL Plays It** window reads `5,138 bytes, 28 bones, 520 rotation
-   and 25 position keys`. The legs count because the pins are baked into them.
+5. Tick **View → Preview as SL Plays It**: the **As SL Plays It** window reads `6,214 bytes, 43 bones, 598 rotation
+   and 29 position keys`. The legs count because the pins are baked into them, and both hands' fingers because
+   both hands are posed.
 
 ## Troubleshooting
 
@@ -250,7 +268,7 @@ The file is `sword-swing_01.anim`. See [[Export to Second Life]].
 
 ### A foot slides or lifts while the hips move
 
-The leg cannot reach: a hip offset of more than about 5 cm forward pulls the rear leg straight. Keep the **Offset**
+The leg cannot reach: a hip offset of much more than 5 cm forward pulls the rear leg straight. Keep the **Offset**
 values in the tables, and check that both ankles still say **[pinned]** in the **Bones** tab.
 
 ### The centre of mass turns red
@@ -280,3 +298,4 @@ It needs a selection: "Select a bone first". Press **Ctrl+Shift+A** with the poi
 - [[Overlap]]
 
 Category: Getting started
+Order: 19

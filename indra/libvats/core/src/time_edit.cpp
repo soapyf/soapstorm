@@ -18,24 +18,26 @@ bool wanted(const std::vector<std::string>& tracks, const std::string& name) {
 // Moves every edited key through `map`; keys for which `gone` is true are deleted first.
 void remap(Clip& clip, const std::vector<std::string>& tracks, const std::function<double(double)>& map,
            const std::function<bool(double)>& gone) {
-    for (auto& [name, track] : clip.curves) {
-        if (!wanted(tracks, name)) continue;
-        for (auto& [ch, c] : track) {
-            std::vector<Key> keys;
-            for (Key k : c.keys) {
-                if (gone(k.frame)) continue;
-                k.frame = map(k.frame), k.lx = map(k.lx), k.rx = map(k.rx);
-                keys.push_back(k);
+    for_each_track_map(clip, [&](std::map<std::string, Track>& curves) {
+        for (auto& [name, track] : curves) {
+            if (!wanted(tracks, name)) continue;
+            for (auto& [ch, c] : track) {
+                std::vector<Key> keys;
+                for (Key k : c.keys) {
+                    if (gone(k.frame)) continue;
+                    k.frame = map(k.frame), k.lx = map(k.lx), k.rx = map(k.rx);
+                    keys.push_back(k);
+                }
+                std::stable_sort(keys.begin(), keys.end(), [](const Key& a, const Key& b) { return a.frame < b.frame; });
+                c.keys.clear();
+                for (const Key& k : keys) {  // a squash can land two keys on one frame: the later one wins
+                    if (!c.keys.empty() && same_frame(c.keys.back().frame, k.frame)) c.keys.back() = k;
+                    else c.keys.push_back(k);
+                }
+                c.recompute_handles();
             }
-            std::stable_sort(keys.begin(), keys.end(), [](const Key& a, const Key& b) { return a.frame < b.frame; });
-            c.keys.clear();
-            for (const Key& k : keys) {  // a squash can land two keys on one frame: the later one wins
-                if (!c.keys.empty() && same_frame(c.keys.back().frame, k.frame)) c.keys.back() = k;
-                else c.keys.push_back(k);
-            }
-            c.recompute_handles();
         }
-    }
+    });
     const bool all = tracks.empty();
     auto whole = [&](int f) { return f < 0 ? f : int(std::lround(map(f))); };  // -1 = none stays -1
     if (all) {
@@ -91,6 +93,13 @@ void scale_time_to(Clip& clip, double a, double b, double to, const std::vector<
     const double s = (to - a) / (b - a), d = to - b;
     if (tracks.empty()) clip.end_frame = std::max(1, int(std::lround(clip.end_frame + d)));
     remap(clip, tracks, [&](double x) { return x > b + 1e-6 ? x + d : x >= a - 1e-6 ? a + (x - a) * s : x; }, never);
+}
+
+void scale_length_with_keys(Clip& clip, const Clip& at_press, double pivot, double sx) {
+    auto map = [&](int f) { return std::max(0, int(std::lround(pivot + (f - pivot) * sx))); };
+    clip.end_frame = std::max(1, map(at_press.end_frame));
+    clip.loop_out = std::min(map(at_press.loop_out), clip.end_frame);
+    clip.loop_in = std::min(map(at_press.loop_in), clip.loop_out);
 }
 
 KeyRange copy_range(const Clip& clip, int a, int b, const std::vector<std::string>& tracks) {

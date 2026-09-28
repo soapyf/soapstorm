@@ -65,7 +65,7 @@ Some choices are saved in the same file from other places in the app:
 | Body (`body`, `mesh_body`) | **View → Body** |
 | Graph shown (`show_graph`) | **View → Graph Editor** (**Ctrl+G**), or the panel's **×** |
 | Welcome at start-up (`show_welcome`) | **Show this at startup** in the Welcome window |
-| Camera views (`cameras`) | **View → Camera Views → Store Camera View 1** to **4** |
+| Camera views (`cameras`) | **View → Camera → Camera Views → Store Camera View 1** to **4** |
 | Recent files (`recent`, up to 10) | **File → Open Recent**; **Clear Recent** empties it |
 | Motion capture and face tracking (`mocap`) | **Tools → Motion Capture...**; see [[Motion capture]] |
 | Your own keys (`key_overrides`) | **Edit → Keyboard Shortcuts...**; see [[Keyboard shortcuts#Changing shortcuts]] |

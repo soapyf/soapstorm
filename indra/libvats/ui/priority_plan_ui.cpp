@@ -135,7 +135,7 @@ void App::draw_planner_panel() {
     }
     if (changed || ui.winner.size() != size_t(skel_.size())) resolve(ui, skel_);
 
-    place_tool_window(6, 30, 30);
+    place_tool_window(30, 30);
     if (!ImGui::Begin("Priority Planner", &show_planner_)) return ImGui::End();
     help_button("priority-planner");
     hint("Add the animations yours plays with. Each bone goes to the highest priority; on equal priority, to the one "

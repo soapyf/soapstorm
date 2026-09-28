@@ -70,16 +70,22 @@ void stretch_loop(Clip& clip, int frames);
 int apply_loop_tangents(Clip& clip);
 
 // LP-8: Second Life's default ground speeds, m/s on level ground, from
-// https://wiki.secondlife.com/wiki/Default_Avatar_Movement_Speeds (walk 3.20, run 5.13, crouch walk 2.00, fly 16.00).
+// https://wiki.secondlife.com/wiki/Default_Avatar_Movement_Speeds (walk 3.20, run 5.13, crouch walk 2.00, fly 16.00;
+// checked 2026-09-28; https://wiki.secondlife.com/wiki/Physics_Test has testers verify ~3.2 and ~5.13 with llGetVel).
+// SL's walk is more than twice a person's (about 1.4 m/s), so a walk that keeps its feet on this ground needs a
+// longer, quicker stride than a real one (docs/wiki/examples/loop-walk.vat: 1.6 m strides, 0.5 s each).
 struct SlSpeed {
     const char* name;
     double mps;
 };
 inline constexpr SlSpeed kSlSpeeds[] = {{"Walk", 3.20}, {"Run", 5.13}, {"Crouch Walk", 2.00}, {"Fly", 16.00}};
 
-// LP-8: the cycle as the foot contacts (footlock.h, height only) show it over the loop range. speed is how fast
-// the body moves over a planted foot (the ground speed the cycle implies, travel included), cycle the loop's
-// length over the most contacts one foot starts in it, stride = speed x cycle. contacts = 0: none found.
+// LP-8: the cycle as the soles show it over the loop range, sampled eight times a frame. speed is how fast the body
+// moves over the foot's lowest sole point while it is on the floor (heel, ball or toe tip: footlock.h's sole_points,
+// within 1.5 cm; the ground speed the cycle implies, travel included), the median over the time it is down, with
+// touch-down and lift-off between samples, so stretching the loop by k divides it by k to within about 1%. cycle is the loop's length over the most
+// steps one foot starts in it (a foot is down while its lowest sole point is within 3 cm of the ground), stride =
+// speed x cycle. contacts: the steps found, 0 = none.
 struct Gait {
     double speed = 0, cycle = 0, stride = 0;
     int contacts = 0;

@@ -46,9 +46,9 @@ you play, a gesture, a dance, a sit, should win over it. 2 is a usual priority f
 
 ### 3. Key the out-breath at frame 0
 
-1. Open the **Picker** tab. Click the **Chest** (the upper box of the body), then **Shift+click**
-   both collars (the short bars at the shoulders) and the **Head**. Four parts are filled with the
-   accent colour.
+1. Open the **Picker** tab. Click the **Chest** (the third dot up the spine), then **Shift+click**
+   both collars (the dots either side of the spine at shoulder height, where the arm lines start) and
+   the **Head** (the top dot). Four bones are drawn in the accent colour.
 2. Press **S** (**Edit → Set Key**). The status bar says `Keyed 4 item(s) at frame 0`.
 
 This is the resting pose: breath out, everything as Relaxed Stand left it.
@@ -62,7 +62,7 @@ This is the resting pose: breath out, everything as Relaxed Stand left it.
 1. Go to frame `48` (double-click the **Frame** box, type `48`, **Enter**).
 2. Click the **Chest** in the picker (a plain click selects just it) and set the second **Rotation**
    box to `-4`. The chest tips back a little: the rib cage lifts.
-3. Click the left collar (on your right in the **Front** outline) and set the first **Rotation** box
+3. Click the left collar (on your right on the **Front** view) and set the first **Rotation** box
    to `-2`. It read `-5`, so the shoulder rises 3°.
 4. Press **M** (**Edit → Mirror Bone to Other Side**): the right collar gets `2`, the mirror image.
 5. Click the **Head** and set the second **Rotation** box to `2`.
@@ -112,7 +112,7 @@ them because **Tools → Loop Tools → Loop-Aware Tangents** is on in new proje
 ### 7. Read the upload size
 
 1. Press **Ctrl+E** (**File → Export SL .anim...**). The top line reads
-   `Length 4.00 s, priority 2, looping, ease 0.80 / 0.80 s`.
+   `Length 4.00 s, priority 2, looping, ease 0.30 / 0.30 s`.
 2. Type `Breathing` into **Name**. **Saves as** changes to `Breathing_01.anim`.
 
 ![The Export SL .anim window: Length 4.00 s, priority 2, looping; Reduce keys Per bone; Upload size 663 / 250,000 bytes, 4.00 / 60 s, and the table of parts](images/tutorial-breathing-idle/upload-size.png)
@@ -135,10 +135,10 @@ them because **Tools → Loop Tools → Loop-Aware Tangents** is on in new proje
 ### 8. Export
 
 Press **Export SL .anim**. The first time, a dialog asks where to save; the folder you pick becomes
-the export **Folder** (the file keeps the name **Saves as** shows). The status bar says
+the export **Folder**, and the file takes the name **Saves as** shows unless you type another there. The status bar says
 `Exported Breathing_01.anim to <folder>: 8 bones, 4.00 s, priority 2, 663 bytes`.
 
-**Ease in** and **Ease out** (0.80 s each) are how long Second Life takes to blend this animation in
+**Ease in** and **Ease out** (0.30 s each) are how long Second Life takes to blend this animation in
 when it starts and out when it stops, so the avatar never snaps into or out of the breath. For a
 looping idle the defaults are fine.
 
@@ -199,3 +199,4 @@ The beginner tutorials end here. Continue with the [[Tutorials#Routine]] tutoria
 - [[Export to Second Life]]
 
 Category: Getting started
+Order: 12

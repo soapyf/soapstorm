@@ -74,7 +74,7 @@ struct BodyPose {
     const char* slug;
     const char* name;
     bool symmetric;
-    std::vector<std::pair<const char*, Vec3>> bones;
+    std::vector<std::pair<std::string, Vec3>> bones;
 };
 
 // clang-format off
@@ -105,6 +105,40 @@ const BodyPose kBodies[] = {
       {"mCollarRight", {5, 0, 0}}, {"mShoulderRight", {76, 0, 0}}, {"mElbowRight", {0, 0, 15}}}},
 };
 // clang-format on
+
+// Fitting stances: the reference stances of a pose stand, for fitting clothes and mesh and checking rigging.
+// Symmetric, spine and head straight, the Rest hand shape on both hands; every body bone is keyed (and the hip
+// offset), so a stance replaces whatever pose was there. Arms: Straight is out to the sides (the rest pose, palms
+// down), Down at the sides (palms in), Downward and Upward 45 degrees below and above level (palms down; palms
+// forward), Forward level in front (palms down). Legs: Together is the rest stance, Apart puts the feet about
+// shoulder width, Sitting has the thighs level and the knees at 90 degrees, the hips lowered to keep the feet on
+// the ground.
+enum class Arms { Straight, Down, Downward, Upward, Forward };
+enum class Legs { Together, Apart, Sitting };
+
+struct Stance {
+    const char* slug;
+    const char* name;
+    Arms arms;
+    Legs legs;
+};
+
+const Stance kStances[] = {
+    {"body-t-pose", "T-Pose", Arms::Straight, Legs::Together},
+    {"body-arms-down-legs-together", "Arms Down, Legs Together", Arms::Down, Legs::Together},
+    {"body-arms-down-sitting", "Arms Down, Sitting", Arms::Down, Legs::Sitting},
+    {"body-arms-downward-legs-apart", "Arms Downward, Legs Apart", Arms::Downward, Legs::Apart},
+    {"body-arms-downward-legs-together", "Arms Downward, Legs Together", Arms::Downward, Legs::Together},
+    {"body-arms-forward-legs-apart", "Arms Forward, Legs Apart", Arms::Forward, Legs::Apart},
+    {"body-arms-forward-legs-together", "Arms Forward, Legs Together", Arms::Forward, Legs::Together},
+    {"body-arms-straight-legs-apart", "Arms Straight, Legs Apart", Arms::Straight, Legs::Apart},
+    {"body-arms-straight-sitting", "Arms Straight, Sitting", Arms::Straight, Legs::Sitting},
+    {"body-arms-upward-legs-apart", "Arms Upward, Legs Apart", Arms::Upward, Legs::Apart},
+    {"body-arms-upward-legs-together", "Arms Upward, Legs Together", Arms::Upward, Legs::Together},
+};
+
+constexpr double kArmsDown = -80;  // shoulder X: the arms hang just clear of the hips
+constexpr double kLegsApart = 6;   // hip X: the feet about shoulder width apart
 
 const char* const kDigits[] = {"Thumb", "Index", "Middle", "Ring", "Pinky"};
 
@@ -153,6 +187,45 @@ LibraryItem body_item(const Skeleton& skel, const BodyPose& b) {
     return it;
 }
 
+Quat rot(const Vec3& axis, double deg) { return Quat::axis_angle(axis, deg * kDegToRad); }
+
+LibraryItem stance_item(const Skeleton& skel, const Stance& st, const HandShape& hand) {
+    BodyPose b{st.slug, st.name, true, {}};
+    for (const char* bone : {"mPelvis", "mTorso", "mChest", "mNeck", "mHead", "mCollarLeft"}) b.bones.push_back({bone, {}});
+    // The left arm points along +Y: shoulder X lowers it, Z swings it forward, Y turns it about its length.
+    Quat shoulder, elbow;
+    switch (st.arms) {
+        case Arms::Straight: break;
+        case Arms::Down: shoulder = rot({1, 0, 0}, kArmsDown); break;
+        case Arms::Downward: shoulder = rot({1, 0, 0}, -45); break;
+        case Arms::Upward:  // palms turned forward, half at the shoulder and half in the forearm
+            shoulder = rot({1, 0, 0}, 45) * rot({0, 1, 0}, -45);
+            elbow = rot({0, 1, 0}, -45);
+            break;
+        case Arms::Forward: shoulder = rot({0, 0, 1}, -90); break;
+    }
+    b.bones.push_back({"mShoulderLeft", quat_to_euler(shoulder)});
+    b.bones.push_back({"mElbowLeft", quat_to_euler(elbow)});
+    b.bones.push_back({"mWristLeft", {}});
+    // The left leg: hip X swings it out, Y forward; the ankle undoes the swing so the foot stays flat.
+    Vec3 hip, knee, ankle;
+    if (st.legs == Legs::Apart) hip = {kLegsApart, 0, 0}, ankle = {-kLegsApart, 0, 0};
+    if (st.legs == Legs::Sitting) hip = {0, -90, 0}, knee = {0, 90, 0};
+    b.bones.push_back({"mHipLeft", hip});
+    b.bones.push_back({"mKneeLeft", knee});
+    b.bones.push_back({"mAnkleLeft", ankle});
+    for (auto& [bone, e] : hand_item(skel, hand).bones) b.bones.push_back({bone, e});
+    LibraryItem it = body_item(skel, b);
+    it.category = "Fitting stances";
+    // Hips lowered by as much as the ankles rose, so the feet stay on the ground.
+    Pose pose(skel.size());
+    for (auto& [bone, e] : it.bones) pose.rot[skel.find(bone)] = euler_to_quat(e);
+    const int ankle_node = skel.find("mAnkleLeft");
+    double rise = skel.global_pose(pose)[ankle_node].pos.z - skel.global_pose(Pose(skel.size()))[ankle_node].pos.z;
+    it.hip = Vec3{0, 0, st.legs == Legs::Sitting ? -rise : 0};
+    return it;
+}
+
 }  // namespace
 
 const std::vector<LibraryItem>& builtin_poses(const Skeleton& skel) {
@@ -160,6 +233,8 @@ const std::vector<LibraryItem>& builtin_poses(const Skeleton& skel) {
         std::vector<LibraryItem> v;
         for (auto& h : kHands) v.push_back(hand_item(skel, h));
         for (auto& b : kBodies) v.push_back(body_item(skel, b));
+        const HandShape& rest = kHands[1];  // Rest
+        for (auto& st : kStances) v.push_back(stance_item(skel, st, rest));
         return v;
     }();
     return items;

@@ -50,10 +50,12 @@ The wind-up (0 to 10) and the release (10 to 18) take about the same time, so th
 slow build and a fast release.
 
 1. Click **Select All** at the top of the **Bones** tab, then click the **Dope Sheet** tab at the bottom.
-2. In the **Summary** row, click the diamond at frame 18. It turns yellow: every key on that frame is selected.
-3. Drag it left to frame 15 and let go. With **Snap frames** ticked it lands on the whole frame (**Move Keys**,
-   one undo step).
-4. Play. The release is now 5 frames instead of 8, and the arm cracks through.
+2. In the **Summary** row, click the third diamond, the release at frame 18. It turns yellow: every key on that
+   frame is selected.
+3. Drag it left three frames, to 15, and let go. With **Snap frames** ticked it lands on a whole frame (**Move
+   Keys**, one undo step); the ruler's numbers are every 5 frames, so 15 is the one right above it.
+4. Play. The release is now 5 frames instead of 8, and the arm cracks through. Too fast or too slow for your taste?
+   Drag the diamond a frame either way and play again: this is the place to try it.
 
 ![The Summary row's diamond at frame 18 dragged to frame 15; the timeline and every row follow](images/tutorial-the-polish-pass/dope-sheet.gif)
 *The whole body's release pose moved three frames earlier.*
@@ -67,28 +69,34 @@ slow build and a fast release.
 Between the wind-up (10) and the release (15), the computer moves everything evenly. A thrower holds the wind-up a
 moment, then explodes.
 
-1. Keep every bone selected. Type `12` in the **Frame** box and press **Enter**.
-2. Drag the **Tween** slider on the timeline bar, right of **Blocking**, until it reads **Tween 20%**, and let go.
-   The status bar says "Tween 20%: keyed 9 item(s) at frame 12": the nine bones with a key on both sides.
-3. A teal circle on the timeline marks the new **Breakdown** keys at frame 12.
+1. Keep every bone selected. Drag the playhead (the pink tab on the timeline's ruler) to frame 12, two frames after
+   the wind-up key at 10: the red marks along the timeline's foot are the keys.
+2. Drag the **Tween** slider on the timeline bar, right of **Blocking**, to the left until it reads about **Tween
+   20%**, and let go. The slider is short, so a small move goes a long way; anything from 15% to 25% is right. The
+   status bar says, for example, "Tween 18%: keyed 9 item(s) at frame 12": the nine bones with a key on both sides.
+3. A teal circle on the timeline marks the new **Breakdown** keys at frame 12. Drag the playhead back and forth
+   across 10 to 15: the body lingers near the wind-up, then goes.
 
 > **Why:** a *breakdown* is the pose that decides how you get from one key to the next. At 20% the body is still
 > near the wind-up two frames later, so it *eases out* of the wind-up slowly and covers the rest in three frames:
 > that is *slow in and slow out*, and it is what makes the release read as fast.
 
 > **Tip:** instead of the slider, press **Shift+E**, move the mouse left or right (hold **Ctrl** for 10% steps) and
-> click.
+> click. Start the playhead drag on the pink tab, not at the far left of the ruler's foot: there, on a clip that
+> does not loop, you would pick up the **Loop in** flag and turn **Loop** on (**Ctrl+Z** puts it back).
 
 ### 4. Check the arc with a motion path
 
-1. Type `mWristRight` in the **Bones** filter and click it, and choose **View → Motion Path → Show Motion Path**.
-   Press **3** (**View → Right**) to see the thrower from the side, and go to frame `15`.
+1. In the **Picker** tab, click the dot at the end of the arm on the left of the chart (the avatar faces you, so its
+   right hand is on your left; the tooltip says **Right Hand**). Choose **View → Motion Path → Show Motion Path**.
+   Press **3** (**View → Camera → Right**) to see the thrower from the side, and drag the playhead to 15, the release key.
 2. The path shows ten frames either side of the current one: blue before, orange after, a white dot now, and bigger
    dots on keyed frames. The blue dots loop round behind the head (the wind-up), then run far apart, almost in a
    line, to the release: the hand is fast there. After the release the orange dots curve down in front of the body
    and close up as the arm slows.
 3. Tick **Whole Clip** in the same menu to see all 44 frames at once, and **Frame Numbers** to number the keyed
-   dots.
+   dots. Scrub the playhead from 10 to 26 and watch the white dot run along the path: it should sweep in a curve, fast
+   in the middle.
 
 ![The right hand's motion path seen from the side at frame 15: blue dots looping behind the head, then far apart up to the white dot at the release, orange dots curving down in front of the body](images/tutorial-the-polish-pass/motion-path.png)
 *The finished throw at frame 15, the release, from the right. The spacing of the dots is the speed: far apart is fast, close together is slow.*
@@ -106,11 +114,12 @@ If you are starting here, open this example: it is the throw after steps 1 to 3.
 
 1. Choose **Tools → Animation Check...**. It lists three findings:
    - "Ease in and ease out are 0: the avatar snaps into and out of the pose" (Info);
-   - "mShoulderRight goes 84 degrees past what a body can do" (Info), on the frames of the wind-up;
+   - "mShoulderRight goes 31 degrees past what a body can do" (Info), on the frames of the wind-up;
    - "The whole body is animated but the hips and legs play below priority 4; a walking or standing AO wins them"
      (Warning).
 2. Press **Fix** on the first finding: **Ease in** and **Ease out** become `0.30 s`.
-3. Press **Go to Frame 6** on the second to see the wind-up: the arm is twisted further back than a shoulder turns.
+3. Press **Go to Frame** on the second to see the wind-up (frame 9 in the example; a frame or so either side if you
+   made the breakdown yourself): the arm is twisted further back than a shoulder turns.
    Press **Fix** (**Key the Joint Inside Its Limits**): the shoulder is keyed at its limit on each frame it was past
    it, and the hand now goes up over the head.
 4. Press **Fix** on the last: **Priority** becomes `4`. The window says "No problems found." and the badge goes.
@@ -127,11 +136,11 @@ If you are starting here, open this example: it is the throw after steps 1 to 3.
 
 1. Choose **View → Preview as SL Plays It**. The **As SL Plays It** window opens: the body now plays the exported
    `.anim`, and your own animation is a green ghost.
-2. The window reads "5,077 bytes, 17 bones, 554 rotation and 27 position keys". The table lists how far each bone
+2. The window reads "4,997 bytes, 17 bones, 544 rotation and 27 position keys". The table lists how far each bone
    ends up from your animation: under 2 mm and a tenth of a degree, too small to see.
 3. Play. The ghost and the body move as one. Close the window to turn the preview off.
 
-![The As SL Plays It window: 5,077 bytes, 17 bones, 554 rotation and 27 position keys, and the table of differences per bone, all under 2 mm](images/tutorial-the-polish-pass/sl-preview.png)
+![The As SL Plays It window: 4,997 bytes, 17 bones, 544 rotation and 27 position keys, and the table of differences per bone, all under 2 mm](images/tutorial-the-polish-pass/sl-preview.png)
 *What the export keeps: every difference is under 2 mm.*
 
 > **Why:** export thins your keys and rounds them to the file's precision. Usually nothing shows, but on a fast
@@ -188,27 +197,32 @@ set to 0 and 0 (keep every frame), which makes it too big.
 
 ## Check your result
 
-[Open the example](example:polish-finished.vat) to compare with the finished throw.
+[Open the example](example:polish-finished.vat) to compare with the finished throw, or
+[show it as the target](target:polish-finished.vat) over yours and play them together: the green body and yours
+should wind up, release and follow through on the same frames.
 
-| Where | What to look for |
-|---|---|
-| **Properties → Animation** | Last frame `44`, **Loop** off, Priority `4`, Ease in `0.30 s`, Ease out `0.30 s` |
-| Timeline, **Select All** | keys at 0, 10, 12, 15, 26 and 44, a teal circle (Breakdown) at 12, and the keys **Key the Joint Inside Its Limits** added to the shoulder during the wind-up |
-| **Animation Check** | "No problems found." |
-| **As SL Plays It** | 5,077 bytes; every bone within 2 mm |
-| Playing | a slow wind-up, a release in 5 frames, and the hand on a curved path throughout |
+- **Playing:** a slow wind-up, then the arm cracks through in about five frames, and the hand runs on a curved path
+  the whole way (look at the motion path from the side).
+- **The dope sheet, everything selected:** the release keys five frames after the wind-up (at 15), a breakdown
+  just after the wind-up (a teal circle on the timeline), and the extra keys **Key the Joint Inside Its Limits**
+  added to the shoulder during the wind-up.
+- **The Check badge:** gone ("No problems found.").
+- **As SL Plays It:** the ghost and the body move as one.
+
+> **Check:** the finished example has keys at 0, 10, 12, 15, 26 and 44, Last frame `44`, **Loop** off, Priority `4`,
+> Ease in and Ease out `0.30 s`, and exports to about 4,997 bytes with every bone within 2 mm.
 
 ## Troubleshooting
 
-### Typing a value into the Tween slider keys nothing
-
-**Ctrl+click** on the **Tween** slider lets you type a value, but the typed value does not key the pose. Drag the
-slider instead, or use **Shift+E**.
-
 ### Tween says it needs a key before and after this frame
 
-The selected bones have no key on one side of the playhead. Go to a frame between two keys (12 lies between 10
+The selected bones have no key on one side of the playhead. Drag the playhead between two keys (12 lies between 10
 and 15).
+
+### Loop turned on when I dragged the playhead
+
+The drag started on the **Loop in** flag, which sits at frame 0 on the ruler's foot while **Loop** is off. **Ctrl+Z**
+undoes it; drag the pink tab at the top of the ruler instead.
 
 ### The dope sheet is empty
 
@@ -228,3 +242,4 @@ Next: finish your own blocking the same way, for example the swing from [[Melee:
 the [[Tutorials]] list.
 
 Category: Getting started
+Order: 22

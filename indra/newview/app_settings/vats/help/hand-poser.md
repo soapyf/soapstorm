@@ -37,7 +37,7 @@ For ready-made shapes (fist, point, peace, OK, grips and more), use the starter 
 
 ## Tips and tricks
 
-- Show the hand bones (**View → Show Hand Bones**) to see the result on the skeleton while you drag.
+- Show the hand bones (**View → Bones → Show Hand Bones**) to see the result on the skeleton while you drag.
 - Start from a starter shape, then adjust single fingers with the dots.
 - To copy one hand to the other, select the finger bones and press **M** (**Edit → Mirror Bone to Other Side**); see [[Mirror, flip and reverse]].
 

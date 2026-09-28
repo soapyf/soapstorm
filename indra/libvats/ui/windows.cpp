@@ -17,6 +17,7 @@
 #include "vats/height_variant.h"
 #include "vats/world_reduce.h"
 #include "theme.h"
+#include "widgets.h"
 
 namespace vats {
 namespace {
@@ -70,16 +71,27 @@ int json_int(const Json& obj, const char* key, int fallback) {
 // Preferences
 
 // Tool windows first open at the 3D view's top-right, stepped so two never land on the same spot.
-void App::place_tool_window(int slot, float w_em, float h_em) {
+void App::place_tool_window(float w_em, float h_em) {
+    // ImGui takes this only the first time the window opens (then layout.ini remembers where it was).
+    ImGuiContext& g = *GImGui;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    const Box work{vp->WorkPos.x, vp->WorkPos.y, vp->WorkPos.x + vp->WorkSize.x, vp->WorkPos.y + vp->WorkSize.y};
+    // The avatar stands in the middle of the view (the dockspace's central node; the app's Viewport panel is there).
+    const ImGuiDockNode* central = ImGui::DockBuilderGetCentralNode(dockspace_id_);
+    const float avatar_x = central && central->Size.x > 8 ? central->Pos.x + central->Size.x / 2 : (work.x0 + work.x1) / 2;
+    // The other windows open over the dock: the tool windows already floating there.
+    std::vector<Box> others;
+    for (ImGuiWindow* w : g.Windows)
+        if ((w->Active || w->WasActive) && !w->Hidden && !w->DockIsActive && !w->ParentWindow &&
+            !(w->Flags & (ImGuiWindowFlags_Popup | ImGuiWindowFlags_Tooltip | ImGuiWindowFlags_ChildMenu |
+                          ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBackground)) &&
+            w->Size.x < work.w() * 0.95f)
+            others.push_back({w->Pos.x, w->Pos.y, w->Pos.x + w->Size.x, w->Pos.y + w->Size.y});
+    const ImVec2 size = window_size(w_em, h_em);
     const float step = ImGui::GetFrameHeight();
-    const float top = ImGui::GetMainViewport()->WorkPos.y + 2.5f * step + slot * step;  // below the view's tab
-    ImGui::SetNextWindowPos(ImVec2(viewport_max_.x - 12 - slot * step, top), ImGuiCond_FirstUseEver, ImVec2(1, 0));
-    if (w_em > 0) {
-        const ImGuiViewport* vp = ImGui::GetMainViewport();
-        ImVec2 size = window_size(w_em, h_em);
-        size.y = std::min(size.y, vp->WorkPos.y + vp->WorkSize.y - top - step);
-        ImGui::SetNextWindowSize(size, ImGuiCond_FirstUseEver);
-    }
+    const Box at = place_window(work, size.x, size.y, avatar_x, others, 0.5f * step, step);
+    ImGui::SetNextWindowPos(ImVec2(at.x0, at.y0), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(at.w(), at.h()), ImGuiCond_FirstUseEver);
 }
 
 void App::draw_preferences() {
@@ -157,10 +169,10 @@ void App::draw_preferences() {
         ImGui::EndCombo();
     }
     row("Gizmo size");
-    if (ImGui::SliderFloat("##gizmo", &settings_.gizmo_size, 50, 220, "%.0f px")) gizmo_size_ = settings_.gizmo_size;
+    if (slider_float("##gizmo", &settings_.gizmo_size, 50, 220, "%.0f px")) gizmo_size_ = settings_.gizmo_size;
     if (ImGui::IsItemDeactivatedAfterEdit()) save_settings();
     row(settings_.preset == Preset::SecondLife ? "Rotation snap (G)" : "Rotation snap (Ctrl)");
-    if (ImGui::SliderFloat("##snap", &settings_.snap_degrees, 1, 90, "%.0f°")) snap_deg_ = settings_.snap_degrees;
+    if (slider_float("##snap", &settings_.snap_degrees, 1, 90, "%.0f°")) snap_deg_ = settings_.snap_degrees;
     if (ImGui::IsItemDeactivatedAfterEdit()) save_settings();
     row("BVH import");
     if (ImGui::Checkbox("Reduce keys after import", &settings_.bvh_reduce)) save_settings();
@@ -632,9 +644,9 @@ void App::export_now(bool bvh, bool all_bones, bool all_clips) {
         export_all_after_folder_ = all_clips;
         std::string dir = doc_.path.empty() ? "" : doc_.path.substr(0, doc_.path.find_last_of('/') + 1);
         std::string name = dir + export_file_name(export_naming(), export_stem(), doc_.clip().mirror_export, bvh ? "bvh" : "anim");
-        // The Save dialog's folder becomes the export folder.
+        // The Save dialog's folder becomes the export folder, and a name typed there the export's Name.
         host_.save_file_dialog({bvh ? ui::FileFilter{"BVH motion", "bvh"} : ui::FileFilter{"SL animation", "anim"}}, name,
-                               dialog_result(Dialog::ExportFolder, true));
+                               dialog_result(Dialog::ExportFile));
         return;
     }
     int replaced = 0;

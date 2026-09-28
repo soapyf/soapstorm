@@ -9,6 +9,7 @@
 
 #include "app.h"
 #include "imgui.h"
+#include "widgets.h"
 #include "vats/reference.h"
 #include "vats/wiki.h"
 
@@ -195,12 +196,12 @@ void App::draw_reference_window() {
     if (ImGui::Combo("##ref_view", &view, views, int(std::size(views))))
         edit("Reference View", [&](Clip& c) { c.reference->view = ReferenceView(view); });
     ImGui::SetItemTooltip("Locked to a view, the picture shows only while the camera looks from within 15 degrees of it "
-                          "(View > Front, Back, Right, Left, Top)");
+                          "(View > Camera > Front, Back, Right, Left, Top)");
 
     ImGui::SeparatorText("Look");
     float opacity = float(r.opacity);
     label("Opacity");
-    if (ImGui::SliderFloat("##ref_opacity", &opacity, 0, 1, "%.2f")) r.opacity = opacity;
+    if (slider_float("##ref_opacity", &opacity, 0, 1, "%.2f")) r.opacity = opacity;
     track("Reference Opacity");
     float scale = float(r.scale);
     label("Scale");
