@@ -54,6 +54,7 @@
 #include "fsconsoleutils.h"
 #include "fsfloaternearbychat.h"
 #include "llviewernetwork.h"
+#include "fsvatshost.h" // VATs editor
 
 //add LLFloaterIMNearbyChatHandler to LLNotificationsUI namespace
 
@@ -453,7 +454,11 @@ void LLFloaterIMNearbyChatScreenChannel::arrangeToasts()
     updateRect();
 
     LLRect channel_rect;
-    mFloaterSnapRegion->localRectToOtherView(mFloaterSnapRegion->getLocalRect(), &channel_rect, gFloaterView);
+    const bool vats = FSVATsEditor::toastArea(channel_rect); // VATs editor: in its view
+    if (!vats)
+    {
+        mFloaterSnapRegion->localRectToOtherView(mFloaterSnapRegion->getLocalRect(), &channel_rect, gFloaterView);
+    }
     channel_rect.mLeft += 10;
     channel_rect.mRight = channel_rect.mLeft + 300;
 
@@ -480,7 +485,7 @@ void LLFloaterIMNearbyChatScreenChannel::arrangeToasts()
 
         S32 toast_top = bottom + toast->getRect().getHeight() + margin;
 
-        if(toast_top > channel_rect.getHeight())
+        if(toast_top > channel_rect.getHeight() + (vats ? channel_rect.mBottom : 0)) // VATs editor: its view's top
         {
             while(it!=m_active_toasts.end())
             {

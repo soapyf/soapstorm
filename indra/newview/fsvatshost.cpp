@@ -44,6 +44,7 @@
 #include "lldir.h"
 #include "lldirpicker.h"
 #include "llfile.h"
+#include "llchannelmanager.h"
 #include "llchiclet.h"
 #include "llfloater.h"
 #include "llfloaterreg.h"
@@ -251,6 +252,7 @@ namespace
         bool world_view() const override { return true; }
         bool pointer_on_world() const override { return FSVATsImGui::pointerOnWorld(); }
         const vats::Shape* body_shape() const override { return mHaveShape ? &mShape : nullptr; }
+        void set_view_frame(const vats::Xform& edited_in_yours) override;
         std::vector<std::string> joint_overrides() const override;
         void setSkeleton(const vats::Skeleton* skel) { mSkel = skel; }  // before the first frame, so body_shape is ready
         // Spec 09 §5a: the face-positions check without uploading; a line for the log and the status bar.
@@ -266,6 +268,7 @@ namespace
         vats::ui::Host::HostUi* host_ui() override { return this; }
         const char* pane_title() const override { return "Chat"; }
         void place_pane(bool shown, ImVec2 min, ImVec2 max) override;
+        void place_view(ImVec2 min, ImVec2 max) override;
         int unread_notices() const override;
         void toggle_notices() override { LLFloaterReg::toggleInstanceOrBringToFront("notification_well_window"); }
         const char* reveal_label() const override { return "Show Firestorm UI"; }
@@ -279,6 +282,10 @@ namespace
         void releaseGL();    // the GL context is going
         void beforeFrame(bool reset_joints, bool show_others);  // outside the ImGui frame: the world's frame, the worn body, the camera
         bool hidingOthers() const { return mHidingOthers; }
+        // Build 17: while the viewer's UI is hidden, toasts and notifications stay inside the editor's view (the world area
+        // between its docked panels), in the viewer's scaled screen coordinates; false: the viewer's own places.
+        bool toastArea(LLRect& out) const;
+        bool hidesWorldTips() const { return holdsAvatar() && !mRevealed; }
         bool holdsAvatar() const { return mIsolatedOn && isAgentAvatarValid() && mIsolatedOn == gAgentAvatarp.get(); }
         void afterFrame();   // inside it, after the UI's frame: questions, camera edits
         void close();        // the editor is going: stop driving the avatar and the sound, drop its callbacks
@@ -286,6 +293,7 @@ namespace
         void hideChrome();   // the viewer's UI hidden but for shownOverEditor
         void showChrome();   // and back exactly as it was
         void releasePane();  // the conversations floater back where it was
+        void updateToasts(); // the toast channels laid out again when their area changes (or goes)
         void hideOthers(bool hide);  // every other avatar hidden on this screen, or back as before
         bool regionKeepsStanding() const { return mRegionKeepsStanding; }
 
@@ -301,9 +309,13 @@ namespace
         void pushCamera();
         void startSound();
         void stopSound();
-        LLVector3 toAgent(const Vec3& p) const { return toLL(p - pelvisRest()) * mRot + mPos; }
-        Vec3 fromAgent(const LLVector3& a) const { return toVATs((a - mPos) * ~mRot) + pelvisRest(); }
-        Vec3 dirFromAgent(const LLVector3& d) const { return toVATs(d * ~mRot); }
+        // The UI's space is the edited actor's; mView places it in your actor's (the worn avatar's), whose origin is at
+        // the feet. toAgentYours maps your actor's own space (the pose the avatar is driven with).
+        LLVector3 toAgentYours(const Vec3& p) const { return toLL(p - pelvisRest()) * mRot + mPos; }
+        LLVector3 toAgent(const Vec3& p) const { return toAgentYours(mView.apply(p)); }
+        Vec3 fromAgent(const LLVector3& a) const { return mView.inverse().apply(toVATs((a - mPos) * ~mRot) + pelvisRest()); }
+        Vec3 dirFromAgent(const LLVector3& d) const { return mView.rot.conj().rotate(toVATs(d * ~mRot)); }
+        void syncCamera();  // the UI's camera and projection from LLViewerCamera, in the UI's space
         // VATs' space has its origin at the feet (the pelvis rests 1.067 m up); the viewer's mRoot sits where
         // the pelvis rests.
         Vec3 pelvisRest() const { return mSkel && mSkel->size() ? (*mSkel)[0].pos : Vec3{ 0, 0, 1.067 }; }
@@ -313,6 +325,9 @@ namespace
         vats::Mat4 mViewProj;
         LLVector3 mPos;                  // VATs' space in the agent frame: the avatar's mRoot
         LLQuaternion mRot;
+        vats::Xform mView;               // the edited actor in your actor's space (identity: you edit your own)
+        LLRect mViewRect;                // the editor's view, scaled screen coordinates (place_view)
+        LLRect mToastRect;               // the toasts' area as last laid out; empty: the viewer's own
 
         const vats::Skeleton* mSkel = nullptr;
         vats::Pose mPose;               // what VATsClipMotion::sEditor shows
@@ -882,9 +897,26 @@ namespace
         }
         updateShape();
         checkFrame();
+        syncCamera();
+        if (std::exchange(mFrameOnOpen, false))
+        {
+            // As Frame All does, from the front; pushCamera moves the viewer's camera there, unfollowed, as after an
+            // Alt+click, so a push on the region doesn't move the view.
+            mCamera.target = Vec3{ 0, 0, 1.0 };
+            mCamera.distance = vats::Camera::kDefaultDistance;
+            mCamera.yaw = 0;
+            mCamera.pitch = 0.1;
+        }
 
-        // The viewer's camera is the view: the UI's camera follows it every frame (in VATs' space), and
-        // the projection is LLViewerCamera's own, so markers and gizmos sit on the world.
+        if (mPlayAt >= 0 && LLTimer::getTotalSeconds() >= mPlayAt)
+            startSound();
+    }
+
+    // The viewer's camera is the view: the UI's camera follows it every frame (in VATs' space), and the projection is
+    // LLViewerCamera's own, so markers and gizmos sit on the world.
+    void ViewerHost::syncCamera()
+    {
+        LLViewerCamera* cam = LLViewerCamera::getInstance();
         const Vec3 eye = fromAgent(cam->getOrigin());
         const Vec3 at = dirFromAgent(cam->getAtAxis()).normalized();
         const Vec3 up = dirFromAgent(cam->getUpAxis()).normalized();
@@ -897,19 +929,18 @@ namespace
         mCamera.yaw = std::atan2(-at.y, -at.x);
         mCamera.target = eye + at * mCamera.distance;
         mSynced = mCamera;
-        if (std::exchange(mFrameOnOpen, false))
-        {
-            // As Frame All does, from the front; pushCamera moves the viewer's camera there, unfollowed, as after an
-            // Alt+click, so a push on the region doesn't move the view.
-            mCamera.target = Vec3{ 0, 0, 1.0 };
-            mCamera.distance = vats::Camera::kDefaultDistance;
-            mCamera.yaw = 0;
-            mCamera.pitch = 0.1;
-        }
         mViewProj = vats::perspective(cam->getView(), cam->getAspect(), 0.05, 1024.0) * vats::look_at(eye, eye + at, up);
+    }
 
-        if (mPlayAt >= 0 && LLTimer::getTotalSeconds() >= mPlayAt)
-            startSound();
+    // Build 17: editing another actor than yours, the UI's space is that actor's. The camera is read again in the new
+    // space at once, so the change is not taken for a camera edit of the UI's (pushCamera).
+    void ViewerHost::set_view_frame(const vats::Xform& edited_in_yours)
+    {
+        const bool same = (edited_in_yours.pos - mView.pos).length() < 1e-9 && std::fabs(edited_in_yours.rot.dot(mView.rot)) > 1 - 1e-12;
+        if (same)
+            return;
+        mView = edited_in_yours;
+        syncCamera();
     }
 
     // Spec 09 §5a: the body as drawn against the editor's frame, logged 1, 3 and 6 s after the editor takes the avatar
@@ -945,7 +976,7 @@ namespace
             LLJoint* joint = node >= 0 ? avatarJoint(node) : nullptr;
             if (!joint)
                 continue;
-            const LLVector3 drawn = joint->getWorldPosition(), editor = toAgent(g[node].pos);
+            const LLVector3 drawn = joint->getWorldPosition(), editor = toAgentYours(g[node].pos);
             line += llformat(" %s drawn <%.3f %.3f %.3f> editor <%.3f %.3f %.3f> off %.3f m;", name, drawn.mV[VX], drawn.mV[VY],
                              drawn.mV[VZ], editor.mV[VX], editor.mV[VY], editor.mV[VZ], (drawn - editor).length());
         }
@@ -960,6 +991,38 @@ namespace
     {
         drawQuestion();
         pushCamera();
+        updateToasts();
+    }
+
+    void ViewerHost::place_view(ImVec2 min, ImVec2 max)
+    {
+        const LLRect world = gViewerWindow->getWorldViewRectScaled();
+        mViewRect = LLRect(world.mLeft + S32(std::lround(min.x)), world.mTop - S32(std::lround(min.y)),
+                           world.mLeft + S32(std::lround(max.x)), world.mTop - S32(std::lround(max.y)));
+    }
+
+    // The editor's view, less a margin, while the viewer's UI is hidden (the editor's panels are where the viewer's toasts
+    // would go). Show Firestorm UI or closing gives the channels their own places back.
+    bool ViewerHost::toastArea(LLRect& out) const
+    {
+        constexpr S32 MARGIN = 8;
+        if (!mChromeHidden || mViewRect.getWidth() < 2 * MARGIN || mViewRect.getHeight() < 2 * MARGIN)
+            return false;
+        out = LLRect(mViewRect.mLeft + MARGIN, mViewRect.mTop - MARGIN, mViewRect.mRight - MARGIN, mViewRect.mBottom + MARGIN);
+        return true;
+    }
+
+    void ViewerHost::updateToasts()
+    {
+        LLRect area;
+        if (!toastArea(area))
+            area = LLRect();
+        if (area == mToastRect)
+            return;
+        mToastRect = area;
+        for (const auto& elem : LLNotificationsUI::LLChannelManager::getInstance()->getChannelList())
+            if (LLNotificationsUI::LLScreenChannelBase* channel = elem.channel.get())
+                channel->redrawToasts();
     }
 
     // The UI moved its camera (Frame Selected, the view cube, a camera view, Alt+arrows): the viewer's
@@ -1076,7 +1139,7 @@ namespace
         for (const vats::Vertex& v : verts)
         {
             const LLVector3 p = toAgent(Vec3{ v.p[0], v.p[1], v.p[2] });
-            const LLVector3 n = LLVector3(v.n[0], v.n[1], v.n[2]) * mRot;
+            const LLVector3 n = toLL(mView.rot.rotate(Vec3{ v.n[0], v.n[1], v.n[2] })) * mRot;
             b.verts.insert(b.verts.end(), { p.mV[VX], p.mV[VY], p.mV[VZ], n.mV[VX], n.mV[VY], n.mV[VZ], v.c[0], v.c[1], v.c[2], v.c[3] });
         }
         if (indices.empty())
@@ -1469,6 +1532,8 @@ namespace
     void ViewerHost::close()
     {
         showChrome();
+        mViewRect = LLRect();
+        updateToasts();  // the toasts back in the viewer's own places
         mRevealed = false;
         gSavedSettings.setBOOL("VATsShowViewerUI", false);
         hideOthers(false);
@@ -1480,6 +1545,7 @@ namespace
         mSkel = nullptr;
         mCacheFor = nullptr;
         mHaveShape = false;
+        mView = {};
         mQuestions.clear();
         mUploadDone = nullptr;  // the confirmation may still come; it uploads, nobody is told
         mWavEnd = nullptr;
@@ -1622,6 +1688,16 @@ bool FSVATsEditor::hidesOtherAvatars()
 bool FSVATsEditor::holdsAvatar()
 {
     return sHost && sHost->holdsAvatar();
+}
+
+bool FSVATsEditor::toastArea(LLRect& out)
+{
+    return sHost && sApp && sHost->toastArea(out);
+}
+
+bool FSVATsEditor::hidesWorldTips()
+{
+    return sHost && sApp && sHost->hidesWorldTips();
 }
 
 bool FSVATsEditor::ownsWorld()

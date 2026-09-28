@@ -159,7 +159,8 @@ private:
     void guard_unsaved(std::function<void()> then);
 
     // File dialogs run asynchronously; results come back through this queue.
-    enum class Dialog { Open, SaveAs, ImportAnim, ImportBvh, ImportProp, ImportBody, ImportRetarget, LoadAudio, ExportFolder };
+    enum class Dialog { Open, SaveAs, ImportAnim, ImportBvh, ImportProp, ImportBody, ImportRetarget, LoadAudio, ExportFolder,
+                        LoadActor, SaveActor, ExportActor };  // the *Actor ones act on file_actor_
     // A dialog's answer, queued for the next frame (hosts may answer on another thread). Several files
     // (body parts) arrive joined with newlines; "" = cancelled.
     ui::FilesChosen dialog_result(Dialog kind, bool folder_of_file = false);
@@ -286,7 +287,7 @@ private:
     void evaluate();
     ImTextureID render_scene(int w, int h);  // the view's picture, or 0 when the host draws none
     int pick_bone(ImVec2 mouse, std::vector<int>* ranked = nullptr) const;
-    void draw_view_cube(ImDrawList* dl, ImVec2 vp_min, ImVec2 vp_max, bool viewport_hovered);
+    void draw_view_cube(ImDrawList* dl, ImVec2 vp_min, bool viewport_hovered);  // top left of the view
     void look_from(const Vec3& direction);  // animated (VP-63)
     void focus_camera_on(const Vec3& point);  // Second Life Alt+click, eased like the viewer's focus swing
     void update_camera_animation(double dt);
@@ -355,18 +356,19 @@ private:
     int pick_handle(ImVec2 mouse, bool& pole) const;
     void draw_handles(ImDrawList* dl) const;
     const Shape* shape() const;  // the view's body; a mesh body's own proportions when one is shown (BD-3)
+    const Shape* view_body_shape() const;  // the app's own body (the Linden body or the mesh body shown)
     const Shape* export_shape() const;  // IK and pins bake against this, not the viewport body (IO-13)
     // The joint positions position keys are written from: the worn avatar's with "Your avatar", read live from the
     // host and never stored; else null (IO-11).
     const Shape* export_positions() const;
     // The export settings' "shape", or the default: "avatar" in the viewer while the worn avatar has mesh joint
     // positions, else "sl-default".
-    // yours = false (another actor than your avatar, unless "Use Your avatar for every actor"): never "avatar".
+    // yours = false (another actor than your avatar, the first, unless "Use Your avatar for every actor"): never "avatar".
     std::string bake_shape_key(const Json& export_settings, bool yours = true) const;
-    // During a multi-actor export or upload: the actor the user was editing (your avatar in the viewer); -1 otherwise.
+    // During a multi-actor export or upload: the actor the user was editing, whose settings apply; -1 otherwise.
     int export_home_ = -1;
     const Json& export_home_settings() const;  // that actor's export settings (the active one's when not exporting)
-    bool exporting_yours() const;               // the actor being exported may use Your avatar
+    bool exporting_yours() const;               // the actor being exported (the active one) may use Your avatar
     std::string bake_shape_label(const std::string& key) const;  // "SL Default", "Mesh body: <name>", ...
     int limb_for_action() const;  // the limb of the primary handle or bone, or -1
     std::vector<std::string> selected_tracks() const;  // bones, their pin: tracks, selected handles' ik. tracks
@@ -581,6 +583,16 @@ private:
     bool show_actors_ = false;
     void draw_actors_panel();
     bool multi_actor() const { return doc_.project.actors.size() >= 2; }
+    // Your avatar is the first actor (in the viewer, the worn avatar plays its animation). The one edited may be another.
+    bool editing_other() const { return multi_actor() && doc_.project.active != 0; }
+    // Per-actor files (GR-6): load an animation into an actor (-1: a new actor), save or export one actor alone.
+    std::string file_actor_;  // the actor a LoadActor, SaveActor or ExportActor dialog is for, by name ("" = a new one)
+    int actor_index(const std::string& name) const;  // -1 when there is no such actor
+    void load_actor_file(const std::string& actor, const std::string& path);
+    void put_clip_in_actor(const std::string& actor, const std::string& path, Clip clip, const Actor* from);
+    void save_actor(const std::string& actor, const std::string& path, bool anim);
+    void actor_file_menu(int i, bool load);  // actor i's Load Animation... (load) and Save/Export items
+    void draw_actor_body(int i, const std::vector<Xform>& globals, const SceneColours& colours, bool edited);
     Xform actor_rel(int i) const;              // actor i's placement in the active actor's space
     std::string actor_body_key(int i) const;   // body id or "mesh:<id>"; "" in the file (None) = the view's, for its shape
     void sync_active_body();                   // the view shows the active actor's own Linden body
@@ -602,6 +614,7 @@ private:
         std::vector<Xform> globals;
         std::array<float, 3> colour;
         int actor;
+        bool drawn = true;  // false: your avatar in the world view, picked by its bones but drawn by the host
     };
     std::vector<OtherSkeleton> other_skeletons_;
     // The view's placement gizmo on another actor (the "place" button).

@@ -82,6 +82,7 @@
 // [/RLVa:KB]
 
 #include "llviewernetwork.h"    // <FS:CR> For prim equivilance hiding
+#include "fsvatshost.h" // VATs editor
 
 extern bool gDebugClicks;
 
@@ -1645,6 +1646,7 @@ bool LLToolPie::handleToolTip(S32 local_x, S32 local_y, MASK mask)
 {
     static LLCachedControl<bool> show_hover_tips(*LLUI::getInstance()->mSettingGroups["config"], "ShowHoverTips", true);
     if (!show_hover_tips) return true;
+    if (FSVATsEditor::hidesWorldTips()) return true; // VATs editor: no object or avatar tips over its panels
     if (!mHoverPick.isValid()) return true;
 // [RLVa:KB] - Checked: 2010-05-03 (RLVa-1.2.0g) | Modified: RLVa-1.2.0g
 #ifdef RLV_EXTENSION_CMD_INTERACT

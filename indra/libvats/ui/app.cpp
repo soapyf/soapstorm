@@ -347,6 +347,63 @@ void App::import_file(const std::string& path) {
     }
 }
 
+// GR-6: an animation file into an actor ("" = a new actor): a .anim, a BVH on the SL skeleton, or one actor of a
+// project (asked which when it has several). put_clip_in_actor asks before replacing keys and does the rest.
+void App::load_actor_file(const std::string& actor, const std::string& path) {
+    std::string text, err;
+    const std::string what = file_name(path), ext = extension(path);
+    if (!read_file(path, text)) return message("Could not load " + what, "The file could not be read.");
+    if (ext == "anim") {
+        AnimFile f;
+        if (!parse_anim(std::vector<std::uint8_t>(text.begin(), text.end()), f, err)) return message("Could not load " + what, err);
+        if (auto problems = validate_anim(f, skel_, false); !problems.empty())
+            return message("Could not load " + what, what + " is not a valid SL animation: " + problems.front());
+        return put_clip_in_actor(actor, path, import_anim(skel_, f).clip, nullptr);
+    }
+    if (ext == "bvh") {
+        auto r = import_bvh(skel_, text, settings_.bvh_reduce ? BvhImportOptions{0.05, 0.0005} : BvhImportOptions{});
+        if (!r.ok)
+            return message("Could not load " + what, r.error + "\n\nA BVH from another rig: load it with File > Import Animation "
+                                                                "(Retarget)... and save it as a project first.");
+        return put_clip_in_actor(actor, path, std::move(r.clip), nullptr);
+    }
+    Project q;
+    if (!load_project(text, q, err, path)) return message("Could not load " + what, err);
+    if (q.actors.size() < 2) return put_clip_in_actor(actor, path, std::move(q.clip), nullptr);
+    std::vector<std::string> names;
+    for (const Actor& a : q.actors) names.push_back(a.name);
+    names.push_back("Cancel");
+    host_.ask("Load which actor?", what + " has " + std::to_string(q.actors.size()) + " actors. Load the animation of:", names,
+              [this, actor, path, q](int k) {
+                  if (k >= 0 && k < int(q.actors.size())) put_clip_in_actor(actor, path, actor_clip(q, k), &q.actors[k]);
+              });
+}
+
+// One actor alone: as a project of its own (its clip, props and export settings), or its .anim as Export writes it
+// with its own bake shape and settings.
+void App::save_actor(const std::string& actor, const std::string& path, bool anim) {
+    const int i = actor_index(actor);
+    if (i < 0) return status(actor + " is no longer in the project");
+    if (doc_.history.is_open() || scene_busy()) return status("Finish the current edit first");
+    Project& pr = doc_.project;
+    if (anim) {
+        const int home = pr.active;
+        set_active_actor(pr, i);
+        export_anim(path);  // says what it wrote, or why not
+        set_active_actor(pr, home);
+        return;
+    }
+    Project one;
+    one.clip = actor_clip(pr, i);
+    const std::string dir = path.substr(0, path.find_last_of('/'));
+    for (Prop& p : one.clip.props) p.path = prop_path_to_stored(p.path, dir);
+    if (one.clip.audio) one.clip.audio->path = prop_path_to_stored(one.clip.audio->path, dir);
+    const std::string text = save_project(one);
+    if (!write_file(path, text.data(), text.size(), true)) return message("Save failed", "Could not write " + path + "\n\n" + g_write_error);
+    rescan_files();
+    status("Saved " + actor + " as " + file_name(path));
+}
+
 // The .anim bytes the project exports: 0 when it cannot (after saying why), 1 exported, 2 an imported .anim
 // nobody has edited, going back out exactly as it came in (IO-22).
 int App::anim_bytes(AnimExportResult& r, std::vector<std::uint8_t>& bytes) {
@@ -541,6 +598,15 @@ void App::show_dialog(Dialog kind, std::function<void()> after_save) {
         case Dialog::LoadAudio: host_.open_file_dialog({{"Audio", "wav;mp3;ogg;flac"}}, false, dialog_result(kind)); break;
         case Dialog::ImportBody: host_.open_file_dialog({mesh}, true, dialog_result(kind)); break;
         case Dialog::ExportFolder: host_.open_folder_dialog("", dialog_result(kind)); break;
+        case Dialog::LoadActor:
+            host_.open_file_dialog({{"Animation", "anim;bvh;vat;hxanim"}}, false, dialog_result(kind));
+            break;
+        case Dialog::SaveActor:
+            host_.save_file_dialog({{"VATs project", "vat"}}, dir + stem + "_" + file_actor_ + ".vat", dialog_result(kind));
+            break;
+        case Dialog::ExportActor:
+            host_.save_file_dialog({{"SL animation", "anim"}}, dir + stem + "_" + file_actor_ + ".anim", dialog_result(kind));
+            break;
     }
 }
 
@@ -1510,6 +1576,9 @@ bool App::frame() {
                     guarded(parts.empty() ? path : parts[0], [&] { import_body(parts); });
                     break;
                 }
+                case Dialog::LoadActor: guarded(path, [&] { load_actor_file(file_actor_, path); }); break;
+                case Dialog::SaveActor: save_actor(file_actor_, with_extension(path, "vat"), false); break;
+                case Dialog::ExportActor: save_actor(file_actor_, with_extension(path, "anim"), true); break;
                 case Dialog::ExportFolder:
                     doc_.clip().export_settings.set("folder", path);
                     mark_dirty();
@@ -1580,7 +1649,16 @@ void App::evaluate() {
     pose_ = std::move(e.pose);
     globals_ = std::move(e.globals);
     limb_states_ = std::move(e.limbs);
-    host_.drive_avatar(skel_, pose_, doc_.clip(), frame_);
+    if (host_.world_view() && editing_other()) {
+        // The worn avatar is your actor (the first): it plays its own animation while another is edited.
+        const Project& p = doc_.project;
+        Evaluation yours = evaluate_actor(0, frame_);
+        host_.drive_avatar(skel_, yours.pose, actor_clip(p, 0), frame_);
+        host_.set_view_frame(p.actors[0].placement().inverse() * p.actors[p.active].placement());
+    } else {
+        host_.drive_avatar(skel_, pose_, doc_.clip(), frame_);
+        host_.set_view_frame({});
+    }
     // Handles of limbs that lost their IK data at this frame drop out of the selection (VP-27).
     handles_.erase(std::remove_if(handles_.begin(), handles_.end(),
                                   [&](const HandleRef& h) {

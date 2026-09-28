@@ -24,6 +24,7 @@
 #ifndef FS_VATSHOST_H
 #define FS_VATSHOST_H
 
+#include "llrect.h"
 #include "stdtypes.h"
 
 // The VATs editor (Avatar > VATs Editor, setting "VATsEditor"): Viewport Avatar Toolset's own editor
@@ -46,6 +47,14 @@ namespace FSVATsEditor
     // True while the editor hides every other avatar (spec 09 U5): it turns on the viewer's Render Only Friends
     // (RenderAvatarFriendsOnly) and LLVOAvatar::isBuddy answers false, so friends are hidden too; never your own.
     bool hidesOtherAvatars();
+    // Build 17 (spec 09 §0f): while the editor hides the viewer's UI, the area toasts, notifications, script dialogs and
+    // alerts are laid out in (LLScreenChannelBase::getChannelRect, LLScreenChannel::redrawToasts, the nearby chat toasts,
+    // LLScriptFloater::show): the editor's view between its docked panels, in scaled screen coordinates. False: the
+    // viewer's own places (editor closed, or Show Firestorm UI on).
+    bool toastArea(LLRect& out);
+    // True while the editor holds your avatar and the viewer's UI is hidden: LLToolPie shows no hover tips for objects
+    // and avatars (they would draw over the editor's panels).
+    bool hidesWorldTips();
     // True while the editor is open: the world's clicks and the keys are the editor's (FSVATsImGui).
     bool ownsWorld();
     // From LLAgent::setControlFlags (spec 09 U4b): the flags that may reach the avatar. While the editor holds it,

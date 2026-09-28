@@ -70,7 +70,14 @@ const App::MeshBody* App::find_mesh_body(const std::string& id) const {
 }
 
 const Shape* App::shape() const {
-    if (const Shape* worn = host_.body_shape()) return worn;  // the viewer: the avatar in the world
+    if (const Shape* worn = host_.body_shape()) {  // the viewer: your actor is the avatar in the world
+        if (!editing_other()) return worn;
+        return actor_shape(doc_.project.active);  // another actor: the proportions of the body it is drawn with
+    }
+    return view_body_shape();
+}
+
+const Shape* App::view_body_shape() const {
     const Shape* base = mesh_.shape(body_);
     const MeshBody* b = mesh_body();
     return b ? mesh_body_shape(*b, base) : base;

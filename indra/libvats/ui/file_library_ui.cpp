@@ -430,12 +430,21 @@ void App::anim_to_library(const std::string& file_name, const std::vector<std::u
     rescan_files();
 }
 
-// Inventory files dropped on the view: a .anim is inserted at the frame, a project opens.
+// Inventory files dropped on the view: a .anim is inserted at the frame, or loaded into the actor it is dropped on; a
+// project opens.
 void App::file_drop(const ImGuiPayload* payload, std::string& hint) {
     const std::string path(static_cast<const char*>(payload->Data));
     LibKind kind = LibKind::Project;
     lib_kind_of(path, kind);
     const std::string name = stem_of(path);
+    // A .anim over another actor's body (or your avatar's bones in the world view) loads into that actor (GR-6).
+    if (const int actor = kind == LibKind::Anim ? pick_actor(ImGui::GetIO().MousePos) : -1;
+        actor >= 0 && actor < int(doc_.project.actors.size())) {
+        const std::string who = doc_.project.actors[actor].name;
+        hint = "Load " + name + " into " + who;
+        if (ImGui::AcceptDragDropPayload("VATS_FILE", ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) load_actor_file(who, path);
+        return;
+    }
     hint = kind == LibKind::Anim ? "Insert " + name + " at frame " + std::to_string(int(std::round(frame_))) + (apply_mirrored_ ? " (mirrored)" : "")
                                  : "Open " + name;
     if (!ImGui::AcceptDragDropPayload("VATS_FILE", ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) return;

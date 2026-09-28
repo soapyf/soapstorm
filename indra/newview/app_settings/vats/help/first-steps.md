@@ -34,7 +34,7 @@ With the Industry preset:
 
 - **Alt + left drag** orbits, **Alt + middle drag** pans, **Alt + right drag** or the wheel zooms.
 - **F** frames the selected bone; **A** frames the whole avatar.
-- Click a face of the cube at the top right of the viewport to look from that side.
+- Click a face of the cube at the top left of the viewport to look from that side.
 
 ### Posing the first frame
 

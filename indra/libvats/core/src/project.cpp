@@ -1,6 +1,7 @@
 // Viewport Avatar Toolset - project files: the native .vat format and .hxanim migration.
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 #include "vats/project.h"
+#include "vats/curve_ops.h"
 #include "vats/prop.h"
 #include "vats/legacy.h"
 #include "guard.h"
@@ -633,6 +634,32 @@ void sync_actor_timing(Project& p) {
         c.fps = p.clip.fps, c.end_frame = p.clip.end_frame, c.loop = p.clip.loop;
         c.loop_in = p.clip.loop_in, c.loop_out = p.clip.loop_out;
     }
+}
+
+ActorLoad load_into_actor(Project& p, int i, Clip clip) {
+    const Clip scene = p.clip;  // the active actor's clip carries the shared timing
+    ActorLoad r;
+    r.file_fps = clip.fps;
+    r.fps = scene.fps;
+    r.scene_was = scene.end_frame;
+    if (clip.fps != scene.fps) retime_clip(clip, scene.fps);
+    r.clip_frames = clip.end_frame;
+    r.scene_now = std::max(scene.end_frame, clip.end_frame);
+    const std::string self = p.actors.empty() ? "" : p.actors[i].name;
+    r.dropped_binds = int(std::erase_if(clip.pins, [&](const Pin& pin) {
+        if (pin.target_actor.empty()) return false;
+        return pin.target_actor == self || std::none_of(p.actors.begin(), p.actors.end(), [&](const Actor& a) { return a.name == pin.target_actor; });
+    }));
+    Clip& to = actor_clip(p, i);
+    clip.props = std::move(to.props);
+    clip.audio = std::move(to.audio);
+    clip.export_settings = std::move(to.export_settings);
+    clip.mirror_export = to.mirror_export;
+    clip.loop = scene.loop, clip.loop_in = scene.loop_in, clip.loop_out = scene.loop_out;
+    to = std::move(clip);
+    p.clip.end_frame = r.scene_now;
+    sync_actor_timing(p);
+    return r;
 }
 
 bool load_project(std::string_view text, Project& out, std::string& err, std::string_view source_path) {

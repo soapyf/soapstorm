@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <optional>
 
 #include "app.h"
 #include "icon_button.h"
@@ -58,12 +59,13 @@ void App::sync_active_body() {
 const Shape* App::actor_shape(int i) const {
     const Project& p = doc_.project;
     if (p.actors.size() < 2) return shape();
+    if (const Shape* worn = host_.body_shape(); worn && i == 0) return worn;  // the viewer: your actor is the worn avatar
     const std::string b = actor_body_key(i);
     for (int k = 0; k < kBodyCount; ++k)
         if (b == kBodyIds[k]) return mesh_.shape(Body(k));
     if (b.rfind("mesh:", 0) == 0)  // BD-3: the body's own joints over the view's Linden shape
         if (const MeshBody* mb = find_mesh_body(b.substr(5))) return mesh_body_shape(*mb, mesh_.shape(body_));
-    return shape();
+    return view_body_shape();
 }
 
 ExternalTarget App::actor_resolver(int self) {
@@ -95,14 +97,93 @@ void App::activate_actor(int i) {
     if (i == p.active || i < 0 || i >= int(p.actors.size())) return;
     if (p.actors[i].locked) return status(p.actors[i].name + " is locked");
     if (doc_.history.is_open() || scene_busy()) return status("Finish the current edit first");
-    // Keep the camera on the same spot of the scene: old active space -> new active space.
-    Xform m = p.actors[i].placement().inverse() * p.actors[p.active].placement();
-    camera_.target = m.apply(camera_.target);
-    camera_.yaw += (p.actors[p.active].rot_z - p.actors[i].rot_z) * kDegToRad;
+    // Keep the camera on the same spot of the scene: old active space -> new active space. The world view's camera is the
+    // host's, which follows the change itself (Host::set_view_frame).
+    if (!host_.world_view()) {
+        Xform m = p.actors[i].placement().inverse() * p.actors[p.active].placement();
+        camera_.target = m.apply(camera_.target);
+        camera_.yaw += (p.actors[p.active].rot_z - p.actors[i].rot_z) * kDegToRad;
+    }
     set_active_actor(p, i);
     clear_selection();
     clip_replaced();
     status("Editing " + p.actors[i].name);
+}
+
+int App::actor_index(const std::string& name) const {
+    const auto& as = doc_.project.actors;
+    for (int i = 0; i < int(as.size()); ++i)
+        if (as[i].name == name) return i;
+    return -1;
+}
+
+// GR-6: a loaded clip into an actor (by name; "" = a new actor, placed like Blank, or where a project's actor stood),
+// one undo step, after asking when that actor has keys. The scene's timing rules are load_into_actor's; the status bar
+// says what they changed.
+void App::put_clip_in_actor(const std::string& actor, const std::string& path, Clip clip, const Actor* from) {
+    std::optional<Actor> source;
+    if (from) source = *from;
+    const int i = actor.empty() ? -1 : actor_index(actor);
+    if (!actor.empty() && i < 0) return status(actor + " is no longer in the project");
+    auto apply = [this, actor, path, clip, source] {
+        if (doc_.history.is_open() || scene_busy()) return status("Finish the current edit first");
+        std::string name = actor, file = path.substr(path.find_last_of("/\\") + 1);
+        ActorLoad r;
+        scene_edit(actor.empty() ? "Add Actor from File" : "Load Animation", [&](Project& pr) {
+            int k = -1;
+            for (int n = 0; n < int(pr.actors.size()); ++n)
+                if (pr.actors[n].name == actor) k = n;
+            if (actor.empty()) {
+                if (pr.actors.empty()) {  // a plain project: its animation becomes Actor 1, your avatar
+                    Actor first;
+                    first.name = "Actor 1";
+                    pr.actors.push_back(first);
+                    pr.active = 0;
+                }
+                const Actor& cur = pr.actors[pr.active];
+                Actor a = source ? *source : Actor{};
+                a.clip = {};
+                a.hidden = a.locked = false;
+                a.name = unique_name(pr, source ? source->name : file.substr(0, file.rfind('.')));
+                if (!source) {
+                    a.colour = kActorColours[pr.actors.size() % 5];
+                    a.body = cur.body;
+                    a.pos = cur.pos + cur.placement().rot.rotate({0, -0.8, 0});
+                    a.rot_z = cur.rot_z;
+                }
+                pr.actors.push_back(std::move(a));
+                k = int(pr.actors.size()) - 1;
+                name = pr.actors[k].name;
+            }
+            if (k >= 0) r = load_into_actor(pr, k, clip);
+        });
+        std::string t = (actor.empty() ? "Added " + name + " from " : "Loaded ") + file + (actor.empty() ? "" : " into " + name);
+        if (r.file_fps != r.fps)
+            t += "; retimed from " + std::to_string(r.file_fps) + " to " + std::to_string(r.fps) + " fps, keys keep their timing";
+        if (r.scene_now > r.scene_was)
+            t += "; the scene now lasts " + std::to_string(r.scene_now) + " frames (was " + std::to_string(r.scene_was) + ")";
+        else if (r.clip_frames < r.scene_now)
+            t += "; it ends at frame " + std::to_string(r.clip_frames) + " of " + std::to_string(r.scene_now);
+        if (r.dropped_binds) t += "; " + std::to_string(r.dropped_binds) + " bind(s) to other actors left out";
+        status(t);
+    };
+    if (i >= 0 && !actor_clip(doc_.project, i).curves.empty())
+        host_.ask("Replace " + actor + "'s animation?",
+                  actor + " has keys. Loading replaces its animation (one undo step); the other actors stay as they are.",
+                  {"Replace", "Cancel"}, [apply](int b) {
+                      if (b == 0) apply();
+                  });
+    else
+        apply();
+}
+
+// The per-actor file items: the row's right-click menu (with Load), the Save/Export This Actor... button (without).
+void App::actor_file_menu(int i, bool load) {
+    const std::string name = doc_.project.actors[i].name;
+    if (load && ImGui::MenuItem("Load Animation...")) file_actor_ = name, show_dialog(Dialog::LoadActor);
+    if (load) ImGui::SetItemTooltip("A .anim, a BVH or an actor of another project replaces this actor's animation");
+    if (ImGui::MenuItem("Save This Actor as Project...")) file_actor_ = name, show_dialog(Dialog::SaveActor);
+    if (ImGui::MenuItem("Export This Actor as .anim...")) file_actor_ = name, show_dialog(Dialog::ExportActor);
 }
 
 void App::scene_edit(const std::string& label, const std::function<void(Project&)>& change) {
@@ -133,7 +214,8 @@ void App::apply_restore(History::Restore r) {
 
 // Other visible actors, dimmed and tinted with their colour, each with its own body: None (the default) draws nothing
 // but the actor's props, Ruth is the SL default body, a mesh body its imported parts. An actor with nothing to draw is
-// not evaluated.
+// not evaluated. In the world view your actor (the first) is the worn avatar: only its props are drawn, and its bones
+// are kept for picking; the edited actor, when it is another, is drawn here with its body too (render_world_scene).
 void App::draw_other_actors(const SceneColours& colours) {
     const Project& p = doc_.project;
     actor_pick_pos_.assign(p.actors.size(), {});
@@ -141,60 +223,72 @@ void App::draw_other_actors(const SceneColours& colours) {
     if (p.actors.size() < 2) return;
     static std::vector<Vertex> verts;
     static std::vector<std::uint32_t> idx;
-    static std::vector<float> nrm;
     other_skeletons_.clear();
+    const bool world = host_.world_view();
     for (int i = 0; i < int(p.actors.size()); ++i) {
         const Actor& a = p.actors[i];
         if (i == p.active || a.hidden) continue;
+        const bool worn = world && i == 0;
         const auto& props = actor_clip(p, i).props;
-        if (a.body.empty() && std::none_of(props.begin(), props.end(), [](const Prop& pr) { return pr.visible; })) continue;
+        if (a.body.empty() && !worn && std::none_of(props.begin(), props.end(), [](const Prop& pr) { return pr.visible; })) continue;
         Evaluation e = evaluate_actor(i, frame_);
         Xform rel = actor_rel(i);
         for (Xform& g : e.globals) g = rel * g;
         for (const Prop& prop : props)  // their props, at their place
             if (prop.visible) draw_prop(prop, verts, idx, &e.globals, actor_shape(i), 0.7f, rel);
-        if (a.body.empty()) continue;  // None
-        const std::string key = actor_body_key(i);
-        if (key.rfind("mesh:", 0) == 0) {
-            if (const MeshBody* mb = find_mesh_body(key.substr(5))) {
-                harmonize_body(*mb);
-                for (const std::string& path : mb->parts) {
-                    Prop part;
-                    part.path = path;
-                    part.rigged = true;
-                    draw_prop(part, verts, idx, &e.globals, actor_shape(i), 0.7f);
-                }
-            }
-            continue;
-        }
-        int b = -1;
-        for (int k = 0; k < kBodyCount; ++k)
-            if (key == kBodyIds[k]) b = k;
-        if (b < 0) continue;
-        if (Body(b) == Body::SkeletonOnly) {  // drawn as bones by render_scene
-            other_skeletons_.push_back({std::move(e.globals), a.colour, i});
-            continue;
-        }
-        AvatarMesh* m = &mesh_;
-        if (Body(b) != body_ || mesh_body()) {
-            auto& slot = actor_meshes_[key];
-            if (!slot) {
-                slot = std::make_unique<AvatarMesh>(mesh_);
-                slot->build(Body(b));
-            }
-            m = slot.get();
-        }
-        std::vector<float>& pos = actor_pick_pos_[i];
-        m->skin(e.globals, actor_shape(i), pos, nrm);
-        auto tint = [&](float body, float own) { return (body + (own - body) * 0.35f) * 0.8f; };
-        Rgb c{tint(colours.body.r, a.colour[0]), tint(colours.body.g, a.colour[1]), tint(colours.body.b, a.colour[2])};
-        verts.resize(pos.size() / 3);
-        for (size_t v = 0; v < verts.size(); ++v)
-            verts[v] = {{pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]}, {nrm[v * 3], nrm[v * 3 + 1], nrm[v * 3 + 2]},
-                        {c.r, c.g, c.b, 1}};
-        host_.scene_triangles(verts, m->indices(), true, 0.04f);
-        actor_pick_idx_[i] = &m->indices();
+        if (worn) other_skeletons_.push_back({std::move(e.globals), a.colour, i, false});
+        else if (!a.body.empty()) draw_actor_body(i, e.globals, colours, false);  // None draws nothing
     }
+}
+
+// Actor i's body posed by globals (the view's space): dimmed and tinted with its colour, or as the view's body when it is
+// the edited actor (the world view only). Skeleton Only (older projects) goes to other_skeletons_ for render_scene.
+void App::draw_actor_body(int i, const std::vector<Xform>& globals, const SceneColours& colours, bool edited) {
+    const Actor& a = doc_.project.actors[i];
+    static std::vector<Vertex> verts;
+    static std::vector<std::uint32_t> idx;
+    static std::vector<float> nrm;
+    const std::string key = actor_body_key(i);
+    if (key.rfind("mesh:", 0) == 0) {
+        if (const MeshBody* mb = find_mesh_body(key.substr(5))) {
+            harmonize_body(*mb);
+            for (const std::string& path : mb->parts) {
+                Prop part;
+                part.path = path;
+                part.rigged = true;
+                draw_prop(part, verts, idx, &globals, actor_shape(i), edited ? 1.f : 0.7f);
+            }
+        }
+        return;
+    }
+    int b = -1;
+    for (int k = 0; k < kBodyCount; ++k)
+        if (key == kBodyIds[k]) b = k;
+    if (b < 0) return;
+    if (Body(b) == Body::SkeletonOnly) {  // drawn as bones: render_scene, or draw_world_extras
+        if (!edited) other_skeletons_.push_back({globals, a.colour, i});
+        return;
+    }
+    AvatarMesh* m = &mesh_;
+    if (Body(b) != body_ || mesh_body()) {
+        auto& slot = actor_meshes_[key];
+        if (!slot) {
+            slot = std::make_unique<AvatarMesh>(mesh_);
+            slot->build(Body(b));
+        }
+        m = slot.get();
+    }
+    static std::vector<float> edited_pos;
+    std::vector<float>& out = edited ? edited_pos : actor_pick_pos_[i];  // the edited actor is picked by its bones
+    m->skin(globals, actor_shape(i), out, nrm);
+    auto tint = [&](float body, float own) { return edited ? body : (body + (own - body) * 0.35f) * 0.8f; };
+    Rgb c{tint(colours.body.r, a.colour[0]), tint(colours.body.g, a.colour[1]), tint(colours.body.b, a.colour[2])};
+    verts.resize(out.size() / 3);
+    for (size_t v = 0; v < verts.size(); ++v)
+        verts[v] = {{out[v * 3], out[v * 3 + 1], out[v * 3 + 2]}, {nrm[v * 3], nrm[v * 3 + 1], nrm[v * 3 + 2]},
+                    {c.r, c.g, c.b, 1}};
+    host_.scene_triangles(verts, m->indices(), true, 0.04f);
+    if (!edited) actor_pick_idx_[i] = &m->indices();
 }
 
 int App::pick_actor(ImVec2 m) const {
@@ -202,7 +296,7 @@ int App::pick_actor(ImVec2 m) const {
     projector_.ray(camera_, m.x, m.y, o, d);
     int hit = -1;
     double best = 1e30;
-    if (host_.world_view()) {  // the world view: Skeleton Only actors are lines (draw_world_extras); a bone near the pointer
+    if (host_.world_view()) {  // the world view: Skeleton Only actors and your worn avatar by their bones; a bone near the pointer
         for (const OtherSkeleton& s : other_skeletons_)
             for (int b = 0; b < skel_.joint_count(); ++b) {
                 double hx, hy, tx, ty;
@@ -342,8 +436,9 @@ void App::draw_actors_panel() {
     help_button("couples-and-groups");
     Project& p = doc_.project;
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped("Several avatars in one scene, each with its own animation. Click an actor's body in the view, "
-                       "or its name here, to edit it. Placement is from the shared sit target.");
+    ImGui::TextWrapped("Several avatars in one scene, each with its own animation on one timeline. The first is you (your "
+                       "avatar). Click an actor's body in the view, or its name here, to edit it. Placement is from the "
+                       "shared sit target.");
     ImGui::PopStyleColor();
 
     auto add = [&](const char* kind) {
@@ -383,6 +478,8 @@ void App::draw_actors_panel() {
     if (ImGui::Button("Duplicate")) add("copy");
     ImGui::SameLine();
     if (ImGui::Button("Blank")) add("blank");
+    if (ImGui::Button("Add Actor from File...")) file_actor_.clear(), show_dialog(Dialog::LoadActor);
+    ImGui::SetItemTooltip("A new actor with the animation of a .anim, a BVH or an actor of another project");
     ImGui::Separator();
 
     if (p.actors.size() < 2) {
@@ -390,18 +487,27 @@ void App::draw_actors_panel() {
         ImGui::End();
         return;
     }
-    int remove = -1;
+    int remove = -1, you = -1;
     for (int i = 0; i < int(p.actors.size()); ++i) {
         Actor& a = p.actors[i];
         ImGui::PushID(i);
         ImVec4 col(a.colour[0], a.colour[1], a.colour[2], 1);
         ImGui::ColorButton("##c", col, ImGuiColorEditFlags_NoTooltip, ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight()));
         ImGui::SameLine();
-        std::string label = a.name + (a.hidden ? " (hidden)" : "") + (a.locked ? " (locked)" : "");
+        std::string label = a.name + (i == 0 ? " (you)" : "") + (a.hidden ? " (hidden)" : "") + (a.locked ? " (locked)" : "");
         const float buttons = 3 * (icon_button_width() + ImGui::GetStyle().ItemSpacing.x);
         if (ImGui::Selectable(label.c_str(), i == p.active, 0, ImVec2(ImGui::GetContentRegionAvail().x - buttons, 0)))
             activate_actor(i);
+        if (ImGui::BeginDragDropTarget()) {  // an animation or project from the Inventory loads into this actor
+            if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("VATS_FILE"))
+                load_actor_file(a.name, std::string(static_cast<const char*>(pl->Data)));
+            ImGui::EndDragDropTarget();
+        }
         if (ImGui::BeginPopupContextItem("actor_menu")) {  // on the name, where people right-click
+            actor_file_menu(i, true);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Make This Your Avatar", nullptr, false, i != 0)) you = i;
+            ImGui::SetItemTooltip("Moves it to the top of the list: the first actor is your avatar");
             if (ImGui::MenuItem("Delete Actor")) remove = i;
             ImGui::EndPopup();
         }
@@ -426,6 +532,17 @@ void App::draw_actors_panel() {
             scene_edit(locked ? "Unlock Actor" : "Lock Actor", [i, locked](Project& pr) { pr.actors[i].locked = !locked; });
         ImGui::PopID();
     }
+    if (you > 0 && !scene_busy()) {
+        scene_edit("Make Your Avatar", [you](Project& pr) {
+            std::rotate(pr.actors.begin(), pr.actors.begin() + you, pr.actors.begin() + you + 1);
+            pr.active = pr.active == you ? 0 : pr.active < you ? pr.active + 1 : pr.active;
+        });
+        // Indices into the actor list: the moved one goes to the top, those above it down one.
+        auto move = [you](int& k) { k = k == you ? 0 : k >= 0 && k < you ? k + 1 : k; };
+        move(place_actor_);
+        move(pin_actor_);
+        status(p.actors[0].name + " is now your avatar");
+    }
     if (remove >= 0 && !scene_busy()) {
         scene_edit("Delete Actor", [remove](Project& pr) {
             if (remove == pr.active) set_active_actor(pr, remove == 0 ? 1 : 0);
@@ -446,6 +563,15 @@ void App::draw_actors_panel() {
 
     // The active actor's settings.
     ImGui::SeparatorText(p.actors[p.active].name.c_str());
+    if (ImGui::Button("Load Animation...")) file_actor_ = p.actors[p.active].name, show_dialog(Dialog::LoadActor);
+    ImGui::SetItemTooltip("A .anim, a BVH or an actor of another project replaces this actor's animation; or drag a .anim "
+                          "from the Inventory onto the actor's name or body");
+    ImGui::SameLine();
+    if (ImGui::Button("Save/Export This Actor...")) ImGui::OpenPopup("actor_save");
+    if (ImGui::BeginPopup("actor_save")) {
+        actor_file_menu(p.active, false);
+        ImGui::EndPopup();
+    }
     Actor& cur = p.actors[p.active];
     char name[64];
     std::snprintf(name, sizeof name, "%s", cur.name.c_str());
@@ -486,7 +612,7 @@ void App::draw_actors_panel() {
         }
         ImGui::EndCombo();
     }
-    ImGui::TextDisabled("Shown while another actor is edited. None: nothing, Ruth: the SL default body.");
+    ImGui::TextDisabled("None: nothing (its bones while edited), Ruth: the SL default body.");
 
     // Placement: drag the fields; one undo step per drag.
     ImGui::SeparatorText("Placement from the sit target");

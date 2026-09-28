@@ -774,6 +774,9 @@ void App::render_world_scene() {
     static std::vector<Vertex> verts;
     static std::vector<std::uint32_t> indices;
     draw_other_actors(colours);
+    // Editing another actor than yours: it stands at its place with its body, posed live (None: its bones only).
+    if (editing_other() && !doc_.project.actors[doc_.project.active].body.empty() && !globals_.empty())
+        draw_actor_body(doc_.project.active, globals_, colours, true);
     draw_props(verts, indices);
     host_.scene_end();
 }
@@ -790,10 +793,11 @@ void App::draw_world_extras(ImDrawList* dl) {
     };
     const Shape* sh = shape();
 
-    // Skeleton Only actors (GR-1): other_skeletons_, filled by render_world_scene this frame.
+    // Skeleton Only actors (GR-1): other_skeletons_, filled by render_world_scene this frame. Your avatar's bones are
+    // there for picking only (the worn avatar is drawn by the host).
     for (const OtherSkeleton& s : other_skeletons_)
         for (int i = 0; i < skel_.joint_count(); ++i) {
-            if (!node_visible(i) || skel_[i].end.length() < 1e-5) continue;
+            if (!s.drawn || !node_visible(i) || skel_[i].end.length() < 1e-5) continue;
             const auto& g = s.globals;
             Rgb c = mix(kCategoryColour[int(skel_[i].category)], {s.colour[0], s.colour[1], s.colour[2]}, 0.5f);
             const ImU32 col = IM_COL32(int(c.r * 200), int(c.g * 200), int(c.b * 200), 220);
@@ -856,6 +860,7 @@ void App::draw_viewport() {
                   !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) &&
                   !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) && host_.pointer_on_world();
         projector_ = host_.projector(origin, size);
+        if (ui::Host::HostUi* h = host_.host_ui()) h->place_view(origin, viewport_max_);  // the viewer's toasts stay in here
     } else {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
         bool open = ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -878,7 +883,7 @@ void App::draw_viewport() {
     ImVec2 vmax(origin.x + size.x, origin.y + size.y);
     const float cube = settings_.view_cube_size;
     ImVec2 mp = ImGui::GetIO().MousePos;
-    bool over_cube = mp.x >= vmax.x - 8 - cube && mp.x <= vmax.x - 8 && mp.y >= origin.y + 8 && mp.y <= origin.y + 8 + cube;
+    bool over_cube = mp.x >= origin.x + 8 && mp.x <= origin.x + 8 + cube && mp.y >= origin.y + 8 && mp.y <= origin.y + 8 + cube;
     { VATS_PROFILE("vp input"); viewport_input(origin, size, hovered && !over_cube && cube_drag_ == 0); }
     if (world && ImGui::GetDragDropPayload()) {
         // The world view has no window of its own to drop onto: an empty one over it while something is dragged.
@@ -977,7 +982,7 @@ void App::draw_viewport() {
         dl->AddText(ImVec2(at.x + 1, at.y + 1), IM_COL32(0, 0, 0, 200), modal_readout_.c_str());
         dl->AddText(at, IM_COL32(255, 255, 255, 255), modal_readout_.c_str());
     }
-    draw_view_cube(dl, origin, vmax, hovered);
+    draw_view_cube(dl, origin, hovered);
     dl->PopClipRect();
     draw_prop_sl_popup();
     draw_context_menu();

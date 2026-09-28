@@ -40,6 +40,25 @@ editor:
 Any other window that opens while the editor is open (for example a map a script opens) stays hidden until
 you close the editor or choose **Viewer → Show Firestorm UI**.
 
+Where they go while the viewer's UI is hidden:
+
+| What | Where |
+|---|---|
+| Notifications, IM and group notice toasts | stacked from the top right of the editor's view: the world area left between its docked panels |
+| Script dialogs that are not docked | the top right of the editor's view |
+| Questions that need an answer | the centre of the editor's view |
+| Nearby chat toasts | the bottom left of the editor's view |
+| The **Stand** button, while your avatar sits | the bottom of the world view; the editor's panels and status bar stay above it |
+
+They follow the view when you move or resize the editor's panels. With **Show Firestorm UI** on, or after
+you close the editor, they are back in the viewer's own places. The view cube is at the view's top left,
+so the toasts never cover it.
+
+Hovering an object or another avatar shows no hover tip (name, owner and so on) while the editor holds your
+avatar, since the tip would be drawn over the editor's panels; world clicks are the editor's anyway. Tips
+of the viewer's windows that stay, such as the Chat pane and the toasts, still show. Hover tips come back
+with **Show Firestorm UI** and when you close the editor.
+
 - **Chat pane.** The editor's **Chat** pane holds the viewer's own Conversations window: nearby chat and
   your IMs, with its usual tabs and chat box. It moves and resizes with the pane, and hides when the pane is
   closed or another tab of its dock is in front. **Viewer → Chat** shows or hides it.
@@ -144,14 +163,20 @@ bone or a panel takes the click, not the editor.
   your avatar with the **Body** chosen for them in the **Actors** window: **None** (the default) draws
   nothing, **Ruth** is the Second Life default body, drawn from the viewer's own avatar files, and a mesh
   body is one you imported under **Inventory → Bodies** from its files. Bodies are tinted with the actor's
-  colour, lit simply, and hidden where the world is in front of them. Click a body to edit that actor;
-  your avatar then shows it. An actor with **None** is chosen by its name in the **Actors** window.
+  colour, lit simply, and hidden where the world is in front of them. Your avatar is the first actor in the
+  **Actors** window, marked **(you)**.
+- **Editing another actor.** Click its body, or its name in the **Actors** window (an actor with **None**
+  by its name only). The bones, handles and gizmos are then drawn on that actor at its place, and its body
+  shows its pose live, untinted: **Ruth** or a mesh body, or its bones alone with **None**. Your avatar keeps
+  playing your own actor's animation, on the same timeline, so you see both together. The status bar says
+  **Editing** and the actor's name. Click your avatar's bones, or your actor's name, to edit it again.
 - **[[Props]]** are drawn with the world, lit simply and hidden where the world is in front of them: add,
   attach, place and move them as in the app. They are on your screen only; nothing is rezzed.
 - **[[Onion skin]]** ghosts are bone lines, blue before the current frame and orange after.
 - **Collision volumes** are three rings each, with **View → Show Collision Volumes** on.
 
-The view cube, **Frame Selected** (**F**) and the camera views move the viewer's camera.
+The view cube (at the view's top left), **Frame Selected** (**F**) and the camera views move the viewer's
+camera.
 
 ### Uploading
 
@@ -178,7 +203,7 @@ The editor takes its colours from the viewer's skin and follows it when the skin
 | Body | VATs' avatar, or a [[Mesh bodies|devkit mesh body]] | your own avatar and the mesh body you wear |
 | [[Props]] | imported `.dae` and `.fbx` props and the starter props | the same, on your screen only |
 | 3D view | its own, with its own camera controls per preset | the world, with the viewer's camera controls |
-| Other actors | **None**, **Ruth** or a mesh body each | the same, on your screen only |
+| Other actors | **None**, **Ruth** or a mesh body each | the same, on your screen only; your avatar is the first actor and keeps playing it while you edit another |
 | Other people's avatars | none | hidden while the editor is open, unless **View → Show Other Avatars** |
 | Pose and prop thumbnails | pictures | plain icons |
 | [[Audio track]] | the app's audio output | the viewer's sound, heard by you only; no snippets while scrubbing |
@@ -225,6 +250,11 @@ then type.
 
 Choose **Viewer → Show Firestorm UI** or press **Alt+Shift+U**: all of the viewer's UI shows over the
 editor until you choose it again or press **Alt+Shift+U** again.
+
+### Hovering an object shows no tip
+
+While the editor holds your avatar, the viewer shows no hover tips for objects and avatars. Choose **Viewer
+→ Show Firestorm UI**, or close the editor.
 
 ### I can't see other avatars
 

@@ -56,7 +56,7 @@ Drag or double-click an item to use it; right-click it for the rest.
 - **Shift+click** adds a bone to the selection; a click on empty space clears it (see [[Posing]]).
 - Right-click a bone for its body-part menu.
 - **Esc** or a right-click during a drag cancels the drag.
-- The cube at the top right turns the view: click a face to look from that side, or drag the cube to
+- The cube at the top left turns the view: click a face to look from that side, or drag the cube to
   orbit.
 - The axis marker at the bottom left shows the world axes.
 

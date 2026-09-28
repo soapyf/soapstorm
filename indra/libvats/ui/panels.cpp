@@ -710,6 +710,10 @@ void App::draw_status_bar() {
     if (ImGui::BeginViewportSideBar("##status", vp, ImGuiDir_Down, h, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_MenuBar)) {
         if (ImGui::BeginMenuBar()) {
             ImGui::TextUnformatted(status_.c_str());
+            if (multi_actor()) {  // GR: whose animation the Bones list, timeline, graph and keys edit
+                const std::string editing = "Editing " + doc_.project.actors[doc_.project.active].name;
+                if (status_ != editing) ImGui::SameLine(0, 24), hint(editing.c_str());
+            }
             if (size_t n = selection_.size() + handles_.size(); n > 1) {  // TG-112
                 ImGui::SameLine(0, 24);
                 hint((std::to_string(n) + " selected: keys, copy/paste and the graph apply to all of them").c_str());

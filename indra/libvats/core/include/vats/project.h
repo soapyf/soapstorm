@@ -65,6 +65,18 @@ Clip& actor_clip(Project& p, int i);
 void set_active_actor(Project& p, int i);
 void sync_actor_timing(Project& p);
 
+// GR-6: a loaded animation replaces actor i's clip (i = 0 for a single-actor project). The timing stays the scene's
+// (GR-3): the clip is retimed to the scene's frame rate keeping its timing (retime_clip), the scene grows to the clip's
+// length when that is longer, and the scene's Loop and loop points apply. The actor keeps its own props, audio track
+// and export settings; binds to actors the project doesn't have (or to the actor itself) are dropped.
+struct ActorLoad {
+    int file_fps = 30, fps = 30;      // the clip's rate as loaded, and the scene's
+    int clip_frames = 0;              // the clip's length at the scene's rate
+    int scene_was = 0, scene_now = 0; // the scene's length before and after
+    int dropped_binds = 0;
+};
+ActorLoad load_into_actor(Project& p, int i, Clip clip);
+
 // Writes the native format. Empty curves and tracks are skipped.
 std::string save_project(const Project& p);
 

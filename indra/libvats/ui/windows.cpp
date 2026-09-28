@@ -269,8 +269,9 @@ const Json& App::export_home_settings() const {
                                                                       : doc_.clip().export_settings;
 }
 
+// Your avatar is the first actor, whichever actor is being edited or exported from.
 bool App::exporting_yours() const {
-    return export_home_ < 0 || doc_.project.active == export_home_ || json_bool(export_home_settings(), "avatar_all");
+    return !multi_actor() || doc_.project.active == 0 || json_bool(export_home_settings(), "avatar_all");
 }
 
 std::string App::bake_shape_label(const std::string& key) const {
@@ -355,8 +356,8 @@ void App::draw_export_section() {
         bool every = json_bool(ex, "avatar_all");
         ImGui::SetCursorPosX(label_w);
         if (ImGui::Checkbox("Use Your avatar for every actor", &every)) set("avatar_all", every);
-        ImGui::SetItemTooltip("Off: only the actor you are editing (your avatar) bakes on Your avatar; the other actors of a "
-                              "couple or group use SL Default instead. On: every actor bakes against your worn avatar.");
+        ImGui::SetItemTooltip("Off: only your avatar's actor (the first in the Actors window) bakes on Your avatar; the other "
+                              "actors of a couple or group use SL Default instead. On: every actor bakes against your worn avatar.");
     }
     bool both = json_bool(ex, "both"), count_up = json_bool(ex, "count_up"), mirrored = doc_.clip().mirror_export;
     ImGui::SetCursorPosX(label_w);
@@ -615,7 +616,7 @@ void App::draw_export_dialog() {
         for (int k = 0; k < int(pr.actors.size()); ++k) {
             const Json& ek = actor_clip(pr, k).export_settings;
             ImGui::BulletText("%s%s: bakes on %s", pr.actors[k].name.c_str(), k == pr.active ? " (settings below)" : "",
-                              bake_shape_label(bake_shape_key(ek, k == pr.active || json_bool(doc_.clip().export_settings, "avatar_all"))).c_str());
+                              bake_shape_label(bake_shape_key(ek, k == 0 || json_bool(doc_.clip().export_settings, "avatar_all"))).c_str());
         }
         hint("Each actor keeps its own bake shape and key reduction; select an actor to change them. Naming, the folder "
              "and the mirrored copy come from the actor you export from.");

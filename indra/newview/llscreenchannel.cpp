@@ -42,6 +42,7 @@
 #include "llfloaterimsession.h"
 #include "llscriptfloater.h"
 #include "llrootview.h"
+#include "fsvatshost.h" // VATs editor
 
 #include <algorithm>
 
@@ -54,6 +55,8 @@ bool LLScreenChannel::mWasStartUpToastShown = false;
 LLRect LLScreenChannelBase::getChannelRect()
 {
     LL_PROFILE_ZONE_SCOPED;
+
+    if (LLRect vats_area; FSVATsEditor::toastArea(vats_area)) return vats_area; // VATs editor: toasts stay in its view
 
     if (mFloaterSnapRegion == NULL)
     {
@@ -602,7 +605,10 @@ void LLScreenChannel::redrawToasts()
     if(mToastList.size() == 0)
         return;
 
-    switch(mToastAlignment)
+    // VATs editor: in its view, toasts stack from the top right and alerts are centred
+    LLRect vats_area;
+    const bool vats = FSVATsEditor::toastArea(vats_area);
+    switch(vats && mToastAlignment == NA_BOTTOM ? NA_TOP : mToastAlignment)
     {
     case NA_TOP :
         showToastsTop();
@@ -610,6 +616,9 @@ void LLScreenChannel::redrawToasts()
 
     case NA_CENTRE :
         showToastsCentre();
+        for (ToastElem& elem : mToastList) // VATs editor
+            if (LLToast* toast = vats ? elem.getToast() : nullptr)
+                toast->setOrigin(vats_area.getCenterX() - toast->getRect().getWidth() / 2, vats_area.getCenterY() - toast->getRect().getHeight() / 2);
         break;
 
     case NA_BOTTOM :

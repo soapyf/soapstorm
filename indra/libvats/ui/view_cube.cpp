@@ -127,10 +127,10 @@ void App::update_camera_animation(double dt) {
     if (cam_anim_t_ >= 1) cam_anim_t_ = -1;
 }
 
-void App::draw_view_cube(ImDrawList* dl, ImVec2 vp_min, ImVec2 vp_max, bool viewport_hovered) {
+void App::draw_view_cube(ImDrawList* dl, ImVec2 vp_min, bool viewport_hovered) {
     ImGuiIO& io = ImGui::GetIO();
     const float size = settings_.view_cube_size;
-    ImVec2 box_min(vp_max.x - 8 - size, vp_min.y + 8), box_max(vp_max.x - 8, vp_min.y + 8 + size);
+    ImVec2 box_min(vp_min.x + 8, vp_min.y + 8), box_max(vp_min.x + 8 + size, vp_min.y + 8 + size);  // top left (VP-60)
     ImVec2 centre((box_min.x + box_max.x) / 2, (box_min.y + box_max.y) / 2);
     const ImVec2 m = io.MousePos;
     bool over_box = m.x >= box_min.x && m.x <= box_max.x && m.y >= box_min.y && m.y <= box_max.y;
@@ -194,11 +194,11 @@ void App::draw_view_cube(ImDrawList* dl, ImVec2 vp_min, ImVec2 vp_max, bool view
         }
     }
 
-    // Resize grip, bottom-left of the widget (VP-65).
-    ImVec2 g0(box_min.x, box_max.y), g1(box_min.x + 14, box_max.y), g2(box_min.x, box_max.y - 14);
-    bool over_grip = over && m.x <= box_min.x + 14 && m.y >= box_max.y - 14 && (m.x - box_min.x) + (box_max.y - m.y) <= 14;
-    dl->AddTriangleFilled(g0, g1, g2, IM_COL32(255, 255, 255, int((over_grip || cube_drag_ == 2 ? 140 : 64) * cube_alpha_)));
-    if (over_grip || cube_drag_ == 2) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNESW);
+    // Resize grip, bottom-right of the widget, away from the corner it is anchored to (VP-65).
+    ImVec2 g0(box_max.x, box_max.y), g1(box_max.x - 14, box_max.y), g2(box_max.x, box_max.y - 14);
+    bool over_grip = over && m.x >= box_max.x - 14 && m.y >= box_max.y - 14 && (box_max.x - m.x) + (box_max.y - m.y) <= 14;
+    dl->AddTriangleFilled(g0, g2, g1, IM_COL32(255, 255, 255, int((over_grip || cube_drag_ == 2 ? 140 : 64) * cube_alpha_)));
+    if (over_grip || cube_drag_ == 2) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
     if (over && cube_drag_ == 0 && !over_grip) ImGui::SetTooltip("Click a side to look from it, drag to orbit");
 
     // Presses and drags.
@@ -212,7 +212,7 @@ void App::draw_view_cube(ImDrawList* dl, ImVec2 vp_min, ImVec2 vp_max, bool view
     if (cube_drag_ != 0) {
         ImVec2 d(m.x - cube_press_.x, m.y - cube_press_.y);
         if (cube_drag_ == 2) {
-            settings_.view_cube_size = std::clamp(cube_press_size_ + std::max(-d.x, d.y), 60.f, 260.f);
+            settings_.view_cube_size = std::clamp(cube_press_size_ + std::max(d.x, d.y), 60.f, 260.f);
         } else {
             cube_moved_ = cube_moved_ || std::hypot(d.x, d.y) > 3;
             if (cube_moved_) {

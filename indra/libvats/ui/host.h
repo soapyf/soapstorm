@@ -98,6 +98,10 @@ public:
     virtual bool world_view() const { return false; }
     // With world_view: false while the host's own UI (a viewer floater or menu) is under the pointer.
     virtual bool pointer_on_world() const { return true; }
+    // With world_view: where the actor being edited stands in the frame of the host's avatar (the project's first
+    // actor, your avatar), once a frame. The UI works in the edited actor's space, so the host maps that space through
+    // this; the identity while you edit your own actor.
+    virtual void set_view_frame(const Xform& edited_in_yours) { (void)edited_in_yours; }
     // With world_view: the proportions of the body the host shows (the worn avatar), which the view's
     // evaluation uses instead of the UI's own body; null = the UI's own.
     virtual const Shape* body_shape() const { return nullptr; }
@@ -121,6 +125,9 @@ public:
         // frame the editor says whether the pane shows and its inner rectangle, in display coordinates.
         virtual const char* pane_title() const = 0;
         virtual void place_pane(bool shown, ImVec2 min, ImVec2 max) = 0;
+        // The world area left between the editor's docked panels (the dockspace's central node), display coordinates,
+        // every frame: the viewer keeps its toasts and notifications inside it.
+        virtual void place_view(ImVec2 min, ImVec2 max) { (void)min, (void)max; }
         virtual int unread_notices() const = 0;  // the host's notifications not yet seen
         virtual void toggle_notices() = 0;       // shows or hides the host's notification window
         // The host's full UI, shown over the editor until turned off again ("Show Firestorm UI").

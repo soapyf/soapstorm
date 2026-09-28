@@ -33,6 +33,7 @@
 #include "llframetimer.h"
 #include "llgl.h"
 #include "llglslshader.h"
+#include "llmoveview.h"
 #include "llrender.h"
 #include "llrootview.h"
 #include "lltimer.h"
@@ -222,13 +223,23 @@ namespace
 
     // Where the viewer's own UI covers the world view while it shows (the editor's Show Firestorm UI, or before the editor
     // hides it): its toolbars, chat bar and Stand button (everything outside the floater snap region) and the navigation
-    // bar. The editor's work area (menu bar, dockspace, status bar) keeps clear of it; the world layer still spans the
+    // bar; while it is hidden, the Stand button when it shows. The editor's work area (menu bar, dockspace, status bar) keeps clear of it; the world layer still spans the
     // whole world view, which is what LLViewerCamera projects onto.
     ImVec4 viewerUiInsets()
     {
-        if (!FSVATsEditor::ownsWorld() || !gViewerWindow->getUIVisibility() || !gFloaterView)
+        if (!FSVATsEditor::ownsWorld() || !gFloaterView)
         {
             return ImVec4(0.f, 0.f, 0.f, 0.f);
+        }
+        if (!gViewerWindow->getUIVisibility())
+        {
+            // The viewer's UI hidden: its Stand / Stop Flying buttons still show (the editor sits the avatar down), at the
+            // bottom of the world view. The editor's status bar and panels stay above them (build 17: they overlapped).
+            const LLRect world = gViewerWindow->getWorldViewRectScaled();
+            LLPanelStandStopFlying* stand = LLPanelStandStopFlying::getInstance();
+            const LLRect rect = stand && stand->isInVisibleChain() ? stand->calcScreenRect() : LLRect();
+            const F32 bottom = rect.notEmpty() && rect.mBottom < world.mTop && rect.mTop > world.mBottom ? (F32)(rect.mTop - world.mBottom) : 0.f;
+            return ImVec4(0.f, 0.f, 0.f, bottom);
         }
         const LLRect world = gViewerWindow->getWorldViewRectScaled();
         LLRect free_rect;
