@@ -574,7 +574,7 @@ namespace
         std::string mSeatName;
         LLObjectSelectionHandle mSeatSelection;
         F64 mSeatCheckUntil = 0;
-        // The offscreen pictures (SceneTarget::FaceCam and Thumbnail), drawn at scene_end.
+        // The offscreen pictures (SceneTarget::FaceCam, Thumbnail and Picker), drawn at scene_end.
         bool ensureProgram();                    // the triangles' program (drawScene's)
         ImTextureID renderOffscreen();
         bool readThumbnail(std::vector<std::uint8_t>& px, int& width, int& height);  // bottom row first, straight alpha
@@ -686,7 +686,8 @@ namespace
         U32 mThumbProgram = 0;           // thumbnails: the app's lit shader, so both draw the same picture
         bool mThumbProgramFailed = false;
         bool ensureThumbProgram();
-        Offscreen mFace, mThumb;         // apart, so a thumbnail never overwrites the face cam's picture (ui/host.h)
+        // Apart, so a thumbnail never overwrites the face cam's picture or the Picker's avatar (ui/host.h).
+        Offscreen mFace, mThumb, mPicker;
         Offscreen* mOffTarget = &mFace;
         void drawBatches(const SceneBatch (&batches)[2]);  // program, VAO and buffers bound: opaque, then translucent
         struct SceneImage  // a reference picture's plane (scene_image): corners in the agent frame, bottom-left first
@@ -1845,10 +1846,14 @@ namespace
     bool ViewerHost::scene_begin(vats::ui::SceneTarget target, int width, int height, const vats::Camera& cam,
                                  const vats::SceneColours& colours, const vats::Mat4* projection)
     {
-        if (target == vats::ui::SceneTarget::FaceCam || target == vats::ui::SceneTarget::Thumbnail)
+        if (target == vats::ui::SceneTarget::FaceCam || target == vats::ui::SceneTarget::Thumbnail ||
+            target == vats::ui::SceneTarget::Picker)
         {
-            // Thumbnails (props, poses, listing media) go the same way, into their own framebuffer.
-            mOffTarget = target == vats::ui::SceneTarget::FaceCam ? &mFace : &mThumb;
+            // Thumbnails (props, poses, listing media) go the same way, into their own framebuffer, and so does the
+            // Picker's avatar (08 PK-3: the body behind its dots, 4x MSAA and the app's shader like a thumbnail).
+            mOffTarget = target == vats::ui::SceneTarget::FaceCam ? &mFace
+                       : target == vats::ui::SceneTarget::Picker  ? &mPicker
+                                                                   : &mThumb;
             // Build 20, item 53: the face cam's own picture, in the UI's space with the UI's camera, drawn at scene_end.
             // It needs no world, so it works on the login screen too; the world's batches are left alone.
             mOff[0].verts.clear(), mOff[0].indices.clear();
@@ -2251,7 +2256,7 @@ namespace
             glBindFramebuffer(GL_FRAMEBUFFER, o.fbo);
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, o.tex, 0);
             glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, o.depth);
-            if (&o == &mThumb)  // as the app's Renderer: 4x MSAA colour and depth, blitted into o.tex at the end
+            if (&o == &mThumb || &o == &mPicker)  // as the app's Renderer: 4x MSAA colour and depth, blitted into o.tex
             {
                 if (!o.msFbo)
                 {
@@ -2271,7 +2276,7 @@ namespace
             o.w = mOffW, o.h = mOffH;
         }
         // Thumbnails: the app's shader and 4x MSAA; either missing, the face cam's way (one sample, its lighting).
-        const bool ms = &o == &mThumb && o.msFbo && ensureThumbProgram();
+        const bool ms = (&o == &mThumb || &o == &mPicker) && o.msFbo && ensureThumbProgram();
         // Each target draws into and is read from its one colour attachment (framebuffer state, set here every time).
         auto bind = [&](GLuint fbo)
         {
@@ -2404,7 +2409,7 @@ namespace
         // help keeps their stale names until its page changes (drawn blank), and free_texture ignores them.
         mProgram = mVao = mVbo = mEbo = 0;
         mImageProgram = mImageVbo = 0;
-        mFace = mThumb = Offscreen();  // the face cam's and the thumbnails'; remade at their next picture
+        mFace = mThumb = mPicker = Offscreen();  // the face cam's, the thumbnails' and the Picker's; remade at their next picture
         mThumbProgram = 0;
         mTextures.clear();
     }
