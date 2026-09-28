@@ -166,7 +166,9 @@ public:
         return true;
     }
     bool set_preset(const std::string& name) {
-        if (!preset_from_name(name, settings_.preset)) return false;
+        Preset p;
+        if (!preset_from_name(name, p) || (host_.world_view() && p != Preset::SecondLife)) return false;
+        settings_.preset = p;
         apply_preset();
         if (settings_.preset == Preset::SecondLife) tool_ = Tool::Move;
         return true;
@@ -288,9 +290,11 @@ private:
     void save_settings() {
         Settings s = settings_;
         if (session_body_) s.body = session_body_->first, s.mesh_body = session_body_->second;
+        if (saved_preset_) s.preset = *saved_preset_;
         s.save(host_.paths().settings);
     }
-    std::optional<std::pair<std::string, std::string>> session_body_;  // the saved body and mesh body under --body
+    std::optional<std::pair<std::string, std::string>> session_body_;
+    std::optional<Preset> saved_preset_;  // the saved preset when this host does not offer it (apply_settings)  // the saved body and mesh body under --body
     std::string nav_hint() const;
     std::string graph_nav_hint() const;
     std::string key_hint(const char* action) const;  // "Home", "Ctrl+E" or "" for the active preset

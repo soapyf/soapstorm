@@ -285,6 +285,7 @@ The editor takes its colours from the viewer's skin and follows it when the skin
 | Body | VATs' avatar, or a [[Mesh bodies|devkit mesh body]] | your own avatar and the mesh body you wear |
 | [[Props]] | imported `.dae` and `.fbx` props and the starter props | the same, on your screen only |
 | 3D view | its own, with its own camera controls per preset | the world, with the viewer's camera controls |
+| [[Control presets]] | all four, picked in **Preferences** | **Second Life** only, matching the viewer's own controls; no picker, and your own keys still apply |
 | Other actors | **None**, **Ruth** or a mesh body each | the same, on your screen only; your avatar is the first actor and keeps playing it while you edit another |
 | Other people's avatars | none | hidden while the editor is open, unless **View → Show Other Avatars** |
 | Pose and prop thumbnails | pictures | plain icons |

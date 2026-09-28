@@ -171,14 +171,13 @@ void App::draw_shortcuts() {
     ImGui::EndDisabled();
 
     // The preset, what is changed, and a way to the keys a keyboard without a number pad cannot press.
-    static const char* preset_names[] = {"Industry (Maya-style)", "Blender", "QAvimator", "Second Life"};
     int numpad = 0;
     for (auto& [id, a] : actions_) numpad += needs_numpad(a.key) + needs_numpad(a.key2);
     if (capture_slot_ >= 0) {
         ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(accent), "Press a key\xE2\x80\xA6 (Esc cancels, Backspace clears)");
     } else {
         const size_t n = settings_.key_overrides.size();
-        ImGui::TextColored(dim, "Preset: %s  \xC2\xB7  %s", preset_names[int(settings_.preset)],
+        ImGui::TextColored(dim, "Preset: %s  \xC2\xB7  %s", preset_label(settings_.preset),
                            n ? (std::to_string(n) + (n == 1 ? " command changed" : " commands changed")).c_str()
                              : "no changes");
         if (numpad > 0) {
@@ -297,7 +296,8 @@ void App::draw_shortcuts() {
         ImGui::EndTable();
     }
     ImGui::Spacing();
-    hint("Mouse controls follow the preset (Edit > Preferences...). Your keys stay when you change the preset.");
+    if (!host_.world_view())
+        hint("Mouse controls follow the preset (Edit > Preferences...). Your keys stay when you change the preset.");
 
     // The key is another action's: take it from that one, or leave both as they were.
     ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
@@ -332,7 +332,7 @@ void App::draw_shortcuts() {
 
     ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     if (ImGui::BeginPopupModal("Reset all shortcuts?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("Every command goes back to the %s keys.", preset_names[int(settings_.preset)]);
+        ImGui::Text("Every command goes back to the %s keys.", preset_label(settings_.preset));
         ImGui::Spacing();
         const float w = fs * 7;
         if (ImGui::Button("Reset All", ImVec2(w, 0))) {

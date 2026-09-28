@@ -493,6 +493,8 @@ namespace
         void set_title(const std::string&) override {}  // the editor has no window title of its own
         vats::CommandRunner command_runner() override { return vats::system_runner(); }
 
+        // The world is the view and the viewer owns the camera: the editor also offers the Second Life preset only
+        // (its keys and camera are the viewer's own), with no preset picker (build 28).
         bool world_view() const override { return true; }
         bool pointer_on_world() const override { return FSVATsImGui::pointerOnWorld(); }
         const vats::Shape* body_shape() const override { return mHaveShape ? &mShape : nullptr; }

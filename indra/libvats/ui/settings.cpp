@@ -191,4 +191,14 @@ bool preset_from_name(const std::string& name, Preset& out) {
     return false;
 }
 
+const char* preset_label(Preset p) {
+    static const char* const labels[] = {"Industry (Maya-style)", "Blender", "QAvimator", "Second Life"};
+    return labels[int(p)];
+}
+
+std::vector<Preset> offered_presets(bool host_owns_camera) {
+    if (host_owns_camera) return {Preset::SecondLife};
+    return {Preset::Industry, Preset::Blender, Preset::QAvimator, Preset::SecondLife};
+}
+
 }  // namespace vats

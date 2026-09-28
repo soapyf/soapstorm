@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 //
 // Spec: docs/spec/06 sections 4.4, 4.9, 4.10 and 5.
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -108,14 +109,18 @@ void App::draw_preferences() {
         ImGui::SetNextItemWidth(-1);
     };
     row("Navigation & hotkeys");
-    int preset = int(settings_.preset);
-    const char* presets[] = {"Industry (Maya-style)", "Blender", "QAvimator", "Second Life"};
-    if (ImGui::Combo("##preset", &preset, presets, 4)) {
-        settings_.preset = Preset(preset);
+    const std::vector<Preset> offered = offered_presets(host_.world_view());
+    int preset = int(std::find(offered.begin(), offered.end(), settings_.preset) - offered.begin());
+    std::vector<const char*> labels;
+    for (Preset p : offered) labels.push_back(preset_label(p));
+    if (offered.size() == 1) {  // the viewer: its own controls, no picker
+        ImGui::TextUnformatted(labels[0]);
+    } else if (ImGui::Combo("##preset", &preset, labels.data(), int(labels.size()))) {
+        settings_.preset = offered[preset];
         if (settings_.preset == Preset::SecondLife) tool_ = Tool::Move;  // SL edits with the move arrows
         apply_preset();
         save_settings();
-        status(std::string("Controls: ") + presets[preset]);
+        status(std::string("Controls: ") + labels[preset]);
     }
     if (!settings_.key_overrides.empty()) {  // your own keys stay over any preset (Edit > Keyboard Shortcuts...)
         ImGui::SetCursorPosX(label_w);

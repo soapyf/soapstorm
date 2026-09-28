@@ -111,6 +111,10 @@ std::string key_label(ImGuiKeyChord chord) {
 
 // Copies the loaded settings into the app's working state (start-up and the IO-54 import).
 void App::apply_settings() {
+    // A host that owns the camera offers Second Life only: that for the session, the saved choice kept.
+    saved_preset_.reset();
+    if (host_.world_view() && settings_.preset != Preset::SecondLife)
+        saved_preset_ = settings_.preset, settings_.preset = Preset::SecondLife;
     if (settings_.preset == Preset::SecondLife) tool_ = Tool::Move;
     body_ = Body::SLDefault;
     for (int b = 0; b < kBodyCount; ++b)

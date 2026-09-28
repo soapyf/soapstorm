@@ -18,6 +18,11 @@ namespace vats {
 enum class Preset { Industry, Blender, QAvimator, SecondLife };
 // "industry", "blender", "qavimator" or "secondlife"; false when unknown.
 bool preset_from_name(const std::string& name, Preset& out);
+// The label Preferences and Keyboard Shortcuts show: "Industry (Maya-style)", "Blender", "QAvimator", "Second Life".
+const char* preset_label(Preset p);
+// The presets a host offers, in order. A host that owns the camera (the viewer's world view) offers Second Life
+// only, the controls it already has in-world, and so shows no preset picker.
+std::vector<Preset> offered_presets(bool host_owns_camera);
 
 // A UTF-8 path for std::filesystem: on Windows a plain std::string would be read in the ANSI code page.
 inline std::filesystem::path u8path(const std::string& s) { return std::filesystem::path(std::u8string(s.begin(), s.end())); }

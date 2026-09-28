@@ -17,6 +17,8 @@ changed in **Edit → Keyboard Shortcuts...** stay; **Clear** under the preset d
 
 To try a preset for one session, start VATs with `--preset`; see [[Command line]].
 
+In the viewer the editor has no preset picker: **Second Life** is the only preset there, matching the viewer's own camera and keys in-world.
+
 ![The status bar with the Blender preset: Middle drag: orbit, Shift+middle: pan, Ctrl+middle: zoom, Wheel: zoom](images/control-presets/status-bar.png)
 *The right end of the status bar with the Blender preset. Each preset shows its own line here.*
 
