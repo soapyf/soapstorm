@@ -2056,7 +2056,7 @@ namespace
         glGetFloatv(GL_COLOR_CLEAR_VALUE, clear);
         glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_mask);
         const GLboolean blend = glIsEnabled(GL_BLEND), depth = glIsEnabled(GL_DEPTH_TEST), cull = glIsEnabled(GL_CULL_FACE),
-                        scissor = glIsEnabled(GL_SCISSOR_TEST);
+                        scissor = glIsEnabled(GL_SCISSOR_TEST), multisample = glIsEnabled(GL_MULTISAMPLE);
         glActiveTexture(GL_TEXTURE0);
         glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
 
@@ -2143,6 +2143,7 @@ namespace
             glDepthFunc(GL_LESS);
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glEnable(GL_MULTISAMPLE);  // the viewer turns it off for good (LLGLState::initClass): no samples, no edges
             drawBatches(mOff);
             glBindFramebuffer(GL_READ_FRAMEBUFFER, o.msFbo);
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, o.fbo);
@@ -2184,6 +2185,7 @@ namespace
         (depth ? glEnable : glDisable)(GL_DEPTH_TEST);
         (cull ? glEnable : glDisable)(GL_CULL_FACE);
         (scissor ? glEnable : glDisable)(GL_SCISSOR_TEST);
+        (multisample ? glEnable : glDisable)(GL_MULTISAMPLE);
         return complete ? ImTextureID(o.tex) : ImTextureID{};
     }
 
