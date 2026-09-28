@@ -171,6 +171,10 @@ void App::draw_preferences() {
         if (ImGui::Checkbox("Reset joint positions when the editor opens", &settings_.viewer_reset_joints)) save_settings();
         ImGui::SetItemTooltip("Resets your avatar's skeleton on your screen only, as the viewer's Reset Skeleton does: joint "
                               "positions left by animations that stopped go back. Your mesh body's own joint offsets stay.");
+        row("While the editor is open");
+        if (ImGui::Checkbox("Show other avatars", &settings_.viewer_show_others)) save_settings();
+        ImGui::SetItemTooltip("Off: every other avatar, with its attachments and name tag, is hidden on your screen only, as the "
+                              "viewer's Render Only Friends does (friends too). Also View > Show Other Avatars.");
     }
 
     ImGui::Separator();

@@ -289,10 +289,11 @@ ImTextureID App::render_scene(int w, int h) {
 
     // Other actors shown as a skeleton (GR): the body bones only, dimmed towards their colour.
     bones.clear();
-    for (const auto& [g, colour] : other_skeletons_)
+    for (const OtherSkeleton& s : other_skeletons_)
         for (int i = 0; i < skel_.joint_count(); ++i) {
             if (!node_visible(i) || skel_[i].end.length() < 1e-5) continue;
-            Rgb c = mix(kCategoryColour[int(skel_[i].category)], {colour[0], colour[1], colour[2]}, 0.5f);
+            const auto& g = s.globals;
+            Rgb c = mix(kCategoryColour[int(skel_[i].category)], {s.colour[0], s.colour[1], s.colour[2]}, 0.5f);
             c = {c.r * 0.7f, c.g * 0.7f, c.b * 0.7f};
             bone_glyph(bones, g[i].pos, g[i].apply(skel_[i].end), g[i].rot * skel_.bone_frame(i), c);
         }
@@ -761,20 +762,26 @@ void App::draw_bone_lines(ImDrawList* dl) const {
     }
 }
 
-// The world view (the viewer): the props, as triangles the host draws with the world (spec 09 U5), placed as in the
-// app. The avatar is the viewer's own, so no body, ground or bone glyphs.
+// The world view (the viewer): the triangles the world lacks, which the host draws with the world (spec 09 U5): the
+// other actors' bodies (None, the default, draws nothing) and the props, placed as in the app. The avatar is the
+// viewer's own, so no body, ground or bone glyphs.
 void App::render_world_scene() {
-    if (!host_.scene_begin(ui::SceneTarget::View, 1, 1, camera_, scene_colours())) return;
+    actor_pick_pos_.clear();
+    actor_pick_idx_.clear();
+    other_skeletons_.clear();
+    const SceneColours& colours = scene_colours();
+    if (!host_.scene_begin(ui::SceneTarget::View, 1, 1, camera_, colours)) return;
     static std::vector<Vertex> verts;
     static std::vector<std::uint32_t> indices;
+    draw_other_actors(colours);
     draw_props(verts, indices);
     host_.scene_end();
 }
 
-// The world view's other actors, onion ghosts and collision volumes (spec 09 U4): the host draws no scene, so
-// they are lines over the world like the bones. Other actors are skeletons at their place around the active
-// actor (your avatar); ghosts are bone lines, cool before the frame and warm after, as the viewer's 6g layer drew
-// them; volumes are three rings each.
+// The world view's Skeleton Only actors, onion ghosts and collision volumes (spec 09 U4): lines over the world like the
+// bones. Skeleton Only actors (a body older projects may have) are at their place around the active actor (your
+// avatar); ghosts are bone lines, cool before the frame and warm after, as the viewer's 6g layer drew them; volumes
+// are three rings each.
 void App::draw_world_extras(ImDrawList* dl) {
     auto line = [&](const Vec3& a, const Vec3& b, ImU32 c, float w) {
         double ax, ay, bx, by;
@@ -783,20 +790,12 @@ void App::draw_world_extras(ImDrawList* dl) {
     };
     const Shape* sh = shape();
 
-    // Other actors (GR-1): kept in other_skeletons_ for pick_actor.
-    other_skeletons_.clear();
-    const Project& p = doc_.project;
-    for (int i = 0; p.actors.size() > 1 && i < int(p.actors.size()); ++i) {
-        if (i == p.active || p.actors[i].hidden) continue;
-        Evaluation e = evaluate_actor(i, frame_);
-        const Xform rel = actor_rel(i);
-        for (Xform& g : e.globals) g = rel * g;
-        other_skeletons_.push_back({std::move(e.globals), p.actors[i].colour});
-    }
-    for (const auto& [g, colour] : other_skeletons_)
+    // Skeleton Only actors (GR-1): other_skeletons_, filled by render_world_scene this frame.
+    for (const OtherSkeleton& s : other_skeletons_)
         for (int i = 0; i < skel_.joint_count(); ++i) {
             if (!node_visible(i) || skel_[i].end.length() < 1e-5) continue;
-            Rgb c = mix(kCategoryColour[int(skel_[i].category)], {colour[0], colour[1], colour[2]}, 0.5f);
+            const auto& g = s.globals;
+            Rgb c = mix(kCategoryColour[int(skel_[i].category)], {s.colour[0], s.colour[1], s.colour[2]}, 0.5f);
             const ImU32 col = IM_COL32(int(c.r * 200), int(c.g * 200), int(c.b * 200), 220);
             line(g[i].pos, g[i].apply(skel_[i].end), IM_COL32(10, 12, 14, 130), 3.5f);
             line(g[i].pos, g[i].apply(skel_[i].end), col, 1.8f);

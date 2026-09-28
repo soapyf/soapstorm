@@ -71,6 +71,7 @@ void Settings::load(const std::string& file) {
     str("orientation", orientation);
     boolean("bvh_reduce", bvh_reduce);
     boolean("viewer_reset_joints", viewer_reset_joints);
+    boolean("viewer_show_others", viewer_show_others);
     boolean("show_graph", show_graph);
     str("theme", theme);
     boolean("show_welcome", show_welcome);
@@ -110,6 +111,7 @@ void Settings::save(const std::string& file) const {
     j.set("orientation", orientation);
     j.set("bvh_reduce", bvh_reduce);
     j.set("viewer_reset_joints", viewer_reset_joints);
+    j.set("viewer_show_others", viewer_show_others);
     j.set("show_graph", show_graph);
     j.set("theme", theme);
     j.set("show_welcome", show_welcome);

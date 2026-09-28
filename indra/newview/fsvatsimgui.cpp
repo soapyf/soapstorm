@@ -405,7 +405,7 @@ namespace
         {
             before.read();
         }
-        FSVATsEditor::drawScene();  // the editor's triangles (props), under ImGui's lines
+        FSVATsEditor::drawScene();  // the editor's triangles (other actors' bodies, props), under ImGui's lines
         ImGui_ImplOpenGL3_RenderDrawData(data);
         if (sGLChecksLeft > 0)
         {

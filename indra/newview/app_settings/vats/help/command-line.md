@@ -47,7 +47,7 @@ vats walk.vat --frame 12 --select mPelvis
 | `--focus` | Frames the selection once the first frame is drawn, as **Frame Selected**. |
 | `--distance <m>` | Sets the camera's distance from its target, in metres, on the first frame. |
 | `--points` | Shows the attachment points, as **View → Show Attachment Points**. |
-| `--tab <name>` | Brings a left panel to the front: `bones` for **Bones**; any other value for **Inventory**. |
+| `--tab <name>` | Brings a left panel to the front: `bones` for **Bones**; `actors` opens the **Actors** window instead; any other value for **Inventory**. |
 | `--import-prop <file>` | Imports a `.dae` or `.fbx` file as a prop, as **File → Import Prop / Mesh (.dae, .fbx)...**. |
 | `--open-help <page>` | Opens the help at a page, by title or file name; `<page>#<heading>` opens it at a heading. |
 | `--screenshot <file.png>` | Runs without dialogs, draws 12 frames, saves the window as a PNG and quits. See [[Command line#Screenshots]]. |

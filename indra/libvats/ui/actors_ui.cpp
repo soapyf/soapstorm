@@ -131,7 +131,9 @@ void App::apply_restore(History::Restore r) {
     sync_actor_timing(p);
 }
 
-// Other visible actors, dimmed and tinted with their colour, each with its own body.
+// Other visible actors, dimmed and tinted with their colour, each with its own body: None (the default) draws nothing
+// but the actor's props, Ruth is the SL default body, a mesh body its imported parts. An actor with nothing to draw is
+// not evaluated.
 void App::draw_other_actors(const SceneColours& colours) {
     const Project& p = doc_.project;
     actor_pick_pos_.assign(p.actors.size(), {});
@@ -144,11 +146,14 @@ void App::draw_other_actors(const SceneColours& colours) {
     for (int i = 0; i < int(p.actors.size()); ++i) {
         const Actor& a = p.actors[i];
         if (i == p.active || a.hidden) continue;
+        const auto& props = actor_clip(p, i).props;
+        if (a.body.empty() && std::none_of(props.begin(), props.end(), [](const Prop& pr) { return pr.visible; })) continue;
         Evaluation e = evaluate_actor(i, frame_);
         Xform rel = actor_rel(i);
         for (Xform& g : e.globals) g = rel * g;
-        for (const Prop& prop : actor_clip(p, i).props)  // their props, at their place
+        for (const Prop& prop : props)  // their props, at their place
             if (prop.visible) draw_prop(prop, verts, idx, &e.globals, actor_shape(i), 0.7f, rel);
+        if (a.body.empty()) continue;  // None
         const std::string key = actor_body_key(i);
         if (key.rfind("mesh:", 0) == 0) {
             if (const MeshBody* mb = find_mesh_body(key.substr(5))) {
@@ -167,7 +172,7 @@ void App::draw_other_actors(const SceneColours& colours) {
             if (key == kBodyIds[k]) b = k;
         if (b < 0) continue;
         if (Body(b) == Body::SkeletonOnly) {  // drawn as bones by render_scene
-            other_skeletons_.push_back({std::move(e.globals), a.colour});
+            other_skeletons_.push_back({std::move(e.globals), a.colour, i});
             continue;
         }
         AvatarMesh* m = &mesh_;
@@ -197,22 +202,19 @@ int App::pick_actor(ImVec2 m) const {
     projector_.ray(camera_, m.x, m.y, o, d);
     int hit = -1;
     double best = 1e30;
-    if (host_.world_view()) {  // the world view: other actors are skeletons (draw_world_extras); a bone near the pointer
-        const Project& p = doc_.project;
-        size_t k = 0;
-        for (int i = 0; i < int(p.actors.size()) && k < other_skeletons_.size(); ++i) {
-            if (i == p.active || p.actors[i].hidden) continue;
-            const auto& g = other_skeletons_[k++].first;
+    if (host_.world_view()) {  // the world view: Skeleton Only actors are lines (draw_world_extras); a bone near the pointer
+        for (const OtherSkeleton& s : other_skeletons_)
             for (int b = 0; b < skel_.joint_count(); ++b) {
                 double hx, hy, tx, ty;
+                const auto& g = s.globals;
                 if (!node_visible(b) || !projector_.to_screen(g[b].pos, hx, hy) || !projector_.to_screen(g[b].apply(skel_[b].end), tx, ty))
                     continue;
                 const double abx = tx - hx, aby = ty - hy, apx = m.x - hx, apy = m.y - hy;
                 const double t = std::clamp((apx * abx + apy * aby) / std::max(abx * abx + aby * aby, 1e-9), 0.0, 1.0);
-                if (double d = std::hypot(apx - abx * t, apy - aby * t); d < 10 && d < best) best = d, hit = i;
+                if (double d = std::hypot(apx - abx * t, apy - aby * t); d < 10 && d < best) best = d, hit = s.actor;
             }
-        }
-        return hit;
+        if (hit >= 0) return hit;
+        best = 1e30;  // then the bodies, as in the app
     }
     for (int i = 0; i < int(actor_pick_pos_.size()); ++i)
         if (actor_pick_idx_[i])
@@ -465,17 +467,18 @@ void App::draw_actors_panel() {
             for (int k = 0; k < 3; ++k) cur.colour[k] = colour[k];
     }
     if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) finish_scene_drags();
-    // Body: "" follows the view.
-    const char* current = cur.body.empty() ? "Same as the view" : cur.body.c_str();
+    // Body (both hosts alike): None draws nothing, Ruth is the SL default body, or an imported mesh body. Older projects'
+    // other Linden bodies still show by name.
+    const char* current = cur.body.empty() ? "None" : cur.body.c_str();
     for (int k = 0; k < kBodyCount; ++k)
-        if (cur.body == kBodyIds[k]) current = kBodyNames[k];
+        if (cur.body == kBodyIds[k]) current = Body(k) == Body::SLDefault ? "Ruth" : kBodyNames[k];
     if (const MeshBody* mb = cur.body.rfind("mesh:", 0) == 0 ? find_mesh_body(cur.body.substr(5)) : nullptr) current = mb->name.c_str();
     if (ImGui::BeginCombo("Body", current)) {
         auto pick = [&](const std::string& id, const char* label) {
             if (ImGui::Selectable(label, cur.body == id)) scene_edit("Actor Body", [id](Project& pr) { pr.actors[pr.active].body = id; });
         };
-        pick("", "Same as the view");
-        for (int k = 0; k < kBodyCount; ++k) pick(kBodyIds[k], kBodyNames[k]);
+        pick("", "None");
+        pick(kBodyIds[int(Body::SLDefault)], "Ruth");
         for (int k = 0; k < int(bodies_.size()); ++k) {  // two bodies may share a name
             ImGui::PushID(k);
             pick("mesh:" + bodies_[k].id, bodies_[k].name.c_str());
@@ -483,7 +486,7 @@ void App::draw_actors_panel() {
         }
         ImGui::EndCombo();
     }
-    ImGui::TextDisabled("\"Same as the view\" follows View > Body.");
+    ImGui::TextDisabled("Shown while another actor is edited. None: nothing, Ruth: the SL default body.");
 
     // Placement: drag the fields; one undo step per drag.
     ImGui::SeparatorText("Placement from the sit target");

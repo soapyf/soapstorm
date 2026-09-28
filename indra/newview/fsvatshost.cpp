@@ -175,7 +175,7 @@ namespace
 
         const vats::ui::Paths& paths() const override { return mPaths; }
 
-        // The world is the view. The UI sends only what the world lacks (the props; spec 09 U5), kept as
+        // The world is the view. The UI sends only what the world lacks (other actors' bodies, props; spec 09 U5), kept as
         // agent-frame triangles for drawScene. Thumbnails: none, the UI shows its plain icons.
         bool scene_begin(vats::ui::SceneTarget target, int, int, const vats::Camera&, const vats::SceneColours&,
                          const vats::Mat4*) override;
@@ -273,7 +273,8 @@ namespace
 
         void drawScene();    // with the world layer, before ImGui's draw: the triangles the UI sent this frame
         void releaseGL();    // the GL context is going
-        void beforeFrame(bool reset_joints);  // outside the ImGui frame: the world's frame, the worn body, the camera
+        void beforeFrame(bool reset_joints, bool show_others);  // outside the ImGui frame: the world's frame, the worn body, the camera
+        bool hidingOthers() const { return mHidingOthers; }
         bool holdsAvatar() const { return mIsolatedOn && isAgentAvatarValid() && mIsolatedOn == gAgentAvatarp.get(); }
         void afterFrame();   // inside it, after the UI's frame: questions, camera edits
         void close();        // the editor is going: stop driving the avatar and the sound, drop its callbacks
@@ -281,6 +282,7 @@ namespace
         void hideChrome();   // the viewer's UI hidden but for shownOverEditor
         void showChrome();   // and back exactly as it was
         void releasePane();  // the conversations floater back where it was
+        void hideOthers(bool hide);  // every other avatar hidden on this screen, or back as before
         bool regionKeepsStanding() const { return mRegionKeepsStanding; }
 
     private:
@@ -345,6 +347,8 @@ namespace
         bool mChromeHidden = false;      // hidden by the editor
         bool mUiWasVisible = true;       // the viewer's UI was showing before (its own Show UI toggle)
         bool mRevealed = false;          // Show Firestorm UI is on
+        bool mHidingOthers = false;      // other avatars hidden (spec 09 U5), and Render Only Friends as it was before
+        bool mFriendsOnlyWas = false;
         std::vector<LLHandle<LLFloater>> mHiddenFloaters;  // floaters hidden since, shown again on close
         struct Pane
         {
@@ -841,12 +845,13 @@ namespace
         return true;
     }
 
-    void ViewerHost::beforeFrame(bool reset_joints)
+    void ViewerHost::beforeFrame(bool reset_joints, bool show_others)
     {
         static LLCachedControl<bool> show_ui(gSavedSettings, "VATsShowViewerUI", false);
         if (show_ui != mRevealed)
             reveal(show_ui);
         isolate(reset_joints);
+        hideOthers(holdsAvatar() && !show_others);
         LLViewerCamera* cam = LLViewerCamera::getInstance();
         if (isAgentAvatarValid() && gAgentAvatarp->getRootJoint())
         {
@@ -1132,7 +1137,7 @@ namespace
             glGetProgramiv(mProgram, GL_LINK_STATUS, &linked);
             if (!linked)
             {
-                LL_WARNS("VATsEditor") << "the scene shader did not link: props are not drawn" << LL_ENDL;
+                LL_WARNS("VATsEditor") << "the scene shader did not link: other actors' bodies and props are not drawn" << LL_ENDL;
                 glDeleteProgram(mProgram);
                 mProgram = 0;
                 mProgramFailed = true;
@@ -1262,6 +1267,27 @@ namespace
         mHiddenFloaters.clear();
         mChromeHidden = false;
         LL_INFOS("VATsEditor") << "viewer UI shown again" << LL_ENDL;
+    }
+
+    // Spec 09 U5: the viewer's own Render Only Friends (Developer > Avatar > Character Tests > Render Only Friends,
+    // RenderAvatarFriendsOnly, not persisted): an avatar it hides draws nothing, with its attachments, shadow and name
+    // tag (LLVOAvatar::isVisible, the avatar draw pool, idleUpdateNameTag). With hidesOtherAvatars, isBuddy answers
+    // false, so friends go too; your own avatar and animesh never do. Put back exactly as it was when the editor lets go.
+    void ViewerHost::hideOthers(bool hide)
+    {
+        if (hide == mHidingOthers)
+            return;
+        if (hide)
+        {
+            mFriendsOnlyWas = gSavedSettings.getBOOL("RenderAvatarFriendsOnly");
+            gSavedSettings.setBOOL("RenderAvatarFriendsOnly", true);
+        }
+        else
+        {
+            gSavedSettings.setBOOL("RenderAvatarFriendsOnly", mFriendsOnlyWas);
+        }
+        mHidingOthers = hide;
+        LL_INFOS("VATsEditor") << (hide ? "other avatars hidden on this screen" : "other avatars shown as before") << LL_ENDL;
     }
 
     // The editor's Viewer menu, the Avatar menu's item or Alt+Shift+U (both through the setting VATsShowViewerUI).
@@ -1441,6 +1467,7 @@ namespace
         showChrome();
         mRevealed = false;
         gSavedSettings.setBOOL("VATsShowViewerUI", false);
+        hideOthers(false);
         stopMotion();
         mBase.clear();
         restore();
@@ -1487,7 +1514,7 @@ namespace
         }
         if (sApp)
         {
-            sHost->beforeFrame(sApp->viewer_reset_joints());
+            sHost->beforeFrame(sApp->viewer_reset_joints(), sApp->viewer_show_others());
             static LLCachedControl<bool> face_check(gSavedSettings, "VATsFaceCheck", false);
             if (face_check)
             {
@@ -1581,6 +1608,11 @@ void FSVATsEditor::releaseGL()
 {
     if (sHost)
         sHost->releaseGL();
+}
+
+bool FSVATsEditor::hidesOtherAvatars()
+{
+    return sHost && sHost->hidingOthers();
 }
 
 bool FSVATsEditor::holdsAvatar()

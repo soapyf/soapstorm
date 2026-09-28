@@ -7,8 +7,9 @@ exports a file per actor plus a note with the sit-target values.
 
 > Related articles: [[Hold and bind]], [[Export to Second Life]], [[Props]], [[Mesh bodies]], [[Keys and timeline]]
 
-> **Note:** In the viewer your own avatar shows the actor you edit, and the other actors are skeletons
-> around it, seen only by you. See [[VATs Editor (viewer)#The world as the view]].
+> **Note:** In the viewer your own avatar shows the actor you edit. The other actors are drawn around it on
+> your screen only, with the body you choose for them; they are never other people's avatars. See
+> [[VATs Editor (viewer)#The world as the view]].
 
 ## Usage
 
@@ -21,13 +22,14 @@ Open **Tools → Actors (Couples and Groups)...**. A project starts with one act
 - **Duplicate**: a copy of the current actor's animation, 0.8 m to its side;
 - **Blank**: an actor with no keys, 0.8 m to the side.
 
-Each new actor gets its own colour. Cross-actor binds are not copied.
+Each new actor gets its own colour and the current actor's **Body**, so actors added to a plain project
+start with **None** and draw nothing until you choose a body. Cross-actor binds are not copied.
 
 ### Choose the actor to edit
 
-Click an actor's body in the view, or its name in the **Actors** window. The Bones list, the graph and
-keying all work on that actor; the others are shown dimmed in their colour. A locked actor cannot be
-chosen.
+Click an actor's body in the view, or its name in the **Actors** window; an actor with the body **None**
+draws nothing, so choose it by name. The Bones list, the graph and keying all work on that actor; the others
+are shown dimmed in their colour. A locked actor cannot be chosen.
 
 The three icon buttons at the end of each row act on the other actors; hover one for its name:
 
@@ -49,7 +51,7 @@ Below the list, under the actor's name:
 |---|---|
 | **Name** | Used in the exported file names. Press **Enter** to apply. |
 | **Colour** | The tint when the actor is not being edited. |
-| **Body** | **Same as the view** (follows **View → Body**), a Linden body, or one of your [[Mesh bodies]]. |
+| **Body** | How the actor looks while another actor is edited: **None** (the default: nothing but its [[Props|props]]), **Ruth** (the Second Life default body), or one of your [[Mesh bodies]]. Saved in the project. Projects made before may show another Linden body by name. |
 
 Under **Placement from the sit target**, **Position (m)** and **Turn (deg)** set where the actor stands
 relative to the shared point, which stands for the pose ball or the furniture's root in Second Life.

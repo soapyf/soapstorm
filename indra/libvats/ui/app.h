@@ -69,6 +69,7 @@ public:
     // when there is nowhere to write it; the editor then stays open.
     bool quit_to_quicksave();
     bool viewer_reset_joints() const { return settings_.viewer_reset_joints; }  // the viewer's Preferences toggle
+    bool viewer_show_others() const { return settings_.viewer_show_others; }    // View > Show Other Avatars (the viewer)
     const Skeleton& skeleton() const { return skel_; }
     // The viewer's face-positions check (spec 09 §5a): the bytes an upload of the active actor sends, the same with
     // Bake shape SL Default (the negative control), and the pose at each sampled frame (0, the face tracks' keys, the
@@ -104,7 +105,10 @@ public:
         clear_selection();
         selected_prop_ = index;
     }
-    void show_tab(const std::string& tab) { pending_tab_ = tab == "bones" ? "Bones" : "Inventory"; }  // library = Inventory
+    void show_tab(const std::string& tab) {  // library = Inventory; actors opens the Actors window
+        if (tab == "actors") show_actors_ = true;
+        else pending_tab_ = tab == "bones" ? "Bones" : "Inventory";
+    }
     bool set_preset(const std::string& name) {
         if (!preset_from_name(name, settings_.preset)) return false;
         apply_preset();
@@ -273,7 +277,7 @@ private:
     void draw_bone_lines(ImDrawList* dl) const;  // the world view's bones: the host draws no scene (spec 09 U3)
     // The world view's other actors, ghosts and collision volumes as lines (spec 09 U4).
     void draw_world_extras(ImDrawList* dl);
-    // The world view's triangles (spec 09 U5): the props, which the host draws with the world.
+    // The world view's triangles (spec 09 U5): other actors' bodies and props, which the host draws with the world.
     void render_world_scene();
     ImGuiID dockspace_id_ = 0;
     void draw_message_popup();
@@ -578,7 +582,7 @@ private:
     void draw_actors_panel();
     bool multi_actor() const { return doc_.project.actors.size() >= 2; }
     Xform actor_rel(int i) const;              // actor i's placement in the active actor's space
-    std::string actor_body_key(int i) const;   // body id or "mesh:<id>"; "" in the file = the view's choice
+    std::string actor_body_key(int i) const;   // body id or "mesh:<id>"; "" in the file (None) = the view's, for its shape
     void sync_active_body();                   // the view shows the active actor's own Linden body
     const Shape* actor_shape(int i) const;     // the shape actor i evaluates with
     ExternalTarget actor_resolver(int self);   // GR-4 pin targets as seen by actor `self`
@@ -594,7 +598,12 @@ private:
     std::map<std::string, std::unique_ptr<AvatarMesh>> actor_meshes_;  // Linden bodies other actors use
     int pin_actor_ = -1, pin_bone_ = -1;       // the actors panel's "Bind to" choice
     // Other actors with body "Skeleton Only": their globals (active space) and colour, drawn as bones.
-    std::vector<std::pair<std::vector<Xform>, std::array<float, 3>>> other_skeletons_;
+    struct OtherSkeleton {
+        std::vector<Xform> globals;
+        std::array<float, 3> colour;
+        int actor;
+    };
+    std::vector<OtherSkeleton> other_skeletons_;
     // The view's placement gizmo on another actor (the "place" button).
     Gizmo actor_gizmo_;
     int place_actor_ = -1;

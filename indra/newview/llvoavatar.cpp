@@ -134,6 +134,7 @@
 #include "fsdiscordconnect.h" // <FS:LO> tapping a place that happens on landing in world to start up discord
 #include "fslslbridge.h" // <FS:PP> Movelock position refresh
 #include "fssoundemitterblacklist.h"
+#include "fsvatshost.h" // VATs editor
 #include "lfsimfeaturehandler.h"    // <FS:CR> Opensim
 #include "lggcontactsets.h"
 #include "llcontrol.h"
@@ -13820,6 +13821,7 @@ F32 LLVOAvatar::getAverageGPURenderTime()
 
 bool LLVOAvatar::isBuddy() const
 {
+    if (FSVATsEditor::hidesOtherAvatars()) return false; // VATs editor: Render Only Friends hides friends too
     bool is_friend = false;
     F64 now = LLFrameTimer::getTotalSeconds();
     if (now < mCachedBuddyListUpdateTime)

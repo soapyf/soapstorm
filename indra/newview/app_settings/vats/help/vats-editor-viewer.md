@@ -96,6 +96,19 @@ The avatar belongs to the editor until you close it:
 Other residents see your avatar sitting on the ground with its normal animations; the editor's pose is
 yours only until you upload the animation and play it.
 
+### Other avatars while the editor is open
+
+Every other avatar is hidden on your screen while the editor is open, friends too, with their attachments
+and name tags, so the scene shows only you and your project. Your own avatar and animated objects stay.
+This is the viewer's own **Render Only Friends**, extended to friends while the editor is open; closing the
+editor sets it back to what it was. Nothing is sent: the others still see you, and you still get their chat.
+
+To see them, choose **View → Show Other Avatars**, or tick **Edit → Preferences... → In the viewer → Show
+other avatars**. The choice is kept for the next time.
+
+The editor never picks, poses or reads other people's avatars. The other actors of a couple or group
+project are your own project's actors (below).
+
 ### Clicks and keys
 
 | Input | Goes to |
@@ -127,9 +140,12 @@ axis marker and the view cube. These and the editor's panels are drawn with the 
 windows that show: notifications, questions and the Chat pane are always in front. A viewer window over a
 bone or a panel takes the click, not the editor.
 
-- **Other actors** of a couple or group project (see [[Couples and groups]]) are drawn as skeletons at
-  their place around your avatar, tinted with their colour. Click one of their bones to edit that actor;
-  your avatar then shows it.
+- **Other actors** of a couple or group project (see [[Couples and groups]]) stand at their place around
+  your avatar with the **Body** chosen for them in the **Actors** window: **None** (the default) draws
+  nothing, **Ruth** is the Second Life default body, drawn from the viewer's own avatar files, and a mesh
+  body is one you imported under **Inventory → Bodies** from its files. Bodies are tinted with the actor's
+  colour, lit simply, and hidden where the world is in front of them. Click a body to edit that actor;
+  your avatar then shows it. An actor with **None** is chosen by its name in the **Actors** window.
 - **[[Props]]** are drawn with the world, lit simply and hidden where the world is in front of them: add,
   attach, place and move them as in the app. They are on your screen only; nothing is rezzed.
 - **[[Onion skin]]** ghosts are bone lines, blue before the current frame and orange after.
@@ -162,7 +178,8 @@ The editor takes its colours from the viewer's skin and follows it when the skin
 | Body | VATs' avatar, or a [[Mesh bodies|devkit mesh body]] | your own avatar and the mesh body you wear |
 | [[Props]] | imported `.dae` and `.fbx` props and the starter props | the same, on your screen only |
 | 3D view | its own, with its own camera controls per preset | the world, with the viewer's camera controls |
-| Other actors | each with its own body | skeletons |
+| Other actors | **None**, **Ruth** or a mesh body each | the same, on your screen only |
+| Other people's avatars | none | hidden while the editor is open, unless **View → Show Other Avatars** |
 | Pose and prop thumbnails | pictures | plain icons |
 | [[Audio track]] | the app's audio output | the viewer's sound, heard by you only; no snippets while scrubbing |
 | File types | registered with the desktop | not registered |
@@ -208,6 +225,15 @@ then type.
 
 Choose **Viewer → Show Firestorm UI** or press **Alt+Shift+U**: all of the viewer's UI shows over the
 editor until you choose it again or press **Alt+Shift+U** again.
+
+### I can't see other avatars
+
+The editor hides them while it is open. Choose **View → Show Other Avatars**.
+
+### An actor I added isn't drawn
+
+Its **Body** is **None**, the default. Choose it by name in the **Actors** window and pick **Ruth** or a
+mesh body under **Body**.
 
 ## See also
 

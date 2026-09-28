@@ -1286,6 +1286,10 @@ void App::draw_menus() {
         }
         ImGui::Separator();
         ImGui::MenuItem("Bones in Front (X-ray)", nullptr, &xray_);
+        if (host_.world_view() && ImGui::MenuItem("Show Other Avatars", nullptr, settings_.viewer_show_others)) {
+            settings_.viewer_show_others = !settings_.viewer_show_others;  // the viewer's (spec 09 U5), saved
+            save_settings();
+        }
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Select")) {

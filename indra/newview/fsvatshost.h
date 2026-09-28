@@ -36,13 +36,16 @@ namespace FSVATsEditor
     // Once a frame from FSVATsImGui::render, before the ImGui frame: opens or closes the editor to match
     // the setting, and closes it (autosaving, no prompt) when the viewer quits.
     void update(bool want_open);
-    // FSVATsImGui's world layer, before ImGui's draw: the props (spec 09 U5). releaseGL: the GL
+    // FSVATsImGui's world layer, before ImGui's draw: other actors' bodies and props (spec 09 U5). releaseGL: the GL
     // context is going (LLViewerWindow::stopGL).
     void drawScene();
     void releaseGL();
     // True while the editor holds your avatar (logged in, editor open). audio_update_wind fades the flight wind out
     // then, as when not flying (spec 09 U5).
     bool holdsAvatar();
+    // True while the editor hides every other avatar (spec 09 U5): it turns on the viewer's Render Only Friends
+    // (RenderAvatarFriendsOnly) and LLVOAvatar::isBuddy answers false, so friends are hidden too; never your own.
+    bool hidesOtherAvatars();
     // True while the editor is open: the world's clicks and the keys are the editor's (FSVATsImGui).
     bool ownsWorld();
     // From LLAgent::setControlFlags (spec 09 U4b): the flags that may reach the avatar. While the editor holds it,
