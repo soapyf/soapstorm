@@ -33,6 +33,7 @@
 #include "llframetimer.h"
 #include "llgl.h"
 #include "llglslshader.h"
+#include "llkeyboard.h"
 #include "llmoveview.h"
 #include "llrender.h"
 #include "llrootview.h"
@@ -47,7 +48,12 @@
 
 #include <cctype>
 #include <cfloat>
+#include <iterator>
 #include <map>
+
+#if LL_SDL2
+#include <SDL3/SDL.h>  // the number pad's keys, which LLKeyboardSDL does not tell apart (keypadKeys)
+#endif
 
 namespace
 {
@@ -122,6 +128,7 @@ namespace
             case KEY_CONTROL: return ImGuiKey_LeftCtrl;
             case KEY_ALT: return ImGuiKey_LeftAlt;
             case KEY_CAPSLOCK: return ImGuiKey_CapsLock;
+            case KEY_PAD_CENTER: return ImGuiKey_Keypad5;  // Windows' 5 with Num Lock off
             case KEY_ADD: case KEY_PAD_ADD: return ImGuiKey_KeypadAdd;
             case KEY_SUBTRACT: case KEY_PAD_SUBTRACT: return ImGuiKey_KeypadSubtract;
             case KEY_MULTIPLY: case KEY_PAD_MULTIPLY: return ImGuiKey_KeypadMultiply;
@@ -129,6 +136,37 @@ namespace
             default: return ImGuiKey_None;
         }
     }
+
+#if LL_SDL2
+    // Linux (SDL): LLKeyboardSDL turns the number pad's 0-9 and . into Insert, End, the arrows... with Num Lock off (5 is
+    // dropped) and drops them with it on (only their typed characters arrive), and has no F13-F24, Pause or Print Screen.
+    // The editor wants them as the app gets them from SDL (Num 5 Orthographic, Blender's Num 1/3/7/.), whatever Num Lock
+    // says, so they are read from SDL's own key state once a frame (keypadKeys), and the viewer's aliases of them are
+    // left out of keyDown.
+    struct PolledKey { SDL_Scancode sc; ImGuiKey key; };
+    const PolledKey kPolled[] = {
+        { SDL_SCANCODE_KP_0, ImGuiKey_Keypad0 }, { SDL_SCANCODE_KP_1, ImGuiKey_Keypad1 }, { SDL_SCANCODE_KP_2, ImGuiKey_Keypad2 },
+        { SDL_SCANCODE_KP_3, ImGuiKey_Keypad3 }, { SDL_SCANCODE_KP_4, ImGuiKey_Keypad4 }, { SDL_SCANCODE_KP_5, ImGuiKey_Keypad5 },
+        { SDL_SCANCODE_KP_6, ImGuiKey_Keypad6 }, { SDL_SCANCODE_KP_7, ImGuiKey_Keypad7 }, { SDL_SCANCODE_KP_8, ImGuiKey_Keypad8 },
+        { SDL_SCANCODE_KP_9, ImGuiKey_Keypad9 }, { SDL_SCANCODE_KP_PERIOD, ImGuiKey_KeypadDecimal },
+        { SDL_SCANCODE_F13, ImGuiKey_F13 }, { SDL_SCANCODE_F14, ImGuiKey_F14 }, { SDL_SCANCODE_F15, ImGuiKey_F15 },
+        { SDL_SCANCODE_F16, ImGuiKey_F16 }, { SDL_SCANCODE_F17, ImGuiKey_F17 }, { SDL_SCANCODE_F18, ImGuiKey_F18 },
+        { SDL_SCANCODE_F19, ImGuiKey_F19 }, { SDL_SCANCODE_F20, ImGuiKey_F20 }, { SDL_SCANCODE_F21, ImGuiKey_F21 },
+        { SDL_SCANCODE_F22, ImGuiKey_F22 }, { SDL_SCANCODE_F23, ImGuiKey_F23 }, { SDL_SCANCODE_F24, ImGuiKey_F24 },
+        { SDL_SCANCODE_PAUSE, ImGuiKey_Pause }, { SDL_SCANCODE_PRINTSCREEN, ImGuiKey_PrintScreen },
+    };
+    bool sPolledDown[std::size(kPolled)] = {};
+
+    // The key being handled came from the number pad's 0-9 or . (SDL's keycode, before LLKeyboardSDL's Num Lock aliasing).
+    bool fromKeypadDigit()
+    {
+        const LLSD native = gViewerWindow && gViewerWindow->getWindow() ? gViewerWindow->getWindow()->getNativeKeyData() : LLSD();
+        const U32 sdl_key = (U32)native["virtual_key"].asInteger();
+        return sdl_key >= (U32)SDLK_KP_1 && sdl_key <= (U32)SDLK_KP_PERIOD;  // KP_1...KP_9, KP_0, KP_PERIOD in a row
+    }
+#else
+    bool fromKeypadDigit() { return false; }
+#endif
 
     ECursorType toCursor(ImGuiMouseCursor c)
     {
@@ -410,6 +448,25 @@ namespace
         return io.WantCaptureKeyboard || FSVATsEditor::ownsWorld();
     }
 
+#if LL_SDL2
+    // Once a frame: the polled keys (kPolled) that went down or up since, to ImGui while it gets the keys; a key held
+    // when that ends is still let go.
+    void keypadKeys(ImGuiIO& io)
+    {
+        const bool* state = SDL_GetKeyboardState(nullptr);
+        const bool wanted = state && gKeyboard && imguiGetsKeys(KEY_PAD_CENTER, gKeyboard->currentMask(false));
+        for (size_t i = 0; i < std::size(kPolled); ++i)
+        {
+            const bool down = state && state[kPolled[i].sc] && (sPolledDown[i] || wanted);
+            if (down != sPolledDown[i])
+            {
+                sPolledDown[i] = down;
+                io.AddKeyEvent(kPolled[i].key, down);
+            }
+        }
+    }
+#endif
+
     LLCoordGL sMousePos;  // the pointer, raw window coordinates
 
     // The pointer reaches ImGui only where no LLUI view is under it (the viewer's hover reached the world, which
@@ -539,6 +596,9 @@ static bool buildFrame()
     // The pointer only where no viewer window is over it (they are drawn over the panels).
     const ImVec2 mouse = pointerForImGui() ? toImGui(sMousePos) : ImVec2(-FLT_MAX, -FLT_MAX);
     io.AddMousePosEvent(mouse.x, mouse.y);
+#if LL_SDL2
+    keypadKeys(io);
+#endif
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
@@ -724,6 +784,10 @@ bool FSVATsImGui::keyDown(KEY key, MASK mask)
     {
         return false;
     }
+    if (fromKeypadDigit())
+    {
+        return true;  // the number pad's own key reaches ImGui from keypadKeys
+    }
     ImGuiIO& io = ImGui::GetIO();
     setMods(io, mask);
     ImGuiKey k = toImGuiKey(key);
@@ -737,7 +801,7 @@ bool FSVATsImGui::keyDown(KEY key, MASK mask)
 void FSVATsImGui::keyUp(KEY key, MASK mask)
 {
     // Releases always reach both sides, so neither is left with a key held down.
-    if (sCtx)
+    if (sCtx && !fromKeypadDigit())
     {
         ImGuiIO& io = ImGui::GetIO();
         setMods(io, mask);
