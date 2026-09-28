@@ -66,6 +66,7 @@
 #include "llrootview.h"
 #include "llviewerwindow.h"
 #include "llvoavatarself.h"
+#include "llmoveview.h"
 #include "llweb.h"
 #include "llworld.h"
 #include "lldatapacker.h"
@@ -549,6 +550,7 @@ namespace
         U32 filterControls(U32 flags);
         void hideChrome();   // the viewer's UI hidden but for shownOverEditor
         void showChrome();   // and back exactly as it was
+        void hideStand();    // the viewer's Stand / Stop Flying buttons, while the chrome is hidden
         void releasePane();  // the conversations floater back where it was
         void updateToasts(); // the toast channels laid out again when their area changes (or goes)
         void hideOthers(bool hide);  // every other avatar hidden on this screen, or back as before
@@ -649,6 +651,7 @@ namespace
         // The viewer's UI while the editor is open (U4b).
         bool mChromeHidden = false;      // hidden by the editor
         bool mUiWasVisible = true;       // the viewer's UI was showing before (its own Show UI toggle)
+        bool mStandWas = false;          // the Stand / Stop Flying buttons showed (or the viewer showed them since)
         bool mRevealed = false;          // Show Firestorm UI is on
         bool mHidingOthers = false;      // other avatars hidden (spec 09 U5), and Render Only Friends as it was before
         bool mFriendsOnlyWas = false;
@@ -1136,6 +1139,8 @@ namespace
         // Seated on an object, it goes where the object goes; walking (build 20), where you walk it.
         VATsClipMotion::sEditor.pin = !avatar->getParent() && mMode != Mode::Walk;
         pollSeatCheck();
+        if (mChromeHidden)
+            hideStand();
         if (mChromeHidden && gFloaterView)
         {
             // A floater that opens meanwhile (a script's map, a new window) stays hidden unless allowed.
@@ -1234,7 +1239,7 @@ namespace
             if (gAgentAvatarp->isSitting() && now >= mToldAt)
             {
                 mToldAt = now + 3.0;
-                tip("Close the editor to stand up");
+                tip("Close the editor to stand up", "VATsEditorTip");  // the toast only: not in chat as well
                 LL_INFOS("VATsEditor") << "Stand Up refused while the editor is open" << LL_ENDL;
             }
         }
@@ -2555,11 +2560,26 @@ namespace
         mUiWasVisible = gViewerWindow->getUIVisibility();
         if (mUiWasVisible)
             gViewerWindow->setUIVisibility(false);
+        mStandWas = false;
+        hideStand();
         for (const LLHandle<LLFloater>& handle : keep)
             if (LLFloater* floater = handle.get())
                 floater->setVisible(true);
         mChromeHidden = true;
         LL_INFOS("VATsEditor") << "viewer UI hidden but for chat, IMs, notifications and alerts" << LL_ENDL;
+    }
+
+    // The viewer's Stand / Stop Flying buttons, which it keeps over its hidden UI: hidden while the editor's UI is, so
+    // the editor reaches the window's bottom (the editor holds the avatar and refuses Stand anyway; the walk test stands
+    // by its own). Called again each frame, since a sit or leaving mouselook shows them again.
+    void ViewerHost::hideStand()
+    {
+        LLPanelStandStopFlying* stand = LLPanelStandStopFlying::getInstance();
+        if (stand && stand->getVisible())
+        {
+            mStandWas = true;
+            stand->setVisible(false);  // its layout panel too
+        }
     }
 
     void ViewerHost::showChrome()
@@ -2569,6 +2589,8 @@ namespace
         releasePane();
         if (mUiWasVisible && gViewerWindow)
             gViewerWindow->setUIVisibility(true);  // shows what its hide hid
+        if (std::exchange(mStandWas, false))
+            LLPanelStandStopFlying::getInstance()->setVisible(true);  // as the viewer shows it; its own buttons say which
         for (const LLHandle<LLFloater>& handle : mHiddenFloaters)
             if (LLFloater* floater = handle.get())
                 floater->setVisible(true);

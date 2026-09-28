@@ -7592,6 +7592,15 @@ URL: [AUDIOURL]
    type="notifytip">
 [MESSAGE]
   </notification>
+
+  <!-- VATs editor: a tip toast only, not also a line in nearby chat (whose toast shows over the editor too) -->
+  <notification
+   icon="notifytip.tga"
+   name="VATsEditorTip"
+   log_to_chat="false"
+   type="notifytip">
+[MESSAGE]
+  </notification>
   
   <notification
    icon="notifytip.tga"

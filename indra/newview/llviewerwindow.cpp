@@ -242,6 +242,7 @@
 #include "ssatmomagic.h" // <SS:Nexii> Atmo Magic weather
 #include "fspanellogin.h"
 #include "fsvatsimgui.h" // VATs ImGui UI
+#include "fsvatshost.h" // VATs editor
 
 #include "lltracerecording.h"
 
@@ -3003,6 +3004,9 @@ void LLViewerWindow::drawDebugText()
     {
         // scale view by UI global scale factor and aspect ratio correction factor
         gGL.scaleUI(mDisplayScale.mV[VX], mDisplayScale.mV[VY], 1.f);
+        // VATs editor: in the bottom right of its view, not over its panels (the text starts 64 up from the world's bottom)
+        if (LLRect vats_area; FSVATsEditor::toastArea(vats_area))
+            gGL.translateUI((F32)(vats_area.mRight - getWorldViewRectScaled().mRight), (F32)(vats_area.mBottom - 56), 0.f);
         mDebugText->draw();
     }
     gGL.popUIMatrix();

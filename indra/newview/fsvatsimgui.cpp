@@ -270,8 +270,9 @@ namespace
         }
         if (!gViewerWindow->getUIVisibility())
         {
-            // The viewer's UI hidden: its Stand / Stop Flying buttons still show (the editor sits the avatar down), at the
-            // bottom of the world view. The editor's status bar and panels stay above them (build 17: they overlapped).
+            // The viewer's UI hidden: its Stand / Stop Flying buttons may still show at the bottom of the world view; the
+            // editor's status bar and panels stay above them (build 17: they overlapped). Build 26: while the editor hides
+            // the viewer's UI it hides them too (ViewerHost::hideStand), so this is 0 and the editor reaches the bottom.
             const LLRect world = gViewerWindow->getWorldViewRectScaled();
             LLPanelStandStopFlying* stand = LLPanelStandStopFlying::getInstance();
             const LLRect rect = stand && stand->isInVisibleChain() ? stand->calcScreenRect() : LLRect();
