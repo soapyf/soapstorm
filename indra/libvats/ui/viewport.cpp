@@ -260,9 +260,11 @@ void App::draw_ghost(const std::vector<Xform>& globals, const Rgb& c, float alph
     }
 }
 
-// The edited actor's bone glyphs (VP-6), coloured by category and state. Shared: the viewer's world view can send
-// them through the same scene triangles (spec 09).
-void App::draw_bones() {
+// The edited actor's bone glyphs (VP-6), coloured by category and state. Shared: the viewer's world view sends them
+// through the same scene triangles (spec 09), over_world: not tested against the world's depth, since the avatar the
+// viewer draws round them would hide them (the app's body is translucent). There depth_test false means "over the
+// world": opaque glyphs still hide each other, X-ray ones draw with no depth, back faces culled.
+void App::draw_bones(bool over_world) {
     static std::vector<Vertex> bones;
     bones.clear();
     const Shape* sh = shape();
@@ -286,7 +288,7 @@ void App::draw_bones() {
     }
     // X-ray culls back faces (the translucent path), so each closed glyph shows only its outside; with depth
     // testing the depth buffer does that.
-    host_.scene_triangles(bones, {}, !xray_, 0.25f, xray_);
+    host_.scene_triangles(bones, {}, !xray_ && !over_world, 0.25f, xray_);
 }
 
 ImTextureID App::render_scene(int w, int h) {
@@ -982,34 +984,9 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
     (void)size;
 }
 
-// The world as the view (the viewer, spec 09 U3): the host draws no scene, so the bones are lines over it.
-void App::draw_bone_lines(ImDrawList* dl) const {
-    const Shape* sh = shape();
-    for (int i = 0; i < skel_.volume_start(); ++i) {
-        if (!node_visible(i) || skel_[i].attachment) continue;  // attachment points get their dots below
-        Vec3 end = sh ? skel_[i].end.mul(sh->scale[i]) : skel_[i].end;
-        if (end.length() < 1e-5) continue;
-        double hx, hy, tx, ty;
-        if (!projector_.to_screen(globals_[i].pos, hx, hy) || !projector_.to_screen(globals_[i].apply(end), tx, ty)) continue;
-        Rgb c = kCategoryColour[int(skel_[i].category)];
-        planner_colour(i, c);  // 08 PP-2
-        const bool sel = std::find(selection_.begin(), selection_.end(), i) != selection_.end();
-        if (i == primary()) c = kSelected;
-        else if (sel) c = mix(kSelected, c, 0.45f);
-        else if (contact_bone(i)) c = kContact;
-        else if (hot(i)) c = mix(c, {1, 1, 1}, 0.5f);
-        const ImU32 col = IM_COL32(int(c.r * 255), int(c.g * 255), int(c.b * 255), 235);
-        const ImVec2 a{float(hx), float(hy)}, b{float(tx), float(ty)};
-        const float width = i == primary() ? 3.5f : sel || hot(i) ? 3.f : 2.f;
-        dl->AddLine(a, b, IM_COL32(10, 12, 14, 150), width + 2);  // a dark edge keeps them readable on any backdrop
-        dl->AddLine(a, b, col, width);
-        dl->AddCircleFilled(a, width + 0.5f, col);
-    }
-}
-
 // The world view (the viewer): the triangles the world lacks, which the host draws with the world (spec 09 U5): the
-// other actors' bodies (None, the default, draws nothing) and the props, placed as in the app. The avatar is the
-// viewer's own, so no body, ground or bone glyphs.
+// other actors' bodies (None, the default, draws nothing), the props, placed as in the app, and the edited actor's
+// bone glyphs, as the app draws them. The avatar is the viewer's own, so no body or ground.
 void App::render_world_scene() {
     actor_pick_pos_.clear();
     actor_pick_idx_.clear();
@@ -1027,6 +1004,7 @@ void App::render_world_scene() {
     draw_treadmill();  // 08 LP-8
     draw_backdrop();   // 08 LT-2
     draw_reference(false, 1);  // 08 RF: the plane, when the host draws pictures (else draw_viewport's overlay)
+    if (!globals_.empty()) draw_bones(true);
     host_.scene_end();
 }
 
@@ -1180,7 +1158,7 @@ void App::draw_viewport() {
     if (world) draw_reference_overlay(dl, origin, size);  // 08 RF
 
     dl->PushClipRect(origin, ImVec2(origin.x + size.x, origin.y + size.y), true);
-    if (world) draw_world_extras(dl), draw_bone_lines(dl);
+    if (world) draw_world_extras(dl);
     draw_target_bones(dl);  // the target ghost's bones, thin lines in both hosts
     // Attachment points get a dot so they can be seen and clicked (their glyphs are only 4 cm).
     for (int i = skel_.joint_count(); i < skel_.volume_start(); ++i) {

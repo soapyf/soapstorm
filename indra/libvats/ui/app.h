@@ -362,7 +362,6 @@ private:
     void draw_host_pane();  // Host::host_ui's pane (spec 09 U4b)
     bool show_host_pane_ = true;
     void draw_viewport();
-    void draw_bone_lines(ImDrawList* dl) const;  // the world view's bones: the host draws no scene (spec 09 U3)
     // The world view's other actors, ghosts and collision volumes as lines (spec 09 U4).
     void draw_world_extras(ImDrawList* dl);
     // The world view's triangles (spec 09 U5): other actors' bodies and props, which the host draws with the world.
@@ -646,7 +645,7 @@ private:
     }
     // The Local gizmo frame of a bone: its global rotation x the display bone frame (SK-21).
     Quat local_axes(int node) const { return globals_[node].rot * skel_.bone_frame(node); }
-    void draw_bones();  // the bone glyphs, through scene_triangles
+    void draw_bones(bool over_world = false);  // the bone glyphs, through scene_triangles; over_world: the viewer's (not against its depth)
     void draw_collision_volumes(std::vector<Vertex>& verts);  // VP-10, SK-I5
 
     // --- formats/viewport ---

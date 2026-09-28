@@ -606,6 +606,10 @@ namespace
 
         vats::ui::Paths mPaths;
         vats::Camera mCamera, mSynced;  // mSynced: as read from the viewer this frame, to spot the UI's edits
+        // A camera move of the UI's (the view cube, Alt+arrows): frames since its last step, -1 when none. While it
+        // lasts the UI's camera is the authority and is not read back from the viewer's, which lags behind its
+        // pushes (read back, each step lost distance and the camera drifted into the avatar).
+        int mDriveQuiet = -1;
         F32 mLensFov = DEFAULT_FIELD_OF_VIEW;  // ortho: the viewer's lens before (restored when off), the UI's fov meanwhile
         F32 mFarWas = 0.f;                // ortho: the draw distance before, restored when off
         vats::Mat4 mViewProj;
@@ -670,6 +674,7 @@ namespace
             std::vector<U32> indices;
         };
         SceneBatch mScene[2];
+        SceneBatch mOver[2];             // depth_test false (the bone glyphs): over the world, drawn last, back faces culled
         SceneBatch mOff[2];              // the face cam's or a thumbnail's, in the UI's space
         bool mOffOpen = false;
         int mOffW = 0, mOffH = 0;
@@ -1608,6 +1613,12 @@ namespace
         const Vec3 eye = fromAgent(cam->getOrigin());
         const Vec3 at = dirFromAgent(cam->getAtAxis()).normalized();
         const Vec3 up = dirFromAgent(cam->getUpAxis()).normalized();
+        mViewProj = vats::perspective(cam->getView(), cam->getAspect(), 0.05, 1024.0) * vats::look_at(eye, eye + at, up);
+        if (mDriveQuiet >= 0)  // the UI is moving the camera: its own camera stands (pushCamera)
+        {
+            mSynced = mCamera;
+            return;
+        }
         F64 distance = 3.2;
         if (isAgentAvatarValid())
             distance = (gAgent.getPosAgentFromGlobal(gAgentCamera.getFocusGlobal()) - cam->getOrigin()) * cam->getAtAxis();
@@ -1620,7 +1631,6 @@ namespace
         mCamera.yaw = std::atan2(-at.y, -at.x);
         mCamera.target = eye + at * distance;
         mSynced = mCamera;
-        mViewProj = vats::perspective(cam->getView(), cam->getAspect(), 0.05, 1024.0) * vats::look_at(eye, eye + at, up);
     }
 
     // Build 17: editing another actor than yours, the UI's space is that actor's. The camera is read again in the new
@@ -1631,6 +1641,7 @@ namespace
         if (same)
             return;
         mView = edited_in_yours;
+        mDriveQuiet = -1;  // the UI's camera is in the old space: read in the new one
         syncCamera();
     }
 
@@ -1722,12 +1733,23 @@ namespace
     {
         const bool same = (mCamera.target - mSynced.target).length() < 1e-5 && std::fabs(mCamera.yaw - mSynced.yaw) < 1e-6 &&
                           std::fabs(mCamera.pitch - mSynced.pitch) < 1e-6 && std::fabs(mCamera.distance - mSynced.distance) < 1e-6;
+        if (same && mDriveQuiet >= 0 && ++mDriveQuiet >= 2 && !gAgentCamera.getCameraAnimating())
+        {
+            // The move is over: the viewer's camera is read again from the next frame. Logged with the distance
+            // held against the viewer's, which should agree (a drift shows as a gap).
+            mDriveQuiet = -1;
+            LLViewerCamera* cam = LLViewerCamera::getInstance();
+            const F64 viewer = (gAgent.getPosAgentFromGlobal(gAgentCamera.getFocusGlobal()) - cam->getOrigin()) * cam->getAtAxis();
+            LL_INFOS("VATsEditor") << "camera move ended: distance " << mCamera.distance << " m, the viewer's " << viewer << " m" << LL_ENDL;
+        }
         if (same || !isAgentAvatarValid() || gAgentCamera.cameraMouselook())
             return;
+        mDriveQuiet = 0;
         const Vec3 at_eye = mCamera.ortho ? mCamera.target - mCamera.forward() * pullBack(mCamera.distance) : mCamera.eye();
         const LLVector3 eye = toAgent(at_eye), target = toAgent(mCamera.target);
         gAgentCamera.setFocusOnAvatar(false, false);
         gAgentCamera.setCameraPosAndFocusGlobal(gAgent.getPosGlobalFromAgent(eye), gAgent.getPosGlobalFromAgent(target), LLUUID::null);
+        gAgentCamera.stopCameraSmoothing();  // straight there: a smoothed camera lags the UI's
         if (mCamera.ortho)  // zoomed: the scene behind the focus stays within the draw distance
             gAgentCamera.mDrawDistance = mFarWas + F32(pullBack(mCamera.distance));
     }
@@ -1872,14 +1894,16 @@ namespace
         }
         mScene[0].verts.clear(), mScene[0].indices.clear();
         mScene[1].verts.clear(), mScene[1].indices.clear();
+        mOver[0].verts.clear(), mOver[0].indices.clear();
+        mOver[1].verts.clear(), mOver[1].indices.clear();
         mImages.clear();
         // Only logged in: before that the login page covers the world view, and there is no world depth to test against.
         mSceneOpen = target == vats::ui::SceneTarget::View && LLStartUp::getStartupState() >= STATE_STARTED && !mProgramFailed;
         return mSceneOpen;
     }
 
-    void ViewerHost::scene_triangles(const std::vector<vats::Vertex>& verts, const std::vector<std::uint32_t>& indices, bool,
-                                     float gloss, bool translucent)
+    void ViewerHost::scene_triangles(const std::vector<vats::Vertex>& verts, const std::vector<std::uint32_t>& indices,
+                                     bool depth_test, float gloss, bool translucent)
     {
         if (mOffOpen && !verts.empty())  // the face cam's: kept in the UI's space
         {
@@ -1898,7 +1922,8 @@ namespace
         }
         if (!mSceneOpen || verts.empty())
             return;
-        SceneBatch& b = mScene[translucent ? 1 : 0];
+        // Not depth tested (App::draw_bones over the world): kept apart, drawn after the world's triangles.
+        SceneBatch& b = (depth_test ? mScene : mOver)[translucent ? 1 : 0];
         const U32 base = U32(b.verts.size() / 11);
         b.verts.reserve(b.verts.size() + verts.size() * 11);
         for (const vats::Vertex& v : verts)
@@ -2158,7 +2183,8 @@ namespace
 
     void ViewerHost::drawScene()
     {
-        if (mScene[0].indices.empty() && mScene[1].indices.empty() && mImages.empty())
+        if (mScene[0].indices.empty() && mScene[1].indices.empty() && mOver[0].indices.empty() && mOver[1].indices.empty() &&
+            mImages.empty())
             return;
         if (!ensureProgram())
             return;
@@ -2188,6 +2214,20 @@ namespace
         glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
         drawBatches(mScene);
         drawImages(mvp, world_depth, world);
+        if (!mOver[0].indices.empty() || !mOver[1].indices.empty())
+        {
+            // The bone glyphs, as the app draws them: not against the world's depth (your avatar would hide them),
+            // closed solids wound counter-clockwise, so back faces are culled; opaque ones still hide each other, X-ray
+            // ones (translucent, sorted farthest first) have no depth at all.
+            glUseProgram(mProgram);
+            glUniform1i(mUseDepthLoc, 0);
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_BACK);
+            glFrontFace(GL_CCW);
+            if (!mOver[1].indices.empty())
+                glDisable(GL_DEPTH_TEST);
+            drawBatches(mOver);
+        }
     }
 
     void ViewerHost::drawBatches(const SceneBatch (&batches)[2])
@@ -2799,9 +2839,13 @@ namespace
 
     void ViewerHost::close()
     {
+        // Build 27: each step logged, so a hang after closing shows where it stopped.
+        auto step = [](const char* what) { LL_INFOS("VATsEditor") << "close: " << what << LL_ENDL; };
+        step("plan, walk test and seat selection");
         mMode = Mode::Hold;  // build 20: the in-world play and the walk test end with the editor (restore below)
         mOwnPlan.reset();
         mWalkState = 0;
+        mDriveQuiet = -1;  // no camera move of the UI's outlives it
         if (mSeatSelection)
         {
             if (LLViewerObject* root = gObjectList.findObject(mSeatCheckFor))
@@ -2809,17 +2853,25 @@ namespace
             mSeatSelection = nullptr;
         }
         mOffOpen = false;
+        step("lens and draw distance");
         set_orthographic(false);  // the viewer's lens, draw distance and camera distance back
+        step("viewer UI");
         showChrome();
         mViewRect = LLRect();
+        step("toasts");
         updateToasts();  // the toasts back in the viewer's own places
         mRevealed = false;
         gSavedSettings.setBOOL("VATsShowViewerUI", false);
+        step("other avatars");
         hideOthers(false);
+        step("editor motion");
         stopMotion();
         mBase.clear();
+        step("avatar hand-back");
         restore();
+        step("sound");
         stopSound();
+        step("sky");
         restoreSky();
         VATsClipMotion::sEditor = VATsClipMotion::Playback();
         mSkel = nullptr;
@@ -2829,6 +2881,7 @@ namespace
         mQuestions.clear();
         mUploadDone = nullptr;  // the confirmation may still come; it uploads, nobody is told
         mWavEnd = nullptr;
+        step("done");
     }
 
     // --- The editor --------------------------------------------------------------------------------------
@@ -2840,6 +2893,8 @@ namespace
     bool sQuit = false;                  // the UI chose to quit (App::frame returned false)
     bool sClosing = false;               // unticked in the menu: the UI was asked to quit
     bool sFailed = false;
+    S32 sFramesSinceClose = -1;          // build 27: the first frames after closing are logged (a hang after close)
+    U32 sLastLoggedFrame = 0;
 
     void editorBefore()
     {
@@ -2890,22 +2945,37 @@ namespace
 
     void closeNow()
     {
+        LL_INFOS("VATsEditor") << "closing the editor" << LL_ENDL;
+        // The avatar's motion reads the UI's skeleton: nothing to show from here (the UI and its skeleton go first).
+        VATsClipMotion::sEditor.skeleton = nullptr;
+        VATsClipMotion::sEditor.pose = nullptr;
         if (sApp)
         {
             sApp->shutdown();
+            LL_INFOS("VATsEditor") << "close: UI shut down" << LL_ENDL;
             sApp.reset();
+            LL_INFOS("VATsEditor") << "close: UI destroyed" << LL_ENDL;
         }
         sHost->close();
         FSVATsImGui::removeClient(CLIENT);
         ImGui::GetIO().ConfigFlags &= ~ImGuiConfigFlags_NavEnableKeyboard;
         sOpen = sQuit = sClosing = sFailed = false;
         gSavedSettings.setBOOL("VATsEditor", false);
+        sFramesSinceClose = 0;
+        sLastLoggedFrame = LLFrameTimer::getFrameCount();
         LL_INFOS("VATsEditor") << "editor closed" << LL_ENDL;
     }
 }
 
 void FSVATsEditor::update(bool want_open)
 {
+    if (sFramesSinceClose >= 0 && LLFrameTimer::getFrameCount() != sLastLoggedFrame)
+    {
+        sLastLoggedFrame = LLFrameTimer::getFrameCount();
+        LL_INFOS("VATsEditor") << "frame " << ++sFramesSinceClose << " after the editor closed" << LL_ENDL;
+        if (sFramesSinceClose >= 3)
+            sFramesSinceClose = -1;
+    }
     if (!sOpen)
     {
         if (want_open && !LLApp::isExiting())

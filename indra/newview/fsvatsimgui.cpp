@@ -342,6 +342,12 @@ namespace
         FSVATsImGui::destroyGL();
         ImGui::DestroyContext(sCtx);    // also writes the ini
         sCtx = nullptr;
+        // Build 27: a press ImGui took whose release has not come yet (the editor closed on it): let the mouse go, as
+        // that release would have, and forget the button (its release no longer reaches ImGui).
+        if (std::exchange(sCapturedButtons, 0u) && gViewerWindow && gViewerWindow->getWindow())
+        {
+            gViewerWindow->getWindow()->releaseMouse();
+        }
         LL_INFOS("VATsImGui") << "ImGui context destroyed" << LL_ENDL;
     }
 
