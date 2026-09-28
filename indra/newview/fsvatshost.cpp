@@ -1151,7 +1151,11 @@ namespace
             mResitAt = -1;
             if (stand)
                 gAgent.standUp();  // the viewer's own Stand Up; filterControls lets it through while walking
-            gAgentCamera.setFocusOnAvatar(true, true);  // the camera follows you again
+            // The camera follows you again. Refocusing resets the agent's axes to face the camera's way (setFocusOnAvatar's
+            // reset_axes, third person): the heading is put back, so the avatar walks off the way it stood.
+            const LLVector3 heading = gAgent.getAtAxis();
+            gAgentCamera.setFocusOnAvatar(true, true);
+            gAgent.resetAxes(heading);
             LL_INFOS("VATsEditor") << "walk test (" << (state == 1 ? "walk" : "run") << "): the avatar is yours to move"
                                    << (stand ? ", standing up" : "") << LL_ENDL;
             return true;

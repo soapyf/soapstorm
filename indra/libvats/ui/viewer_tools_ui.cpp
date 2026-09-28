@@ -80,6 +80,10 @@ void App::start_walk_test(int state) {
     }
     walk_was_in_world_ = in_world_;
     if (!in_world_) set_in_world(true);  // the claims the walk plays with
+    if (in_world_ && ui.own.joints.empty()) {  // nothing keyed: the test would only stand the avatar up
+        if (!walk_was_in_world_) set_in_world(false);
+        return status("Nothing to play as your walk: key a walk cycle first (Help > Loop Tools has an example walk)");
+    }
     if (!in_world_ || !host_.test_walk(state)) {
         if (!walk_was_in_world_) set_in_world(false);
         return status("This program cannot walk your avatar");
@@ -194,7 +198,8 @@ void App::draw_walk_test_window() {
                              : "Run with your usual keys. While you run, your animation plays as your run on your screen; "
                                "others see your ordinary run.");
         ImGui::Text("%s", l.moving ? (walk_test_ == 1 ? "Walking: your animation plays" : "Running: your animation plays")
-                                   : "Standing: your AO or the default stand plays");
+                                   : "Standing: your animation plays only while you move; your AO or the default "
+                                     "stand plays now");
         ImGui::Text("Ground speed %.2f m/s%s", l.moving ? ui.speed : l.speed, l.moving ? " (averaged)" : "");
         if (ui.gait.speed <= 0) {
             ImGui::TextDisabled("No foot contacts found in the %s: no stride speed", c.loop ? "loop" : "animation");

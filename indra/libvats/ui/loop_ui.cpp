@@ -67,10 +67,15 @@ void App::draw_onion_settings() {
 
 void App::draw_loop_tools_menu() {
     if (host_.world_view()) {  // spec 09 build 20, item 48: the viewer only
-        if (menu_item_icon(icon::kWalkTest, "Test as My Walk", nullptr, walk_test_ == 1)) start_walk_test(walk_test_ == 1 ? 0 : 1);
-        ImGui::SetItemTooltip("Walk for real: your animation plays as your walk on your screen, with your speed against its "
-                              "stride");
-        if (menu_item_icon(icon::kWalkTest, "Test as My Run", nullptr, walk_test_ == 2)) start_walk_test(walk_test_ == 2 ? 0 : 2);
+        const bool keyed = walk_test_ || !actor_clip(doc_.project, 0).curves.empty();
+        const char* nothing = "Nothing to play as your walk: key a walk cycle first (Help > Loop Tools has an example walk)";
+        if (menu_item_icon(icon::kWalkTest, "Test as My Walk", nullptr, walk_test_ == 1, keyed))
+            start_walk_test(walk_test_ == 1 ? 0 : 1);
+        ImGui::SetItemTooltip("%s", keyed ? "Walk for real: your animation plays as your walk on your screen, with your "
+                                            "speed against its stride" : nothing);
+        if (menu_item_icon(icon::kWalkTest, "Test as My Run", nullptr, walk_test_ == 2, keyed))
+            start_walk_test(walk_test_ == 2 ? 0 : 2);
+        if (!keyed) ImGui::SetItemTooltip("%s", nothing);
         ImGui::Separator();
     }
     const LoopRange r = loop_range(doc_.clip());
