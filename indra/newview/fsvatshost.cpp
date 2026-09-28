@@ -217,6 +217,8 @@ namespace
         bool thumbnail_pixels(std::vector<std::uint8_t>& rgba, int& width, int& height) override;
         bool scene_image(ImTextureID texture, const std::array<Vec3, 4>& corners, float opacity, bool backdrop) override;
         ImTextureID load_texture(const std::string& png) override;
+        ImTextureID make_texture(const std::uint8_t* rgba, int width, int height) override;
+        bool update_texture(ImTextureID texture, const std::uint8_t* rgba, int width, int height) override;
         void free_texture(ImTextureID texture) override;
         void set_light(const vats::LightPreset* preset) override;
 
@@ -2276,6 +2278,14 @@ namespace
                 q[3] = c == 4 ? p[3] : c == 2 ? p[1] : 255;
             }
         }
+        return make_texture(rgba.data(), w, h);
+    }
+
+    // The help's GIF frames (and load_texture's pictures): straight-alpha RGBA, top row first, into a plain GL texture.
+    ImTextureID ViewerHost::make_texture(const std::uint8_t* rgba, int width, int height)
+    {
+        if (!rgba || width <= 0 || height <= 0)
+            return ImTextureID{};
         GLint active = 0, bound = 0, align = 0;
         glGetIntegerv(GL_ACTIVE_TEXTURE, &active);
         glActiveTexture(GL_TEXTURE0);
@@ -2289,12 +2299,32 @@ namespace
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
         glPixelStorei(GL_UNPACK_ALIGNMENT, align);
         glBindTexture(GL_TEXTURE_2D, bound);
         glActiveTexture(active);
         mTextures.insert(tex);
         return ImTextureID(tex);
+    }
+
+    // The next frame of a help GIF, into the texture make_texture made for it (same size).
+    bool ViewerHost::update_texture(ImTextureID texture, const std::uint8_t* rgba, int width, int height)
+    {
+        const GLuint tex = GLuint(texture);
+        if (!rgba || width <= 0 || height <= 0 || !mTextures.count(tex))
+            return false;
+        GLint active = 0, bound = 0, align = 0;
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &active);
+        glActiveTexture(GL_TEXTURE0);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound);  // gGL's unit 0 keeps thinking this is bound: put it back
+        glGetIntegerv(GL_UNPACK_ALIGNMENT, &align);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, align);
+        glBindTexture(GL_TEXTURE_2D, bound);
+        glActiveTexture(active);
+        return true;
     }
 
     void ViewerHost::free_texture(ImTextureID texture)
