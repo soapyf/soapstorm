@@ -488,7 +488,7 @@ private:
                 if (r > 0.3 && b > 1e-12 && std::isfinite(b)) ratios.push_back(r / b);
             }
         }
-        if (!ratios.empty()) rig_scale = rig_scale_of(ratios, rep.measured_scale);
+        if (!ratios.empty()) rig_scale = rig_scale_of(ratios, rep.measured_scale, unit);
     }
 
     std::string find_texture(std::string raw) {
@@ -884,7 +884,7 @@ bool Loader::run(std::string_view text, std::string& err) {
 
 }  // namespace
 
-double rig_scale_of(std::vector<double> ratios, double& measured) {
+double rig_scale_of(std::vector<double> ratios, double& measured, double declared) {
     std::sort(ratios.begin(), ratios.end());
     const size_t h = ratios.size() / 2;
     measured = ratios.size() % 2 ? ratios[h] : (ratios[h - 1] + ratios[h]) / 2;
@@ -901,6 +901,9 @@ double rig_scale_of(std::vector<double> ratios, double& measured) {
     if (votes * 3 >= ratios.size()) return best;
     for (double u : units)
         if (near_unit(measured, u)) return u;
+    // No unit fits because the rig has its own proportions (a creature with moved joints): SL uploads it at the
+    // unit the file declares, so shrinking it to the median would draw it smaller than it is in-world.
+    if (declared > 0 && std::fabs(std::log(measured / declared)) < std::log(2.0)) return declared;
     return measured;
 }
 

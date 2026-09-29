@@ -219,7 +219,7 @@ static bool load_fbx(const std::vector<std::uint8_t>& bytes, const std::string& 
             double r = rest[n].pos.length(), d = vec(b.cols[3]).length();
             if (r > 0.3 && d > 1e-12 && std::isfinite(d)) ratios.push_back(r / d);
         }
-        if (!ratios.empty()) rig_scale = rig_scale_of(ratios, rep.measured_scale);
+        if (!ratios.empty()) rig_scale = rig_scale_of(ratios, rep.measured_scale, unit);
         model.binds = rest;
         bound.assign(count, false);
         for (auto& [c, n] : target) {

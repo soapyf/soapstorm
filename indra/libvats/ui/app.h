@@ -407,6 +407,13 @@ private:
     void load_bodies();
     void save_bodies() const;
     const MeshBody* mesh_body() const;  // the one shown instead of the Linden body, or null
+    // The world view's body swap (spec 09 build 32): the mesh body shown in your avatar's place, on your screen only, or
+    // null (none chosen, or none of its parts loads). It stays the export's "Your avatar" while swap_shown() is off.
+    const MeshBody* swap_body() const;
+    // It shows now: not while a mode that needs your real avatar runs (As It Plays In-World, the walk test, Place on
+    // Furniture Point). The app: always false.
+    bool swap_shown() const { return swap_body() && !in_world_ && !walk_test_ && !seat_pick_; }
+    const Shape* worn_shape() const { return swap_shown() ? nullptr : host_.body_shape(); }  // the worn avatar's, unless swapped
     void use_mesh_body(const std::string& id);
     void import_body(const std::vector<std::string>& paths);
     void draw_mesh_body(std::vector<Vertex>& verts, std::vector<std::uint32_t>& indices);

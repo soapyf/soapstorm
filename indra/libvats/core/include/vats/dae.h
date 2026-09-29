@@ -28,8 +28,9 @@ int map_skin_joint(const Skeleton& skel, std::string_view name);
 
 // §3.3.4 rig scale from rest / bind distance ratios (bones > 0.3 m out): the unit (1, 0.01, 0.001, 0.0254, 0.1,
 // 10, 100) that a third of the ratios lie within 5 % of, else the median snapped to a unit within 5 %, else the
-// median. measured gets the median.
-double rig_scale_of(std::vector<double> ratios, double& measured);
+// file's declared unit when the median is within a factor of 2 of it (a rig with its own proportions, which SL
+// uploads at that unit), else the median. measured gets the median.
+double rig_scale_of(std::vector<double> ratios, double& measured, double declared = 1);
 
 struct DaeMaterial {
     std::string name;  // the COLLADA material id, or "" for the default material

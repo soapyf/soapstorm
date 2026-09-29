@@ -987,7 +987,8 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
 
 // The world view (the viewer): the triangles the world lacks, which the host draws with the world (spec 09 U5): the
 // other actors' bodies (None, the default, draws nothing), the props, placed as in the app, and the edited actor's
-// bone glyphs, as the app draws them. The avatar is the viewer's own, so no body or ground.
+// bone glyphs, as the app draws them. The avatar is the viewer's own, so no body or ground, unless View > Body swaps a mesh
+// body in (spec 09 build 32): the host hides your avatar and this draws the mesh body in its place.
 void App::render_world_scene() {
     actor_pick_pos_.clear();
     actor_pick_idx_.clear();
@@ -997,6 +998,7 @@ void App::render_world_scene() {
     static std::vector<Vertex> verts;
     static std::vector<std::uint32_t> indices;
     draw_other_actors(colours);
+    if (!editing_other() && swap_shown() && !globals_.empty()) draw_mesh_body(verts, indices);  // your actor, swapped
     draw_target(colours);  // the target ghost: through the world's scene triangles, as the other actors
     // Editing another actor than yours: it stands at its place with its body, posed live (None: its bones only).
     if (editing_other() && !doc_.project.actors[doc_.project.active].body.empty() && !globals_.empty())

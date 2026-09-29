@@ -314,7 +314,7 @@ void App::draw_welcome() {
 // Export settings and immediate export
 
 std::string App::bake_shape_key(const Json& ex, bool yours) const {
-    const bool fitted = host_.body_shape() && !host_.joint_overrides().empty();
+    const bool fitted = swap_body() || (host_.body_shape() && !host_.joint_overrides().empty());
     const std::string key = json_str(ex, "shape", fitted ? "avatar" : "sl-default");
     return key == "avatar" && !yours ? "sl-default" : key;  // Your avatar belongs to the actor that is your avatar
 }
@@ -331,7 +331,10 @@ bool App::exporting_yours() const {
 }
 
 std::string App::bake_shape_label(const std::string& key) const {
-    if (key == "avatar") return host_.body_shape() ? "Your avatar" : "Your avatar (viewer only: SL Default here)";
+    if (key == "avatar") {
+        if (const MeshBody* b = swap_body()) return "Your avatar, swapped: " + b->name;  // spec 09 build 32
+        return host_.body_shape() ? "Your avatar" : "Your avatar (viewer only: SL Default here)";
+    }
     if (key.rfind("mesh:", 0) == 0) {
         const MeshBody* b = find_mesh_body(key.substr(5));
         return b ? "Mesh body: " + b->name : "Mesh body (missing)";
@@ -342,8 +345,10 @@ std::string App::bake_shape_label(const std::string& key) const {
 const Shape* App::export_shape() const {
     // "avatar": IK and pins bake on SL Default; only the moving joints' positions come from the worn avatar
     // (export_positions), so nothing else of it (scales, other joints) reaches the file.
+    // With the body swap (spec 09 build 32), "avatar" is the swapped body: IK, pins and positions bake on its own joints.
     const std::string key = bake_shape_key(doc_.clip().export_settings, exporting_yours());
     const Shape* female = &mesh_.sl_default(false).shape;
+    if (const MeshBody* b = key == "avatar" ? swap_body() : nullptr) return mesh_body_shape(*b, female);
     if (key.rfind("mesh:", 0) == 0)  // BD-3: a mesh body's joints over the SL default
         if (const MeshBody* b = find_mesh_body(key.substr(5))) return mesh_body_shape(*b, female);
     return key == "sl-default-male" ? &mesh_.sl_default(true).shape : female;
@@ -351,7 +356,8 @@ const Shape* App::export_shape() const {
 
 // Read live from the host at each export or upload; the project keeps only the choice "avatar".
 const Shape* App::export_positions() const {
-    return bake_shape_key(doc_.clip().export_settings, exporting_yours()) == "avatar" ? host_.body_shape() : nullptr;
+    if (bake_shape_key(doc_.clip().export_settings, exporting_yours()) != "avatar") return nullptr;
+    return swap_body() ? export_shape() : host_.body_shape();  // the swapped body's joints, or the worn avatar's
 }
 
 void App::draw_export_section() {
@@ -392,7 +398,7 @@ void App::draw_export_section() {
             auto pick = [&](const std::string& id, const std::string& text) {
                 if (ImGui::Selectable(text.c_str(), key == id) && key != id) set("shape", id);
             };
-            if (host_.body_shape()) pick("avatar", "Your avatar");  // the viewer: the worn avatar
+            if (host_.body_shape() || swap_body()) pick("avatar", bake_shape_label("avatar"));  // the viewer: the worn avatar, or the swap
             pick("sl-default", "SL Default");
             pick("sl-default-male", "SL Default (Male)");
             for (int k = 0; k < int(bodies_.size()); ++k) {  // two bodies may share a name
@@ -404,16 +410,24 @@ void App::draw_export_section() {
         }
         ImGui::SetItemTooltip("IK and pins are baked against this body, whatever the view shows. A mesh body uses the "
                               "joint positions it was rigged to.%s",
-                              host_.body_shape() ? "\nYour avatar: positions fitted to the head and body you wear now; "
+                              swap_body() ? "\nYour avatar, swapped: View > Body shows a mesh body in your avatar's place, so "
+                                            "IK, pins and position keys bake on that body's own joint positions. Choose "
+                                            "Your Avatar in View > Body to bake on the avatar you wear."
+                              : host_.body_shape() ? "\nYour avatar: positions fitted to the head and body you wear now; "
                                                    "other heads may look different. Only bones that move get positions; "
                                                    "IK and pins bake on SL Default." : "");
+        if (const MeshBody* b = key == "avatar" ? swap_body() : nullptr) {  // spec 09 build 32: said plainly, not only on hover
+            ImGui::SetCursorPosX(label_w);
+            hint(("Swapped body: bakes on " + b->name + "'s own joint positions, not your worn avatar's").c_str());
+        }
     }
     if (host_.world_view()) {  // the viewer: Your avatar is for the actor that is your avatar, unless this is on
         bool every = json_bool(ex, "avatar_all");
         ImGui::SetCursorPosX(label_w);
         if (ImGui::Checkbox("Use Your avatar for every actor", &every)) set("avatar_all", every);
         ImGui::SetItemTooltip("Off: only your avatar's actor (the first in the Actors window) bakes on Your avatar; the other "
-                              "actors of a couple or group use SL Default instead. On: every actor bakes against your worn avatar.");
+                              "actors of a couple or group use SL Default instead. On: every actor bakes against your worn avatar (or the "
+                              "body View > Body swaps in).");
     }
     bool both = json_bool(ex, "both"), count_up = json_bool(ex, "count_up"), mirrored = doc_.clip().mirror_export;
     ImGui::SetCursorPosX(label_w);
@@ -831,6 +845,8 @@ void App::draw_about() {
     if (ImGui::Begin("About Viewport Avatar Toolset", &show_about_, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking)) {
         ImGui::Text("Viewport Avatar Toolset %s", kVersion);
         ImGui::TextDisabled("An open-source animation editor for Second Life. LGPL-2.1.");
+        ImGui::TextDisabled("VATs is free. If you paid for it, you were misled: the official downloads are at");
+        ImGui::TextDisabled("github.com/squeedledorf/viewport-avatar-toolset/releases");
         ImGui::Separator();
         ImGui::BulletText("Skeleton, attachment points and avatar meshes: Second Life viewer data,");
         ImGui::TextDisabled("    (C) Linden Research, Inc., LGPL-2.1");

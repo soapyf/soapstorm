@@ -42,6 +42,7 @@ Xform App::actor_rel(int i) const {
 
 std::string App::actor_body_key(int i) const {
     const Project& p = doc_.project;
+    if (i == 0 && swap_shown()) return "mesh:" + settings_.mesh_body;  // the world view: your actor wears the swap
     if (i < int(p.actors.size()) && !p.actors[i].body.empty()) return p.actors[i].body;
     return settings_.mesh_body.empty() ? settings_.body : "mesh:" + settings_.mesh_body;
 }
@@ -60,7 +61,7 @@ void App::sync_active_body() {
 const Shape* App::actor_shape(int i) const {
     const Project& p = doc_.project;
     if (p.actors.size() < 2) return shape();
-    if (const Shape* worn = host_.body_shape(); worn && i == 0) return worn;  // the viewer: your actor is the worn avatar
+    if (const Shape* worn = worn_shape(); worn && i == 0) return worn;  // the viewer: your actor is the worn avatar
     const std::string b = actor_body_key(i);
     for (int k = 0; k < kBodyCount; ++k)
         if (b == kBodyIds[k]) return mesh_.shape(Body(k));
@@ -222,7 +223,8 @@ void App::apply_restore(History::Restore r) {
 // Other visible actors, dimmed and tinted with their colour, each with its own body: None (the default) draws nothing
 // but the actor's props, Ruth is the SL default body, a mesh body its imported parts. An actor with nothing to draw is
 // not evaluated. In the world view your actor (the first) is the worn avatar: only its props are drawn, and its bones
-// are kept for picking; the edited actor, when it is another, is drawn here with its body too (render_world_scene).
+// are kept for picking; with the body swap, its swapped body is drawn too. The edited actor, when it is another, is drawn
+// here with its body too (render_world_scene).
 void App::draw_other_actors(const SceneColours& colours) {
     const Project& p = doc_.project;
     actor_pick_pos_.assign(p.actors.size(), {});
@@ -235,7 +237,7 @@ void App::draw_other_actors(const SceneColours& colours) {
     for (int i = 0; i < int(p.actors.size()); ++i) {
         const Actor& a = p.actors[i];
         if (i == p.active || a.hidden) continue;
-        const bool worn = world && i == 0;
+        const bool worn = world && i == 0, swapped = worn && swap_shown();
         const auto& props = actor_clip(p, i).props;
         if (a.body.empty() && !worn && std::none_of(props.begin(), props.end(), [](const Prop& pr) { return pr.visible; })) continue;
         Evaluation e = evaluate_actor(i, frame_);
@@ -243,8 +245,8 @@ void App::draw_other_actors(const SceneColours& colours) {
         for (Xform& g : e.globals) g = rel * g;
         for (const Prop& prop : props)  // their props, at their place
             if (prop.visible) draw_prop(prop, verts, idx, &e.globals, actor_shape(i), 0.7f, rel);
+        if (swapped || (!worn && !a.body.empty())) draw_actor_body(i, e.globals, colours, false);  // None draws nothing
         if (worn) other_skeletons_.push_back({std::move(e.globals), a.colour, i, false});
-        else if (!a.body.empty()) draw_actor_body(i, e.globals, colours, false);  // None draws nothing
     }
 }
 
@@ -639,6 +641,8 @@ void App::draw_actors_panel() {
         ImGui::EndCombo();
     }
     hint("None: nothing (its bones while edited), Ruth: the SL default body.");
+    if (host_.world_view() && p.active == 0)
+        hint("Here your actor is your avatar, whatever this says; View > Body shows a mesh body in its place.");
 
     // Placement: drag the fields; one undo step per drag.
     ImGui::SeparatorText("Placement from the sit target");

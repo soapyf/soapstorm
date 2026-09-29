@@ -135,6 +135,10 @@ included, plus the move.
   placed where they sit on yours.
 - In the standalone app, **Your avatar** is not offered. A project that chose it exports as **SL Default**, and
   **Bake shape** shows `Your avatar (viewer only: SL Default here)`.
+- While **View → Body** shows a mesh body in your avatar's place (the viewer, see
+  [[VATs Editor (viewer)#Another body in your avatar's place]]), **Your avatar** is that body: IK, pins and the
+  position keys bake on its own joint positions, and **Bake shape** reads `Your avatar, swapped:` and its name.
+  It is the default then.
 - In a [[Couples and groups|couple or group]], **Your avatar** is for the actor you are editing, the one your
   avatar shows. Another actor whose **Bake shape** is **Your avatar** bakes on **SL Default** instead, unless **Use
   Your avatar for every actor** (the viewer only, under **Bake shape**) is on; then every actor bakes against your

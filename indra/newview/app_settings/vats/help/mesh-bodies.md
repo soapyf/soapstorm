@@ -7,9 +7,10 @@ shares or uploads them.
 
 > Related articles: [[Props]], [[Export to Second Life]], [[IK]], [[Hold and bind]], [[Skeleton]]
 
-> **Note:** In the [[VATs Editor (viewer)]] the mesh body you wear is your own body, and its joint
-> positions come from your avatar. A body imported here is for the other actors of a
-> [[Couples and groups|couple or group]], chosen as their **Body** in the **Actors** window.
+> **Note:** In the [[VATs Editor (viewer)]] your body is the avatar you wear, until **View → Body**
+> shows an imported body in its place, on your screen only: see
+> [[VATs Editor (viewer)#Another body in your avatar's place]]. Imported bodies are also for the other
+> actors of a [[Couples and groups|couple or group]], chosen as their **Body** in the **Actors** window.
 
 ## Usage
 
@@ -37,11 +38,17 @@ Body**, **Add as Prop** or **Cancel**.
 - In **Inventory → Bodies**, double-click a body, or **Linden body** to go back. Hover a body to see its
   files.
 - **View → Body** lists the Linden shapes (**SL Default**, **SL Default (Male)**, **Female**, **Male**,
-  **Skeleton Only**) and, under **Mesh bodies**, your bodies.
+  **Skeleton Only**) and, under **Mesh bodies**, your bodies. In the viewer it lists **Your Avatar** and
+  your bodies, and a body chosen there shows in your avatar's place.
 - Right-click a body for **Use** or **Remove from Inventory**. Removing it does not delete the mesh
   files.
 
 The body shown is a preference, not part of the project.
+
+### Any rigged mesh: creatures too
+
+A body does not have to be a human devkit. Any mesh rigged to the SL skeleton imports the same way, a
+creature with its own proportions included, and shows at the size its rig declares.
 
 ### Pose on the body's proportions
 
@@ -51,7 +58,8 @@ has.
 
 What the view shows does not change the export. To bake IK and pins against the body, set
 **Properties → Export → Bake shape** to **Mesh body:** and the body's name; see
-[[Export to Second Life#Choose the bake shape]].
+[[Export to Second Life#Choose the bake shape]]. In the viewer, a body shown in your avatar's place is
+what **Your avatar** bakes on, position keys included.
 
 ### Export a devkit from Blender
 

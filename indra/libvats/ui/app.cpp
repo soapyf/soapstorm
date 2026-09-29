@@ -1549,21 +1549,32 @@ void App::draw_menus() {
                               "is not animated by the tracking meanwhile");
         ImGui::Separator();
         if (begin_menu_icon(icon::kWalkTest, "Body")) {
-            // SL defaults first: they are what people see in-world.
             const bool linden = !mesh_body();
-            for (Body b : {Body::SLDefault, Body::SLDefaultMale, Body::Female, Body::Male, Body::SkeletonOnly})
-                if (ImGui::MenuItem(kBodyNames[int(b)], nullptr, linden && body_ == b)) {
-                    set_body(int(b));
-                    if (!linden) use_mesh_body("");
-                }
+            if (host_.world_view()) {  // spec 09 build 32: your avatar, or a mesh body in its place on your screen only
+                if (ImGui::MenuItem("Your Avatar", nullptr, linden)) use_mesh_body("");
+                ImGui::SetItemTooltip("The avatar you wear, as everyone sees it");
+            } else {  // SL defaults first: they are what people see in-world.
+                for (Body b : {Body::SLDefault, Body::SLDefaultMale, Body::Female, Body::Male, Body::SkeletonOnly})
+                    if (ImGui::MenuItem(kBodyNames[int(b)], nullptr, linden && body_ == b)) {
+                        set_body(int(b));
+                        if (!linden) use_mesh_body("");
+                    }
+            }
             if (!bodies_.empty()) {
                 ImGui::SeparatorText("Mesh bodies");
                 for (int k = 0; k < int(bodies_.size()); ++k) {  // two bodies may share a name
                     const MeshBody& mb = bodies_[k];
                     ImGui::PushID(k);
                     if (ImGui::MenuItem(mb.name.c_str(), nullptr, settings_.mesh_body == mb.id)) use_mesh_body(mb.id);
+                    if (host_.world_view())
+                        ImGui::SetItemTooltip("Shown in your avatar's place on your screen only; nothing is sent. It poses on "
+                                              "its own joint positions, and Bake shape Your avatar exports with them. As It "
+                                              "Plays In-World, the walk test and Place on Furniture Point show your real "
+                                              "avatar while they run.");
                     ImGui::PopID();
                 }
+            } else if (host_.world_view()) {
+                ImGui::TextDisabled("Import a mesh body in Inventory > Bodies");
             }
             ImGui::EndMenu();
         }
@@ -1949,6 +1960,7 @@ void App::evaluate() {
         }
         rig_->external = ours;
     }
+    if (host_.world_view()) host_.hide_avatar(swap_shown());  // spec 09 build 32: the body swap
     if (host_.world_view() && editing_other()) {
         // The worn avatar is your actor (the first): it plays its own animation while another is edited.
         const Project& p = doc_.project;

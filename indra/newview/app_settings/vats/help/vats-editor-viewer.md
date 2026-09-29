@@ -144,6 +144,30 @@ plays:
 Choose it again, or close its window, and the editor holds your avatar alone again: every other motion stops and
 the editor's pose shows on every joint. In the app, the [[Priority planner]] answers the same question from files.
 
+### Another body in your avatar's place
+
+**View → Body** shows **Your Avatar** and, under **Mesh bodies**, every body you imported under **Inventory →
+Bodies** (see [[Mesh bodies]]): a devkit's parts, or any rigged `.dae` or `.fbx`, a creature too. Choose one and
+the editor shows that body where your avatar stands, posed by your animation:
+
+- **On your screen only.** Your avatar and everything you wear on it are hidden on your screen while the swap is
+  on; your HUDs stay. Nothing is sent to the region: other residents see your avatar as before, sitting on the
+  ground.
+- **Its own proportions.** The body poses on the joint positions it was rigged to, not your avatar's, so a tall
+  creature stands at its full height and IK and pins reach where its limbs really are.
+- **Export and upload.** With **Bake shape** at **Your avatar** (the default while a body is swapped in),
+  exports and uploads bake on the swapped body: IK, pins and position keys use its own joint positions. The
+  **Export** section says so under **Bake shape** ("Your avatar, swapped: ..."). Choose **Your Avatar** in
+  **View → Body** to bake on the avatar you wear again.
+- **Modes that need your real avatar show it again while they run** and bring the swapped body back after:
+  **View → As It Plays In-World**, **Tools → Loop Tools → Test as My Walk / Run**, and **Place on Furniture
+  Point** while it waits for your click.
+- **Closing the editor always shows your avatar again.** The choice is kept for the next time you open the
+  editor.
+
+**View → Body → Your Avatar** turns the swap off. In the **Actors** window, your actor's own **Body** does not
+apply in the viewer: your actor is your avatar, or the body swapped in.
+
 ### Other avatars while the editor is open
 
 Every other avatar is hidden on your screen while the editor is open, friends too, with their attachments
@@ -202,8 +226,9 @@ bone or a panel takes the click, not the editor.
 - **[[Props]]** are drawn with the world, lit simply and hidden where the world is in front of them: add,
   attach, place and move them as in the app. They are on your screen only; nothing is rezzed.
 - **[[Onion skin]]** ghosts are bone lines, blue before the current frame and orange after.
-- **[[Target ghost]]**: drawn in the world as the other actors' bodies are, see-through green, in the body chosen
-  under **View → Body** (the viewer can't draw a copy of the avatar you wear), with its bones as thin green lines.
+- **[[Target ghost]]**: drawn in the world as the other actors' bodies are, see-through green, with its bones as thin
+  green lines: in the mesh body chosen under **View → Body**, or the Second Life default body with **Your Avatar**
+  (the viewer can't draw a copy of the avatar you wear).
 - **Collision volumes** are three rings each, with **View → Bones → Show Collision Volumes** on.
 - **Attachment points.** Hover a point's dot: the label lists what you wear there, by name. When the point
   is keyed, it also warns that in-world the animation moves what you wear there.
@@ -282,7 +307,7 @@ The editor takes its colours from the viewer's skin and follows it when the skin
 
 | Feature | App | Viewer |
 |---|---|---|
-| Body | VATs' avatar, or a [[Mesh bodies|devkit mesh body]] | your own avatar and the mesh body you wear |
+| Body | VATs' avatar, or a [[Mesh bodies|devkit mesh body]] | your own avatar, or a [[Mesh bodies|mesh body]] shown in its place on your screen only (**View → Body**) |
 | [[Props]] | imported `.dae` and `.fbx` props and the starter props | the same, on your screen only |
 | 3D view | its own, with its own camera controls per preset | the world, with the viewer's camera controls |
 | [[Control presets]] | all four, picked in **Preferences** | **Second Life** only, matching the viewer's own controls; no picker, and your own keys still apply |

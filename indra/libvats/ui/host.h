@@ -152,8 +152,13 @@ public:
     // this; the identity while you edit your own actor.
     virtual void set_view_frame(const Xform& edited_in_yours) { (void)edited_in_yours; }
     // With world_view: the proportions of the body the host shows (the worn avatar), which the view's
-    // evaluation uses instead of the UI's own body; null = the UI's own.
+    // evaluation uses instead of the UI's own body (except while hide_avatar swaps in a body of the UI's); null = the
+    // UI's own.
     virtual const Shape* body_shape() const { return nullptr; }
+    // With world_view, once a frame: true while the UI draws your actor's body itself in your avatar's place (View > Body,
+    // a mesh body; spec 09 build 32). The host then hides your avatar and its attachments on this screen only (nothing
+    // goes to the region) and shows them again with false, and when the editor closes.
+    virtual void hide_avatar(bool hide) { (void)hide; }
     // The joints whose position a worn mesh overrides (its joint positions, e.g. a mesh head's face bones),
     // by skeleton name; empty = none or unknown. Only names: export warns with it, and never writes the positions.
     virtual std::vector<std::string> joint_overrides() const { return {}; }

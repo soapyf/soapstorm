@@ -69,8 +69,16 @@ const App::MeshBody* App::find_mesh_body(const std::string& id) const {
     return nullptr;
 }
 
+const App::MeshBody* App::swap_body() const {
+    const MeshBody* b = host_.world_view() ? mesh_body() : nullptr;
+    if (b)  // a devkit on a drive not mounted: your avatar stays
+        for (const std::string& path : b->parts)
+            if (const_cast<App*>(this)->prop_model(path)) return b;  // ponytail: the model cache is the only state touched
+    return nullptr;
+}
+
 const Shape* App::shape() const {
-    if (const Shape* worn = host_.body_shape()) {  // the viewer: your actor is the avatar in the world
+    if (const Shape* worn = worn_shape()) {  // the viewer: your actor is the avatar in the world (unless swapped)
         if (!editing_other()) return worn;
         return actor_shape(doc_.project.active);  // another actor: the proportions of the body it is drawn with
     }
@@ -117,6 +125,10 @@ void App::use_mesh_body(const std::string& id) {
     session_body_.reset();  // chosen in the app: saved as usual
     save_settings();
     const MeshBody* b = mesh_body();
+    if (host_.world_view())  // spec 09 build 32: the body swap
+        return status(!b ? "Showing your avatar again"
+                      : swap_body() ? "Showing " + b->name + " in your avatar's place, on your screen only (nothing is sent)"
+                                    : b->name + ": none of its parts could be read, so your avatar stays");
     status(b ? "Showing " + b->name + " (the Linden body is hidden)" : "Showing the Linden body");
 }
 
@@ -170,9 +182,12 @@ void App::draw_mesh_body(std::vector<Vertex>& verts, std::vector<std::uint32_t>&
 void App::draw_bodies_section() {
     if (!inventory_section("Bodies")) return;
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped("Pose on your own mesh body by importing its devkit's rigged parts. Double-click to switch.");
+    const bool world = host_.world_view();
+    ImGui::TextWrapped(world ? "Import a devkit's rigged parts, or any rigged mesh such as a creature, and double-click it to "
+                               "show it in your avatar's place, on your screen only."
+                             : "Pose on your own mesh body by importing its devkit's rigged parts. Double-click to switch.");
     ImGui::PopStyleColor();
-    if (ImGui::Selectable("Linden body", settings_.mesh_body.empty(), ImGuiSelectableFlags_AllowDoubleClick) &&
+    if (ImGui::Selectable(world ? "Your avatar" : "Linden body", settings_.mesh_body.empty(), ImGuiSelectableFlags_AllowDoubleClick) &&
         ImGui::IsMouseDoubleClicked(0))
         use_mesh_body("");
     int remove = -1;

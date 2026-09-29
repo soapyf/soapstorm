@@ -45,6 +45,9 @@ namespace FSVATsEditor
     // True while the editor holds your avatar (logged in, editor open). audio_update_wind fades the flight wind out
     // then, as when not flying (spec 09 U5).
     bool holdsAvatar();
+    // Build 32: true while View > Body shows a mesh body in your avatar's place (the editor holds your avatar):
+    // LLVOAvatar::isVisible hides your own avatar and, with it, its attachments, on this screen only.
+    bool hidesYourAvatar();
     // True while the editor hides every other avatar (spec 09 U5): it turns on the viewer's Render Only Friends
     // (RenderAvatarFriendsOnly) and LLVOAvatar::isBuddy answers false, so friends are hidden too; never your own.
     bool hidesOtherAvatars();

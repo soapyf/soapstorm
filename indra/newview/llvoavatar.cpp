@@ -9678,6 +9678,7 @@ bool LLVOAvatar::isVisible() const
     {
         return false;
     }
+    if (isSelf() && FSVATsEditor::hidesYourAvatar()) return false; // VATs editor: its body swap shows another body in your place
     static LLCachedControl<bool> friends_only(gSavedSettings, "RenderAvatarFriendsOnly", false);
     return mDrawable.notNull()
         && (!mOrphaned || isSelf())

@@ -511,6 +511,10 @@ namespace
         bool world_view() const override { return true; }
         bool pointer_on_world() const override { return FSVATsImGui::pointerOnWorld(); }
         const vats::Shape* body_shape() const override { return mHaveShape ? &mShape : nullptr; }
+        // Build 32: View > Body swaps a mesh body in, drawn by the UI through scene_triangles; your avatar and its
+        // attachments are hidden on this screen meanwhile (LLVOAvatar::isVisible), nothing is sent.
+        void hide_avatar(bool hide) override;
+        bool hidesYours() const { return mHideYours && holdsAvatar(); }
         void set_view_frame(const vats::Xform& edited_in_yours) override;
         std::vector<std::string> joint_overrides() const override;
         std::vector<vats::PlanClip> running_motions() const override;
@@ -672,6 +676,7 @@ namespace
         bool mUiWasVisible = true;       // the viewer's UI was showing before (its own Show UI toggle)
         bool mStandWas = false;          // the Stand / Stop Flying buttons showed (or the viewer showed them since)
         bool mRevealed = false;          // Show SoapStorm UI is on
+        bool mHideYours = false;         // build 32: your avatar hidden while the UI shows a swapped body in its place
         bool mHidingOthers = false;      // other avatars hidden (spec 09 U5), and Render Only Friends as it was before
         bool mFriendsOnlyWas = false;
         std::vector<LLHandle<LLFloater>> mHiddenFloaters;  // floaters hidden since, shown again on close
@@ -2675,6 +2680,17 @@ namespace
         LL_INFOS("VATsEditor") << "viewer UI shown again" << LL_ENDL;
     }
 
+    // Build 32 (View > Body, a mesh body): your avatar and its attachments hidden on this screen while the UI draws the
+    // swapped body in their place; LLVOAvatar::isVisible asks hidesYours. Nothing reaches the region.
+    void ViewerHost::hide_avatar(bool hide)
+    {
+        if (hide == mHideYours)
+            return;
+        mHideYours = hide;
+        LL_INFOS("VATsEditor") << (hide ? "body swap on: your avatar is hidden on this screen while the editor holds it"
+                                        : "body swap off: your avatar shows again") << LL_ENDL;
+    }
+
     // Spec 09 U5: the viewer's own Render Only Friends (Developer > Avatar > Character Tests > Render Only Friends,
     // RenderAvatarFriendsOnly, not persisted): an avatar it hides draws nothing, with its attachments, shadow and name
     // tag (LLVOAvatar::isVisible, the avatar draw pool, idleUpdateNameTag). With hidesOtherAvatars, isBuddy answers
@@ -2896,6 +2912,7 @@ namespace
         gSavedSettings.setBOOL("VATsShowViewerUI", false);
         step("other avatars");
         hideOthers(false);
+        hide_avatar(false);  // build 32: your own avatar shows again, whatever the body swap
         step("editor motion");
         stopMotion();
         mBase.clear();
@@ -3068,6 +3085,11 @@ void FSVATsEditor::releaseGL()
 bool FSVATsEditor::hidesOtherAvatars()
 {
     return sHost && sHost->hidingOthers();
+}
+
+bool FSVATsEditor::hidesYourAvatar()
+{
+    return sHost && sApp && sHost->hidesYours();
 }
 
 bool FSVATsEditor::holdsAvatar()
