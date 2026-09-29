@@ -1,3 +1,8 @@
+# What's new in 0.1.1
+
+- **Creatures import at their real size.** A rigged mesh with its own proportions (a hutt, a mech) keeps the unit its file declares, as Second Life does, instead of being shrunk to fit.
+- **In SoapStorm: another body in your avatar's place.** View > Body shows a mesh body where you stand, on your screen only, posed on its own joints.
+
 # What's new in 0.1.0
 
 ## Posing

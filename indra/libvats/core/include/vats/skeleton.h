@@ -67,6 +67,21 @@ struct Pose {
     explicit Pose(size_t n = 0) : rot(n), offset(n) {}
 };
 
+// Spec 09 build 35: the avatar size every SL viewer computes from the joints (LLAvatarAppearance::computeBodySize),
+// from their local positions (rest, the shape's offsets and the pose's: an animation's position keys count) and
+// the shape's scales. The viewer stands the root pelvis_to_foot above the ground's collision height and centres
+// height on the agent's position, which the region keeps at the shape's own size (a viewer in a region with
+// server-side appearance never sends it this one): an animation that makes height taller by d lowers the wearer by
+// d / 2 on every viewer from the next time an animation starts or stops on it (when the viewer recomputes it), its own
+// end included, and for as long as the joints keep those positions (after it ends too: nothing puts them back).
+struct SlBodySize {
+    double pelvis_to_foot = 0;  // LL's formula as it is: the hip's height counts with the sign of the leg's
+    double height = 0;          // pelvis_to_foot plus the torso, chest, neck, head and skull above the pelvis
+};
+
+class Skeleton;
+SlBodySize sl_body_size(const Skeleton& skel, const Pose* pose = nullptr, const Shape* shape = nullptr);
+
 class Skeleton {
 public:
     // Loads from the text of avatar_skeleton.xml and avatar_lad.xml.
@@ -103,10 +118,15 @@ public:
     std::vector<Xform> global_pose(const Pose& pose, const Shape* shape = nullptr) const;
     // Spec 09 build 34: the pose an avatar shows in the world, read back from its joints, as a Pose like the editor's.
     // local: each node's rotation in its parent's frame as the avatar holds it now, the pelvis's in the actor's space
-    // (nodes past its end stay at rest); pelvis: where the pelvis stands in the actor's space (feet at the origin).
-    // Rotations become rotations from rest and the pelvis's place its offset from rest; no other joint is offset, so
-    // global_pose(result, shape) poses any body on its own joint positions, with these rotations and this hip travel.
-    Pose pose_from_live(const std::vector<Quat>& local, const Vec3& pelvis) const;
+    // (nodes past its end stay at rest); pelvis: where the pelvis stands in the actor's space; rest: where that avatar's
+    // own pelvis rests there (build 35: its root, whatever its shape or the frame). Rotations become rotations from rest
+    // and the hip's travel from its own rest the pelvis's offset; no other joint is offset, so global_pose(result, shape)
+    // poses any body on its own joint positions and pelvis height, with these rotations and this hip travel.
+    Pose pose_from_live(const std::vector<Quat>& local, const Vec3& pelvis, const Vec3& rest) const;
+    // Spec 09 build 35: where a worn avatar's pelvis rests in actor space, the ground at z = 0. The viewer stands an
+    // avatar's root (its pelvis) sl_body_size().pelvis_to_foot above the ground, so an avatar whose legs and hips put
+    // it higher than the SL default's rests that much above the default's pelvis.
+    Vec3 worn_pelvis_rest(double worn_pelvis_to_foot) const;
     // Local transform of one node (rest and pose applied, shape offsets and parent scale).
     Xform local_xform(int i, const Pose& pose, const Shape* shape = nullptr) const;
 

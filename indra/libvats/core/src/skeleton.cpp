@@ -3,6 +3,7 @@
 #include "vats/skeleton.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <cctype>
 #include <cstdio>
@@ -314,11 +315,42 @@ Xform Skeleton::local_xform(int i, const Pose& pose, const Shape* shape) const {
     return {n.rest * pose.rot[i], t};
 }
 
-Pose Skeleton::pose_from_live(const std::vector<Quat>& local, const Vec3& pelvis) const {
+Pose Skeleton::pose_from_live(const std::vector<Quat>& local, const Vec3& pelvis, const Vec3& rest) const {
     Pose p(nodes_.size());
     for (size_t i = 0; i < nodes_.size() && i < local.size(); ++i) p.rot[i] = (nodes_[i].rest.conj() * local[i]).normalized();
-    if (!nodes_.empty()) p.offset[0] = pelvis - nodes_[0].pos;
+    if (!nodes_.empty()) p.offset[0] = pelvis - rest;
     return p;
+}
+
+Vec3 Skeleton::worn_pelvis_rest(double worn_pelvis_to_foot) const {
+    if (nodes_.empty()) return {};
+    return nodes_[0].pos + Vec3{0, 0, worn_pelvis_to_foot - sl_body_size(*this).pelvis_to_foot};
+}
+
+SlBodySize sl_body_size(const Skeleton& skel, const Pose* pose, const Shape* shape) {
+    // The joint's position in its parent's frame (LLJoint::getPosition) and its scale (getScale), by name.
+    auto at = [&](const char* name, Vec3* scale) {
+        const int i = skel.find(name);
+        if (i < 0 || skel[i].name != name) {
+            if (scale) *scale = {1, 1, 1};
+            return Vec3{};
+        }
+        Vec3 p = skel[i].pos;
+        if (pose && size_t(i) < pose->offset.size()) p += pose->offset[size_t(i)];
+        if (shape && size_t(i) < shape->offset.size()) p += shape->offset[size_t(i)];
+        if (scale) *scale = shape && size_t(i) < shape->scale.size() ? shape->scale[size_t(i)] : Vec3{1, 1, 1};
+        return p;
+    };
+    Vec3 pelvis_s, neck_s, chest_s, head_s, torso_s, hip_s, knee_s, ankle_s;
+    at("mPelvis", &pelvis_s);
+    const Vec3 skull = at("mSkull", nullptr), neck = at("mNeck", &neck_s), chest = at("mChest", &chest_s);
+    const Vec3 head = at("mHead", &head_s), torso = at("mTorso", &torso_s), hip = at("mHipLeft", &hip_s);
+    const Vec3 knee = at("mKneeLeft", &knee_s), ankle = at("mAnkleLeft", &ankle_s), foot = at("mFootLeft", nullptr);
+    SlBodySize b;
+    b.pelvis_to_foot = hip.z * pelvis_s.z - knee.z * hip_s.z - ankle.z * knee_s.z - foot.z * ankle_s.z;
+    b.height = b.pelvis_to_foot + std::sqrt(2.0) * (skull.z * head_s.z) + head.z * neck_s.z + neck.z * chest_s.z +
+               chest.z * torso_s.z + torso.z * pelvis_s.z;
+    return b;
 }
 
 std::vector<Xform> Skeleton::global_pose(const Pose& pose, const Shape* shape) const {

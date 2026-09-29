@@ -135,7 +135,10 @@ plays:
 - Your animation plays at its own priorities, and only on the joints its upload keys: its priority, or a joint's
   own, as **Export SL .anim** writes them. Each joint goes to the highest priority, on equal priority to the one
   started last, so your AO may win joints your animation keys at a lower priority.
-- The avatar stays sat on the ground and drawn where it was, as before; nothing is sent to the region.
+- If the editor sat your avatar on the ground, it stands up meanwhile (the viewer's own **Stand Up**, as the walk
+  test does), so your animation plays on a standing avatar, as it will in-world, and not over the ground sit's
+  low hip. It sits down again when you turn the mode off. It stays drawn where it was; nothing else is sent to the
+  region. Seated on furniture, or on the ground before you opened the editor, it stays seated.
 - With a mesh body swapped in under **View → Body**, all of this plays on the body, in your avatar's place,
   unless **View → Body → Keep in Real-Avatar Modes** is off (see [[#Another body in your avatar's place]]).
 - The **As It Plays In-World** window lists every joint something animates: the motion that drives it and at what
@@ -165,8 +168,9 @@ the editor shows that body where your avatar stands, posed by your animation:
   Plays In-World**, **Tools → Loop Tools → Test as My Walk / Run**, and **Place on Furniture Point** while it
   waits for your click, the body is posed by what your avatar really does, not by the editor: your AO and the
   animations the region plays on you, your walk as you move with your keys, the sit of the furniture you sit
-  on. Its hip goes where your avatar's goes, so it walks across the region with you and sits down with you,
-  and it keeps its own proportions. Your real avatar stays hidden meanwhile. This is **View → Body → Keep in
+  on. Its hip moves as your avatar's moves from its own rest, so it walks across the region with you and sits
+  down with you, and it keeps its own proportions. It stands on the ground on its own feet whatever shape you
+  wear: longer legs, taller hips, a longer neck or a taller head change nothing. Your real avatar stays hidden meanwhile. This is **View → Body → Keep in
   Real-Avatar Modes**, on unless you untick it; the choice is kept. Off, those modes show your real avatar
   while they run and bring the swapped body back after.
 - **Closing the editor always shows your avatar again.** The choice is kept for the next time you open the

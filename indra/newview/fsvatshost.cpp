@@ -587,6 +587,7 @@ namespace
         int mWalkState = 0;                      // 1 walk, 2 run
         bool locomoting() const;                 // the region plays the tested walk or run on you now
         void sitForEditor(LLVOAvatarSelf* avatar);  // the hold's ground sit (not flying, not already seated)
+        bool standFromEditorSit(LLVOAvatarSelf* avatar);  // build 35: As It Plays In-World and the walk test stand
         S32 restartStopped(LLVOAvatarSelf* avatar);  // the motions isolate stopped that are still wanted, started again
         LLViewerObject* seatRoot() const;        // the root prim of what your avatar sits on, or null
         void pollSeatCheck();                    // check_seat's selection: read who made each part once it arrives
@@ -621,7 +622,14 @@ namespace
         void syncCamera();  // the UI's camera and projection from LLViewerCamera, in the UI's space
         // VATs' space has its origin at the feet (the pelvis rests 1.067 m up); the viewer's mRoot sits where
         // the pelvis rests.
-        Vec3 pelvisRest() const { return mSkel && mSkel->size() ? (*mSkel)[0].pos : Vec3{ 0, 0, 1.067 }; }
+        // Build 35: with a body swapped in, the ground under the root is at VATs' z = 0 (the body's own feet), whatever
+        // the worn avatar's legs: the viewer stands its root pelvis_to_foot above the ground (worn_pelvis_rest).
+        Vec3 pelvisRest() const
+        {
+            if (!mSkel || !mSkel->size())
+                return Vec3{ 0, 0, 1.067 };
+            return mHideYours && mFrameFoot > 0.f ? mSkel->worn_pelvis_rest(mFrameFoot) : (*mSkel)[0].pos;
+        }
         // Ortho: how far the telephoto's eye stands from the focus for the UI's logical distance (same framing there).
         double pullBack(double logical) const { return logical * std::tan(mLensFov / 2) / std::tan(ORTHO_FOV / 2); }
         void drawImages(const glm::mat4& mvp, U32 world_depth, const LLRect& world);  // drawScene: the scene_image quads
@@ -660,6 +668,12 @@ namespace
         const LLVOAvatarSelf* mIsolatedOn = nullptr;
         std::set<LLUUID> mStopped;
         bool mWeSat = false;
+        // Build 35: As It Plays In-World and the walk test stand the avatar the editor sat; the hold sits it down again.
+        bool mSitWhenHeld = false;
+        // Build 35: the worn avatar's pelvis_to_foot (LLVOAvatar) when the frame was taken, so a swapped body stands on
+        // the ground the root stands above; <= 0: unknown (no avatar, or seated on an object).
+        F32 mFrameFoot = 0.f;
+        bool mFootPinned = false;
         // U4b: the region standing up an avatar the editor sat (re-sit once, then close), flying, the camera.
         bool mSatSeen = false;           // the sit the editor asked for has arrived
         int mRegionStands = 0;
@@ -894,7 +908,15 @@ namespace
             local[i] = joint ? toQuat(joint->getRotation()) : skel[i].rest;  // an attachment point the avatar lacks: at rest
         }
         local[0] = toQuat(pelvis->getWorldRotation() * ~mRot);  // in your actor's space
-        pose = skel.pose_from_live(local, fromAgentYours(pelvis->getWorldPosition()));
+        // Build 35: the hip's travel from your avatar's own rest, its root (the pelvis rests on it, SL-315), not from
+        // the frame: the root moves under a pinned frame when the viewer recomputes the avatar's height (an animation's
+        // neck or head positions, a shape edit), and a body swapped in must not sink with it. While the editor holds the
+        // pelvis's position on the pin (VATsClipMotion), the pin is where it rests.
+        const VATsClipMotion::Playback& pb = VATsClipMotion::sEditor;
+        LLJoint* root = gAgentAvatarp->getRootJoint();
+        const bool held = pb.pin && pb.pinned && mMotionID.notNull() && !mDrivesPos.empty() && mDrivesPos[0];
+        const Vec3 rest = fromAgentYours(held || !root ? mPos : root->getWorldPosition());
+        pose = skel.pose_from_live(local, fromAgentYours(pelvis->getWorldPosition()), rest);
         return true;
     }
 
@@ -1150,7 +1172,7 @@ namespace
         {
             mIsolatedOn = avatar;
             mStopped.clear();
-            mWeSat = mSatSeen = mRegionKeepsStanding = false;
+            mWeSat = mSatSeen = mRegionKeepsStanding = mSitWhenHeld = false;
             mRegionStands = 0;
             mResitAt = -1;
             mRegion = gAgent.getRegion();
@@ -1160,6 +1182,13 @@ namespace
             mFrameOnOpen = true;  // beforeFrame frames the avatar; the camera then stays put (no longer following it)
             if (!mRevealed)
                 hideChrome();
+            sitForEditor(avatar);
+        }
+        // Build 35: back in the hold after As It Plays In-World or the walk test stood the avatar: it sits down again once
+        // the region has it standing.
+        if (mSitWhenHeld && mMode == Mode::Hold && !avatar->isSitting())
+        {
+            mSitWhenHeld = false;
             sitForEditor(avatar);
         }
         LLMotionController& controller = avatar->getMotionController();
@@ -1364,9 +1393,24 @@ namespace
         return restarted;
     }
 
+    // Build 35: stands the avatar up if the editor sat it on the ground (the viewer's own Stand Up, as the walk test does)
+    // and has the hold sit it down again. filterControls lets it through: mWeSat is cleared first.
+    bool ViewerHost::standFromEditorSit(LLVOAvatarSelf* avatar)
+    {
+        const bool on_ground = avatar->isSitting() || avatar->mSignaledAnimations.count(ANIM_AGENT_SIT_GROUND_CONSTRAINED);
+        if (!mWeSat || !on_ground || avatar->getParent())
+            return false;
+        mWeSat = false;
+        mResitAt = -1;
+        mSitWhenHeld = true;
+        gAgent.standUp();
+        return true;
+    }
+
     // Build 20, item 47: View > As It Plays In-World. The claims are the UI's (plan_clip_from_clip: the joints the upload
     // keys, at their priorities); drive_avatar binds only those, and isolate stops nothing, so the AO, the default motions
-    // and avatar physics play with it as they will in-world. The ground sit and the pin stay. Nothing is sent.
+    // and avatar physics play with it as they will in-world. The pin stays; build 35: the avatar stands up from the editor's
+    // ground sit meanwhile (the viewer's own Stand Up), and sits down again when the hold returns.
     bool ViewerHost::play_in_world(const vats::PlanClip* own)
     {
         if (own)
@@ -1379,8 +1423,12 @@ namespace
         if (was == Mode::Hold && mMode == Mode::InWorld)
         {
             const S32 restarted = holdsAvatar() ? restartStopped(gAgentAvatarp.get()) : 0;
+            // Build 35: shown on a standing avatar, as it will play. The editor's ground sit would stay under it, and its
+            // hip position (near the ground) wins over every animation that keys none: the legs went through the ground.
+            const bool stood = holdsAvatar() && standFromEditorSit(gAgentAvatarp.get());
             LL_INFOS("VATsEditor") << "as it plays in-world: " << restarted << " stopped motions running again, the animation on "
-                                   << own->joints.size() << " joints at its own priorities" << LL_ENDL;
+                                   << own->joints.size() << " joints at its own priorities"
+                                   << (stood ? ", standing up from the editor's ground sit" : "") << LL_ENDL;
         }
         else if (was == Mode::InWorld && mMode == Mode::Hold)
         {
@@ -1423,12 +1471,9 @@ namespace
             for (const auto& signaled : avatar->mSignaledAnimations)
                 if (isLocomotion(1, signaled.first) || isLocomotion(2, signaled.first))
                     avatar->getMotionController().stopMotionLocally(avatar->remapMotionID(signaled.first), true);
-            const bool on_ground = avatar->isSitting() || avatar->mSignaledAnimations.count(ANIM_AGENT_SIT_GROUND_CONSTRAINED);
-            const bool stand = mWeSat && on_ground && !avatar->getParent();
+            const bool stand = standFromEditorSit(avatar);
             mWeSat = false;
             mResitAt = -1;
-            if (stand)
-                gAgent.standUp();  // the viewer's own Stand Up; filterControls lets it through while walking
             // The camera follows you again. Refocusing resets the agent's axes to face the camera's way (setFocusOnAvatar's
             // reset_axes, third person): the heading is put back, so the avatar walks off the way it stood.
             const LLVector3 heading = gAgent.getAtAxis();
@@ -1447,7 +1492,8 @@ namespace
         mRegionStands = 0;
         mRegionKeepsStanding = false;
         pb.pinned = false;  // pinned again where it stands now
-        sitForEditor(avatar);
+        // Build 35: sat down again when the hold returns (isolate); As It Plays In-World stays standing meanwhile.
+        mSitWhenHeld = true;
         LL_INFOS("VATsEditor") << "walk test stopped: the editor holds the avatar again" << LL_ENDL;
         return true;
     }
@@ -1618,15 +1664,25 @@ namespace
             mPos = root->getWorldPosition();
             mRot = root->getWorldRotation();
             const VATsClipMotion::Playback& pb = VATsClipMotion::sEditor;
-            if (pb.pin && pb.pinned)  // drawn where the avatar is drawn (the pin), with any later root offset
+            const bool pinned = pb.pin && pb.pinned;
+            if (pinned)  // drawn where the avatar is drawn (the pin), with any later root offset
             {
                 mPos = pb.pin_pos + (mPos - pb.root_at_update);
                 mRot = pb.pin_rot;
             }
+            // Build 35: how high the root the frame stands on is above the ground, kept from when the pin was taken;
+            // seated on an object the seat, not the ground, carries it.
+            if (gAgentAvatarp->getParent())
+                mFrameFoot = 0.f;
+            else if (!pinned || !mFootPinned)
+                mFrameFoot = gAgentAvatarp->getPelvisToFoot();
+            mFootPinned = pinned;
         }
         else
         {
             // No avatar yet (the login screen): VATs' skeleton stands 3.2 m in front of the camera, facing it.
+            mFrameFoot = 0.f;
+            mFootPinned = false;
             LLVector3 at = cam->getAtAxis();
             at.mV[VZ] = 0.f;
             if (at.normVec() < 1e-3f)

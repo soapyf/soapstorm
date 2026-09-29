@@ -27,6 +27,7 @@ constexpr double kArcMax = 90;         // degrees between kept keys before nlerp
 constexpr double kArcStep = 45;        // the fix's key spacing: any two frames inside a step are <= 90 apart
 constexpr double kSubFrame = 0.1;      // frames off a whole frame (reverse's slivers sit closer, on purpose)
 constexpr double kEaseFixed = 0.3;     // seconds the ease fix gives a zero ease
+constexpr double kSinkTol = 0.01;      // m: SL lowering or raising the wearer this far (spec 09 build 35)
 constexpr int kAoPriority = 4;         // AO walks and stands play at up to this
 
 const std::vector<LintRule> kRules = {
@@ -39,6 +40,7 @@ const std::vector<LintRule> kRules = {
     {"nlerp_arc", "Turns over 90 degrees between keys"},
     {"ao_priority", "Whole body below priority 4"},
     {"hover_pop", "Hip and leg position keys"},
+    {"body_height", "Position keys that make the avatar taller"},
     {"frozen_bones", "Bones that never move"},
     {"face_positions", "Face position keys on the default face"},
     {"eyes", "Eyes keyed"},
@@ -547,6 +549,46 @@ std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const
         add("hover_pop", LintSeverity::Warning, hover, {},
             "Position keys on " + list(hover) + " change the leg length; the avatar pops up or down as it starts",
             {"Remove Their Position Keys", delete_all(hover, true)});
+    // Spec 09 build 35: every SL viewer computes the avatar's height from the torso, chest, neck, head and skull
+    // positions, animated ones included, and stands it half the change lower (sl_body_size). It does so whenever an
+    // animation starts or stops (LLVOAvatar::processSingleAnimationStateChange), and a joint no motion drives keeps its
+    // last position (LLPoseBlender sets only joints with active states), so a neck-stretch deformer sinks the wearer
+    // as it ends and for good. A hip key cannot undo it: the pelvis_fix motion takes the hip back when it ends.
+    std::vector<std::string> taller;
+    for (const AnimJoint& j : file.joints)
+        for (const char* b : {"mTorso", "mChest", "mNeck", "mHead", "mSkull"})
+            if (!j.pos.empty() && skel.find_viewer(j.name) == skel.find(b)) taller.push_back(b);
+    if (on("body_height") && !taller.empty()) {
+        const SlBodySize rest = sl_body_size(skel, nullptr, eo.shape);
+        const double rest_up = rest.height - rest.pelvis_to_foot;
+        std::vector<int> frames;
+        double worst = 0, end = 0;
+        for (int f = 0; f <= last; ++f) {
+            const SlBodySize b = sl_body_size(skel, &poses[size_t(f)], eo.shape);
+            const double sink = (b.height - b.pelvis_to_foot - rest_up) / 2;
+            if (f == last) end = sink;
+            if (std::fabs(sink) <= kSinkTol) continue;
+            frames.push_back(f);
+            if (std::fabs(sink) > std::fabs(worst)) worst = sink;
+        }
+        if (!frames.empty()) {
+            const double cm = std::fabs(worst) * 100;
+            const bool stays = std::fabs(end) > kSinkTol;
+            char msg[700];
+            std::snprintf(msg, sizeof msg,
+                          "Position keys on %s make the avatar up to %.1f cm %s. Second Life's viewers take the avatar's "
+                          "height whenever an animation starts or stops, and stand it half that, %.1f cm, %s. %s Set Hover "
+                          "Height %.1f cm %s while the change is on. (The spine bones mSpine1 to mSpine4 and the hip's "
+                          "position do not count.)",
+                          list(taller).c_str(), 2 * cm, worst > 0 ? "taller" : "shorter", cm,
+                          worst > 0 ? "lower, into the ground" : "higher, off the ground",
+                          stays ? "It ends changed, and a joint keeps an animation's position after it ends (how a "
+                                  "deformer stays), so this lasts after it stops, until the skeleton is reset."
+                                : "It ends at rest, so this lasts only while it plays.",
+                          cm, worst > 0 ? "higher" : "lower");
+            add("body_height", LintSeverity::Warning, taller, frames, msg, {});
+        }
+    }
     if (on("frozen_bones") && !frozen.empty())
         add("frozen_bones", LintSeverity::Warning, frozen, {},
             list(frozen) + " never move but are exported; they freeze the wearer's own tail, wings, face or hands",

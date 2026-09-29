@@ -66,7 +66,8 @@ void App::set_in_world(bool on) {
     ui.sent = true;
     ui.running_at = -1;
     in_world_ = true;
-    status(std::string("As it plays in-world: your AO, the default motions and avatar physics run, your animation at its priorities") +
+    status(std::string("As it plays in-world: you stand (if the editor sat you), your AO, the default motions and avatar physics "
+                      "run, your animation at its priorities") +
            real_mode_swap_note());
 }
 
