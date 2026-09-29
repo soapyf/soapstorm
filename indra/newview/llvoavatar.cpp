@@ -3862,6 +3862,7 @@ void LLVOAvatar::idleUpdateNameTag(const LLVector3& root_pos_last)
         static LLCachedControl<S32> name_tag_mode(gSavedSettings, "AvatarNameTagMode");
         render_name = render_name
             && !gAgentCamera.cameraMouselook()
+            && !FSVATsEditor::hidesYourAvatar() // VATs editor: no name tag over the body swapped into your place
             && (visible_chat || (render_name_show_self && name_tag_mode));
     }
 
