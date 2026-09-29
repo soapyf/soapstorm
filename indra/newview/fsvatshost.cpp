@@ -544,7 +544,7 @@ namespace
         void place_view(ImVec2 min, ImVec2 max) override;
         int unread_notices() const override;
         void toggle_notices() override { LLFloaterReg::toggleInstanceOrBringToFront("notification_well_window"); }
-        const char* reveal_label() const override { return "Show Firestorm UI"; }
+        const char* reveal_label() const override { return "Show SoapStorm UI"; }
         const char* reveal_shortcut() const override { return "Alt+Shift+U"; }
         bool revealed() const override { return mRevealed; }
         void reveal(bool on) override;
@@ -671,7 +671,7 @@ namespace
         bool mChromeHidden = false;      // hidden by the editor
         bool mUiWasVisible = true;       // the viewer's UI was showing before (its own Show UI toggle)
         bool mStandWas = false;          // the Stand / Stop Flying buttons showed (or the viewer showed them since)
-        bool mRevealed = false;          // Show Firestorm UI is on
+        bool mRevealed = false;          // Show SoapStorm UI is on
         bool mHidingOthers = false;      // other avatars hidden (spec 09 U5), and Render Only Friends as it was before
         bool mFriendsOnlyWas = false;
         std::vector<LLHandle<LLFloater>> mHiddenFloaters;  // floaters hidden since, shown again on close
@@ -1719,7 +1719,7 @@ namespace
     }
 
     // The editor's view, less a margin, while the viewer's UI is hidden (the editor's panels are where the viewer's toasts
-    // would go). Show Firestorm UI or closing gives the channels their own places back.
+    // would go). Show SoapStorm UI or closing gives the channels their own places back.
     bool ViewerHost::toastArea(LLRect& out) const
     {
         constexpr S32 MARGIN = 8;
@@ -2702,7 +2702,7 @@ namespace
         if (gSavedSettings.getBOOL("VATsShowViewerUI") != on)
             gSavedSettings.setBOOL("VATsShowViewerUI", on);
         if (mRevealed != on)
-            LL_INFOS("VATsEditor") << "Show Firestorm UI " << (on ? "on" : "off") << LL_ENDL;
+            LL_INFOS("VATsEditor") << "Show SoapStorm UI " << (on ? "on" : "off") << LL_ENDL;
         mRevealed = on;
         if (on)
             showChrome();

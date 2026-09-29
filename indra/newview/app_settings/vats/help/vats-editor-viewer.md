@@ -41,7 +41,7 @@ editor:
 | The Notifications window and the IM well | to read what came in |
 
 Any other window that opens while the editor is open (for example a map a script opens) stays hidden until
-you close the editor or choose **Viewer → Show Firestorm UI**.
+you close the editor or choose **Viewer → Show SoapStorm UI**.
 
 Where they go while the viewer's UI is hidden:
 
@@ -53,29 +53,29 @@ Where they go while the viewer's UI is hidden:
 | Nearby chat toasts | the bottom left of the editor's view |
 | The **Stand** button, while your avatar sits | the bottom of the world view; the editor's panels and status bar stay above it |
 
-They follow the view when you move or resize the editor's panels. With **Show Firestorm UI** on, or after
+They follow the view when you move or resize the editor's panels. With **Show SoapStorm UI** on, or after
 you close the editor, they are back in the viewer's own places. The view cube is at the view's top left,
 so the toasts never cover it.
 
 Hovering an object or another avatar shows no hover tip (name, owner and so on) while the editor holds your
 avatar, since the tip would be drawn over the editor's panels; world clicks are the editor's anyway. Tips
 of the viewer's windows that stay, such as the Chat pane and the toasts, still show. Hover tips come back
-with **Show Firestorm UI** and when you close the editor.
+with **Show SoapStorm UI** and when you close the editor.
 
 - **Chat pane.** The editor's **Chat** pane holds the viewer's own Conversations window: nearby chat and
   your IMs, with its usual tabs and chat box. It moves and resizes with the pane, and hides when the pane is
   closed or another tab of its dock is in front. **Viewer → Chat** shows or hides it.
 - **Viewer menu.** **Chat**; **Notifications** opens or closes the viewer's Notifications window (the menu
-  and a button in the status bar show how many are unread); **Show Firestorm UI** (**Alt+Shift+U**); **Close
+  and a button in the status bar show how many are unread); **Show SoapStorm UI** (**Alt+Shift+U**); **Close
   Editor**.
-- **Show Firestorm UI** shows all of the viewer's UI over the editor: its menu bar, navigation bar, toolbars,
+- **Show SoapStorm UI** shows all of the viewer's UI over the editor: its menu bar, navigation bar, toolbars,
   chat bar and windows. The editor's menu bar, panels and status bar move in so the viewer's bars don't cover
-  them. Put it away with **Viewer → Show Firestorm UI** again, with the viewer's own **Avatar → Show Firestorm
+  them. Put it away with **Viewer → Show SoapStorm UI** again, with the viewer's own **Avatar → Show Firestorm
   UI over VATs Editor**, or with **Alt+Shift+U** from anywhere (the viewer's own Show User Interface keys,
   which do this while the editor is open). Closing the editor leaves the viewer's UI as it was before you
   opened it, whichever way it was showing.
 
-> **Note:** Screenshot to come: **Show Firestorm UI** on, with the viewer's menu bar, toolbars and chat bar
+> **Note:** Screenshot to come: **Show SoapStorm UI** on, with the viewer's menu bar, toolbars and chat bar
 > over the editor and the editor's panels moved in.
 
 ### Your avatar while the editor is open
@@ -167,7 +167,7 @@ project are your own project's actors (below).
 | **Alt**+drag, **Ctrl+Alt**+drag, **Ctrl+Alt+Shift**+drag | the viewer's camera |
 | The mouse wheel over the world | the viewer's camera zoom |
 | The viewer's camera keys: **Alt** (or **Ctrl+Alt**, **Ctrl+Alt+Shift**) with the arrows, **Page Up**, **Page Down**, **A**, **D**, **W**, **S**, **E** or **C** | the viewer's camera |
-| **Alt+Shift+U** | **Show Firestorm UI**, on or off, whatever has the keys |
+| **Alt+Shift+U** | **Show SoapStorm UI**, on or off, whatever has the keys |
 | Any other key | the editor's shortcuts (see [[Keyboard shortcuts]]) |
 | Typing while a viewer text field has the focus | that field |
 
@@ -341,13 +341,13 @@ then type.
 
 ### A viewer window I need is hidden
 
-Choose **Viewer → Show Firestorm UI** or press **Alt+Shift+U**: all of the viewer's UI shows over the
+Choose **Viewer → Show SoapStorm UI** or press **Alt+Shift+U**: all of the viewer's UI shows over the
 editor until you choose it again or press **Alt+Shift+U** again.
 
 ### Hovering an object shows no tip
 
 While the editor holds your avatar, the viewer shows no hover tips for objects and avatars. Choose **Viewer
-→ Show Firestorm UI**, or close the editor.
+→ Show SoapStorm UI**, or close the editor.
 
 ### I can't see other avatars
 

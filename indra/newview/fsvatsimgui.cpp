@@ -259,7 +259,7 @@ namespace
         }
     }
 
-    // Where the viewer's own UI covers the world view while it shows (the editor's Show Firestorm UI, or before the editor
+    // Where the viewer's own UI covers the world view while it shows (the editor's Show SoapStorm UI, or before the editor
     // hides it): its toolbars, chat bar and Stand button (everything outside the floater snap region) and the navigation
     // bar; while it is hidden, the Stand button when it shows. The editor's work area (menu bar, dockspace, status bar) keeps clear of it; the world layer still spans the
     // whole world view, which is what LLViewerCamera projects onto.
@@ -357,7 +357,6 @@ namespace
     // The debug test: the ImGui demo plus a window with its own dockspace and a few input checks.
     void drawTest()
     {
-        static bool show_demo = true;
         static bool dock_over_viewport = false;
         static char text[256] = "";
         static float slider = 0.5f;
@@ -379,17 +378,12 @@ namespace
                         io.WantCaptureMouse, io.WantCaptureKeyboard, io.WantTextInput);
             ImGui::InputText("Text", text, sizeof(text));
             ImGui::SliderFloat("Slider", &slider, 0.f, 1.f);
-            ImGui::Checkbox("Demo window", &show_demo);
             ImGui::Checkbox("Dockspace over the viewer (passthrough centre)", &dock_over_viewport);
             ImGui::Separator();
             ImGui::TextUnformatted("Drag windows onto the dock area below:");
             ImGui::DockSpace(ImGui::GetID("VATsTestDock"), ImVec2(0.f, 0.f));
         }
         ImGui::End();
-        if (show_demo)
-        {
-            ImGui::ShowDemoWindow(&show_demo);
-        }
         if (!open)
         {
             gSavedSettings.setBOOL("VATsImGuiTest", false);
@@ -784,7 +778,7 @@ bool FSVATsImGui::scrollWheel(S32 clicks, bool horizontal)
 bool FSVATsImGui::keyDown(KEY key, MASK mask)
 {
     // Alt+Shift+U, the viewer's own Show User Interface chord: while the editor is open it shows or hides the viewer's UI
-    // over the editor (Show Firestorm UI), from anywhere.
+    // over the editor (Show SoapStorm UI), from anywhere.
     if (sCtx && FSVATsEditor::ownsWorld() && key == 'U' && (mask & MASK_NORMALKEYS) == (MASK_ALT | MASK_SHIFT))
     {
         gSavedSettings.setBOOL("VATsShowViewerUI", !gSavedSettings.getBOOL("VATsShowViewerUI"));

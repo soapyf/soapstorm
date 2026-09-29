@@ -636,7 +636,7 @@
         </menu_item_check>
 <!-- /FS:AR FIRE-30873 -->
         <menu_item_check label="VATs Editor" name="VATs Editor"><menu_item_check.on_check function="CheckControl" parameter="VATsEditor" /><menu_item_check.on_click function="ToggleControl" parameter="VATsEditor" /></menu_item_check>
-        <menu_item_check label="Show Firestorm UI over VATs Editor" name="VATs Show Viewer UI" shortcut="alt|shift|U" visibility_control="VATsEditor" enabled_control="VATsEditor"><menu_item_check.on_check function="CheckControl" parameter="VATsShowViewerUI" /><menu_item_check.on_click function="ToggleControl" parameter="VATsShowViewerUI" /></menu_item_check>
+        <menu_item_check label="Show SoapStorm UI over VATs Editor" name="VATs Show Viewer UI" shortcut="alt|shift|U" visibility_control="VATsEditor" enabled_control="VATsEditor"><menu_item_check.on_check function="CheckControl" parameter="VATsShowViewerUI" /><menu_item_check.on_click function="ToggleControl" parameter="VATsShowViewerUI" /></menu_item_check>
 
         <menu_item_separator/>
 

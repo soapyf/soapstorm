@@ -51,7 +51,7 @@ namespace FSVATsEditor
     // Build 17 (spec 09 §0f): while the editor hides the viewer's UI, the area toasts, notifications, script dialogs and
     // alerts are laid out in (LLScreenChannelBase::getChannelRect, LLScreenChannel::redrawToasts, the nearby chat toasts,
     // LLScriptFloater::show): the editor's view between its docked panels, in scaled screen coordinates. False: the
-    // viewer's own places (editor closed, or Show Firestorm UI on).
+    // viewer's own places (editor closed, or Show SoapStorm UI on).
     bool toastArea(LLRect& out);
     // True while the editor holds your avatar and the viewer's UI is hidden: LLToolPie shows no hover tips for objects
     // and avatars (they would draw over the editor's panels).
