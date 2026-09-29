@@ -75,6 +75,7 @@ void Settings::load(const std::string& file) {
     boolean("viewer_keep_swap", viewer_keep_swap);
     boolean("mixamo_notice_seen", mixamo_notice_seen);
     boolean("mirror_centre", mirror_centre);
+    boolean("auto_ik", auto_ik);
     boolean("scratch_existing_only", scratch_existing_only);
     str("scratch_scrub", scratch_scrub);
     str("picker_style", picker_style);
@@ -129,6 +130,7 @@ void Settings::save(const std::string& file) const {
     j.set("viewer_keep_swap", viewer_keep_swap);
     j.set("mixamo_notice_seen", mixamo_notice_seen);
     j.set("mirror_centre", mirror_centre);
+    j.set("auto_ik", auto_ik);
     j.set("scratch_existing_only", scratch_existing_only);
     j.set("scratch_scrub", scratch_scrub);
     j.set("picker_style", picker_style);

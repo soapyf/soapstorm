@@ -30,6 +30,8 @@ topic. Second Life names are given as Second Life uses them.
   use them for soft parts, and [[Dynamics]] uses them for jiggle. Shown with **View → Show Collision
   Volumes**.
 - **Curve**: The values of one channel over time, drawn through its keys. See [[Graph editor]].
+- **Deformer**: An animation whose position keys reshape the avatar (a long neck, a taller body) and stay on after
+  it stops; an *undeformer* puts the bones back. See [[Deformers]].
 - **Devkit**: The files a mesh-body maker gives creators, used to animate against that body's shape. See
   [[Mesh bodies]].
 - **Ease in, ease out**: The time, in seconds, Second Life takes to blend an animation in when it starts

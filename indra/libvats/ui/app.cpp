@@ -23,6 +23,7 @@
 #include "vats/anim_convert.h"
 #include "vats/bvh.h"
 #include "vats/clips.h"
+#include "vats/deformer.h"
 #include "vats/edit.h"
 #include "vats/footlock.h"
 #include "vats/pose_presets.h"
@@ -479,6 +480,11 @@ void App::save_actor(const std::string& actor, const std::string& path, bool ani
     status("Saved " + actor + " as " + file_name(path));
 }
 
+static bool export_flag(const Json& ex, const char* key) {
+    const Json* v = ex.find(key);
+    return v && v->is_bool() && v->b;
+}
+
 // The options every .anim export of the active actor uses: bake shape (IO-13), positions (IO-11), the key-reduction
 // tolerances (IO-14) and cross-actor pins (GR-4).
 AnimExportOptions App::anim_export_options() {
@@ -498,6 +504,8 @@ AnimExportOptions App::anim_export_options() {
         const Json* w = ex.find("reduce_world");
         opt.reduce_world_m = w && w->is_number() && w->num > 0 ? w->num : kReduceWorldDefault;
     }
+    opt.end_at_rest = export_flag(ex, "end_at_rest");  // 09 0l: the deformer tool
+    opt.hold_without_sinking = export_flag(ex, "hold_no_sink");
     if (height_shape_) opt.shape = height_shape_, opt.positions = nullptr;  // HV: a height variant bakes on its body
     return opt;
 }
@@ -511,15 +519,31 @@ Clip App::anim_export_clip() const {
 // hold whatever file there is (the upload meter and the SL preview show an oversize one too).
 int App::export_in_memory(AnimExportResult& r, std::vector<std::uint8_t>& bytes) {
     ScratchAside aside(*this);  // PT-2: the document, not a scratch pose
-    if (raw_import_ && !doc_.clip().mirror_export && !height_shape_)
+    const AnimExportOptions opt = anim_export_options();
+    // The deformer options change the file, so an unedited import is exported through them too (09 0l).
+    if (raw_import_ && !doc_.clip().mirror_export && !height_shape_ && !opt.end_at_rest && !opt.hold_without_sinking)
         if (const AnimFile* same = raw_reexport(*raw_import_, doc_.clip())) {
             r.file = *same;
             bytes = write_anim(*same);
             return 2;
         }
-    r = vats::export_anim(skel_, anim_export_clip(), anim_export_options());
+    r = vats::export_anim(skel_, anim_export_clip(), opt);
     bytes = write_anim(r.file);
     return 1;
+}
+
+// 09 0l: the undeformer of the .anim export_in_memory made (r.file), when the clip's export asks for one; empty bytes
+// when it does not, or the file has no position-keyed bone to put back.
+std::vector<std::uint8_t> App::undeformer_bytes(const AnimExportResult& r) {
+    if (!export_flag(doc_.clip().export_settings, "undeformer")) return {};
+    const AnimFile u = make_undeformer(skel_, r.file, anim_export_options().positions);
+    return u.joints.empty() ? std::vector<std::uint8_t>{} : write_anim(u);
+}
+
+std::string undeformer_path(const std::string& anim_path) {
+    const size_t slash = anim_path.find_last_of('/'), dot = anim_path.rfind('.');
+    const std::string stem = dot != std::string::npos && (slash == std::string::npos || dot > slash) ? anim_path.substr(0, dot) : anim_path;
+    return undeformer_name(stem) + ".anim";
 }
 
 // The .anim bytes the project exports: 0 when it cannot (after saying why), else as export_in_memory.
@@ -574,9 +598,19 @@ bool App::export_anim(const std::string& path) {
         message("Export failed", "Could not write " + path + "\n\n" + g_write_error);
         return false;
     }
+    std::string undeform;  // 09 0l: "Also export an undeformer"
+    if (export_flag(doc_.clip().export_settings, "undeformer")) {
+        const std::vector<std::uint8_t> u = undeformer_bytes(r);
+        const std::string upath = undeformer_path(path);
+        if (u.empty()) undeform = "; no bone has position keys, so no undeformer";
+        else if (!write_file(upath, u.data(), u.size())) {
+            message("Export failed", "Could not write " + upath + "\n\n" + g_write_error);
+            return false;
+        } else undeform = "; undeformer " + file_name(upath);
+    }
     rescan_files();  // the export folder may be one of the Inventory's
     if (made == 2) {
-        export_summary_ = "unchanged since import, written as it was";
+        export_summary_ = "unchanged since import, written as it was" + undeform;
         status("Exported " + file_name(path) + ": " + export_summary_);
         return true;
     }
@@ -598,6 +632,7 @@ bool App::export_anim(const std::string& path) {
     if (r.static_rotations)  // IO-11b
         export_summary_ += "; " + count_noun(r.static_rotations, "bone") + (r.static_rotations == 1 ? " that doesn't" : " that don't") + " move left out";
     if (r.file.duration > 60) export_summary_ += "; over SL's 60 s limit";
+    export_summary_ += undeform;
     status("Exported " + file_name(path) + ": " + export_summary_);
     if (!r.warnings.empty()) {
         std::string t;
@@ -946,6 +981,15 @@ void App::build_actions() {
                                                                         : "Gimbal: each ring turns exactly one rotation channel");
                         },
                         {}});
+    // Spec 08 AI-1: Auto IK, on by default and saved.
+    add("auto_ik", {"Auto IK", 0, 0, false,
+                    [this] {
+                        settings_.auto_ik = !settings_.auto_ik;
+                        save_settings();
+                        status(settings_.auto_ik ? "Auto IK on: dragging a joint (Move tool, or its dot) pulls the bones above it"
+                                                 : "Auto IK off: the Move tool moves a bone's position");
+                    },
+                    {}});
     // View > Target Ghost: another animation over the avatar, to match by eye.
     auto need_target = [this]() -> const char* { return target_ ? nullptr : "Load a target first"; };
     add("target_show", {"Show Target Ghost", 0, 0, false, [this] { if (target_) target_on_ = !target_on_; }, need_target});
@@ -1607,6 +1651,9 @@ void App::draw_menus() {
         for (const char* id : {"tool_select", "tool_move", "tool_rotate", "tool_scale"}) menu_item(id);
         ImGui::Separator();
         menu_item("orientation");
+        if (menu_item_icon(icon::kPull, "Auto IK", nullptr, settings_.auto_ik)) run_action("auto_ik");
+        ImGui::SetItemTooltip("Drag a joint and the bones above it follow: with the Move tool, or by the dot on a joint "
+                              "with any tool. Keys plain rotations.");
         ImGui::Separator();
         for (const char* id : {"ik_toggle", "follow_target", "pin_world", "pin_bone", "unpin", "delete_pin", "foot_lock"}) menu_item(id);
         if (begin_menu_icon(icon::kLoop, "Loop Tools")) {

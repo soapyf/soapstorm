@@ -43,6 +43,7 @@ vats walk.vat --frame 12 --select mPelvis
 | `--listing <file>` | Once the first frames are drawn, writes [[Listing media]] with the window's first settings (512 x 512, the animation's frame rate, turntable on): an animated GIF, or numbered PNG pictures when `<file>` ends in `.png`. Prints `listing: <n> frames at <w> x <h>` on standard output. |
 | `--preset <name>` | Selects a [[Control presets|control preset]]: `industry`, `blender`, `qavimator` or `secondlife`. An unknown name prints `unknown preset <name>`. |
 | `--body <id>` | Shows a body for this run only: `sl-default`, `sl-default-male`, `female`, `male`, or `none` (also `off`) for the skeleton only. It replaces a mesh body too. The body saved in `settings.json` is kept unless you pick another in **View → Body**. Unknown ids are ignored. |
+| `--mesh-body <file>` | Shows a rigged `.dae` or `.fbx` file as the [[Mesh bodies|mesh body]] for this run only, as if imported and chosen in **Inventory → Bodies**. It is not added to your library, and the body saved in `settings.json` is kept. |
 | `--frame <n>` | Moves to frame `<n>`, clamped to the animation's length. Fractions are allowed. |
 | `--select <bone>` | Selects a bone by its skeleton name, for example `mPelvis` or `mHandLeft`. Unknown names are ignored. |
 | `--select-all` | Runs **Select All**. |

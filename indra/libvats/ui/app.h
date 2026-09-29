@@ -56,6 +56,7 @@ void retarget_settings_ui(RetargetOptions& opt, FitOptions& fit, bool& lock_feet
 
 std::string key_label(ImGuiKeyChord chord);  // "Ctrl+Up", "]": shortcut text for menus and tooltips
 std::string folder_url(const std::string& dir);  // a file:// URL of a folder for Host::open_url (file_library_ui.cpp)
+std::string undeformer_path(const std::string& anim_path);  // 09 0l: "<dir>/<stem>_undeform.anim" (app.cpp)
 
 // Settings ids and menu names, indexed by Body.
 inline constexpr int kBodyCount = 5;
@@ -178,6 +179,8 @@ public:
         graph_.frame_all(g);
     }
     void show_points() { show_category_[7] = true; }
+    // --mesh-body <file.dae|.fbx>: shows a rigged file as the mesh body for this run only, kept out of the library.
+    void cli_mesh_body(const std::string& path);
     // --picker <page>[/<view>] and --picker-style <silhouette|avatar|rest> (08 PK): the Picker tab at a page and view
     // ("hands/palm"), and its backdrop for this run; false when unknown.
     bool cli_picker(const std::string& page_view);
@@ -223,6 +226,7 @@ private:
     void import_file(const std::string& path);
     int anim_bytes(AnimExportResult& r, std::vector<std::uint8_t>& bytes);
     int export_in_memory(AnimExportResult& r, std::vector<std::uint8_t>& bytes);  // anim_bytes without a message
+    std::vector<std::uint8_t> undeformer_bytes(const AnimExportResult& r);  // 09 0l, empty = none
     AnimExportOptions anim_export_options();  // the active actor's, as every .anim export uses them
     Clip anim_export_clip() const;            // the active clip as it exports: mirrored with Export mirrored
     bool export_anim(const std::string& path);
@@ -429,7 +433,7 @@ private:
     void draw_mesh_body(std::vector<Vertex>& verts, std::vector<std::uint32_t>& indices,
                         const std::vector<Xform>* globals = nullptr);
     const MeshBody* find_mesh_body(const std::string& id) const;
-    // BD-3: base with the joints the body's parts were rigged to (base itself when they override none).
+    // BD-3: base with the joints the body's parts were rigged to, and their rig axes (base itself when they have neither).
     void harmonize_body(const MeshBody& b) const;
     const Shape* mesh_body_shape(const MeshBody& b, const Shape* base) const;
     mutable std::map<std::pair<std::string, const Shape*>, std::optional<Shape>> body_shapes_;
@@ -656,6 +660,27 @@ private:
     int bone_drag_ = -1;
     bool bone_drag_started_ = false;
     ImVec2 bone_drag_press_;
+    // Auto IK (spec 08 AI): a Move drag of a bone (the gizmo, Blender's G, or its joint dot with any tool) turns the
+    // bones above it by IK and keys them. auto_ik_ is set at the drag's start (capture_edit_start) when it applies.
+    struct AutoIkDrag {
+        bool on = false;
+        int node = -1;
+        AutoIkChain chain;
+        Evaluation start;  // the pose at the press; its pose then follows each step's solve
+    };
+    AutoIkDrag auto_ik_;
+    std::map<int, int> auto_ik_length_;  // chain lengths changed during drags, per joint, for this run
+    bool auto_ik_applies(int node) const;  // on, and node has a chain now
+    void auto_ik_begin(int node);
+    bool auto_ik_input();  // the wheel and [ ] during a drag: a longer or shorter chain; true when it took them
+    void auto_ik_status();
+    int dot_hover_ = -1;  // the joint dot under the pointer (a bone with an Auto IK chain)
+    int dot_drag_ = -1;   // the joint dot pressed, dragged in the view plane once it moves 4 px
+    bool dot_drag_started_ = false;
+    ImVec2 dot_drag_press_;
+    int pick_dot(ImVec2 mouse) const;
+    Vec3 rig_euler_ref_;  // Properties' rotation in rig axes: the angles last shown, so they never flip
+    int rig_euler_node_ = -1;
     // Box selection (ui/box_select.h): a left drag from empty space, or Blender's B then a drag. box_hits_ are the
     // nodes inside while it runs, highlighted live.
     bool box_ = false, box_moved_ = false, box_from_b_ = false, box_click_clears_ = false, box_armed_ = false;
@@ -666,8 +691,8 @@ private:
     bool hot(int node) const {  // hovered, or inside a running box
         return node == hover_bone_ || std::find(box_hits_.begin(), box_hits_.end(), node) != box_hits_.end();
     }
-    // The Local gizmo frame of a bone: its global rotation x the display bone frame (SK-21).
-    Quat local_axes(int node) const { return globals_[node].rot * skel_.bone_frame(node); }
+    // The Local gizmo frame of a bone: its global rotation x the display bone frame (SK-21), or a mesh body's rig axes.
+    Quat local_axes(int node) const { return globals_[node].rot * skel_.bone_axes(node, shape()); }
     void draw_bones(bool over_world = false);  // the bone glyphs, through scene_triangles; over_world: the viewer's (not against its depth)
     void draw_collision_volumes(std::vector<Vertex>& verts);  // VP-10, SK-I5
 

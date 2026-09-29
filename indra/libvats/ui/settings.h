@@ -52,6 +52,7 @@ struct Settings {
     bool viewer_show_others = false;  // in the viewer: other avatars stay shown while the editor is open (spec 09 U5)
     bool viewer_keep_swap = true;     // in the viewer: View > Body's swapped body stays in the real-avatar modes (build 34)
     bool mirror_centre = false;        // PT-1: live mirror makes centre bones symmetric in place
+    bool auto_ik = true;               // 08 AI-1: a Move drag of a bone pulls the bones above it by IK
     bool scratch_existing_only = false;  // PT-2: a scratch pose keys only channels that already have keys
     std::string scratch_scrub = "ask";   // PT-2: scrubbing off a scratch pose: "ask", "keep" or "discard"
     std::string picker_style = "silhouette";  // 08 PK-3: the Picker's backdrop, "silhouette" or "avatar"

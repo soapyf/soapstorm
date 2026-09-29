@@ -51,6 +51,7 @@ void App::end_modal(bool confirm) {
         status("Cancelled");
     }
     modal_ = Modal::None;
+    auto_ik_.on = false;
     skip_shortcuts_ = true;
 }
 
@@ -86,7 +87,7 @@ bool App::modal_input(ImVec2 m) {
     Quat local;
     modal_pivot(pivot, local);
     // Measure from the start state, not the live one.
-    if (primary() >= 0 && !primary_handle() && selected_prop_ < 0) pivot = drag_start_global_.pos, local = drag_start_global_.rot * skel_.bone_frame(primary());
+    if (primary() >= 0 && !primary_handle() && selected_prop_ < 0) pivot = drag_start_global_.pos, local = drag_start_global_.rot * skel_.bone_axes(primary(), shape());
     Vec3 axis = modal_axis_ < 0 ? camera_.forward()
                                 : (modal_local_ ? local : Quat{}).rotate(modal_axis_ == 0 ? Vec3{1, 0, 0}
                                                                          : modal_axis_ == 1 ? Vec3{0, 1, 0}

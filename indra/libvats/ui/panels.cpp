@@ -326,10 +326,25 @@ void App::draw_properties_panel() {
             // keys; so does Enter on the value already shown (a deliberate hold key).
             ImGui::PushID(track.c_str());
             Vec3 e = curve_euler(clip, track, frame_);
+            // A mesh body's rig axes: the same turn read about the bone's own axes; keys stay in SL's frame.
+            const Shape* sh = shape();
+            const bool rig = pin < 0 && has_rig_axes(sh, p);
+            if (rig) {
+                if (rig_euler_node_ != p) rig_euler_node_ = p, rig_euler_ref_ = {};
+                e = rig_euler_ref_ = nearest_euler(to_rig_axes(sh->axes[p], euler_to_quat(e)), rig_euler_ref_);
+            }
             float ev[3] = {float(e.x), float(e.y), float(e.z)};
             label("Rotation");
-            if (bool changed = ImGui::DragFloat3("##rot", ev, 0.25f, 0, 0, "%.1f°"); changed || item_entered()) key_euler(clip, track, frame_, {ev[0], ev[1], ev[2]});
+            if (bool changed = ImGui::DragFloat3("##rot", ev, 0.25f, 0, 0, "%.1f°"); changed || item_entered()) {
+                if (rig) key_rotation(clip, track, frame_, from_rig_axes(sh->axes[p], euler_to_quat({ev[0], ev[1], ev[2]})));
+                else key_euler(clip, track, frame_, {ev[0], ev[1], ev[2]});
+                if (rig) rig_euler_ref_ = {ev[0], ev[1], ev[2]};
+            }
+            if (rig)
+                ImGui::SetItemTooltip("About the mesh body's own bone axes (its rig axes). The keys and the .anim stay in "
+                                      "Second Life's joint frames.");
             track_edit("Rotate");
+            if (rig) ImGui::TextDisabled("In the body's rig axes");
             if (pin >= 0) {
                 Vec3 o = curve_offset(clip, track, frame_);
                 float ov[3] = {float(o.x), float(o.y), float(o.z)};
@@ -513,7 +528,11 @@ void App::draw_timeline_panel() {
     auto wrap_for = [&](float need) {
         if (compact && ImGui::GetContentRegionAvail().x < need) ImGui::NewLine(), wrapped = true;
     };
-    wrap_for(2 * button_w);  // Mirror and Retime
+    wrap_for(3 * button_w);  // Auto IK, Mirror and Retime
+    if (tool_button(icon::kPull, "Auto IK", settings_.auto_ik,
+                    "Auto IK: drag a joint and the bones above it follow, with the Move tool or by the dot on a joint. "
+                    "Wheel or [ ] while dragging: more or fewer bones"))
+        run_action("auto_ik");  // 08 AI-1
     if (tool_button(icon::kMirror, "Mirror", mirror_live_, "Mirror: posing a bone or IK control also keys its other side"))
         mirror_live_ = !mirror_live_;  // PT-1
     if (tool_button(icon::kRetime, "Retime", retime_on_, "Retime: double-click the ruler to drop a marker; drag a marker to "

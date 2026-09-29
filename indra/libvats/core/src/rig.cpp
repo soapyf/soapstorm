@@ -702,4 +702,281 @@ bool follow_bake(Clip& clip, const Rig& rig, int target, int follower, int f0, i
     return true;
 }
 
+namespace {
+
+bool starts_with(const std::string& s, const char* prefix) { return s.rfind(prefix, 0) == 0; }
+
+// The first bone of a limb's chain, where a default Auto IK chain stops (AI-2).
+bool chain_stop(const std::string& name) {
+    for (const char* p : {"mCollar", "mHipLeft", "mHipRight", "mHindLimb1", "mWing1", "mTail1"})
+        if (starts_with(name, p)) return true;
+    return starts_with(name, "mHand") && name.find('1') != std::string::npos;  // a finger's first joint
+}
+
+// The bone does not turn by its keys at frame: an IK limb (blend > 0) or a pin drives it.
+bool driven(const Rig& rig, const Clip& clip, double frame, int node) {
+    const Skeleton& skel = rig.skeleton();
+    if (int limb = rig.limb_of_bone(node); limb >= 0) {
+        const LimbInfo& l = rig.limbs()[limb];
+        if (blend_at(clip, ik_track(l), frame) > 0 && (node == l.root || node == l.mid || (!l.spine && node == l.end)))
+            return true;
+    }
+    for (const Pin& p : clip.pins) {
+        if (!p.active(frame)) continue;
+        if (int limb = pin_limb(rig, p); limb >= 0) {
+            const LimbInfo& l = rig.limbs()[limb];
+            if (node == l.root || node == l.mid || node == l.end) return true;
+        } else if (skel.find(p.via) == node) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Bento's mSpine1..4: their offsets cancel in pairs, so a chain passes through them without turning them (AI-3).
+bool passive(const std::string& name) { return starts_with(name, "mSpine"); }
+
+// How freely a bone turns in a solve: the collar and the spine give less than the limbs (AI-4).
+double stiffness_weight(const std::string& name) {
+    if (passive(name)) return 0;
+    if (starts_with(name, "mCollar")) return 0.25;
+    if (name == "mTorso" || name == "mChest") return 0.1;
+    if (name == "mNeck") return 0.3;
+    return 1;
+}
+
+// y = m^-1 e for a symmetric positive definite 3 x 3 m.
+Vec3 solve3(const double m[3][3], const Vec3& e) {
+    const double c00 = m[1][1] * m[2][2] - m[1][2] * m[2][1], c01 = m[1][2] * m[2][0] - m[1][0] * m[2][2],
+                 c02 = m[1][0] * m[2][1] - m[1][1] * m[2][0];
+    const double det = m[0][0] * c00 + m[0][1] * c01 + m[0][2] * c02;
+    if (std::fabs(det) < 1e-30) return {};
+    const double inv[3][3] = {{c00, m[0][2] * m[2][1] - m[0][1] * m[2][2], m[0][1] * m[1][2] - m[0][2] * m[1][1]},
+                              {c01, m[0][0] * m[2][2] - m[0][2] * m[2][0], m[0][2] * m[1][0] - m[0][0] * m[1][2]},
+                              {c02, m[0][1] * m[2][0] - m[0][0] * m[2][1], m[0][0] * m[1][1] - m[0][1] * m[1][0]}};
+    Vec3 y;
+    for (int r = 0; r < 3; ++r) y[r] = (inv[r][0] * e.x + inv[r][1] * e.y + inv[r][2] * e.z) / det;
+    return y;
+}
+
+}  // namespace
+
+int auto_ik_default_length(const Skeleton& skel, int node) {
+    if (node <= 0 || node >= skel.joint_count() || skel[node].category == Category::Face) return 0;
+    int n = 0;
+    for (int i = skel[node].parent; i > 0 && n < 6; i = skel[i].parent) {
+        if (passive(skel[i].name)) continue;
+        ++n;
+        if (chain_stop(skel[i].name)) return n;
+    }
+    return std::min(n, 2);
+}
+
+AutoIkChain auto_ik_chain(const Rig& rig, const Clip& clip, double frame, int node, int length) {
+    const Skeleton& skel = rig.skeleton();
+    AutoIkChain c;
+    c.end = node;
+    if (node <= 0 || node >= skel.size()) {
+        c.why = "Auto IK needs a bone with bones above it: the pelvis moves the whole body";
+        return c;
+    }
+    const std::string& name = skel[node].name;
+    if (node >= skel.joint_count() || skel[node].category == Category::Face) {
+        c.why = name + " moves by position, not Auto IK";
+        return c;
+    }
+    if (clip.has_channels(name, kPosChannels)) {
+        c.why = name + " has position keys, so Move moves it";
+        return c;
+    }
+    if (pin_at(clip, rig, node, frame) >= 0 || driven(rig, clip, frame, node)) {
+        c.why = name + " is held by a pin or an IK limb here";
+        return c;
+    }
+    const int want = length > 0 ? length : auto_ik_default_length(skel, node);
+    std::vector<int> up;  // every bone the chain may take, nearest first
+    for (int i = skel[node].parent; i > 0 && !driven(rig, clip, frame, i); i = skel[i].parent) {
+        up.push_back(i);
+        c.longest += !passive(skel[i].name);
+    }
+    if (c.longest == 0) {
+        c.why = "The bone above " + name + " is held by a pin or an IK limb here";
+        return c;
+    }
+    // length counts the bones that turn; the mSpine bones between them come along, none at the root.
+    for (int i = 0; c.turning < std::clamp(want, 1, c.longest); ++i) {
+        c.bones.insert(c.bones.begin(), up[i]);
+        c.turning += !passive(skel[up[i]].name);
+    }
+    return c;
+}
+
+std::vector<Vec3> auto_ik_hinges(const Rig& rig, const Shape* shape) {
+    const Skeleton& skel = rig.skeleton();
+    std::vector<Vec3> h(static_cast<size_t>(skel.size()));
+    for (const LimbInfo& l : rig.limbs()) {
+        if (l.spine) continue;
+        h[l.mid] = l.hinge;
+        if (l.finger) h[l.end] = l.hinge;  // fingers curl at both joints
+        if (starts_with(skel[l.root].name, "mHindLimb")) h[l.end] = l.hinge;  // the hock bends as the knee does
+    }
+    // A body that bends a hinge at rest (a creature's legs rigged bent) bends it in that plane: without rig axes, the
+    // plane's normal is the hinge (AI-4).
+    const std::vector<Xform> rest = shape ? skel.global_pose(Pose(skel.size()), shape) : std::vector<Xform>{};
+    for (int j = 0; j < skel.size() && shape; ++j) {
+        const int up = skel[j].parent;
+        const int down = skel[j].children.empty() ? -1 : skel[j].children.front();
+        if (h[j].length() < 1e-9 || has_rig_axes(shape, j) || up < 0 || down < 0 || down >= skel.joint_count()) continue;
+        const Vec3 a = rest[j].pos - rest[up].pos, b = rest[down].pos - rest[j].pos, n = a.cross(b);
+        if (a.length() < 1e-4 || b.length() < 1e-4 || n.length() < std::sin(20 * kDegToRad) * a.length() * b.length()) continue;
+        const Vec3 hinge = rest[up].rot.conj().rotate(n.normalized());
+        h[j] = hinge * (hinge.dot(h[j]) < 0 ? -1.0 : 1.0);
+    }
+    for (int j = 0; j < skel.size(); ++j) {
+        if (h[j].length() < 1e-9 || !has_rig_axes(shape, j)) continue;
+        // The rig axis nearest the SL hinge, of the two across the bone, pointing the same way (AI-4).
+        const Quat to_parent = skel[j].rest * shape->axes[j];
+        const Vec3 tail = j < static_cast<int>(shape->tails.size()) && shape->tails[j].length() > 0 ? shape->tails[j] : skel[j].end;
+        const Vec3 along = skel[j].rest.rotate(tail).normalized();
+        Vec3 cand[3];
+        int skip = 0;
+        for (int k = 0; k < 3; ++k) {
+            Vec3 e;
+            e[k] = 1;
+            cand[k] = to_parent.rotate(e);
+            if (std::fabs(cand[k].dot(along)) > std::fabs(cand[skip].dot(along))) skip = k;
+        }
+        int best = skip == 0 ? 1 : 0;
+        for (int k = 0; k < 3; ++k)
+            if (k != skip && std::fabs(cand[k].dot(h[j])) > std::fabs(cand[best].dot(h[j]))) best = k;
+        h[j] = cand[best] * (cand[best].dot(h[j]) < 0 ? -1.0 : 1.0);
+    }
+    return h;
+}
+
+namespace {
+
+// Damped least squares over chain (AI-4).
+void dls(const Skeleton& skel, const Shape* shape, const AutoIkChain& chain, const std::vector<Vec3>& hinges,
+         const Vec3& target, Pose& pose) {
+    const std::vector<int>& b = chain.bones;
+    const int n = static_cast<int>(b.size());
+    if (n == 0 || chain.end < 0) return;
+    const Xform base = parent_global(skel, skel.global_pose(pose, shape), b[0]);
+    std::vector<Xform> g(n);
+    Vec3 end;
+    auto fk = [&] {
+        Xform cur = base;
+        for (int k = 0; k < n; ++k) g[k] = cur = cur * skel.local_xform(b[k], pose, shape);
+        end = cur.apply(skel.local_xform(chain.end, pose, shape).pos);
+    };
+    auto parent_rot = [&](int k) { return k > 0 ? g[k - 1].rot : base.rot; };
+    auto hinge_of = [&](int k) { return b[k] < static_cast<int>(hinges.size()) ? hinges[b[k]] : Vec3{}; };
+    // The signed bend at hinge k, about its world hinge: from the bone above it to its own bone.
+    auto bend = [&](int k, const Vec3& axis) {
+        const Vec3 above = g[k].pos - (k > 0 ? g[k - 1].pos : base.pos), own = (k + 1 < n ? g[k + 1].pos : end) - g[k].pos;
+        const Vec3 a = perp_to(above, axis), o = perp_to(own, axis);
+        return a.length() < 1e-6 || o.length() < 1e-6 ? 0.0 : std::atan2(axis.dot(a.cross(o)), a.dot(o));
+    };
+    fk();
+    double reach = (end - g[0].pos).length();
+    for (int k = 1; k < n; ++k) reach += (g[k].pos - g[k - 1].pos).length();
+    reach = std::max(reach, 1e-3);
+    // A hinge keeps the side it bends to (straight counts as SL's usual side): it never folds through straight.
+    std::vector<double> side(n, 0);
+    for (int k = 0; k < n; ++k)
+        if (Vec3 h = hinge_of(k); h.length() > 1e-9) side[k] = bend(k, parent_rot(k).rotate(h).normalized()) < -kDegToRad ? -1 : 1;
+    const double min_bend = 1 * kDegToRad, max_bend = 178 * kDegToRad, lambda = 0.05 * reach;
+    struct Dof {
+        int k;
+        Vec3 axis, col;
+        double w;
+    };
+    std::vector<Dof> dofs;
+    for (int it = 0; it < 150; ++it) {
+        Vec3 e = target - end;
+        if (e.length() < 1e-6) break;
+        if (e.length() > 0.2 * reach) e = e.normalized() * (0.2 * reach);  // small steps: the solve follows a path
+        dofs.clear();
+        for (int k = 0; k < n; ++k) {
+            const Vec3 r = end - g[k].pos, h = hinge_of(k);
+            const double w = stiffness_weight(skel[b[k]].name);
+            if (w == 0) continue;
+            if (h.length() > 1e-9) {
+                const Vec3 axis = parent_rot(k).rotate(h).normalized();
+                dofs.push_back({k, axis, axis.cross(r), w});
+            } else {
+                for (Vec3 axis : {Vec3{1, 0, 0}, Vec3{0, 1, 0}, Vec3{0, 0, 1}}) dofs.push_back({k, axis, axis.cross(r), w});
+            }
+        }
+        // A hinge at its stop that the step would push further takes no part in it (the others make up for it), so
+        // the solve is done again without it.
+        std::vector<Vec3> turn(n);  // world rotation vector per bone
+        for (int pass = 0; pass < 2; ++pass) {
+            double m[3][3] = {{lambda * lambda, 0, 0}, {0, lambda * lambda, 0}, {0, 0, lambda * lambda}};
+            for (const Dof& d : dofs)
+                for (int r = 0; r < 3; ++r)
+                    for (int c = 0; c < 3; ++c) m[r][c] += d.w * d.col[r] * d.col[c];
+            const Vec3 y = solve3(m, e);
+            bool stopped = false;
+            std::fill(turn.begin(), turn.end(), Vec3{});
+            for (Dof& d : dofs) {
+                double a = d.w * d.col.dot(y);
+                if (side[d.k] != 0) {  // a hinge: the bend changes by exactly a
+                    const double s = bend(d.k, d.axis) * side[d.k];
+                    const double clamped = std::clamp(a * side[d.k], min_bend - s, max_bend - s) * side[d.k];
+                    if (pass == 0 && d.w > 0 && std::fabs(clamped - a) > 1e-9 && std::fabs(clamped) < 1e-6)
+                        d.w = 0, stopped = true;
+                    a = clamped;
+                }
+                turn[d.k] += d.axis * a;
+            }
+            if (!stopped) break;
+        }
+        for (int k = 0; k < n; ++k) {
+            const double a = turn[k].length();
+            if (a < 1e-12) continue;
+            const Quat pr = parent_rot(k), r = Quat::axis_angle(turn[k], a);
+            const Node& node = skel[b[k]];
+            const Quat local = (pr.conj() * r * pr * node.rest * pose.rot[b[k]]).normalized();
+            pose.rot[b[k]] = (node.rest.conj() * local).normalized();
+        }
+        fk();
+    }
+}
+
+}  // namespace
+
+void solve_auto_ik(const Skeleton& skel, const Shape* shape, const AutoIkChain& chain, const std::vector<Vec3>& hinges,
+                   const Vec3& target, Pose& pose) {
+    // A chain longer than its limb's default reaches with the limb first; the bones above take only what is left, as
+    // the spine does for an IK target's Pull (RC-1). Solved all at once, a straight arm pulled in would bend the chest
+    // (the only bone that moves the hand towards the shoulder at first) instead of the elbow.
+    const int limb = auto_ik_default_length(skel, chain.end);
+    if (limb > 0 && chain.turning > limb) {
+        AutoIkChain inner = chain;
+        while (inner.turning > limb || passive(skel[inner.bones.front()].name)) {
+            inner.turning -= !passive(skel[inner.bones.front()].name);
+            inner.bones.erase(inner.bones.begin());
+        }
+        dls(skel, shape, inner, hinges, target, pose);
+    }
+    dls(skel, shape, chain, hinges, target, pose);
+}
+
+std::vector<std::string> key_auto_ik(Clip& clip, const Rig& rig, double frame, const AutoIkChain& chain,
+                                     const Evaluation& start, const Vec3& target, const Shape* shape, Pose* solved) {
+    std::vector<std::string> keyed;
+    if (chain.bones.empty()) return keyed;
+    Pose pose = start.pose;
+    solve_auto_ik(rig.skeleton(), shape, chain, auto_ik_hinges(rig, shape), target, pose);
+    for (int b : chain.bones) {
+        if (passive(rig.skeleton()[b].name)) continue;  // never turned
+        keyed.push_back(rig.skeleton()[b].name);
+        key_rotation(clip, keyed.back(), frame, pose.rot[b]);
+    }
+    if (solved) *solved = std::move(pose);
+    return keyed;
+}
+
 }  // namespace vats

@@ -9,6 +9,7 @@
 #include <optional>
 
 #include "vats/curve_ops.h"
+#include "vats/deformer.h"
 #include "vats/dynamics.h"
 #include "vats/edit.h"
 #include "vats/footlock.h"
@@ -137,6 +138,8 @@ AnimExportOptions with_clip_settings(const Clip& clip, AnimExportOptions o) {
         const Json* w = ex.find("reduce_world");
         o.reduce_world_m = w && w->is_number() && w->num > 0 ? w->num : kReduceWorldDefault;
     }
+    if (const Json* v = ex.find("end_at_rest"); v && v->is_bool()) o.end_at_rest = v->b;  // 09 0l
+    if (const Json* v = ex.find("hold_no_sink"); v && v->is_bool()) o.hold_without_sinking = v->b;
     return o;
 }
 
@@ -494,7 +497,8 @@ std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const
         const bool leg = n == 0 || in_leg(skel, n);
         upper = upper || in_upper_body(name);
         if (leg && prio < kAoPriority) low_priority.push_back(name);
-        if (!j.pos.empty() && !skel[n].attachment && (name == "mSpine1" || in_leg(skel, n))) hover.push_back(name);
+        // SL's height reads the left leg's positions (sl_body_size), never mSpine1's; both legs change the leg length.
+        if (!j.pos.empty() && !skel[n].attachment && in_leg(skel, n)) hover.push_back(name);
         if (!j.pos.empty() && cat == Category::Face && !is_eye(name) && !eo.positions) face_pos.push_back(name);
         if (j.pos.empty() && !j.rot.empty() && !is_eye(name) &&
             (cat == Category::Tail || cat == Category::Wings || cat == Category::Face || cat == Category::Hands) &&
@@ -559,14 +563,21 @@ std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const
         for (const char* b : {"mTorso", "mChest", "mNeck", "mHead", "mSkull"})
             if (!j.pos.empty() && skel.find_viewer(j.name) == skel.find(b)) taller.push_back(b);
     if (on("body_height") && !taller.empty()) {
-        const SlBodySize rest = sl_body_size(skel, nullptr, eo.shape);
-        const double rest_up = rest.height - rest.pelvis_to_foot;
+        // The whole height, as the viewer takes it: the left leg's keys count too (for its knee, ankle and foot the
+        // root rises half what the leg grows, so the feet sink the other half), and Hold without sinking evens it all.
+        const Shape* body = deformer_body(eo);  // the worn avatar's scales when the export uses its joints
+        const double rest = sl_body_size(skel, nullptr, body).height;
+        // The clip as the export writes it: End at rest and Hold without sinking (09 0l) change the positions.
+        const bool deformer = eo.end_at_rest || eo.hold_without_sinking;
+        const Clip dclip = deformer ? with_deformer_options(skel, clip, eo) : Clip{};
+        const int dlast = deformer ? std::max(dclip.end_frame, 1) : last;
         std::vector<int> frames;
         double worst = 0, end = 0;
-        for (int f = 0; f <= last; ++f) {
-            const SlBodySize b = sl_body_size(skel, &poses[size_t(f)], eo.shape);
-            const double sink = (b.height - b.pelvis_to_foot - rest_up) / 2;
-            if (f == last) end = sink;
+        for (int f = 0; f <= dlast; ++f) {
+            const Pose dp = deformer ? evaluate_curves(skel, dclip, f) : Pose{};
+            const SlBodySize b = sl_body_size(skel, deformer ? &dp : &poses[size_t(f)], body);
+            const double sink = (b.height - rest) / 2;
+            if (f == dlast) end = sink;
             if (std::fabs(sink) <= kSinkTol) continue;
             frames.push_back(f);
             if (std::fabs(sink) > std::fabs(worst)) worst = sink;
@@ -574,19 +585,36 @@ std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const
         if (!frames.empty()) {
             const double cm = std::fabs(worst) * 100;
             const bool stays = std::fabs(end) > kSinkTol;
-            char msg[700];
+            // The spine hint: a taller torso or chest can be built on the spine bones, which the height never reads.
+            const bool torso = std::find(taller.begin(), taller.end(), "mTorso") != taller.end() ||
+                               std::find(taller.begin(), taller.end(), "mChest") != taller.end();
+            const bool counter = std::any_of(taller.begin(), taller.end(), [](const std::string& b) { return b != "mSkull"; });
+            char msg[1400];
             std::snprintf(msg, sizeof msg,
                           "Position keys on %s make the avatar up to %.1f cm %s. Second Life's viewers take the avatar's "
-                          "height whenever an animation starts or stops, and stand it half that, %.1f cm, %s. %s Set Hover "
-                          "Height %.1f cm %s while the change is on. (The spine bones mSpine1 to mSpine4 and the hip's "
-                          "position do not count.)",
+                          "height whenever an animation starts or stops, and stand it half that, %.1f cm, %s. %s %s Hover "
+                          "Height %.1f cm %s while the change is on. %s",
                           list(taller).c_str(), 2 * cm, worst > 0 ? "taller" : "shorter", cm,
                           worst > 0 ? "lower, into the ground" : "higher, off the ground",
                           stays ? "It ends changed, and a joint keeps an animation's position after it ends (how a "
                                   "deformer stays), so this lasts after it stops, until the skeleton is reset."
                                 : "It ends at rest, so this lasts only while it plays.",
-                          cm, worst > 0 ? "higher" : "lower");
-            add("body_height", LintSeverity::Warning, taller, frames, msg, {});
+                          counter ? "Fix: Hold Without Sinking counter-keys mSkull so the height stays. Or set" : "Set",
+                          cm, worst > 0 ? "higher" : "lower",
+                          torso ? "For a longer body, move the spine bones up instead of mTorso and mChest: mSpine1 and "
+                                  "mSpine2 sit between the hip and mTorso, mSpine3 and mSpine4 between mTorso and mChest, "
+                                  "and Second Life's height never reads them, so the body grows without the wearer sinking."
+                                : "(The spine bones mSpine1 to mSpine4 and the hip's position do not count.)");
+            // The fix counters on mSkull: none when mSkull's own keys are all that change the height.
+            LintFix fix;
+            const int head = skel.find("mHead");
+            const double hs = body && head >= 0 && size_t(head) < body->scale.size() ? body->scale[size_t(head)].z : 1;
+            if (counter)
+                fix = {fmt("Hold Without Sinking (mSkull, head scale %.3g)", hs),
+                       [&skel, sh = body ? std::optional<Shape>(*body) : std::nullopt](Clip& c) {
+                           hold_without_sinking(c, skel, sh ? &*sh : nullptr);
+                       }};
+            add("body_height", LintSeverity::Warning, taller, frames, msg, std::move(fix));
         }
     }
     if (on("frozen_bones") && !frozen.empty())

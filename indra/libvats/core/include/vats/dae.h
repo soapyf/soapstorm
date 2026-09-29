@@ -63,6 +63,11 @@ struct DaeModel {
     // not bind keep the SL rest pose; mRoot is identity.
     std::vector<Xform> binds;
     std::vector<bool> bound;  // Rigged only: which SK-40 indices the file itself gave a bind for
+    // Rigged only: the rig axes, each bound index's bind rotation as the file authored it (SL space, after the
+    // up-axis and quarter turns), kept when settle_rig replaced the binds' bone-orientation rotations with SL's rest
+    // rotations. Empty when the file's binds are in SL's frames. Posing and display only (rig_axes_from_parts);
+    // skinning uses binds.
+    std::vector<Quat> rig_axes;
     // settle_rig's quarter turns about Z (0..3) for the binds and for the vertices, and whether the file
     // had enough evidence to decide them itself. Parts of one body that could not decide (eyes, teeth: a
     // few joints close to the centre line) take the decision of a part that could (apply_rig_turn).
@@ -104,6 +109,7 @@ bool load_dae(std::string_view xml_text, const std::string& dae_dir, const Skele
 // Notes each change in report.warnings.
 // Also records bound in model.bound.
 void settle_rig(DaeModel& model, const Skeleton& skel, const std::vector<bool>& bound, DaeReport& report);
+// Also keeps the file's own bind rotations in model.rig_axes when step 2 replaces them.
 // Turns an undecided model's binds and vertices by the given quarter turns about Z, the same way settle_rig
 // would have. Only the difference from what the model already has is applied, so calling it twice is safe.
 void apply_rig_turn(DaeModel& model, int turn_binds, int turn_vertices);
@@ -120,5 +126,12 @@ void skin_prop(const DaeModel& model, const Skeleton& skel, const std::vector<Xf
 // out as base, when no part overrides a joint.
 bool shape_from_binds(const Skeleton& skel, const std::vector<const DaeModel*>& parts, const Shape* base, Shape& out,
                       double tol_m = 0.001);
+
+// A mesh body's rig axes: for every joint a part authored its own bone axes for (model.rig_axes, first part wins),
+// out.axes gets them as a rotation from the joint's SL rest frame and out.tails the bone's display tail in that frame:
+// along the rig's bone axis (the signed axis that points at the child joints on most of its bones, Y for Blender),
+// as long as the child joint it points at, else as far as the vertices the joint mostly carries reach along it, else
+// the SL bone's length. Other nodes get identity and zero. Returns false, leaving out, when no part has rig axes.
+bool rig_axes_from_parts(const Skeleton& skel, const std::vector<const DaeModel*>& parts, Shape& out);
 
 }  // namespace vats

@@ -47,6 +47,7 @@ void App::load_bodies() {
 void App::save_bodies() const {
     Json list = Json::array();
     for (const MeshBody& b : bodies_) {
+        if (b.id.rfind("run:", 0) == 0) continue;  // --mesh-body: this run only
         Json parts = Json::array();
         for (auto& p : b.parts) parts.arr.push_back(p);
         Json o = Json::object();
@@ -62,6 +63,13 @@ void App::save_bodies() const {
 }
 
 const App::MeshBody* App::mesh_body() const { return find_mesh_body(settings_.mesh_body); }
+
+void App::cli_mesh_body(const std::string& path) {
+    const std::string id = "run:" + path;
+    if (!find_mesh_body(id)) bodies_.push_back({id, stem_of(path), {path}});
+    if (!session_body_) session_body_.emplace(settings_.body, settings_.mesh_body);  // the saved body stays
+    settings_.mesh_body = id;
+}
 
 const App::MeshBody* App::find_mesh_body(const std::string& id) const {
     for (const MeshBody& b : bodies_)
@@ -115,7 +123,8 @@ const Shape* App::mesh_body_shape(const MeshBody& b, const Shape* base) const {
         // ponytail: prop_model caches meshes and is not const; the cache is the only state it touches here.
         for (const std::string& path : b.parts) parts.push_back(const_cast<App*>(this)->prop_model(path));
         Shape s;
-        if (shape_from_binds(skel_, parts, base, s)) it->second = std::move(s);
+        const bool moved = shape_from_binds(skel_, parts, base, s);  // s is base when no joint moved
+        if (rig_axes_from_parts(skel_, parts, s) || moved) it->second = std::move(s);  // and its rig axes
     }
     return it->second ? &*it->second : base;
 }

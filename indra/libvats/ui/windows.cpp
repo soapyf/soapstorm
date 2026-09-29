@@ -14,6 +14,7 @@
 #include "vats/bvh.h"
 #include "imgui_internal.h"
 #include "vats/clips.h"
+#include "vats/deformer.h"
 #include "vats/export_name.h"
 #include "vats/height_variant.h"
 #include "vats/world_reduce.h"
@@ -456,6 +457,42 @@ void App::draw_export_section() {
     if (ImGui::Checkbox("BVH: include bone positions", &bvh_positions)) set("bvh_positions", bvh_positions);
     ImGui::SetItemTooltip("Writes position channels for moved bones other than the hip. Many tools "
                           "expect rotation only below the hip, so this is off by default.");
+    // 09 0l, the deformer tool: shown once a bone other than the hip has position keys (or an option is on).
+    bool end_rest = json_bool(ex, "end_at_rest"), hold = json_bool(ex, "hold_no_sink"), undeform = json_bool(ex, "undeformer");
+    bool moved = end_rest || hold || undeform;
+    for (auto& [name, track] : doc_.clip().curves)
+        moved = moved || (name != "mPelvis" && skel_.find(name) > 0 && doc_.clip().has_channels(name, kPosChannels));
+    if (moved) {
+        label("Deformer");
+        if (ImGui::Checkbox("End at rest", &end_rest)) set("end_at_rest", end_rest);
+        ImGui::SetItemTooltip("Adds a frame after the last one with every moved bone (the hip aside) back at its rest "
+                              "position. A bone keeps an animation's position after it stops, so the shape then lasts only "
+                              "while the animation plays. A looping animation stops wherever it is: pair it with an "
+                              "undeformer instead.");
+        ImGui::SetCursorPosX(label_w);
+        if (ImGui::Checkbox("Hold without sinking", &hold)) set("hold_no_sink", hold);
+        ImGui::SetItemTooltip("Adds mSkull position keys that keep Second Life's avatar height at rest height on every "
+                              "frame, so a longer neck or body does not sink the wearer into the ground (nor a shorter one "
+                              "lift them), while it plays and after. mSkull's own position keys are kept and the counter-move "
+                              "added to them. Anything rigged to mSkull, such as system hair, may shift.");
+        if (hold) {
+            const Shape* s = export_positions() ? export_positions() : export_shape();  // deformer_body
+            const int head = skel_.find("mHead");
+            char text[160];
+            if (s && head >= 0 && size_t(head) < s->scale.size())
+                std::snprintf(text, sizeof text, "Counters for a head scale of %.3g (%s)", s->scale[size_t(head)].z,
+                              export_positions() && !swap_body() ? "your avatar's" : "the bake shape's");
+            else
+                std::snprintf(text, sizeof text, "Counters for a head scale of 1 (no bake shape to take it from)");
+            ImGui::SetCursorPosX(label_w);
+            hint(text);
+        }
+        ImGui::SetCursorPosX(label_w);
+        if (ImGui::Checkbox("Also export an undeformer", &undeform)) set("undeformer", undeform);
+        ImGui::SetItemTooltip("Writes [name]_undeform.anim beside the animation: the same bones at their rest positions, "
+                              "at the same priority, %.1f s long. Playing it puts a deformer's bones back.%s",
+                              double(kUndeformSeconds), host_.can_upload() ? " Upload Animation uploads it too." : "");
+    }
     // IO-14: key-reduction tolerances, stored as [degrees, metres].
     float rot_deg = 0.05f, pos_mm = 0.5f;
     if (const Json* r = ex.find("reduce"); r && r->is_array() && r->arr.size() == 2 && r->arr[0].is_number() && r->arr[1].is_number())
@@ -517,7 +554,12 @@ void App::draw_export_section() {
         naming.actor = actor_names[k];
         for (size_t v = 0; v < variants.size(); ++v) {
             if (k || v) ImGui::SetCursorPosX(label_w);
-            ImGui::TextColored(ImVec4(0.5f, 0.85f, 0.55f, 1), "%s", variant_file_name(naming, stem, variants[v], "anim").c_str());
+            const std::string file = variant_file_name(naming, stem, variants[v], "anim");
+            ImGui::TextColored(ImVec4(0.5f, 0.85f, 0.55f, 1), "%s", file.c_str());
+            if (undeform) {  // 09 0l
+                ImGui::SetCursorPosX(label_w);
+                ImGui::TextColored(ImVec4(0.5f, 0.85f, 0.55f, 1), "%s", undeformer_path(file).c_str());
+            }
         }
     }
     if (multi_actor()) {
@@ -591,7 +633,13 @@ void App::upload_now(bool all_clips) {
                 for (auto& e : validate_anim(r.file, skel_, true)) problems += "- " + name + ": " + e + "\n";  // 60 s, 250000 bytes
                 for (auto& w : r.warnings) warnings += "- " + name + ": " + w + "\n";
                 if (json_bool(ex, "save_to_library")) anim_to_library(name + ".anim", bytes);
+                std::vector<std::uint8_t> undo = undeformer_bytes(r);  // 09 0l: uploaded after its deformer
                 queue.emplace_back(name, std::move(bytes));
+                if (!undo.empty()) {
+                    const std::string uname = undeformer_name(name);
+                    if (json_bool(ex, "save_to_library")) anim_to_library(uname + ".anim", undo);
+                    queue.emplace_back(uname, std::move(undo));
+                }
             }
         }
         if (actors > 1) set_active_actor(pr, home);
@@ -707,6 +755,8 @@ void App::export_now(bool bvh, bool all_bones, bool all_clips) {
                 doc_.clip().mirror_export = saved;
                 if (!ok) break;  // the export already explained why
                 if (library) anim_file_to_library(path);
+                if (std::error_code uec; library && json_bool(ex, "undeformer") && std::filesystem::exists(u8path(undeformer_path(path)), uec))
+                    anim_file_to_library(undeformer_path(path));
                 names += (names.empty() ? "" : ", ") + path.substr(path.find_last_of('/') + 1);
             }
         }

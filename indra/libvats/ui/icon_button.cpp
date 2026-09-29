@@ -149,7 +149,7 @@ const char* action_icon(const char* action_id) {
                  {"upload", icon::kUpload}, {"import_prop", icon::kImport}, {"tween", icon::kTween},
                  {"batch_retarget", icon::kBatch}, {"graph", icon::kEase}, {"dope_sheet", icon::kDopeSheet}, {"reset_layout", icon::kRefresh}, {"foot_lock", icon::kFootLock},
                  {"tool_select", icon::kSelect}, {"tool_move", icon::kMove}, {"tool_rotate", icon::kRotate},
-                 {"tool_scale", icon::kScale}, {"orientation", icon::kGimbal}, {"ik_toggle", icon::kIkFk},
+                 {"tool_scale", icon::kScale}, {"orientation", icon::kGimbal}, {"ik_toggle", icon::kIkFk}, {"auto_ik", icon::kPull},
                  {"follow_target", icon::kFollow}, {"pin_world", icon::kPin}, {"pin_bone", icon::kBind},
                  {"unpin", icon::kRelease}, {"delete_pin", icon::kDelete}, {"hands", icon::kHand},
                  {"target_show", icon::kShown}, {"target_load", icon::kOpen}, {"target_clear", icon::kClear}};

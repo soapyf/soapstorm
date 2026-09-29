@@ -52,6 +52,7 @@ add_library(vats_core STATIC
     src/jump_arc.cpp
     src/reach.cpp
     src/lint.cpp
+    src/deformer.cpp
     src/self_contact.cpp
     src/loop_tools.cpp
     src/loop_assist.cpp

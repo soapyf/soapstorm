@@ -61,6 +61,32 @@ What the view shows does not change the export. To bake IK and pins against the 
 [[Export to Second Life#Choose the bake shape]]. In the viewer, a body shown in your avatar's place is
 what **Your avatar** bakes on, position keys included.
 
+### Rig axes
+
+A rig made in Blender or another 3D program gives every bone its own axes: one along the bone and two across it,
+turned (rolled) the way the rigger chose, so that a knee bends about one of them. Second Life ignores them: its joints
+turn in their own fixed frames. VATs keeps the rig's axes, the **rig axes**, and poses in them while the body is
+shown:
+
+![The Rotate tool on a mech's hind knee: its red ring stands in the plane the leg bends in, not along Second Life's axes](images/mesh-bodies/rig-axes-gizmo.png)
+*The test mech's hind knee with the Rotate tool: the red ring turns the knee about its own hinge.*
+
+- **The Local gizmo** (Rotate and Move, **Local** axes) lines up with the bone's rig axes, so the ring that bends a
+  knee is the knee's own hinge, however it was rolled.
+- **Properties → Rotation** reads the turn about the rig axes (**In the body's rig axes** shows under it). Typing a
+  value turns the bone about its own axes.
+- **The bone glyphs** roll with the rig axes. A bone points along its rig bone axis (Y for a Blender rig), as far as
+  its child joint; an end bone, such as a foot or a head, as far as its own mesh reaches.
+- **[[IK#Auto IK|Auto IK]]** bends elbows, knees and hind legs about their rig hinge.
+
+The keys and the exported `.anim` stay in Second Life's joint frames, exactly as without the body: rig axes only
+change how you pose and what you see. **Gimbal** axes still show the stored channels, and the [[Graph editor]] shows
+the stored curves.
+
+A file has rig axes when its binds follow a bone orientation, as FBX and COLLADA from Blender do. A file written in
+Second Life's frames (many converted kits are) has none, and the gizmo shows Second Life's axes. **View → Body**
+chooses which body you pose on; in the viewer, rig axes apply while a body is shown in your avatar's place.
+
 ### Export a devkit from Blender
 
 Select the armature and every mesh part, then export FBX with the default settings and **Add Leaf Bones**
@@ -71,8 +97,8 @@ off. Import all the parts together, so they share one alignment.
 - **Axes.** A devkit exported with other axes is turned upright, and a quarter turn about the vertical
   is applied when the binds clearly call for it. All parts of one body share the same turn, so the eyes
   and head stay on the body.
-- **Bone-oriented binds.** FBX files whose binds follow Blender's bone orientation are aligned joint by
-  joint.
+- **Bone-oriented binds.** FBX and COLLADA files whose binds follow Blender's bone orientation are aligned joint
+  by joint, and their bone axes are kept as the body's rig axes (above).
 - **Mixed COLLADA.** Blender's COLLADA exporter can write SL bind data for some joints and Blender's own
   positions for others, often the face. VATs corrects each such joint on its own.
 - **Weights.** A vertex with more than four weights keeps its strongest four, as in Second Life.

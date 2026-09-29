@@ -109,4 +109,41 @@ bool key_pinned_point(Clip& clip, const Rig& rig, double frame, int node, const 
 bool follow_bake(Clip& clip, const Rig& rig, int target, int follower, int f0, int f1, bool keep_offset,
                  const Shape* shape, std::string& why);
 
+// Auto IK (spec 08 AI): a joint dragged in the view pulls the bones above it, solved by IK on every frame of the drag
+// and keyed as plain rotations, with no IK controller, as a Move drag keys a bone.
+struct AutoIkChain {
+    std::vector<int> bones;  // from the chain's root down to the dragged joint's parent; Bento's mSpine1..4 among them
+                             // are passed through, never turned
+    int end = -1;            // the dragged joint: its head follows the pointer
+    int turning = 0;         // how many of bones turn
+    int longest = 0;         // the most bones that turn a chain from this joint can have now
+    std::string why;         // why there is no chain, when bones is empty
+};
+// AI-2: how many bones a drag of node turns by default: an arm to its collar, a leg to its hip, a hind leg, wing, tail
+// or finger to its first bone; any other joint 2 (fewer when it has fewer above it). 0: none (the pelvis, attachment
+// points, collision volumes, face bones). Bento's mSpine1..4 do not count: their offsets cancel in pairs.
+int auto_ik_default_length(const Skeleton& skel, int node);
+// AI-3: the chain for dragging node at frame with length bones (<= 0: the default), cut short where it would take the
+// pelvis or a bone an IK limb or a pin drives at the frame, which stay as they are. node itself must turn freely: none
+// (why says so) for the pelvis, attachment points, face bones, a joint with position keys (Move moves those), a
+// pinned joint and one an IK limb drives.
+AutoIkChain auto_ik_chain(const Rig& rig, const Clip& clip, double frame, int node, int length = 0);
+// AI-4: the hinge each joint bends about, in its parent's frame, zero for a ball joint: elbows, knees, the hind legs'
+// second and third joints, the wings' second joint and the fingers' second and third joints, about their limb's
+// hinge. Where shape has rig axes for the joint, the rig axis nearest that hinge (never the one along the bone); else
+// where shape bends the joint at rest by 20 degrees or more, the normal of that bend (a creature rigged bent).
+std::vector<Vec3> auto_ik_hinges(const Rig& rig, const Shape* shape);
+// AI-4: turns chain's bones in pose so the head of chain.end reaches target (avatar space), or as near as they reach,
+// keeping the chain's root joint where it is. Damped least squares from pose: the smallest turn that gets there,
+// hinges bend only about their hinge and never through straight to the other side. A chain longer than the joint's
+// default (auto_ik_default_length) reaches with those bones first, and the ones above only take what is left.
+void solve_auto_ik(const Skeleton& skel, const Shape* shape, const AutoIkChain& chain, const std::vector<Vec3>& hinges,
+                   const Vec3& target, Pose& pose);
+// Keys chain's bones at frame with the solve for target from start's pose, and gives the solved pose in solved. A drag
+// solves each step from the last one's pose (solved), so the chain follows the pointer's path; from the evaluation at
+// the press, a target where the joint was keys the pose it had.
+std::vector<std::string> key_auto_ik(Clip& clip, const Rig& rig, double frame, const AutoIkChain& chain,
+                                     const Evaluation& start, const Vec3& target, const Shape* shape,
+                                     Pose* solved = nullptr);
+
 }  // namespace vats

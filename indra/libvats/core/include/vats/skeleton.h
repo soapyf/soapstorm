@@ -57,7 +57,21 @@ struct CollisionVolume {
 struct Shape {
     std::vector<Vec3> scale;   // 1,1,1 = none
     std::vector<Vec3> offset;  // 0,0,0 = none
+    // A mesh body's rig axes (dae.h, rig_axes_from_parts): per node, the bone axes its file authored, as a rotation
+    // from the node's SL rest frame, and the display tail they give the bone in that frame. Empty where the body has
+    // none (identity and zero per node likewise). Posing and display only: keys stay in SL's joint frames.
+    std::vector<Quat> axes;
+    std::vector<Vec3> tails;
 };
+
+// True when shape gives node i rig axes.
+inline bool has_rig_axes(const Shape* shape, int i) {
+    return shape && i >= 0 && i < static_cast<int>(shape->axes.size()) && !(shape->axes[i] == Quat{});
+}
+// A local rotation (relative to rest, as Pose::rot and the keys hold it) as it reads about a joint's rig axes, and
+// back: the same turn in the joint's frame, R = axes * rig * axes^-1.
+inline Quat to_rig_axes(const Quat& axes, const Quat& rot) { return (axes.conj() * rot * axes).normalized(); }
+inline Quat from_rig_axes(const Quat& axes, const Quat& rig) { return (axes * rig * axes.conj()).normalized(); }
 
 // A pose: rotation relative to the rest rotation, and translation offset from the rest position.
 struct Pose {
@@ -102,6 +116,9 @@ public:
     // axis nearest end to end's direction; identity for tails under 1e-5 or already on an axis.
     static Quat bone_frame(const Vec3& end);
     Quat bone_frame(int i) const { return bone_frame(nodes_[i].end); }
+    // The Local gizmo's axes of node i in its own frame: the mesh body's rig axes where shape has them, else the bone
+    // frame.
+    Quat bone_axes(int i, const Shape* shape) const { return has_rig_axes(shape, i) ? shape->axes[i] : bone_frame(i); }
 
     // The viewer's lookup: exact name, then exact alias (attachment names may use '_' for ' ').
     int find_viewer(std::string_view name) const;

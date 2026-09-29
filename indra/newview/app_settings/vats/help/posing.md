@@ -48,6 +48,29 @@ Pick a tool from the timeline bar or the **Tools** menu. The keys below are the 
 ![Dragging the Rotate tool's blue ring turns the head to one side, then part of the way back](images/posing/rotate-drag.gif)
 *Dragging the blue Z ring turns **mHead** and keys frame 12; the angle shows beside the gizmo during the drag.*
 
+### Dragging a joint in the air (Auto IK)
+
+With **Auto IK** on (the default), you can pick a hand, foot or any other joint up and put it where you want it: the
+bones above it turn to follow, as an arm or leg would. There are two ways to drag:
+
+- **By its dot, with any tool.** Point at a bone near its joint: a white dot appears there and the label says
+  **Drag: Auto IK**. Press on the dot and drag. The joint moves across the view, at the depth it started at. A click
+  on the dot without dragging only selects the bone.
+- **With the Move tool.** Select the bone and drag the gizmo's centre square (across the view), an arrow or a
+  plane square.
+
+While you drag, the status bar says which bones follow, for example `Auto IK: mWristLeft pulls 3 bones, from
+mCollarLeft`. Roll the mouse wheel up or press **]** to take one more bone up the chain, down or **[** for one fewer;
+the drag starts again from where it began with the new chain. When you let go, every bone that turned is keyed at the
+frame, as one undo step ("Move mWristLeft (Auto IK)"). They are plain rotation keys, like any others.
+
+Turn it off with **Tools → Auto IK** or the **Auto IK** button (the grabbing hand) on the timeline bar, next to
+**IK / FK**; the choice is saved. With it off, the Move tool moves a bone's position, as before. How long each chain
+is, what it never takes and how it bends are in [[IK#Auto IK]].
+
+> **Note:** Some joints always move by position with the Move tool: the pelvis, attachment points, collision volumes,
+> face bones and any bone whose position is keyed (**Animate Position**).
+
 ### Typing exact values
 
 The **Bone** section of **Properties** shows the primary bone's **Rotation** in degrees around X, Y and Z; type or drag to change it. Every change keys the bone at the current frame; **Ctrl+click** a value and press **Enter** without changing it to key the pose as it is (a hold). **Offset** works the same way. Under it, **Keyed at this frame** or **Not keyed at this frame** tells you whether the values are a key or are interpolated.
@@ -56,6 +79,10 @@ The **Bone** section of **Properties** shows the primary bone's **Rotation** in 
 *The **Bone** section on a keyed frame. Type into a field to key that value.*
 
 A bone that normally only rotates can also move: press **Animate Position**, then set **Offset (m)**. Positions are in metres.
+
+With a [[Mesh bodies|mesh body]] that has its own bone axes (rig axes), **Rotation** reads the turn about those axes
+instead, and **In the body's rig axes** shows under it. Typing there still keys the bone in Second Life's frame; see
+[[Mesh bodies#Rig axes]].
 
 ### Per-bone priority
 
@@ -100,9 +127,31 @@ The head turns to the avatar's left, **Properties** now says **Keyed at this fra
 
 > **Note:** A bone's only key sets its pose on every frame, before it as well as after. Key the starting pose first when a move should start from rest.
 
+### Worked example: lifting a leg by its ankle
+
+[Open the example](example:posing-leg-lift.vat) [Show the target](target:target-leg-lift.vat): the Relaxed Stand
+held over 24 frames and keyed at frame 0 only. The target is the same stand with the left knee lifted high, as in a
+march.
+
+![Pressing the left ankle's dot and dragging it up and forward onto the green target: the hip and knee follow](images/posing/auto-ik-leg.gif)
+*The ankle's dot dragged onto the target ghost's ankle: the thigh swings up and the knee bends.*
+
+1. Drag the playhead to frame 12.
+2. **View → Camera → Left**, then zoom in until the legs fill the view.
+3. Point at the left ankle, just above the heel: the dot and **Drag: Auto IK** appear.
+4. Press on the dot and drag up and forward until the ankle sits on the green ghost's ankle, about a third of the way
+   up the shin. The thigh swings up and the knee bends as you go; if you overshoot, drag back. Let go.
+5. Click the left thigh (**mHipLeft**): the status bar's **Target** chip turns green once it is within 5°.
+
+Scrub from 0 to 12: the knee rises smoothly from the stand. Only **mHipLeft** and **mKneeLeft** have new keys, both
+at frame 12.
+
+> **Check:** about −58° on **mHipLeft**'s Rotation Y and about 86° on **mKneeLeft**'s; anything within 5° reads the
+> same.
+
 ### Mirror while posing
 
-The **Mirror** button on the timeline bar, next to **IK / FK**, turns live mirroring on and off. While it is on, every gizmo drag (including a direct drag on a bone and the Blender preset's **G** and **R**), every [[Hand poser]] drag or double-click, and every move or turn of an [[IK]] target or pole also keys the partner on the other side, at the same frame, with the mirrored pose. The partner's IK / FK state stays its own.
+The **Mirror** button on the timeline bar, next to **IK / FK**, turns live mirroring on and off. While it is on, every gizmo drag (including a direct drag on a bone, an Auto IK drag and the Blender preset's **G** and **R**), every [[Hand poser]] drag or double-click, and every move or turn of an [[IK]] target or pole also keys the partner on the other side, at the same frame, with the mirrored pose. The partner's IK / FK state stays its own.
 
 While it is on, the status bar shows **Mirror on** in purple and the gizmo's centre and outer ring are purple. It is off each time VATs starts.
 
@@ -139,7 +188,8 @@ Mouse and key behaviour depends on the control preset (Industry, Blender, QAvima
 
 ## Tips and tricks
 
-- Place hands and feet with [[IK]] instead of rotating each joint.
+- Drag hands and feet by their dots ([[IK#Auto IK|Auto IK]]) instead of rotating each joint; switch a limb to [[IK]]
+  when its hand or foot must stay put over many frames.
 - Curl fingers with the [[Hand poser]], or apply a starter hand shape from the [[Pose library]].
 - **View → Bones → Bones in Front (X-ray)** makes bones inside the body clickable.
 

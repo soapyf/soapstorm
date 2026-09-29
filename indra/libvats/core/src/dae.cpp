@@ -1008,8 +1008,10 @@ Quat quarter_turn(int k) { return Quat::axis_angle({0, 0, 1}, k * kPi / 2); }
 void turn_binds(DaeModel& model, int k) {
     const Quat q = quarter_turn(k);
     for (size_t j = 0; j < model.binds.size(); ++j)
-        if (j < model.bound.size() && model.bound[j])
+        if (j < model.bound.size() && model.bound[j]) {
             model.binds[j] = {(q * model.binds[j].rot).normalized(), q.rotate(model.binds[j].pos)};
+            if (j < model.rig_axes.size()) model.rig_axes[j] = (q * model.rig_axes[j]).normalized();
+        }
     model.turn_binds = (model.turn_binds + k) % 4;
 }
 
@@ -1146,15 +1148,17 @@ void settle_rig(DaeModel& model, const Skeleton& skel, const std::vector<bool>& 
     bool oriented = pairs && agree * 2 < pairs;
     for (int j = 0; j < count && !oriented && !pairs; ++j)
         if (bound[j] && j != root) oriented = std::fabs((rest[j].rot.conj() * model.binds[j].rot).w) < std::cos(2.5 * kDegToRad);
-    if (oriented)
+    if (oriented) {
+        model.rig_axes.assign(count, Quat{});  // the file's own axes stay for posing (rig_axes_from_parts)
         for (int j = 0; j < count; ++j)
-            if (bound[j]) model.binds[j].rot = rest[j].rot;
+            if (bound[j]) model.rig_axes[j] = model.binds[j].rot, model.binds[j].rot = rest[j].rot;
+    }
 }
 
 bool shape_from_binds(const Skeleton& skel, const std::vector<const DaeModel*>& parts, const Shape* base, Shape& out,
                       double tol_m) {
     const int n = skel.size();
-    out = base ? *base : Shape{std::vector<Vec3>(n, Vec3{1, 1, 1}), std::vector<Vec3>(n, Vec3{})};
+    out = base ? *base : Shape{std::vector<Vec3>(n, Vec3{1, 1, 1}), std::vector<Vec3>(n, Vec3{}), {}, {}};
     const std::vector<Xform> rest = skel.global_pose(Pose(n));
     std::vector<const Vec3*> target(n, nullptr);
     // A pinned node is placed relative to its nearest ancestor bound in the same part, in that ancestor's bound
@@ -1212,6 +1216,63 @@ bool shape_from_binds(const Skeleton& skel, const std::vector<const DaeModel*>& 
     if (foot >= 0 && !target[0]) {
         Pose zero(n);
         out.offset[0].z += skel.global_pose(zero, base)[foot].pos.z - skel.global_pose(zero, &out)[foot].pos.z;
+    }
+    return true;
+}
+
+bool rig_axes_from_parts(const Skeleton& skel, const std::vector<const DaeModel*>& parts, Shape& out) {
+    const int n = skel.size(), joints = skel.joint_count();
+    std::vector<const DaeModel*> from(n, nullptr);  // the part that gives each joint its axes
+    bool any = false;
+    for (const DaeModel* m : parts)
+        if (m && m->rigged && m->rig_axes.size() >= static_cast<size_t>(n) && m->bound.size() >= static_cast<size_t>(n))
+            for (int j = 0; j < joints; ++j)
+                if (!from[j] && m->bound[j] && !skel[j].attachment) from[j] = m, any = true;
+    if (!any) return false;
+    auto axes = [&](int j) { return from[j]->rig_axes[j]; };  // at the bind, in SL space
+    auto at = [&](int j) { return from[j]->binds[j].pos; };
+    auto kids = [&](int j) {  // the child joints bound in the same part
+        std::vector<int> out_kids;
+        for (int c : skel[j].children)
+            if (c < joints && from[c] == from[j]) out_kids.push_back(c);
+        return out_kids;
+    };
+    // The rig's bone axis: the signed axis that points at the child joints on most bones (Blender: +Y).
+    int votes[6] = {};
+    for (int j = 0; j < joints; ++j)
+        for (int c : from[j] ? kids(j) : std::vector<int>{}) {
+            const Vec3 d = axes(j).conj().rotate(at(c) - at(j));
+            if (d.length() < 1e-4) continue;
+            int k = 0;
+            for (int i = 1; i < 3; ++i)
+                if (std::fabs(d[i]) > std::fabs(d[k])) k = i;
+            if (std::fabs(d[k]) > 0.9 * d.length()) ++votes[k * 2 + (d[k] < 0)];
+        }
+    const int best = int(std::max_element(votes, votes + 6) - votes);
+    Vec3 bone;
+    bone[votes[best] ? best / 2 : 1] = votes[best] && best % 2 ? -1 : 1;
+    const std::vector<Xform> rest = skel.global_pose(Pose(n));  // a shape never turns a joint
+    out.axes.assign(n, Quat{});
+    out.tails.assign(n, Vec3{});
+    for (int j = 0; j < joints; ++j) {
+        if (!from[j]) continue;
+        out.axes[j] = (rest[j].rot.conj() * axes(j)).normalized();
+        const Vec3 along = axes(j).rotate(bone);  // at the bind
+        double len = 0, best_cos = 0.9;
+        for (int c : kids(j)) {  // the child joint the bone points at
+            const Vec3 d = at(c) - at(j);
+            if (const double l = d.length(); l > 1e-4 && d.dot(along) > best_cos * l) best_cos = d.dot(along) / l, len = d.dot(along);
+        }
+        const DaeModel& m = *from[j];
+        const bool to_child = len > 0;
+        for (size_t v = 0; !to_child && v < m.positions.size() / 3; ++v)  // an end bone: as far as its own vertices reach
+            if (v * 4 < m.joints.size() && m.joints[v * 4] == j && m.weights[v * 4] >= 0.5f) {
+                const Vec3 p{m.positions[v * 3], m.positions[v * 3 + 1], m.positions[v * 3 + 2]};
+                len = std::max(len, (p - at(j)).dot(along));
+            }
+        // A bone with neither: as long as the SL bone.
+        if (len < 0.005) len = skel[j].end.length() > 1e-5 ? skel[j].end.length() : 0.05;
+        out.tails[j] = out.axes[j].rotate(bone) * len;
     }
     return true;
 }

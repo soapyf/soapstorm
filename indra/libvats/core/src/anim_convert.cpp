@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 
+#include "vats/deformer.h"
 #include "vats/rig.h"
 #include "vats/world_reduce.h"
 
@@ -116,6 +117,15 @@ bool static_rotation(const std::vector<Pose>& frames, int node, double tol_deg) 
 }
 
 AnimExportResult export_anim(const Skeleton& skel, const Clip& clip, const AnimExportOptions& opt) {
+    if (opt.end_at_rest || opt.hold_without_sinking) {  // the deformer tool: on a copy, then as usual
+        AnimExportOptions plain = opt;
+        plain.end_at_rest = plain.hold_without_sinking = false;
+        std::vector<std::string> notes;
+        const Clip c = with_deformer_options(skel, clip, opt, &notes);
+        AnimExportResult r = export_anim(skel, c, plain);
+        r.warnings.insert(r.warnings.end(), notes.begin(), notes.end());
+        return r;
+    }
     AnimExportResult res;
     AnimFile& f = res.file;
     int fps = std::clamp(clip.fps, 1, 120);

@@ -33,6 +33,11 @@ struct AnimExportOptions {
     // in the world, at most this many metres anywhere on the body (world_reduce.h), instead of by reduce_rot_deg /
     // reduce_pos_m (which still decide IO-11a/b). The first and last frames, set keys and max_gap hold as before.
     double reduce_world_m = 0;
+    // Spec 09 section 0l, the deformer tool (deformer.h), applied to a copy of the clip before it is sampled:
+    // "End at rest" (a rest key after the last frame for every position-keyed bone but the hip) and "Hold without
+    // sinking" (mSkull counter-keys that keep SL's height at rest height). Their notes join the warnings.
+    bool end_at_rest = false;
+    bool hold_without_sinking = false;
 };
 
 struct AnimExportResult {

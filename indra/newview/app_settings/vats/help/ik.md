@@ -1,6 +1,6 @@
 # IK
 
-IK (inverse kinematics) poses a limb by its end: place the hand or foot and the arm or leg bends to reach it. VATs has IK for the arms, legs, fingers, spine, hind legs and wings, and you can switch each limb between IK and FK (bone-by-bone rotation) at any frame without the limb jumping.
+IK (inverse kinematics) poses a limb by its end: place the hand or foot and the arm or leg bends to reach it. VATs has IK for the arms, legs, fingers, spine, hind legs and wings, and you can switch each limb between IK and FK (bone-by-bone rotation) at any frame without the limb jumping. **Auto IK** does the same for a single drag on any joint, and keys ordinary rotations.
 
 > Related articles: [[Posing]], [[Hold and bind]], [[Balance]], [[Graph editor]], [[Keys and timeline]]
 
@@ -46,6 +46,42 @@ Select the limb (a bone, the target or the pole) and press **K** again. From tha
 
 Moving the target or pole keys it at the current frame, like any bone. **S** (Set Key) with a target or pole selected keys both the target and the pole.
 
+### Auto IK
+
+Auto IK is IK for one drag: drag a joint and the bones above it turn to follow, then it keys them as plain rotations
+and leaves no target or pole behind. It is on by default (**Tools → Auto IK**, or the **Auto IK** button on the
+timeline bar). Drag a joint by the dot that appears on it when you point at it, with any tool, or with the **Move**
+tool's gizmo; see [[Posing#Dragging a joint in the air (Auto IK)]].
+
+![The mech's hind foot dragged through the air by its dot: the hind leg lifts, swings forward and bends at its own hinges](images/ik/mech-leg-drag.gif)
+*A hind foot dragged through the air on the test mech: the whole leg follows.*
+
+| Dragged joint | Bones that follow by default |
+|---|---|
+| A wrist | elbow, shoulder and collar |
+| An ankle (or a foot, a toe) | knee and hip (and the ankle, the foot) |
+| A hind leg's foot | the hind leg to `mHindLimb1` |
+| A wing tip, a tail tip, a fingertip | its wing, tail or finger to the first bone |
+| Any other joint | the two bones above it |
+
+- **Longer or shorter.** While you drag, the mouse wheel or **]** takes one more bone, **[** one fewer; the status
+  bar shows the count. VATs remembers the length for that joint until it closes. Bones taken beyond the default only
+  move when the limb cannot reach on its own, as with a target's **Pull**: an arm lengthened to the chest bends at
+  the elbow first and leans the chest only for the rest.
+- **What it never takes.** The pelvis; a bone a pin holds (the chain stops below it, so the pinned joint stays
+  exactly where it is); a limb in IK at this frame, whose bones its target drives. Bento's `mSpine1`–`4` are passed
+  through but never turned or keyed.
+- **Hinges.** Elbows, knees, the hind legs' second and third joints, the wings' second joint and the finger joints
+  bend only about their hinge, and never through straight to the other side. On a [[Mesh bodies|mesh body]] with rig
+  axes the hinge is the body's own axis; on a body rigged with a limb already bent 20° or more, the hinge is the
+  axis of that bend; otherwise it is Second Life's.
+- **Pins and IK.** A pinned joint moves its pin offset instead, as with any Move drag ([[Hold and bind]]). A limb in
+  IK is posed by dragging its target. Mirror, when on, keys the other side too.
+
+Auto IK or IK / FK? Auto IK is for posing: fast, any chain, and the result is ordinary keys you can tweak bone by
+bone. Switch a limb to IK (**K**) when its hand or foot must stay on a spot over many frames, or when you want to key
+the end's path and let the elbow or knee work itself out.
+
 ### Full-body reach
 
 A hand target dragged further than the arm reaches normally leaves the hand short. Give the target a **Pull** and the body goes after it instead.
@@ -80,7 +116,10 @@ Select a target to see its curves in the [[Graph editor]]: **IK / FK Blend**, wh
 
 ## Tips and tricks
 
-- Use IK for feet on the ground and hands on objects; use FK for swinging arms and free gestures.
+- Use IK for feet on the ground and hands on objects; use FK for swinging arms and free gestures, posed quickly by
+  dragging the hand with Auto IK.
+- An Auto IK drag solves each step from the last, so the chain follows the path you drag along. To get a different
+  bend, drag the joint round the other way, or turn the elbow or knee afterwards with the Rotate tool.
 - To keep a hand or foot still while the body moves, pin it instead of keying the target on every frame: see [[Hold and bind]]. A pin on the end of a limb drives the limb through IK.
 - IK is baked into ordinary rotation keys on export, so the uploaded animation looks exactly as it does in VATs. The `.anim` format has no IK of its own.
 - **Select → Select All** also selects the targets and poles of limbs that are in IK.

@@ -160,6 +160,13 @@ animations still move it: a face take then leaves the blinks of your AO or face 
 move. A bone left with nothing to write is left out of the file. Off (the default), every bone you keyed is
 written, holding it where the animation has it. BVH export is not affected.
 
+### Deformers
+
+An animation whose position keys make the avatar taller sinks the wearer in Second Life, and a bone keeps an
+animation's position after it stops. The **Deformer** options, shown once a bone other than the hip has position
+keys, deal with both: **End at rest**, **Hold without sinking** and **Also export an undeformer**
+(`<name>_undeform.anim`, uploaded after the animation in the viewer). See [[Deformers]].
+
 ### Reduce keys
 
 VATs samples every bone at every whole frame, then removes keys that the viewer's interpolation
@@ -248,6 +255,7 @@ confirmation. **Upload All Clips...** does the same for every clip of a project 
 | Reduce keys | **Per bone**: `0.05` degrees, `0.5` mm; **Anywhere on the body**: `1` mm | **Properties → Export** |
 | Also export for heights | off; ticked: `1.75`, `1.95`, `2.15` m | **Properties → Export** |
 | BVH: include bone positions | off | **Properties → Export** |
+| Deformer: End at rest, Hold without sinking, Also export an undeformer | off; shown once a bone other than the hip has position keys | **Properties → Export** |
 
 All of these are stored in the project, not in the preferences.
 

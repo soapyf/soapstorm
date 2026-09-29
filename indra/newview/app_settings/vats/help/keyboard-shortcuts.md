@@ -96,6 +96,7 @@ active preset.*
 | Scale Tool | R | S | R | R |
 | Cycle Local / World / Gimbal Axes | O | , | O | O |
 | Switch IK / FK | K | K | K | K |
+| Auto IK (on / off) | – | – | – | – |
 | Hand Poser | H | H | H | H |
 | Toggle Snapping | – | – | – | G |
 
@@ -250,6 +251,7 @@ These keys work only inside a running operation:
   **Ctrl+Alt+Shift** with the arrows or **A D W S** pans, **Esc** resets the camera; see
   [[Control presets#Second Life]].
 - Any drag in the viewport: **Esc** cancels it.
+- An [[IK#Auto IK|Auto IK]] drag: the mouse wheel or **]** takes one more bone up the chain, **[** one fewer.
 - An open menu: **Esc** closes it, sub-menus and all, and does nothing else.
 - **Tween (Breakdown)** (**Shift+E**, every preset): move the mouse left or right, **Ctrl** for 10%
   steps, then a left click, **Enter** or **Space** keys it and a right-click, **Esc** or **Ctrl+Z**

@@ -240,7 +240,7 @@ void App::draw_ghost(const std::vector<Xform>& globals, const Rgb& c, float alph
         verts.clear();
         const std::vector<int> kinds = glyph_kinds(skel_, globals, sh);
         for (int i = 0; i < skel_.joint_count(); ++i)
-            if (node_visible(i)) node_glyph(verts, skel_, globals, sh, i, kinds[i], globals[i].rot * skel_.bone_frame(i), c);
+            if (node_visible(i)) node_glyph(verts, skel_, globals, sh, i, kinds[i], globals[i].rot * skel_.bone_axes(i, sh), c);
         for (Vertex& vx : verts) vx.c[3] = alpha;
         host_.scene_triangles(verts, {}, true, 0.1f, true);
     } else if (const MeshBody* mb = mesh_body()) {
@@ -285,7 +285,7 @@ void App::draw_bones(bool over_world) {
         else if (sel) c = mix(kSelected, c, 0.45f);
         else if (contact_bone(i)) c = kContact;
         else if (hot(i)) c = mix(c, {1, 1, 1}, 0.5f);
-        node_glyph(bones, skel_, globals_, sh, i, kinds[i], local_axes(i), c);
+        node_glyph(bones, skel_, globals_, sh, i, kinds[i], globals_[i].rot * skel_.bone_axes(i, sh), c);  // local_axes(i)
     }
     // X-ray culls back faces (the translucent path), so each closed glyph shows only its outside; with depth
     // testing the depth buffer does that.
@@ -517,6 +517,70 @@ void App::capture_edit_start() {
         drag_start_offset_ = pose_.offset[p];
         drag_start_euler_ = curve_euler(clip, skel_[p].name, frame_);
     }
+    auto_ik_.on = false;
+    if (!sp && !ph && p >= 0 && drag_tool_ == Tool::Move && auto_ik_applies(p)) auto_ik_begin(p);  // 08 AI-1
+}
+
+// Spec 08 AI: Auto IK. The chain for node as it stands now, with the length last chosen for it in this run.
+bool App::auto_ik_applies(int node) const {
+    if (!settings_.auto_ik || node < 0 || !rig_) return false;
+    auto len = auto_ik_length_.find(node);
+    return !auto_ik_chain(*rig_, doc_.clip(), frame_, node, len == auto_ik_length_.end() ? 0 : len->second).bones.empty();
+}
+
+void App::auto_ik_begin(int node) {
+    auto len = auto_ik_length_.find(node);
+    auto_ik_.node = node;
+    auto_ik_.chain = auto_ik_chain(*rig_, doc_.clip(), frame_, node, len == auto_ik_length_.end() ? 0 : len->second);
+    auto_ik_.start = vats::evaluate(*rig_, doc_.clip(), frame_, shape());
+    auto_ik_.on = !auto_ik_.chain.bones.empty();
+    if (auto_ik_.on) auto_ik_status();
+}
+
+void App::auto_ik_status() {
+    const AutoIkChain& c = auto_ik_.chain;
+    if (c.bones.empty()) return;
+    std::string s = "Auto IK: " + skel_[auto_ik_.node].name + " pulls " + std::to_string(c.turning) +
+                    (c.turning == 1 ? " bone" : " bones") + ", from " + skel_[c.bones.front()].name;
+    if (c.longest > 1) s += "   Wheel or [ ]: " + std::string(c.turning < c.longest ? "more" : "") +
+                            (c.turning < c.longest && c.turning > 1 ? " or " : "") + (c.turning > 1 ? "fewer" : "") + " bones";
+    status(s);
+}
+
+// AI-3: during an Auto IK drag the wheel and ] take one more bone up the chain, [ one fewer. The drag starts over from
+// the press with the new chain, so bones it no longer takes go back to their keys.
+bool App::auto_ik_input() {
+    const bool dragging = dragging_gizmo_ || modal_ == Modal::Move || dot_drag_started_;
+    if (!auto_ik_.on || !dragging) return false;
+    const ImGuiIO& io = ImGui::GetIO();
+    int step = viewport_hovered_ && io.MouseWheel != 0 ? (io.MouseWheel > 0 ? 1 : -1) : 0;
+    if (ImGui::IsKeyPressed(ImGuiKey_RightBracket)) step = 1;
+    if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket)) step = -1;
+    if (step == 0) return false;
+    skip_shortcuts_ = true;  // [ and ] also walk the selection
+    const int want = std::clamp(auto_ik_.chain.turning + step, 1, std::max(1, auto_ik_.chain.longest));
+    if (want != auto_ik_.chain.turning) {
+        auto_ik_length_[auto_ik_.node] = want;
+        doc_.clip() = doc_.history.cancel();  // the old chain's keys go; the drag keys the new one from the press
+        doc_.history.begin(doc_.clip());
+        auto_ik_.chain = auto_ik_chain(*rig_, doc_.clip(), frame_, auto_ik_.node, want);
+        auto_ik_.start = vats::evaluate(*rig_, doc_.clip(), frame_, shape());  // from the press's pose again
+    }
+    auto_ik_status();
+    return true;
+}
+
+// A joint's dot: the head of the hovered or primary bone, where a press drags it by Auto IK with any tool.
+int App::pick_dot(ImVec2 m) const {
+    if (!settings_.auto_ik) return -1;
+    for (int c : {hover_bone_, primary()}) {
+        double x, y;
+        if (c < 0 || c >= skel_.joint_count() || !node_visible(c) || !projector_.to_screen(globals_[c].pos, x, y) ||
+            std::hypot(m.x - x, m.y - y) > 7 || !auto_ik_applies(c))
+            continue;
+        return c;
+    }
+    return -1;
 }
 
 void App::apply_gizmo_drag(ImVec2 m, bool snap) {
@@ -569,6 +633,12 @@ void App::apply_delta(const Quat& r, const Vec3& t, int gimbal_axis, double gimb
         if (drag_tool_ == Tool::Rotate) world.rot = (r * world.rot).normalized();
         else world.pos = world.pos + t;
         key_pinned_point(clip, *rig_, frame_, p, world, shape());
+        return;
+    }
+    if (auto_ik_.on && auto_ik_.node == p && drag_tool_ == Tool::Move) {  // 08 AI: the bones above follow
+        // Each step from the last: the chain follows the pointer's path (08 AI-4).
+        mirror_edit(key_auto_ik(clip, *rig_, frame_, auto_ik_.chain, auto_ik_.start, drag_start_global_.pos + t, shape(),
+                                &auto_ik_.start.pose));
         return;
     }
     if (gimbal_axis >= 0) {
@@ -742,6 +812,7 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
     ImGuiIO& io = ImGui::GetIO();
     ImVec2 m = io.MousePos;
     viewport_hovered_ = hovered;
+    auto_ik_input();  // 08 AI-3: the chain's length while an Auto IK drag runs
     if (modal_input(m)) return;  // a modal transform owns the mouse and keys (VP-51)
     {
         // VP-40: Scale never applies to bones; say so when the tool is picked with no static prop selected.
@@ -775,7 +846,7 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
         return;
     }
     if (box_input(m, hovered)) return;
-    if (hovered && io.MouseWheel != 0) {
+    if (hovered && io.MouseWheel != 0 && !(auto_ik_.on && (dragging_gizmo_ || dot_drag_started_))) {
         if (preset == Preset::SecondLife && !host_.world_view()) {
             // LLAgentCamera::handleScrollWheel, focus off the avatar (llagentcamera.cpp:2562-2566): each click in takes
             // the distance to the focus down by the fourth root of 2 (ROOT_ROOT_TWO), through cameraOrbitIn and so its
@@ -787,7 +858,7 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
         }
     }
     // The viewer's world view: its own camera controls get those clicks (spec 09 U3).
-    if (hovered && !dragging_gizmo_ && euler_drag_bone_ < 0 && !host_.world_view()) {
+    if (hovered && !dragging_gizmo_ && euler_drag_bone_ < 0 && dot_drag_ < 0 && !host_.world_view()) {
         auto start = [&](int button, int mode) {
             nav_button = button, nav_mode = mode, nav_moved = false;
         };
@@ -863,6 +934,42 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
         return;
     }
 
+    // 08 AI-1: a joint's dot pressed, then dragged 4 px: the joint moves in the view plane and Auto IK turns the bones
+    // above it. A click without the drag only selected it.
+    if (dot_drag_ >= 0) {
+        const std::string name = skel_[dot_drag_].name;
+        if (!ImGui::IsMouseDown(0)) {
+            if (dot_drag_started_ && doc_.history.commit("Move " + name + " (Auto IK)", doc_.clip())) {
+                mark_dirty();
+                status("Moved " + name + " by Auto IK at frame " + std::to_string(int(std::round(frame_))));
+            }
+            dot_drag_ = -1, dot_drag_started_ = false, auto_ik_.on = false;
+            return;
+        }
+        if (dot_drag_started_ && (ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))) {
+            doc_.clip() = doc_.history.cancel();
+            dot_drag_ = -1, dot_drag_started_ = false, auto_ik_.on = false;
+            skip_shortcuts_ = true;
+            status("Cancelled");
+            return;
+        }
+        if (!dot_drag_started_) {
+            if (std::hypot(m.x - dot_drag_press_.x, m.y - dot_drag_press_.y) < 4) return;
+            doc_.history.begin(doc_.clip());
+            drag_tool_ = Tool::Move;
+            capture_edit_start();
+            if (!auto_ik_.on) {  // nothing to pull after all
+                doc_.clip() = doc_.history.cancel();
+                dot_drag_ = -1;
+                return;
+            }
+            dot_drag_started_ = true;
+        }
+        const double wpp = projector_.world_per_pixel(camera_, drag_start_global_.pos);
+        apply_delta(Quat{}, (camera_.right() * (m.x - dot_drag_press_.x) - camera_.up() * (m.y - dot_drag_press_.y)) * wpp);
+        return;
+    }
+
     if (actor_gizmo_input(m, hovered)) return;  // GR: placing another actor
 
     // Gizmo on the primary bone.
@@ -876,7 +983,7 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
         if (ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
             doc_.clip() = doc_.history.cancel();  // back to the value at the press
             gizmo_.end_drag();
-            dragging_gizmo_ = false;
+            dragging_gizmo_ = false, auto_ik_.on = false;
             skip_shortcuts_ = true;
             status("Cancelled");
             return;
@@ -886,6 +993,8 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
         } else {
             const char* label = tool == Tool::Rotate ? "Rotate" : tool == Tool::Scale ? "Scale" : "Move";
             std::string what = sp ? sp->name : ph ? rig_->limbs()[ph->limb].label + (ph->pole ? " pole" : " IK") : skel_[p].name;
+            if (auto_ik_.on) what += " (Auto IK)";
+            auto_ik_.on = false;
             const bool reached = ph && !ph->pole && tool == Tool::Move && reach_after_drag(ph->limb);  // 08 RC-1, same step
             if (doc_.history.commit(std::string(label) + " " + what, doc_.clip())) {
                 mark_dirty();
@@ -905,6 +1014,9 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
     hover_bone_ = hovered && hover_handle_ < 0 ? pick_bone(m, &ranked) : -1;
     // The free-rotate disk only takes the click when no other bone is under the cursor (VP-24).
     if (gizmo_hover_ == Gizmo::Free && hover_bone_ >= 0 && hover_bone_ != p) gizmo_hover_ = Gizmo::None;
+    // 08 AI-1: a joint's dot wins over the free-rotate disk it sits in (the gizmo's own parts win elsewhere).
+    dot_hover_ = hovered && hover_handle_ < 0 && (gizmo_hover_ == Gizmo::None || gizmo_hover_ == Gizmo::Free) ? pick_dot(m) : -1;
+    if (dot_hover_ >= 0) gizmo_hover_ = Gizmo::None;
 
     // The world view: a right-click off the bones is the viewer's own (its pie menu).
     if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right) && (preset != Preset::Industry || !io.KeyAlt) &&
@@ -951,7 +1063,11 @@ void App::viewport_input(const ImVec2& origin, const ImVec2& size, bool hovered)
         capture_edit_start();
         return;
     }
-    if (hover_handle_ >= 0) {
+    if (dot_hover_ >= 0) {  // 08 AI-1: selects it; a drag from here pulls it by Auto IK
+        select(dot_hover_, io.KeyShift);
+        status(skel_[dot_hover_].name);
+        if (primary() == dot_hover_) dot_drag_ = dot_hover_, dot_drag_started_ = false, dot_drag_press_ = m;
+    } else if (hover_handle_ >= 0) {
         select_handle({hover_handle_, hover_handle_pole_}, io.KeyShift);
     } else if (hover_bone_ >= 0) {
         // A bone of a limb in IK selects the limb's target instead (VP-25).
@@ -1177,6 +1293,16 @@ void App::draw_viewport() {
         dl->AddCircle(ImVec2(float(x), float(y)), 4.5f, IM_COL32(10, 12, 14, 200), 0, 1.2f);
     }
     draw_handles(dl);
+    // 08 AI-1: the joint dots Auto IK drags by: the hovered bone's and the selected one's.
+    for (int c : {primary(), dot_hover_}) {
+        double x, y;
+        if (c < 0 || !node_visible(c) || dragging_gizmo_ || modal_ != Modal::None || (c != dot_hover_ && !auto_ik_applies(c)) ||
+            !projector_.to_screen(globals_[c].pos, x, y))
+            continue;
+        const bool hot_dot = c == dot_hover_ || c == dot_drag_;
+        dl->AddCircleFilled(ImVec2(float(x), float(y)), hot_dot ? 6.f : 4.5f, hot_dot ? IM_COL32(255, 230, 51, 255) : IM_COL32(245, 245, 245, 235));
+        dl->AddCircle(ImVec2(float(x), float(y)), hot_dot ? 6.f : 4.5f, IM_COL32(10, 12, 14, 220), 0, 1.5f);
+    }
     draw_motion_paths(dl);  // 08 MP: through projector_, so the viewer draws it over the world too
     draw_balance(dl);  // View > Centre of Mass (08 CM-1)
     // IO-42: a prop whose mesh is missing is a dashed-looking orange box, so it can still be found and picked.
@@ -1220,6 +1346,7 @@ void App::draw_viewport() {
         ImVec2 m = ImGui::GetIO().MousePos;
         std::string label = hover_handle_ >= 0 ? rig_->limbs()[hover_handle_].label + (hover_handle_pole_ ? " IK pole" : " IK")
                                                : skel_[hover_bone_].name;
+        if (dot_hover_ >= 0 && hover_handle_ < 0) label = skel_[dot_hover_].name + "\nDrag: Auto IK";  // 08 AI-1
         if (hover_handle_ < 0 && skel_[hover_bone_].attachment && !skel_[hover_bone_].volume)  // spec 09 item 55: the viewer
             if (const std::vector<std::string> worn = host_.worn_on(skel_[hover_bone_].attach_id); !worn.empty()) {
                 label += "\nYou wear here:";
@@ -1268,10 +1395,10 @@ void App::draw_viewport() {
     draw_context_menu();
     if (!world) return ImGui::End();
     // The world view takes the pointer only over what the editor draws, so every other click reaches the world.
-    const bool taken = dragging_gizmo_ || bone_drag_ >= 0 || euler_drag_bone_ >= 0 || modal_ != Modal::None || box_ ||
+    const bool taken = dragging_gizmo_ || bone_drag_ >= 0 || dot_drag_ >= 0 || euler_drag_bone_ >= 0 || modal_ != Modal::None || box_ ||
                        motion_path_.drag_limb >= 0 || (hovered && motion_path_.hover) ||
                        actor_dragging_ || cube_drag_ != 0 ||
-                       (hovered && (hover_bone_ >= 0 || hover_handle_ >= 0 || gizmo_hover_ != Gizmo::None ||
+                       (hovered && (hover_bone_ >= 0 || hover_handle_ >= 0 || dot_hover_ >= 0 || gizmo_hover_ != Gizmo::None ||
                                     actor_gizmo_hover_ != Gizmo::None || over_cube));
     if (taken) ImGui::SetNextFrameWantCaptureMouse(true);
 }

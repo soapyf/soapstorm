@@ -44,6 +44,9 @@ void joint_ring(std::vector<Vec3>& tris, const Vec3& at, const Vec3& axis, doubl
 }
 
 Vec3 glyph_tail(const Skeleton& skel, const std::vector<Xform>& globals, const Shape* shape, int i) {
+    // A mesh body's rig axes give the bone its own tail (rig_axes_from_parts), already at the body's size.
+    if (shape && i < static_cast<int>(shape->tails.size()) && shape->tails[i].length() > 0)
+        return globals[i].apply(shape->tails[i]);
     const Vec3 end = shape ? skel[i].end.mul(shape->scale[i]) : skel[i].end;
     return globals[i].apply(end);
 }

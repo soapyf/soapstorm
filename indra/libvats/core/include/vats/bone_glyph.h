@@ -27,7 +27,7 @@ void joint_ring(std::vector<Vec3>& tris, const Vec3& at, const Vec3& axis, doubl
 // The bones stay where SL has them; only the glyph changes.
 std::vector<int> glyph_kinds(const Skeleton& skel, const std::vector<Xform>& globals, const Shape* shape);
 
-// The world tail of node i: its display end, shape-scaled, through globals.
+// The world tail of node i: its display end, shape-scaled, through globals; a mesh body's rig tail when shape has one.
 Vec3 glyph_tail(const Skeleton& skel, const std::vector<Xform>& globals, const Shape* shape, int i);
 
 // Radius of ring k at a joint, for a bone len long: 16 mm, less for short bones (an eye's 25 mm), each nested
