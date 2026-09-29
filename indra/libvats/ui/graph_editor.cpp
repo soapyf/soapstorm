@@ -685,7 +685,7 @@ void GraphEditor::draw_canvas(GraphContext& ctx) {
             if (k.tag != KeyTag::None) {  // 08 KT-1
                 draw_key_tag_mark(dl, p, sel ? 4.5f : 3.5f, k.tag, sel ? kKeySelected : key_tag_colour(k.tag));
             } else if (channels_[c].pole) {
-                float r = sel ? 6 : 5;
+                float r = sel ? 6.f : 5.f;
                 ImVec2 q[4] = {{p.x, p.y - r}, {p.x + r, p.y}, {p.x, p.y + r}, {p.x - r, p.y}};
                 dl->AddQuadFilled(q[0], q[1], q[2], q[3], sel ? kKeySelected : IM_COL32(20, 20, 22, 255));
                 if (!sel) dl->AddQuad(q[0], q[1], q[2], q[3], channels_[c].colour);

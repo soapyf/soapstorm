@@ -6,6 +6,7 @@
 #include "app.h"
 #include "imgui_internal.h"  // the dockspace's central node (world view)
 #include "box_select.h"
+#include "dock_layout.h"
 #include "profile.h"
 #include "vats/bone_glyph.h"
 #include "vats/edit.h"
@@ -1136,8 +1137,9 @@ void App::draw_viewport() {
         const bool path = motion_path_input(hovered && !over_cube && cube_drag_ == 0);  // 08 MP-3: a key dot's drag
         viewport_input(origin, size, hovered && !over_cube && cube_drag_ == 0 && !path);
     }
-    if (world && ImGui::GetDragDropPayload()) {
-        // The world view has no window of its own to drop onto: an empty one over it while something is dragged.
+    if (world && is_view_drop(ImGui::GetDragDropPayload())) {
+        // The world view has no window of its own to drop onto: an empty one over it while an item is dragged. Not
+        // while a window is (also a payload): over it the dockspace would offer no place to dock that window.
         ImGui::SetNextWindowPos(origin);
         ImGui::SetNextWindowSize(size);
         ImGui::Begin("##world_drop", nullptr,

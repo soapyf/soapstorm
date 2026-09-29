@@ -73,6 +73,7 @@ add_library(vats_ui STATIC
     lip_sync_ui.cpp
     tween_ui.cpp
     key_tags_ui.cpp
+    dock_layout.cpp
     keymap.cpp
     shortcuts_ui.cpp
     picker_ui.cpp

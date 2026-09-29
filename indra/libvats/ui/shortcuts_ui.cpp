@@ -40,7 +40,7 @@ const std::vector<Group>& groups() {
         {"Playback", {"play", "next_frame", "prev_frame", "next_key", "prev_key", "start", "end"}},
         {"View",
          {"view_front", "view_back", "view_right", "view_left", "view_top", "view_ortho", "frame_selected", "frame_all",
-          "zoom_in", "zoom_out", "reset_camera", "graph", "dope_sheet"}},
+          "zoom_in", "zoom_out", "reset_camera", "graph", "dope_sheet", "reset_layout"}},
         {"View > Camera > Camera Views",
          {"cam_1", "cam_2", "cam_3", "cam_4", "store_cam_1", "store_cam_2", "store_cam_3", "store_cam_4"}},
         {"View > Target Ghost", {"target_show", "target_load", "target_clear"}},

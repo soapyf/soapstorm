@@ -15,7 +15,7 @@ std::vector<int> rdp_keys(int n, double tol, int max_gap, const std::vector<char
     std::vector<char> kept(n, 0);
     kept[0] = kept[n - 1] = 1;
     for (int f = 0; f < n && f < int(anchors.size()); ++f) kept[f] = kept[f] || anchors[f];
-    if (tol <= 0) std::fill(kept.begin(), kept.end(), 1);
+    if (tol <= 0) std::fill(kept.begin(), kept.end(), char(1));
     const int gap = max_gap > 0 ? max_gap : n;
     std::vector<std::pair<int, int>> runs;  // an explicit stack: a run can split at every frame
     for (int a = 0, b = 1; b < n; ++b)

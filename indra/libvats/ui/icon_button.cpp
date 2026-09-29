@@ -147,7 +147,7 @@ const char* action_icon(const char* action_id) {
     } icons[] = {{"new", icon::kNew},     {"open", icon::kOpen},          {"save", icon::kSave},
                  {"undo", icon::kUndo},   {"redo", icon::kRedo},          {"export_anim", icon::kExport},
                  {"upload", icon::kUpload}, {"import_prop", icon::kImport}, {"tween", icon::kTween},
-                 {"batch_retarget", icon::kBatch}, {"graph", icon::kEase}, {"dope_sheet", icon::kDopeSheet}, {"foot_lock", icon::kFootLock},
+                 {"batch_retarget", icon::kBatch}, {"graph", icon::kEase}, {"dope_sheet", icon::kDopeSheet}, {"reset_layout", icon::kRefresh}, {"foot_lock", icon::kFootLock},
                  {"tool_select", icon::kSelect}, {"tool_move", icon::kMove}, {"tool_rotate", icon::kRotate},
                  {"tool_scale", icon::kScale}, {"orientation", icon::kGimbal}, {"ik_toggle", icon::kIkFk},
                  {"follow_target", icon::kFollow}, {"pin_world", icon::kPin}, {"pin_bone", icon::kBind},

@@ -153,7 +153,7 @@ slider and **Blend** stay in view.
 | **File** | **New**, **Open...**, **Open Recent**, **Save**, **Save As...**, the imports (BVH, SL `.anim`, retarget, prop / mesh, audio), the exports (`.anim`, BVH, **Export Listing Media...**: see [[Listing media]]), **Quit** |
 | **Edit** | **Undo**, **Redo**, keys, resets, copy and paste pose, **Save Clip of Selected Bones...**, **Time**, mirror and flip, **Reverse Animation**, **Simplify Curves...**, **Preferences...** |
 | **Playback** | play, frame and key stepping, start and end |
-| **View** | **Camera** (view directions, **Orthographic**, framing and zoom, **Reset Camera**, **Camera Views**), **Graph Editor**, **Dope Sheet**, **Bones** (the bone group switches, **Show Collision Volumes**, **Bones in Front (X-ray)**), **Centre of Mass**, **Onion Skin**, **Target Ghost**, **Motion Path**, **Treadmill**, **Reference...** (a picture behind the avatar: [[Reference images]]), **Preview as SL Plays It**, **Face Cam**, **Body** |
+| **View** | **Camera** (view directions, **Orthographic**, framing and zoom, **Reset Camera**, **Camera Views**), **Graph Editor**, **Dope Sheet**, **Reset Layout**, **Bones** (the bone group switches, **Show Collision Volumes**, **Bones in Front (X-ray)**), **Centre of Mass**, **Onion Skin**, **Target Ghost**, **Motion Path**, **Treadmill**, **Reference...** (a picture behind the avatar: [[Reference images]]), **Preview as SL Plays It**, **Face Cam**, **Body** |
 | **Light** | the lighting presets **Flat Noon**, **Three-Quarter Key**, **Rim / Back**, **Dusk** and **Night**, **Studio (Default)**, and **Plain Backdrop**: a grey wall and floor behind the actor that turn with the camera. They are for looking at the animation only; nothing is saved |
 | **Select** | **Select All**, **Select Keyed on Frame**, **Select All Keyed**, **Select None**, parent, child and siblings |
 | **Tools** | the four tools, the axes, IK and pins, **Clean Up Foot Sliding...**, **Loop Tools**, **Hand Poser**, **Dynamics...**, **Idle Layer...**, **Overlap...**, **Auto-Balance...**, **Jump Arc...**, **Ragdoll...**, **Face...**, **Actors (Couples and Groups)...**, **Motion Capture...**, **Split Dance at Beats...**, **Animation Check...**, **Motion Quality...** |
@@ -231,7 +231,8 @@ or pressing **Page** goes back to the page.
   [[Keyboard shortcuts#Camera views]].
 
 VATs keeps the panel layout in `layout.ini` in the data folder. See
-[[Projects and files#Data folders]].
+[[Projects and files#Data folders]]. **View → Reset Layout** goes back to the default layout, with
+every panel docked where it starts on the first run.
 
 ## Troubleshooting
 
@@ -239,8 +240,8 @@ VATs keeps the panel layout in `layout.ini` in the data folder. See
 
 Only **Graph** and **Dope Sheet** can be closed; **Ctrl+G** brings the graph back and **View → Dope
 Sheet** the dope sheet. The other panels can be moved or undocked but
-not closed, so a missing one is hidden behind another tab or pushed to a thin edge. To go back to the
-default layout, quit VATs, delete `layout.ini` from the data folder and start VATs again.
+not closed, so a missing one is hidden behind another tab or pushed to a thin edge. **View → Reset
+Layout** puts every panel back where it starts on the first run and shows the closed ones again.
 
 ### Text is too small or too large
 

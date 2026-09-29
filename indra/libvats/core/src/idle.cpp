@@ -93,19 +93,19 @@ void apply_idle(const Skeleton& skel, const Clip& clip, const IdleLayer& layer, 
         }
         // Noise read around a circle whose circumference is `cycles` lattice cells, so loop-in and loop-out
         // are the same point and the features come about one period apart.
-        const double r = cycles / (2 * kPi);
+        const double radius = cycles / (2 * kPi);
         Vec3 v;
         for (int axis = 0; axis < 3; ++axis) {
             const std::uint32_t s = mix(mix(std::uint32_t(layer.seed), std::uint32_t(axis)), std::uint32_t(n));
             // A random centre per bone and axis, far from the others, keeps the curves unrelated.
             const double cx = (s & 0xffff) * 0.37 + 0.5, cy = (s >> 16) * 0.37 + 0.5;
-            const double value = gradient_noise(cx + r * std::cos(theta), cy + r * std::sin(theta), s) * std::sqrt(2.0);
+            const double value = gradient_noise(cx + radius * std::cos(theta), cy + radius * std::sin(theta), s) * std::sqrt(2.0);
             (axis == 0 ? v.x : axis == 1 ? v.y : v.z) = value;
         }
         // Each axis reaches +-1; the vector is clamped to length 1 so the turn never exceeds the amplitude.
-        const double len = v.length();
-        if (len > 1) v = v * (1 / len);
-        if (len > 1e-12) pose.rot[n] = (Quat::axis_angle(v.normalized(), amp * v.length()) * pose.rot[n]).normalized();
+        const double vlen = v.length();
+        if (vlen > 1) v = v * (1 / vlen);
+        if (vlen > 1e-12) pose.rot[n] = (Quat::axis_angle(v.normalized(), amp * v.length()) * pose.rot[n]).normalized();
     }
 }
 

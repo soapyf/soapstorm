@@ -86,7 +86,7 @@ Gizmo::Part Gizmo::hit(ImVec2 m) const {
         return None;
     }
     // Move: centre square, then planes, then arrows. Scale: centre square, then axes (VP-46).
-    const float centre_half = kind_ == GizmoKind::Scale ? 8 : 9;
+    const float centre_half = kind_ == GizmoKind::Scale ? 8.f : 9.f;
     if (std::fabs(m.x - centre_px_.x) <= centre_half && std::fabs(m.y - centre_px_.y) <= centre_half) return Centre;
     for (int i = 0; i < 3 && kind_ == GizmoKind::Move; ++i) {
         Vec3 u = axis((i + 1) % 3), v = axis((i + 2) % 3);
@@ -225,7 +225,7 @@ void Gizmo::draw(ImDrawList* dl, Part hover, ImU32 tint) const {
         if (!z_only_) {
             dl->AddCircleFilled(centre_px_, size_px_, tint ? with_alpha(tint, hot(Free) ? 0.22f : 0.12f)
                                                            : IM_COL32(255, 255, 255, hot(Free) ? 26 : 10), kSegments);
-            dl->AddCircle(centre_px_, size_px_ * 1.15f, hot(ViewRing) ? kHot : view, kSegments, hot(ViewRing) ? 3 : 2);
+            dl->AddCircle(centre_px_, size_px_ * 1.15f, hot(ViewRing) ? kHot : view, kSegments, hot(ViewRing) ? 3.f : 2.f);
         }
         ImVec2 pts[kSegments + 1];
         bool front[kSegments + 1];

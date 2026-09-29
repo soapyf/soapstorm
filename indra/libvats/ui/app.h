@@ -608,6 +608,7 @@ private:
     int deferred_frames_ = 0;
     bool headless_ = false;  // a key already handled this frame (e.g. Esc cancelling a drag)
     bool first_frame_ = true;
+    bool reset_layout_ = false;  // View > Reset Layout: the default dock layout at the next frame
 
     // --- props ---
     // Prop library (06 section 4.2, 03 section 3.6), thumbnails (04 VP-90) and Inventory drops (VP-83).

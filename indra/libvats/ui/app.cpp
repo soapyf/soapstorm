@@ -16,6 +16,7 @@
 #include <random>
 #include <sstream>
 
+#include "dock_layout.h"
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui_internal.h"
@@ -1089,6 +1090,15 @@ void App::build_actions() {
                   },
                   {}});
     add("dope_sheet", {"Dope Sheet", 0, 0, false, [this] { show_dope_ = !show_dope_; }, {}});  // spec 08 DS
+    add("reset_layout", {"Reset Layout", 0, 0, false,
+                         [this] {
+                             // Every panel back where the first run put it (draw_dockspace, next frame).
+                             reset_layout_ = true;
+                             show_graph_ = show_dope_ = show_host_pane_ = true;
+                             settings_.show_graph = true;
+                             save_settings();
+                         },
+                         {}});
     add("select_all", {"Select All", ctrl | ImGuiKey_A, 0, false,
                        [this] {
                            clear_selection();
@@ -1494,6 +1504,7 @@ void App::draw_menus() {
         ImGui::Separator();
         menu_item("graph");
         menu_item("dope_sheet");
+        menu_item("reset_layout");
         ImGui::Separator();
         if (begin_menu_icon(icon::kShown, "Bones")) {
             static const char* cats[] = {"Show Body Bones", "Show Hand Bones",  "Show Face Bones",  "Show Wing Bones",
@@ -1730,37 +1741,15 @@ void App::draw_dockspace() {
     const bool world = host_.world_view();
     ImGuiID dock = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), world ? ImGuiDockNodeFlags_PassthruCentralNode : 0);
     dockspace_id_ = dock;
-    if (first_frame_) {
-        first_frame_ = false;
+    bool rebuild = std::exchange(reset_layout_, false);  // View > Reset Layout
+    if (std::exchange(first_frame_, false)) {
         ImGuiDockNode* node = ImGui::DockBuilderGetNode(dock);
         bool known = ImGui::FindWindowSettingsByID(ImHashStr("Graph")) && ImGui::FindWindowSettingsByID(ImHashStr("Inventory"));
-        if (!node || node->IsEmpty() || !known) {
-            ImGui::DockBuilderRemoveNode(dock);
-            ImGui::DockBuilderAddNode(dock, ImGuiDockNodeFlags_DockSpace);
-            ImGui::DockBuilderSetNodeSize(dock, ImGui::GetMainViewport()->WorkSize);
-            // Default proportions, widened to what the text needs at larger interface sizes.
-            const ImVec2 ws = ImGui::GetMainViewport()->WorkSize;
-            const float fs = ImGui::GetFontSize(), row = ImGui::GetFrameHeightWithSpacing();
-            const float timeline_h = std::max(0.36f * 0.38f * ws.y, 3.9f * row);
-            const float bottom_h = std::min(std::max(0.38f * ws.y, timeline_h + 7 * row), 0.55f * ws.y);
-            const float left_w = std::min(std::max(0.18f * ws.x, 17 * fs), 0.3f * ws.x);
-            const float right_w = std::min(std::max(0.24f * ws.x, 22 * fs), 0.32f * ws.x);
-            ImGuiID main = dock, left, right, bottom, timeline;
-            ImGui::DockBuilderSplitNode(main, ImGuiDir_Down, bottom_h / ws.y, &bottom, &main);
-            ImGui::DockBuilderSplitNode(bottom, ImGuiDir_Down, std::min(timeline_h / bottom_h, 0.6f), &timeline, &bottom);
-            ImGui::DockBuilderSplitNode(main, ImGuiDir_Left, left_w / ws.x, &left, &main);
-            ImGui::DockBuilderSplitNode(main, ImGuiDir_Right, right_w / (ws.x - left_w), &right, &main);
-            ImGui::DockBuilderDockWindow("Bones", left);
-            ImGui::DockBuilderDockWindow("Picker", left);
-            ImGui::DockBuilderDockWindow("Inventory", left);
-            ImGui::DockBuilderDockWindow("Properties", right);
-            ImGui::DockBuilderDockWindow("Graph", bottom);
-            ImGui::DockBuilderDockWindow("Dope Sheet", bottom);  // spec 08 DS: a tab beside the graph
-            if (ui::Host::HostUi* h = host_.host_ui()) ImGui::DockBuilderDockWindow(h->pane_title(), bottom);
-            ImGui::DockBuilderDockWindow("Timeline", timeline);
-            if (!world) ImGui::DockBuilderDockWindow("Viewport", main);
-            ImGui::DockBuilderFinish(dock);
-        }
+        rebuild |= !node || node->IsEmpty() || !known;
+    }
+    if (rebuild) {
+        ui::Host::HostUi* h = host_.host_ui();
+        build_default_layout(dock, world, h ? h->pane_title() : nullptr);
     }
 }
 

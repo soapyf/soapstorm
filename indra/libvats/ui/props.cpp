@@ -11,6 +11,7 @@
 
 #include "app.h"
 #include "imgui_internal.h"  // BeginDragDropTargetCustom
+#include "dock_layout.h"
 #include "vats/fbx.h"
 #include "vats/gif.h"
 #include "vats/pose_presets.h"
@@ -538,7 +539,7 @@ void App::draw_prop_sl_popup() {
 
 void App::viewport_drop_target(ImVec2 origin, ImVec2 size) {
     const ImGuiPayload* payload = ImGui::GetDragDropPayload();
-    if (!payload || !(payload->IsDataType("VATS_PROP") || payload->IsDataType("VATS_POSE") || payload->IsDataType("VATS_FILE"))) return;
+    if (!is_view_drop(payload)) return;
     if (!ImGui::BeginDragDropTargetCustom(ImRect(origin, ImVec2(origin.x + size.x, origin.y + size.y)),
                                           ImGui::GetID("##view_drop")))
         return;
