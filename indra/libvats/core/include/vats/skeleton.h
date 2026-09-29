@@ -101,6 +101,12 @@ public:
 
     // Global transforms of every node. shape may be null.
     std::vector<Xform> global_pose(const Pose& pose, const Shape* shape = nullptr) const;
+    // Spec 09 build 34: the pose an avatar shows in the world, read back from its joints, as a Pose like the editor's.
+    // local: each node's rotation in its parent's frame as the avatar holds it now, the pelvis's in the actor's space
+    // (nodes past its end stay at rest); pelvis: where the pelvis stands in the actor's space (feet at the origin).
+    // Rotations become rotations from rest and the pelvis's place its offset from rest; no other joint is offset, so
+    // global_pose(result, shape) poses any body on its own joint positions, with these rotations and this hip travel.
+    Pose pose_from_live(const std::vector<Quat>& local, const Vec3& pelvis) const;
     // Local transform of one node (rest and pose applied, shape offsets and parent scale).
     Xform local_xform(int i, const Pose& pose, const Shape* shape = nullptr) const;
 

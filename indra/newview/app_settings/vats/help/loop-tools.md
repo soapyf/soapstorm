@@ -118,6 +118,9 @@ your avatar for real with the animation as its walk. The app has no such command
   Neither the default walk nor your AO's walk starts meanwhile. Standing, your AO's or the default stand plays.
 - Other residents see your ordinary walk: nothing new is sent to the region, and your AO asks for no walk of its
   own while the test runs.
+- With a mesh body swapped in under **View → Body**, the body walks in your avatar's place, posed by your walk
+  and your stand, unless **View → Body → Keep in Real-Avatar Modes** is off (see
+  [[VATs Editor (viewer)#Another body in your avatar's place]]).
 
 The **Test as My Walk** window shows:
 

@@ -167,7 +167,22 @@ void App::import_body(const std::vector<std::string>& paths) {
                                               "\nThe body stays in your own library and is never shared.");
 }
 
-void App::draw_mesh_body(std::vector<Vertex>& verts, std::vector<std::uint32_t>& indices) {
+const std::vector<Xform>* App::swap_live_globals() {
+    Pose live;
+    if (!real_avatar_mode() || !swap_shown() || !host_.live_pose(skel_, live) || live.rot.size() != size_t(skel_.size()))
+        return nullptr;
+    swap_live_ = skel_.global_pose(live, view_body_shape());  // the body's own joints (as shape() is while swapped)
+    return &swap_live_;
+}
+
+std::string App::real_mode_swap_note() const {
+    const MeshBody* b = swap_body();
+    if (!b) return "";
+    return settings_.viewer_keep_swap ? "; " + b->name + " stays in your avatar's place and moves as your avatar does"
+                                      : "; your real avatar shows meanwhile";
+}
+
+void App::draw_mesh_body(std::vector<Vertex>& verts, std::vector<std::uint32_t>& indices, const std::vector<Xform>* globals) {
     const MeshBody* b = mesh_body();
     if (!b) return;
     harmonize_body(*b);
@@ -175,7 +190,7 @@ void App::draw_mesh_body(std::vector<Vertex>& verts, std::vector<std::uint32_t>&
         Prop p;
         p.path = path;
         p.rigged = true;
-        draw_prop(p, verts, indices);
+        draw_prop(p, verts, indices, globals, globals ? view_body_shape() : nullptr);
     }
 }
 

@@ -998,7 +998,8 @@ void App::render_world_scene() {
     static std::vector<Vertex> verts;
     static std::vector<std::uint32_t> indices;
     draw_other_actors(colours);
-    if (!editing_other() && swap_shown() && !globals_.empty()) draw_mesh_body(verts, indices);  // your actor, swapped
+    // Your actor, swapped: posed by the editor, or in a real-avatar mode by what your avatar does in the world (build 34).
+    if (!editing_other() && swap_shown() && !globals_.empty()) draw_mesh_body(verts, indices, swap_live_globals());
     draw_target(colours);  // the target ghost: through the world's scene triangles, as the other actors
     // Editing another actor than yours: it stands at its place with its body, posed live (None: its bones only).
     if (editing_other() && !doc_.project.actors[doc_.project.active].body.empty() && !globals_.empty())

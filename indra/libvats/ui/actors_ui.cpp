@@ -245,7 +245,13 @@ void App::draw_other_actors(const SceneColours& colours) {
         for (Xform& g : e.globals) g = rel * g;
         for (const Prop& prop : props)  // their props, at their place
             if (prop.visible) draw_prop(prop, verts, idx, &e.globals, actor_shape(i), 0.7f, rel);
-        if (swapped || (!worn && !a.body.empty())) draw_actor_body(i, e.globals, colours, false);  // None draws nothing
+        if (const std::vector<Xform>* live = swapped ? swap_live_globals() : nullptr) {  // build 34: as your avatar moves
+            std::vector<Xform> g = *live;
+            for (Xform& x : g) x = rel * x;
+            draw_actor_body(i, g, colours, false);
+        } else if (swapped || (!worn && !a.body.empty())) {
+            draw_actor_body(i, e.globals, colours, false);  // None draws nothing
+        }
         if (worn) other_skeletons_.push_back({std::move(e.globals), a.colour, i, false});
     }
 }

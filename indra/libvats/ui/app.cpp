@@ -1568,13 +1568,25 @@ void App::draw_menus() {
                     if (ImGui::MenuItem(mb.name.c_str(), nullptr, settings_.mesh_body == mb.id)) use_mesh_body(mb.id);
                     if (host_.world_view())
                         ImGui::SetItemTooltip("Shown in your avatar's place on your screen only; nothing is sent. It poses on "
-                                              "its own joint positions, and Bake shape Your avatar exports with them. As It "
-                                              "Plays In-World, the walk test and Place on Furniture Point show your real "
-                                              "avatar while they run.");
+                                              "its own joint positions, and Bake shape Your avatar exports with them. In As It "
+                                              "Plays In-World, the walk test and Place on Furniture Point it stays and moves "
+                                              "as your avatar does, or with Keep in Real-Avatar Modes off, your real avatar "
+                                              "shows while they run.");
                     ImGui::PopID();
                 }
             } else if (host_.world_view()) {
                 ImGui::TextDisabled("Import a mesh body in Inventory > Bodies");
+            }
+            if (host_.world_view()) {  // spec 09 build 34
+                ImGui::Separator();
+                if (ImGui::MenuItem("Keep in Real-Avatar Modes", nullptr, settings_.viewer_keep_swap)) {
+                    settings_.viewer_keep_swap = !settings_.viewer_keep_swap;
+                    save_settings();
+                }
+                ImGui::SetItemTooltip("On: in As It Plays In-World, Test as My Walk / Run and Place on Furniture Point, the "
+                                      "mesh body stays in your avatar's place and moves as your avatar does: the region's "
+                                      "and your AO's animations, the walk, the sit. Off: your real avatar shows while they "
+                                      "run, and the mesh body comes back after.");
             }
             ImGui::EndMenu();
         }

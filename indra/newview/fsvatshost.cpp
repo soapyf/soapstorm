@@ -515,6 +515,8 @@ namespace
         // attachments are hidden on this screen meanwhile (LLVOAvatar::isVisible), nothing is sent.
         void hide_avatar(bool hide) override;
         bool hidesYours() const { return mHideYours && holdsAvatar(); }
+        // Build 34: your avatar as the world poses it now, for the swapped body in the modes that play your real avatar.
+        bool live_pose(const vats::Skeleton& skel, vats::Pose& pose) override;
         void set_view_frame(const vats::Xform& edited_in_yours) override;
         std::vector<std::string> joint_overrides() const override;
         std::vector<vats::PlanClip> running_motions() const override;
@@ -615,6 +617,7 @@ namespace
         LLVector3 toAgent(const Vec3& p) const { return toAgentYours(mView.apply(p)); }
         Vec3 fromAgent(const LLVector3& a) const { return mView.inverse().apply(toVATs((a - mPos) * ~mRot) + pelvisRest()); }
         Vec3 dirFromAgent(const LLVector3& d) const { return mView.rot.conj().rotate(toVATs(d * ~mRot)); }
+        Vec3 fromAgentYours(const LLVector3& a) const { return toVATs((a - mPos) * ~mRot) + pelvisRest(); }
         void syncCamera();  // the UI's camera and projection from LLViewerCamera, in the UI's space
         // VATs' space has its origin at the feet (the pelvis rests 1.067 m up); the viewer's mRoot sits where
         // the pelvis rests.
@@ -869,6 +872,30 @@ namespace
         mMotionID.setNull();
         mMotionOn = nullptr;
         mJoints.clear();
+    }
+
+    // Build 34 (spec 09 §0j): the pose your avatar shows now, whatever plays it (the region's and the AO's animations, the
+    // walk, the sit, the editor's own motion), read back from its joints after the world's motion update: each joint's
+    // local rotation, and the pelvis's world placement taken into your actor's space through the frame beforeFrame set
+    // (mPos, mRot: the root, or the pin while pinned), so the hip's travel as the avatar walks or sits on an object is the
+    // pelvis's offset. Hidden by the body swap, your avatar still animates: updateCharacter never does a hidden update for
+    // your own avatar.
+    bool ViewerHost::live_pose(const vats::Skeleton& skel, vats::Pose& pose)
+    {
+        mSkel = &skel;
+        LLJoint* pelvis = avatarJoint(0);
+        if (!holdsAvatar() || !pelvis)
+            return false;
+        auto toQuat = [](const LLQuaternion& q) { return vats::Quat{ q.mQ[VW], q.mQ[VX], q.mQ[VY], q.mQ[VZ] }; };
+        std::vector<vats::Quat> local(skel.size());
+        for (int i = 0; i < skel.size(); ++i)
+        {
+            LLJoint* joint = avatarJoint(i);
+            local[i] = joint ? toQuat(joint->getRotation()) : skel[i].rest;  // an attachment point the avatar lacks: at rest
+        }
+        local[0] = toQuat(pelvis->getWorldRotation() * ~mRot);  // in your actor's space
+        pose = skel.pose_from_live(local, fromAgentYours(pelvis->getWorldPosition()));
+        return true;
     }
 
     // Spec 09 §0e: the joints whose position a worn mesh overrides, by skeleton name (names only).

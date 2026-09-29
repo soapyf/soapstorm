@@ -67,7 +67,7 @@ void App::set_in_world(bool on) {
     ui.running_at = -1;
     in_world_ = true;
     status(std::string("As it plays in-world: your AO, the default motions and avatar physics run, your animation at its priorities") +
-           (swap_body() ? "; your real avatar shows meanwhile" : ""));
+           real_mode_swap_note());
 }
 
 void App::start_walk_test(int state) {
@@ -96,7 +96,7 @@ void App::start_walk_test(int state) {
     playing_ = true;
     status(std::string(state == 1 ? "Walk with your usual keys: your animation plays as your walk"
                                   : "Run with your usual keys: your animation plays as your run") +
-           (swap_body() ? "; your real avatar shows meanwhile" : ""));
+           real_mode_swap_note());
 }
 
 // Every frame, before evaluate(): the claims follow the project once nothing is being dragged (as the Priority Planner's
@@ -336,7 +336,7 @@ void App::draw_seat_section() {
     if (icon_label_button(icon::kPlace, seat_pick_ ? "Click the furniture...###seat_pick" : "Place on Furniture Point###seat_pick", "", seat_pick_)) {
         seat_pick_ = true;
         status(std::string("Click a point on the furniture for the selected bone or IK handle (Esc cancels)") +
-               (swap_body() ? "; your real avatar shows meanwhile" : ""));
+               real_mode_swap_note());
     }
     ImGui::EndDisabled();
     ImGui::SetItemTooltip("The next click on the furniture moves the selected bone's IK target there, or holds the bone "

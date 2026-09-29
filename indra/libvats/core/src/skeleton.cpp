@@ -314,6 +314,13 @@ Xform Skeleton::local_xform(int i, const Pose& pose, const Shape* shape) const {
     return {n.rest * pose.rot[i], t};
 }
 
+Pose Skeleton::pose_from_live(const std::vector<Quat>& local, const Vec3& pelvis) const {
+    Pose p(nodes_.size());
+    for (size_t i = 0; i < nodes_.size() && i < local.size(); ++i) p.rot[i] = (nodes_[i].rest.conj() * local[i]).normalized();
+    if (!nodes_.empty()) p.offset[0] = pelvis - nodes_[0].pos;
+    return p;
+}
+
 std::vector<Xform> Skeleton::global_pose(const Pose& pose, const Shape* shape) const {
     std::vector<Xform> g(nodes_.size());
     for (int i = 0; i < size(); ++i) {

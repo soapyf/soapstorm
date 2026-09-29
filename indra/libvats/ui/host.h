@@ -159,6 +159,13 @@ public:
     // a mesh body; spec 09 build 32). The host then hides your avatar and its attachments on this screen only (nothing
     // goes to the region) and shows them again with false, and when the editor closes.
     virtual void hide_avatar(bool hide) { (void)hide; }
+    // With world_view (spec 09 build 34): your own avatar's pose as the world shows it now, whatever plays it (the region's
+    // and your AO's animations, the walk, the sit, the editor's own motion), read back from its joints as
+    // Skeleton::pose_from_live makes it: each node's rotation from rest, and the pelvis's offset from rest in your actor's
+    // space (the frame drive_avatar's pose is in, never the edited actor's), so the hip's travel as you walk or sit is in
+    // the offset. The UI poses the swapped body on it in the modes that play your real avatar. False: unknown (the app,
+    // or no avatar yet).
+    virtual bool live_pose(const Skeleton& skel, Pose& pose) { (void)skel, (void)pose; return false; }
     // The joints whose position a worn mesh overrides (its joint positions, e.g. a mesh head's face bones),
     // by skeleton name; empty = none or unknown. Only names: export warns with it, and never writes the positions.
     virtual std::vector<std::string> joint_overrides() const { return {}; }

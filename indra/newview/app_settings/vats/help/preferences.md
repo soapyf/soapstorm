@@ -63,6 +63,7 @@ Some choices are saved in the same file from other places in the app:
 |---|---|
 | Gizmo axes (`orientation`: local, world or gimbal) | the axes button on the timeline, or **O** (Industry) |
 | Body (`body`, `mesh_body`) | **View → Body** |
+| The swapped body in the modes that play your real avatar (`viewer_keep_swap`, the viewer only) | **View → Body → Keep in Real-Avatar Modes** |
 | Graph shown (`show_graph`) | **View → Graph Editor** (**Ctrl+G**), or the panel's **×** |
 | Welcome at start-up (`show_welcome`) | **Show this at startup** in the Welcome window |
 | Camera views (`cameras`) | **View → Camera → Camera Views → Store Camera View 1** to **4** |

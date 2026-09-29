@@ -410,13 +410,24 @@ private:
     // The world view's body swap (spec 09 build 32): the mesh body shown in your avatar's place, on your screen only, or
     // null (none chosen, or none of its parts loads). It stays the export's "Your avatar" while swap_shown() is off.
     const MeshBody* swap_body() const;
-    // It shows now: not while a mode that needs your real avatar runs (As It Plays In-World, the walk test, Place on
-    // Furniture Point). The app: always false.
-    bool swap_shown() const { return swap_body() && !in_world_ && !walk_test_ && !seat_pick_; }
+    // The modes that play your real avatar in the world: As It Plays In-World, the walk test, Place on Furniture Point.
+    bool real_avatar_mode() const { return in_world_ || walk_test_ || seat_pick_; }
+    // It shows now: always with View > Body > Keep in Real-Avatar Modes (build 34, the default), else not while a real-avatar
+    // mode runs (your real avatar shows then, as in build 32). The app: always false.
+    bool swap_shown() const { return swap_body() && (settings_.viewer_keep_swap || !real_avatar_mode()); }
     const Shape* worn_shape() const { return swap_shown() ? nullptr : host_.body_shape(); }  // the worn avatar's, unless swapped
+    // Build 34: while it shows in a real-avatar mode, the body follows what your avatar does in the world (the region's and
+    // your AO's animations, the walk, the sit), not the editor's pose: your avatar's live pose (Host::live_pose) on the
+    // body's own joints, in your actor's space. Null otherwise, or when the host cannot say (the editor's pose then).
+    const std::vector<Xform>* swap_live_globals();
+    std::vector<Xform> swap_live_;
+    // What a real-avatar mode's status line adds while a body is swapped in: it stays and follows you, or your avatar shows.
+    std::string real_mode_swap_note() const;
     void use_mesh_body(const std::string& id);
     void import_body(const std::vector<std::string>& paths);
-    void draw_mesh_body(std::vector<Vertex>& verts, std::vector<std::uint32_t>& indices);
+    // globals: a pose of your actor's other than the editor's (swap_live_globals); null = the editor's.
+    void draw_mesh_body(std::vector<Vertex>& verts, std::vector<std::uint32_t>& indices,
+                        const std::vector<Xform>* globals = nullptr);
     const MeshBody* find_mesh_body(const std::string& id) const;
     // BD-3: base with the joints the body's parts were rigged to (base itself when they override none).
     void harmonize_body(const MeshBody& b) const;

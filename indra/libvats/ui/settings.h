@@ -50,6 +50,7 @@ struct Settings {
     bool bvh_reduce = false;  // IO-35: key reduction after a BVH import
     bool viewer_reset_joints = true;  // in the viewer: a local skeleton reset as the editor opens (spec 09 U4b)
     bool viewer_show_others = false;  // in the viewer: other avatars stay shown while the editor is open (spec 09 U5)
+    bool viewer_keep_swap = true;     // in the viewer: View > Body's swapped body stays in the real-avatar modes (build 34)
     bool mirror_centre = false;        // PT-1: live mirror makes centre bones symmetric in place
     bool scratch_existing_only = false;  // PT-2: a scratch pose keys only channels that already have keys
     std::string scratch_scrub = "ask";   // PT-2: scrubbing off a scratch pose: "ask", "keep" or "discard"
