@@ -1670,8 +1670,11 @@ namespace
                 mPos = pb.pin_pos + (mPos - pb.root_at_update);
                 mRot = pb.pin_rot;
             }
-            // Build 35: how high the root the frame stands on is above the ground, kept from when the pin was taken;
-            // seated on an object the seat, not the ground, carries it.
+            // Build 35: how high the root the frame stands on is above the ground. Pinned, the frame is the pin, which does
+            // not follow the root, so the ground under it stays the pin less the pelvis_to_foot it was taken with: a
+            // shape edit or an animated leg meanwhile moves the root, not that ground, and reading it again would move
+            // the swapped body off it. Unpinned (the walk test) the frame is the root: read every frame. Seated on an
+            // object the seat, not the ground, carries it.
             if (gAgentAvatarp->getParent())
                 mFrameFoot = 0.f;
             else if (!pinned || !mFootPinned)
