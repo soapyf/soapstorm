@@ -27,7 +27,9 @@
 #ifndef LL_CALCPARSER_H
 #define LL_CALCPARSER_H
 
+#ifndef BOOST_SPIRIT_THREADSAFE
 #define BOOST_SPIRIT_THREADSAFE
+#endif
 
 #include <boost/spirit/include/classic_attribute.hpp>
 #include <boost/spirit/include/classic_core.hpp>

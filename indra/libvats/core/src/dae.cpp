@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include "from_chars_compat.h"
 #include <cmath>
 #include <filesystem>
 #include <limits>
@@ -148,7 +149,7 @@ bool parse_list(std::string_view s, std::vector<T>& out) {
         if (p == end) return true;
         if (*p == '+') ++p;
         T v{};
-        auto r = std::from_chars(p, end, v);
+        auto r = vats::from_chars(p, end, v);
         if (r.ptr == p || (r.ptr < end && !is_space(*r.ptr))) return false;
         if (r.ec == std::errc::result_out_of_range) v = std::numeric_limits<T>::max();
         out.push_back(v);
