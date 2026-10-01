@@ -153,9 +153,22 @@ static int nonfatalXErrorHandler(Display *display, XErrorEvent *event)
 {
     char text[256] = "";
     XGetErrorText(display, event->error_code, text, sizeof(text));
-    LL_WARNS() << "Ignoring X11 error: " << text
-               << " (request " << (int)event->request_code
-               << "." << (int)event->minor_code << ")" << LL_ENDL;
+    // <SS:Nexii> Once per distinct error, not once per occurrence.
+    //
+    // This is the process-wide X error handler, so it sees every protocol error the viewer
+    // provokes, and an error the viewer provokes once it usually provokes every frame. The
+    // live case is BadWindow from XGetSelectionOwner in x11SelectionOwned above: the clipboard
+    // owner check runs per frame (LLScriptEdCore polls canPaste()), and asking about a
+    // selection whose owner window has since died is an error every time. That logged 514
+    // times in one session, each a formatted write under logcontrol.xml's log-always-flush.
+    //
+    // LL_WARNS_ONCE dedupes on the formatted message, and the message carries the error text
+    // and both request codes, so this is once per distinct kind of error -- every new failure
+    // is still reported, and a repeating one stops costing a write per frame. The macro also
+    // re-emits at the 10th, 50th and every 100th occurrence, so a runaway is still visible.
+    LL_WARNS_ONCE("Window") << "Ignoring X11 error: " << text
+                            << " (request " << (int)event->request_code
+                            << "." << (int)event->minor_code << ")" << LL_ENDL;
     return 0;
 }
 #endif // LL_X11

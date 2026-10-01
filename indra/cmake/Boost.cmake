@@ -4,6 +4,11 @@ include(Prebuilt)
 include_guard()
 
 add_library( ll::boost INTERFACE IMPORTED )
+# Boost.Wave (the LSL preprocessor) defines BOOST_SPIRIT_THREADSAFE for itself, and that
+# changes the layout of Spirit Classic's shared grammar-id supply. Every other Spirit user
+# (llcalc, llxuiparser) has to see the same define, or the linker mixes the two layouts and
+# the first spinner commit throws boost::lock_error out of LLCalc::evalString.
+target_compile_definitions( ll::boost INTERFACE BOOST_SPIRIT_THREADSAFE )
 if( USE_CONAN )
   target_link_libraries( ll::boost INTERFACE CONAN_PKG::boost )
   target_compile_definitions( ll::boost INTERFACE BOOST_ALLOW_DEPRECATED_HEADERS BOOST_BIND_GLOBAL_PLACEHOLDERS )
