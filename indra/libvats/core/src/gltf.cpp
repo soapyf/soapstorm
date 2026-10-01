@@ -137,7 +137,7 @@ static bool read_gltf(const std::vector<std::uint8_t>& bytes, const std::string&
                 // Only a regular file beside the .gltf (or below it), and not a huge one.
                 std::filesystem::path rel(uri->str);
                 bool up = false;
-                for (auto& part : rel) up = up || part == "..";
+                for (const auto& part : rel) up = up || part == "..";
                 std::error_code ec;
                 const std::filesystem::path file = std::filesystem::path(dir) / rel;
                 if (rel.is_absolute() || rel.has_root_name() || rel.has_root_directory() || up ||
