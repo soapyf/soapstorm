@@ -1863,7 +1863,10 @@ LLUIImagePtr LLUIImageList::loadUIImageByName(const std::string& name, const std
     {
         boost_priority = LLGLTexture::BOOST_UI;
     }
-    LLViewerFetchedTexture* imagep = LLViewerTextureManager::getFetchedTextureFromFile(filename, FTT_LOCAL_FILE, MIPMAP_NO, boost_priority);
+    // <SS> Honour textures.xml use_mips. Art drawn well below its size needs mipmaps, or
+    // minifying it samples texels unevenly and it comes out jagged and thin.
+    LLViewerFetchedTexture* imagep = LLViewerTextureManager::getFetchedTextureFromFile(filename, FTT_LOCAL_FILE,
+        use_mips ? MIPMAP_YES : MIPMAP_NO, boost_priority);
     return loadUIImage(imagep, name, use_mips, scale_rect, clip_rect, scale_style);
 }
 
