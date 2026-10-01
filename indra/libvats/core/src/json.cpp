@@ -274,7 +274,7 @@ void write_value(std::string& out, const Json& v, int indent) {
             break;
         }
         char buf[32];
-        auto r = std::to_chars(buf, buf + sizeof buf, v.num);
+        auto r = to_chars(buf, buf + sizeof buf, v.num);
         out.append(buf, r.ptr);
         break;
     }

@@ -1,17 +1,18 @@
-// Viewport Avatar Toolset - from_chars compatibility header.
+// Viewport Avatar Toolset - from_chars and to_chars compatibility header.
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 #pragma once
 
 #include <charconv>
 #include <cmath>
+#include <cstdio>
 #include <system_error>
 #include <type_traits>
 
 namespace vats {
 
 #if defined(__APPLE__)
-// Apple Clang's libc++ marks floating-point std::from_chars as deleted when
-// targeting macOS < 13.3 (-mmacosx-version-min=11 in the viewer).
+// Apple Clang's libc++ marks floating-point std::from_chars and std::to_chars as unavailable / deleted
+// when targeting macOS < 13.3 (-mmacosx-version-min=11 in the viewer).
 template <typename T>
 typename std::enable_if<std::is_floating_point<T>::value, std::from_chars_result>::type
 from_chars(const char* first, const char* last, T& value) {
@@ -93,9 +94,32 @@ from_chars(const char* first, const char* last, T& value) {
     return std::from_chars(first, last, value);
 }
 
+inline std::to_chars_result to_chars(char* first, char* last, double value) {
+    if (first >= last) return {last, std::errc::value_too_large};
+    int n = std::snprintf(first, static_cast<size_t>(last - first), "%.17g", value);
+    if (n < 0 || n >= (last - first)) {
+        return {last, std::errc::value_too_large};
+    }
+    for (char* c = first; c < first + n; ++c) {
+        if (*c == ',') *c = '.';
+    }
+    return {first + n, std::errc()};
+}
+
+inline std::to_chars_result to_chars(char* first, char* last, float value) {
+    return to_chars(first, last, static_cast<double>(value));
+}
+
+template <typename T>
+typename std::enable_if<std::is_integral<T>::value, std::to_chars_result>::type
+to_chars(char* first, char* last, T value) {
+    return std::to_chars(first, last, value);
+}
+
 #else
 
 using std::from_chars;
+using std::to_chars;
 
 #endif
 
