@@ -481,6 +481,7 @@ void LLPanelVolume::getState( )
             enabled_animated_object_box = false;
         }
     }
+    if (root_volobjp && root_volobjp->ssIsLocalContent()) enabled_animated_object_box = false;    // <SS:Nexii> a rigged animation state the sim drives; nothing client-side can run it
     getChildView("Animated Mesh Checkbox Ctrl")->setEnabled(enabled_animated_object_box);
 
     //refresh any bakes
@@ -1656,7 +1657,7 @@ void LLPanelVolume::onCommitFlexible( LLUICtrl* ctrl, void* userdata )
 void LLPanelVolume::onCommitAnimatedMeshCheckbox(LLUICtrl *, void*)
 {
     LLViewerObject* objectp = mObject;
-    if (!objectp || (objectp->getPCode() != LL_PCODE_VOLUME))
+    if (!objectp || (objectp->getPCode() != LL_PCODE_VOLUME) || objectp->ssIsLocalContent())    // <SS:Nexii> never for local content
     {
         return;
     }

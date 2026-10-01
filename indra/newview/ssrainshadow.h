@@ -46,6 +46,9 @@ public:
     void markDirty(const LLVector3& pos_agent, F32 radius);
     void clearCache();
 
+    // GL teardown: the readback worker is already gone, so the in-flight gate is cleared and the targets and debug texture released unconditionally.
+    void shutdownGL();
+
     S32 tileCount() const { return (S32)mTiles.size(); }
     S32 voidTileCount() const { return (S32)mVoidTiles.size(); }
     U32 resolution() const;

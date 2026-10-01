@@ -36,7 +36,7 @@
      left="0"
      min_height="120"
      min_width="300"
-     height="440"
+     height="700"
      width="384">
     <text
      follows="left|top" layout="topleft" left="12" top="8"
@@ -368,6 +368,205 @@
       name="D_SSAtmoDropSparkle" label="D"
       tool_tip="Reset to the default value">
         <button.commit_callback function="ResetControl" parameter="SSAtmoDropSparkle" />
+    </button>
+
+    <!-- <SS:Nexii> The screen (lens) rain section. These dials all existed in settings.xml and none of them were reachable from any
+         panel, which is why the user could not find them; the three new ones (streaks, reflection, clear centre) arrived with the
+         2026-09-07 R1-R5 defect fixes. Ordered the way someone tunes this: the on/off first, then the two things that decide what is
+         on the glass, then how it looks, then how long it lasts, then the haze underneath it. -->
+    <text
+     follows="left|top" layout="topleft" left="12" top_pad="12"
+     height="14" width="250" name="lens_label" font="SansSerifSmallBold">
+        Screen (lens) rain
+    </text>
+    <button
+     follows="left|top" layout="topleft"
+     left_pad="4" top_delta="-3" height="20" width="102"
+     name="R_lens" label="Reset group"
+     tool_tip="Reset every setting in this section to its default">
+        <button.commit_callback function="SSAtmo.ResetGroup"
+         parameter="SSAtmoLensDrops,SSAtmoLensDropsStrength,SSAtmoLensStreaks,SSAtmoLensStreakBudget,SSAtmoLensReflection,SSAtmoLensDryRate,SSAtmoLensClearCentre,SSAtmoLensCondensation" />
+    </button>
+    <check_box
+     control_name="SSAtmoLensDrops"
+     follows="left|top" layout="topleft" left="12" top_pad="6"
+     height="16" width="356" name="lens_drops_check"
+     label="Rain drops on the screen (drops on the camera lens)"
+     tool_tip="Off removes the whole lens pass - no droplets, no streaks, no condensation - and costs nothing" />
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="122"
+      name="T_SSAtmoLensDropsStrength"
+      tool_tip="How far a drop bends the scene behind it. 0 leaves the drops visible but optically flat - it does not remove them">
+        Refraction depth:
+    </text>
+    <slider_bar
+      control_name="SSAtmoLensDropsStrength" name="SB_SSAtmoLensDropsStrength"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="0" max_val="2" increment="0.05"
+      tool_tip="How far a drop bends the scene behind it. 0 leaves the drops visible but optically flat - it does not remove them" />
+    <spinner
+      control_name="SSAtmoLensDropsStrength" name="S_SSAtmoLensDropsStrength"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="2" increment="0.05" decimal_digits="2"
+      tool_tip="How far a drop bends the scene behind it. 0 leaves the drops visible but optically flat - it does not remove them" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoLensDropsStrength" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoLensDropsStrength" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="122"
+      name="T_SSAtmoLensStreaks"
+      tool_tip="How strongly the running drops, the fresh water behind them and the beads in their wake read. 0 leaves only the fine droplets">
+        Streak strength:
+    </text>
+    <slider_bar
+      control_name="SSAtmoLensStreaks" name="SB_SSAtmoLensStreaks"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="0" max_val="2" increment="0.05"
+      tool_tip="How strongly the running drops, the fresh water behind them and the beads in their wake read. 0 leaves only the fine droplets" />
+    <spinner
+      control_name="SSAtmoLensStreaks" name="S_SSAtmoLensStreaks"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="2" increment="0.05" decimal_digits="2"
+      tool_tip="How strongly the running drops, the fresh water behind them and the beads in their wake read. 0 leaves only the fine droplets" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoLensStreaks" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoLensStreaks" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="122"
+      name="T_SSAtmoLensStreakBudget"
+      tool_tip="How many running drops may be simulated on the glass at once. Each is a real per-pixel cost; 0 turns streaks off entirely">
+        Streaks at once:
+    </text>
+    <slider_bar
+      control_name="SSAtmoLensStreakBudget" name="SB_SSAtmoLensStreakBudget"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="0" max_val="24" increment="1"
+      tool_tip="How many running drops may be simulated on the glass at once. Each is a real per-pixel cost; 0 turns streaks off entirely" />
+    <spinner
+      control_name="SSAtmoLensStreakBudget" name="S_SSAtmoLensStreakBudget"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="24" increment="1" decimal_digits="0"
+      tool_tip="How many running drops may be simulated on the glass at once. Each is a real per-pixel cost; 0 turns streaks off entirely" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoLensStreakBudget" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoLensStreakBudget" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="122"
+      name="T_SSAtmoLensReflection"
+      tool_tip="Weight of the Fresnel reflection off a drop's own surface - the bright rim that makes it read as water rather than a dark lump. 0 is refraction only">
+        Drop reflection:
+    </text>
+    <slider_bar
+      control_name="SSAtmoLensReflection" name="SB_SSAtmoLensReflection"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="0" max_val="2" increment="0.05"
+      tool_tip="Weight of the Fresnel reflection off a drop's own surface - the bright rim that makes it read as water rather than a dark lump. 0 is refraction only" />
+    <spinner
+      control_name="SSAtmoLensReflection" name="S_SSAtmoLensReflection"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="2" increment="0.05" decimal_digits="2"
+      tool_tip="Weight of the Fresnel reflection off a drop's own surface - the bright rim that makes it read as water rather than a dark lump. 0 is refraction only" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoLensReflection" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoLensReflection" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="122"
+      name="T_SSAtmoLensClearCentre"
+      tool_tip="Thins the fine droplets toward the middle of the screen so the view stays legible. Streaks still drive through the centre. 0 gives a uniform field">
+        Clear centre:
+    </text>
+    <slider_bar
+      control_name="SSAtmoLensClearCentre" name="SB_SSAtmoLensClearCentre"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="0" max_val="1" increment="0.05"
+      tool_tip="Thins the fine droplets toward the middle of the screen so the view stays legible. Streaks still drive through the centre. 0 gives a uniform field" />
+    <spinner
+      control_name="SSAtmoLensClearCentre" name="S_SSAtmoLensClearCentre"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="1" increment="0.05" decimal_digits="2"
+      tool_tip="Thins the fine droplets toward the middle of the screen so the view stays legible. Streaks still drive through the centre. 0 gives a uniform field" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoLensClearCentre" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoLensClearCentre" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="122"
+      name="T_SSAtmoLensDryRate"
+      tool_tip="How fast drops live out their lives. 1 means a drop lands, sits and is gone in 5 to 14 seconds; 2 halves that, 0.5 doubles it">
+        Drying speed:
+    </text>
+    <slider_bar
+      control_name="SSAtmoLensDryRate" name="SB_SSAtmoLensDryRate"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="0.1" max_val="4" increment="0.05"
+      tool_tip="How fast drops live out their lives. 1 means a drop lands, sits and is gone in 5 to 14 seconds; 2 halves that, 0.5 doubles it" />
+    <spinner
+      control_name="SSAtmoLensDryRate" name="S_SSAtmoLensDryRate"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0.1" max_val="4" increment="0.05" decimal_digits="2"
+      tool_tip="How fast drops live out their lives. 1 means a drop lands, sits and is gone in 5 to 14 seconds; 2 halves that, 0.5 doubles it" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoLensDryRate" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoLensDryRate" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="122"
+      name="T_SSAtmoLensCondensation"
+      tool_tip="The haze on the glass that a running drop wipes clear as it passes. 0 removes it entirely">
+        Condensation:
+    </text>
+    <slider_bar
+      control_name="SSAtmoLensCondensation" name="SB_SSAtmoLensCondensation"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="136" min_val="0" max_val="2" increment="0.05"
+      tool_tip="The haze on the glass that a running drop wipes clear as it passes. 0 removes it entirely" />
+    <spinner
+      control_name="SSAtmoLensCondensation" name="S_SSAtmoLensCondensation"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="2" increment="0.05" decimal_digits="2"
+      tool_tip="The haze on the glass that a running drop wipes clear as it passes. 0 removes it entirely" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_SSAtmoLensCondensation" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoLensCondensation" />
     </button>
 
     </panel>

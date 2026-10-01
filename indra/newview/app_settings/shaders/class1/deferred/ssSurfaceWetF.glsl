@@ -29,7 +29,26 @@ out vec4 frag_color;
 
 in vec2 vary_fragcoord;
 
+// <SS:Nexii> AUDIT (finding 2): each pass file is its own GLSL compilation unit (see ssSurfaceStateF.glsl's top-of-file note) - a uniform ssSurfaceStateF.glsl declares is NOT visible in this file unless redeclared here too. Re-declared below: diffuseRect, specularRect, the resolved looks and the ss* toggles this pass reads, and the LOCKSTEP SS_ constants this pass's ice/frost/deposit roughness targets use. [interaction: ssSurfaceStateF.glsl]
+uniform sampler2D diffuseRect;
 uniform sampler2D specularRect;
+
+// The resolved looks (SSSurfaceState::resolve) - same uniforms ssSurfaceStateF.glsl declares, re-declared here for this compilation unit.
+uniform vec4 ssLiquidLook;     // rgb tint, a opacity
+uniform vec2 ssLiquidLook2;    // x stain, y metal
+uniform vec4 ssDepositLook;    // rgb tint, a sparkle (base, before age)
+uniform vec4 ssDepositLook2;   // x translucency, y depthFull (metres), z wash, w melts
+uniform float ssSurfaceIceOn;       // SSAtmoSurfaceIce, 0/1
+uniform float ssSurfaceFrostOn;     // SSAtmoSurfaceFrost, 0/1
+uniform float ssSurfaceFrostStrength; // SSAtmoSurfaceFrostStrength
+
+// LOCKSTEP with sssurfacestatecore.h via ssSurfaceStateF.glsl - re-declared here, same names/values, for this unit's ICE/FROST/DEPOSIT roughness targets.
+const float SS_ICE_ROUGHNESS      = 0.22;
+const float SS_FROST_ROUGHNESS    = 0.85;
+const float SS_DEPOSIT_ROUGHNESS  = 0.85;
+
+// Wind-blown snow settling in the lee (doc section 8) - not LOCKSTEP with the core, a shader-side art constant re-declared per unit like the consts above.
+const float SS_DRIFT_CARRY = 0.8;
 
 // Agent space from view space. The field is anchored to the world; everything the gbuffer hands back is relative to the eye.
 uniform mat4 ssFieldInvView;
@@ -87,23 +106,8 @@ uniform float ssPuddleMaskAmt;      // 0 disables the carve, 1 full
 uniform float ssPuddleMaskScaleM;   // lattice pitch, metres
 uniform vec2 ssPuddleMaskAnchor;    // agent-space origin of the lattice
 
-// The lattice hash, bit-for-bit the CPU's: uint(int) wraps two's complement exactly like the C cast does.
-float ssPuddleLatHash(ivec2 c)
-{
-    uint h = uint(c.x) * 374761393u + uint(c.y) * 668265263u;
-    h = (h ^ (h >> 13)) * 1274126177u;
-    return float((h ^ (h >> 16)) & 0xffffffu) / 16777216.0;
-}
-
-float ssPuddleMaskNoise(vec2 m)
-{
-    vec2 f = m / max(ssPuddleMaskScaleM, 1.0);
-    ivec2 i0 = ivec2(floor(f));
-    vec2 t = f - vec2(i0);
-    vec2 s = t * t * (3.0 - 2.0 * t);
-    return mix(mix(ssPuddleLatHash(i0),               ssPuddleLatHash(i0 + ivec2(1, 0)), s.x),
-               mix(ssPuddleLatHash(i0 + ivec2(0, 1)), ssPuddleLatHash(i0 + ivec2(1, 1)), s.x), s.y);
-}
+// <SS:Nexii> AUDIT (finding 10): the hash/noise bodies moved to ssSurfaceStateF.glsl (as ssPuddleLatHash/ssPuddleMaskNoise) so ssSurfaceAlbedoF.glsl can carve the identical shore edge instead of guessing its own - prototypes only here, same idiom as ssFieldAt/ssFieldFetch above.
+float ssPuddleMaskNoise(vec2 m);
 
 // Diagnostic. Above zero this is used as the wetness for every fragment the pass reaches, ignoring the field, the exposure and the shelter march entirely. It answers one question and only one: does
 // anything this pass writes reach the screen. Everything else here is downstream of that.
@@ -120,6 +124,15 @@ vec4 getNormRaw(vec2 screenpos);
 vec4 decodeNormal(vec4 norm);
 vec4 ssFieldAt(vec3 p_agent, vec3 n_agent);
 vec4 ssFieldFetch(vec2 xy_agent);
+
+// <SS:Nexii> ssSurfaceStateF.glsl, linked ahead of this file - prototypes only, same idiom as ssFieldAt/ssFieldFetch above. [interaction: ssSurfaceStateF.glsl]
+vec4 ssFieldFetchState(vec2 xy_agent);
+float ssPorosityAt(vec2 tc, vec4 albedo, vec4 spec, bool is_pbr);
+float ssDepositCoverage(float depth, float depthFull);
+float ssDepositMask(float coverage, float up, vec3 p);
+float ssDepositSparkle(float base, float age);
+float ssFieldWindCarry(vec2 xy_agent);
+float ssSparkleCell(vec3 p, float pitchM, float fraction);
 
 //-----------------------------------------------------------------------------
 // Avatars The field cannot answer for them - it is a 2D thing describing the top of each column, and a person is something standing IN a column - so they carry their own wetness, tested here as a
@@ -218,12 +231,21 @@ void main()
     vec4 spec = texture(specularRect, tc);
 
     float depth = getDepth(tc);
+    vec4 pos_view = getPositionWithDepth(tc, depth);
+
+    // <SS:Nexii> AUDIT (finding 7): hoisted ahead of the sky/HDRI return below - dFdx/dFdy of view position must run before any fragment in the quad could have taken a different control-flow path, and this pair used to sit after that return.
+    vec3 n_geo_view = cross(dFdx(pos_view.xyz), dFdy(pos_view.xyz));
+    if (dot(n_geo_view, -pos_view.xyz) < 0.0) n_geo_view = -n_geo_view;
+    vec3 n_geo_world = normalize(mat3(ssFieldInvView) * n_geo_view);
 
     // decodeNormal() reconstructs xyz from the octahedral encoding but never assigns w - the flag channel comes along for the ride in the same texture but is not part of what that function decodes,
     // and reading it off its result is uninitialised GLSL output. The flag has to come from the raw fetch; only the normal itself goes through decodeNormal.
     vec4 raw = getNormRaw(tc);
     float flag = raw.w;
     vec4 norm = decodeNormal(raw);
+
+    // <SS:Nexii> read once, beside the flag it comes from, so the PBR/legacy fork below and the porosity estimate agree about which gbuffer this fragment carries without asking the flag twice.
+    bool is_pbr = GET_GBUFFER_FLAG(flag, GBUFFER_FLAG_HAS_PBR);
 
     // Sky, stars, the sun disc, HDRI - none of them are surfaces and none of them have a specular response to spoil
     if (GET_GBUFFER_FLAG(flag, GBUFFER_FLAG_HAS_HDRI) ||
@@ -233,12 +255,14 @@ void main()
         return;
     }
 
-    vec4 pos_view = getPositionWithDepth(tc, depth);
     vec3 p = (ssFieldInvView * vec4(pos_view.xyz, 1.0)).xyz;
     vec3 n = normalize(mat3(ssFieldInvView) * norm.xyz);
 
     float wet;
     float puddle;
+
+    // <SS:Nexii> hoisted out of the else branch below so the state additions past the dFdx level block can read the SAME fetch (field.y deposit depth, field.w exposure) the wet/puddle branch used - a default of all-zero for the debug-force and skip-exposure diagnostics, which never populate it.
+    vec4 field = vec4(0.0);
 
     // Avatars first - but only where the field genuinely has nothing to say. The capsule is a screen-space pass's only way of asking "is this fragment a person": there is no per-object identity in a
     // G-buffer, so a world-space cylinder stands in for one. It cannot tell a shin from the floor between two feet, and on its own it claimed both - handing the ground the avatar's soak and zeroing
@@ -287,7 +311,7 @@ void main()
     }
     else
     {
-        vec4 field = ssFieldAt(p, n);
+        field = ssFieldAt(p, n);
 
         // Outside the window, or nothing has fallen here yet. Either way the surface is left exactly as the material author wrote it.
         wet = field.x * field.w * ssWetStrength;
@@ -329,10 +353,7 @@ void main()
     // the band ended in a straight line running up the wall wherever the neighbouring cell stored a different ground height. A seam, at a cell boundary, on a surface that should never have had
     // standing water on it at all. Asked of the GEOMETRIC normal, from the screen-space derivatives of view position, not the gbuffer normal - same reasoning as the normal flatten pass, which
     // already does this: whether a surface can hold a pool is a question about the geometry, and a bump map would otherwise have a wall pooling in whichever pixels its brickwork happened to tilt
-    // upward. The two passes now agree about which fragments are level, because they compute it the same way from the same uniforms.
-    vec3 n_geo_view = cross(dFdx(pos_view.xyz), dFdy(pos_view.xyz));
-    if (dot(n_geo_view, -pos_view.xyz) < 0.0) n_geo_view = -n_geo_view;
-    vec3 n_geo_world = normalize(mat3(ssFieldInvView) * n_geo_view);
+    // upward. The two passes now agree about which fragments are level, because they compute it the same way from the same uniforms. n_geo_world itself is computed at the top of main() now (audit finding 7) - reused here rather than re-derived.
     float level = smoothstep(ssWetFlattenCosZero, ssWetFlattenCosFull,
                              dot(n_geo_world, vec3(0.0, 0.0, 1.0)));
 
@@ -343,6 +364,18 @@ void main()
     // any more. Scaled purely by the cell size this fade reached metres above the ground, which is how the puddle climbed people's bodies and any raised levelish facet near one.
     float cell = ssFieldOrigin.z;
     level *= 1.0 - smoothstep(min(cell * 0.5, 0.20), min(cell * 1.5, 0.45), p.z - field_here.x);
+
+    // <SS:Nexii> state additions (doc/atmo_magic_surface_weather.md sections 4, 7, 8): the porosity estimate the wet-darkening tightening below shares with the albedo pass, and the ice/frost/deposit gates the ICE and FROST/DEPOSIT blocks further down read. Uses "field" and "puddle"/"wet" as this point in the flow has them - the debug-force and skip-exposure diagnostic paths leave field at its all-zero default, which reads as zero coverage rather than a real deposit answer; those two paths only ever exercised wet/puddle to begin with.
+    vec4 albedo = texture(diffuseRect, tc);
+    float porosity = ssPorosityAt(tc, albedo, spec, is_pbr);
+    vec4 state = ssFieldFetchState(p.xy);
+
+    // <SS:Nexii> wind carry (doc section 8): blown snow settles in a lee the sky-view exposure term alone leaves bare, so the deposit's coverage gate takes whichever of the two (direct exposure, ground wind) says more. [interaction: sssurfacefield.h idle(), the flow window's spare channel]
+    float coverage = ssDepositCoverage(field.y, ssDepositLook2.y) * max(clamp(field.w, 0.0, 1.0), ssFieldWindCarry(p.xy) * SS_DRIFT_CARRY);
+
+    float ice = state.x * max(puddle, wet * 0.5) * ssSurfaceIceOn;
+    // <SS:Nexii> AUDIT (finding 8): gated by exposure (field.w) - without it frost grows on an indoor floor exactly as readily as outdoors, since nothing else here asks whether the sky can even see this fragment.
+    float frost = state.y * ssSurfaceFrostOn * ssSurfaceFrostStrength * (0.35 + 0.65 * level) * (1.0 - coverage) * clamp(field.w, 0.0, 1.0);
 
     // Not applied under the debug override, whose whole job is to soak every fragment the pass reaches regardless of what anything thinks.
     if (ssWetDebugForce <= 0.0)
@@ -364,14 +397,17 @@ void main()
     float puddle_night = puddle * mix(1.0, 0.3, clamp(ssWetNight, 0.0, 1.0));
     float wetBlend = max(wet, puddle_night);
 
-    if (GET_GBUFFER_FLAG(flag, GBUFFER_FLAG_HAS_PBR))
+    // <SS:Nexii> porosity-aware tightening (doc section 4): a porous surface has to saturate before it shines (eases in, the wetBlend^2 term), a sealed one tightens at once (the linear term dominates at porosity 0) - puddle's own weight above is untouched, only the FILM's tightening eases.
+    float wetTighten = wetBlend * (0.5 + 0.5 * (1.0 - porosity)) + wetBlend * wetBlend * 0.5 * porosity;
+
+    if (is_pbr)
     {
         // Occlusion, roughness, metal. Only the middle one moves. Water fills the micro-relief a rough surface scatters its highlight over, so the same specular energy comes back in a tighter lobe:
         // a brighter, sharper highlight and a sharper reflection, with nothing added to the light budget. That is the whole reason this is the one channel worth touching - it reads as wet without
         // overwriting a single thing the creator authored.
         float rough_mul = mix(ssWetRoughness, ssWetPuddleRoughness, puddle);
         float rough_min = mix(ssWetRoughMin, ssWetPuddleRoughMin, puddle);
-        spec.g = max(mix(spec.g, spec.g * rough_mul, wetBlend), rough_min);
+        spec.g = max(mix(spec.g, spec.g * rough_mul, wetTighten), rough_min);
     }
     else
     {
@@ -388,8 +424,60 @@ void main()
         target = mix(target, ssWetPuddleSpecular, puddle);
         float gloss_target = mix(ssWetGlossTarget, ssWetPuddleGloss, puddle);
 
-        spec.rgb = mix(spec.rgb, max(spec.rgb, vec3(target)), wetBlend);
-        spec.a = mix(spec.a, max(spec.a, gloss_target), wetBlend);
+        spec.rgb = mix(spec.rgb, max(spec.rgb, vec3(target)), wetTighten);
+        spec.a = mix(spec.a, max(spec.a, gloss_target), wetTighten);
+    }
+
+    // <SS:Nexii> ICE (doc section 7): a frozen puddle reads as frosted glass, a frozen film as glaze - both a hard roughness target rather than a multiplier, since ice is not "more of the same shine", it is a different surface. Legacy has no roughness channel to target, so it gets the same idea through colour/gloss.
+    if (is_pbr)
+    {
+        spec.g = mix(spec.g, SS_ICE_ROUGHNESS, ice);
+    }
+    else
+    {
+        spec.rgb = mix(spec.rgb, vec3(0.16), ice);
+        spec.a = mix(spec.a, 0.6, ice);
+    }
+
+    // <SS:Nexii> FROST and DEPOSIT share one accumulation mask (doc section 8, ssDepositMask - same call the albedo and normal passes make so the layer is one thing); frost is softened by 0.9 so a light frost alone never reads as a fully "delivered" snow layer. AUDIT (finding 14): SS_FROST_ROUGHNESS and SS_DEPOSIT_ROUGHNESS are both 0.85 today, so target_rough is currently a no-op mix - kept as a mix rather than a bare constant because the two are independent dials that read the same only by coincidence, and this line is what makes them diverge correctly the moment either one does.
+    float mask = ssDepositMask(coverage, clamp(n.z, 0.0, 1.0), p);
+    float m = max(frost * 0.9, mask);
+    float target_rough = mix(SS_FROST_ROUGHNESS, SS_DEPOSIT_ROUGHNESS, step(frost * 0.9, mask));
+    if (is_pbr)
+    {
+        spec.g = mix(spec.g, target_rough, m);
+        spec.r = mix(spec.r, 1.0, mask);   // a snow layer covers the baked occlusion under it - ORM red is occlusion
+    }
+    else
+    {
+        spec.rgb = mix(spec.rgb, vec3(0.12), m);
+        spec.a = mix(spec.a, 0.05, m);
+    }
+
+    // <SS:Nexii> SPARKLE (doc section 8): real and view-dependent - a sparse world-hashed lattice of mirror-tight cells under the mask, so highlights pop in and out as the camera moves rather than sitting still in the albedo like the old snow pass's glint did. Frost gets its own, finer lattice, independent of the deposit mask.
+    float cells = ssSparkleCell(p, 0.025, 0.035) * mask * ssDepositSparkle(ssDepositLook.a, state.w);
+    cells += ssSparkleCell(p, 0.02, 0.02) * frost;
+    if (is_pbr)
+    {
+        spec.g = mix(spec.g, 0.03, cells);
+    }
+    else
+    {
+        spec.rgb = mix(spec.rgb, vec3(0.9), cells);
+        spec.a = mix(spec.a, 0.98, cells);
+    }
+
+    // <SS:Nexii> LIQUID METAL (doc section 9): mercury is a mirror with colour, not a dielectric that merely tightens like water - pushed independently of the wet/puddle tightening above so a metal look never has to fight it.
+    float metal = ssLiquidLook2.y * max(puddle, wet * 0.6);
+    if (is_pbr)
+    {
+        spec.b = max(spec.b, metal);
+        spec.g = mix(spec.g, 0.08, metal);
+    }
+    else
+    {
+        spec.rgb = mix(spec.rgb, ssLiquidLook.rgb, metal);
+        spec.a = max(spec.a, 0.9 * metal);
     }
 
     frag_color = spec;

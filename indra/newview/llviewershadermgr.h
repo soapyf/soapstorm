@@ -279,12 +279,17 @@ extern LLGLSLShader         gSSPrecipLitProgram;
 extern LLGLSLShader         gSSPrecipProjProgram;
 extern LLGLSLShader         gSSSurfaceWetProgram;
 extern LLGLSLShader         gSSVolCloudProgram;
+extern LLGLSLShader         gSSVortexProgram;
 extern LLGLSLShader         gSSLightningProgram;
 extern LLGLSLShader         gSSCelestialProgram;
 extern LLGLSLShader         gSSSurfaceNormalProgram;
 extern LLGLSLShader         gSSSurfaceCommitProgram;
-extern LLGLSLShader         gSSSurfaceSnowProgram;
-extern LLGLSLShader         gSSWhiteoutProgram;
+extern LLGLSLShader         gSSSurfaceAlbedoProgram; // <SS:Nexii> was gSSSurfaceSnowProgram; renamed for the albedo pass (doc/atmo_magic_surface_weather.md sec 3)
+// <SS:Nexii> Atmo Magic surface weather: post-processing screen-space layers (replace the old whiteout)
+extern LLGLSLShader         gSSPostFogProgram;
+extern LLGLSLShader         gSSPostHeatProgram;
+extern LLGLSLShader         gSSPostLensProgram;
+extern LLGLSLShader         gSSInfoLookProgram;
 // Wind flowmap compute passes; only created when GL 4.3 is present
 extern LLGLSLShader         gSSWindInitProgram;
 extern LLGLSLShader         gSSWindDivProgram;
@@ -293,6 +298,9 @@ extern LLGLSLShader         gSSWindProjectProgram;
 extern LLGLSLShader         gSSWindSeedProgram;
 extern LLGLSLShader         gSSWindRestrictProgram;
 extern LLGLSLShader         gSSWindProlongProgram;
+// <SS:Nexii> GPU culling compute passes; only created when GL 4.3 is present
+extern LLGLSLShader         gSSHiZProgram;
+extern LLGLSLShader         gSSCullProgram;
 extern LLGLSLShader         gHUDFullbrightProgram;
 extern LLGLSLShader         gDeferredFullbrightAlphaMaskProgram;
 extern LLGLSLShader         gHUDFullbrightAlphaMaskProgram;

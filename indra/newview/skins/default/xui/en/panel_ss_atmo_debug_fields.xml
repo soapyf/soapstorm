@@ -46,6 +46,16 @@
      font="SansSerifSmallBold">
         World Field
     </text>
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     height="16"
+     width="382"
+     name="field_overlay_check"
+     label="Draw the world field"
+     tool_tip="The shared field&apos;s view - surface tops, air labels or drainage - picked below. The drainage and air views are distance-thinned" />
     <text
       follows="left|top" layout="topleft"
       left="12" top_pad="6" height="16" width="106"
@@ -57,11 +67,13 @@
       control_name="SSWorldFieldDebugView" name="C_field_view"
       follows="left|top" layout="topleft"
       left_pad="4" top_delta="-2" height="20" width="250"
-      tool_tip="Band surfaces: every surface the capture resolved, hue by band so stacked storeys read separately. Air labels: the connectivity flood, outside-connected air green and fading with occlusion depth, sealed interior air red. Drainage: standing water blue and the D8 outlet chain of the filled surface. True ground: the wind profile's ground reference per column - topmost real ground, tall structures filled from their neighbours">
-        <combo_box.item label="Band surfaces" value="1" name="field_view_bands" />
+      tool_tip="Surface tops: every solid span top the cell grid holds, hue by altitude so stacked storeys read separately. Air labels: the classification per air gap, outdoors green, sheltered amber fading with the covered distance from the opening, interior red. Drainage: standing water blue and the D8 outlet chain of the filled surface. Cell spans: each solid span a flat rect at its floor and ceiling, coloured by the air state standing on it, joined by a dim line through the span's solid body. Shape census: the declared physics shapes by layer and provenance. Navmesh: the walkable Detour polygons as translucent fills with their edges, coloured by height band - the only view that needs no field grid">
+        <combo_box.item label="Surface tops" value="1" name="field_view_bands" />
         <combo_box.item label="Air labels" value="2" name="field_view_air" />
         <combo_box.item label="Drainage" value="3" name="field_view_drain" />
-        <combo_box.item label="True ground" value="4" name="field_view_ground" />
+        <combo_box.item label="Cell spans" value="5" name="field_view_spans" />
+        <combo_box.item label="Shape census" value="6" name="field_view_shapes" />
+        <combo_box.item label="Navmesh" value="7" name="field_view_navmesh" />
     </combo_box>
 
     <text
@@ -87,6 +99,16 @@
         <button.commit_callback function="SSAtmo.ResetGroup"
          parameter="SSAtmoCloudDebugView" />
     </button>
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="8"
+     height="16"
+     width="382"
+     name="cloud_overlay_check"
+     label="Draw the cloud field"
+     tool_tip="The volumetric deck&apos;s builder views, picked below" />
     <combo_box
       control_name="SSAtmoCloudDebugView" name="C_cloud_view"
       follows="left|top"
@@ -108,6 +130,16 @@
      font="SansSerifSmallBold">
         Surface
     </text>
+    <check_box
+     follows="left|top"
+     layout="topleft"
+     left="12"
+     top_pad="6"
+     height="16"
+     width="382"
+     name="surface_overlay_check"
+     label="Draw the surface field"
+     tool_tip="The wet/snow/puddle landing grid and its runoff traces, drawn over the ground they land on" />
     <text
      follows="left|top"
      layout="topleft"

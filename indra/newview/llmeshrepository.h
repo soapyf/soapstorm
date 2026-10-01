@@ -915,6 +915,7 @@ public:
     LLModel::Decomposition* getDecomposition(const LLUUID& mesh_id);
     void fetchPhysicsShape(const LLUUID& mesh_id);
     bool hasPhysicsShape(const LLUUID& mesh_id);
+    bool hasPhysicsShapeInHeader(const LLUUID& mesh_id) const { return mThread && mThread->hasPhysicsShapeInHeader(mesh_id); }    // <SS:Nexii> header-only answer for the world-field census dump
     bool hasSkinInfo(const LLUUID& mesh_id);
     bool hasHeader(const LLUUID& mesh_id) const;
 

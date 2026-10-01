@@ -202,6 +202,18 @@ LLSD SSPrecipPreset::asLLSD() const
     sd["dark_texture"] = mDarkTexture;
     sd["puff_texture"] = mPuffTexture;
 
+    // <SS:Nexii> Surface weather slice B: the ground looks, saved like tint (LLColor4::getValue, opacity ignores alpha).
+    sd["liquid_tint"] = LLColor4(mLiquid.mTint.r, mLiquid.mTint.g, mLiquid.mTint.b, 1.f).getValue();
+    sd["liquid_opacity"] = mLiquid.mOpacity;
+    sd["liquid_stain"] = mLiquid.mStain;
+    sd["liquid_metal"] = mLiquid.mMetal;
+    sd["deposit_tint"] = LLColor4(mDeposit.mTint.r, mDeposit.mTint.g, mDeposit.mTint.b, 1.f).getValue();
+    sd["deposit_sparkle"] = mDeposit.mSparkle;
+    sd["deposit_translucency"] = mDeposit.mTranslucency;
+    sd["deposit_depth_full"] = mDeposit.mDepthFull;
+    sd["deposit_wash"] = mDeposit.mWash;
+    sd["deposit_melts"] = mDeposit.mMelts;
+
     sd["snd_light"] = mSounds.mAmbientLight;
     sd["snd_medium"] = mSounds.mAmbientMedium;
     sd["snd_heavy"] = mSounds.mAmbientHeavy;
@@ -312,6 +324,26 @@ void SSPrecipPreset::fromLLSD(const LLSD& sd)
     if (sd.has("ripple_texture")) mRippleTexture = sd["ripple_texture"].asString();
     if (sd.has("dark_texture")) mDarkTexture = sd["dark_texture"].asString();
     if (sd.has("puff_texture")) mPuffTexture = sd["puff_texture"].asString();
+
+    // <SS:Nexii> Surface weather slice B: the ground looks; an older preset with none of these keys keeps the struct defaults (water/snow), so it changes nothing on the ground.
+    if (sd.has("liquid_tint"))
+    {
+        LLColor4 c; c.setValue(sd["liquid_tint"]);
+        mLiquid.mTint = { c.mV[VRED], c.mV[VGREEN], c.mV[VBLUE] };
+    }
+    if (sd.has("liquid_opacity")) mLiquid.mOpacity = (F32)sd["liquid_opacity"].asReal();
+    if (sd.has("liquid_stain")) mLiquid.mStain = (F32)sd["liquid_stain"].asReal();
+    if (sd.has("liquid_metal")) mLiquid.mMetal = (F32)sd["liquid_metal"].asReal();
+    if (sd.has("deposit_tint"))
+    {
+        LLColor4 c; c.setValue(sd["deposit_tint"]);
+        mDeposit.mTint = { c.mV[VRED], c.mV[VGREEN], c.mV[VBLUE] };
+    }
+    if (sd.has("deposit_sparkle")) mDeposit.mSparkle = (F32)sd["deposit_sparkle"].asReal();
+    if (sd.has("deposit_translucency")) mDeposit.mTranslucency = (F32)sd["deposit_translucency"].asReal();
+    if (sd.has("deposit_depth_full")) mDeposit.mDepthFull = (F32)sd["deposit_depth_full"].asReal();
+    if (sd.has("deposit_wash")) mDeposit.mWash = (F32)sd["deposit_wash"].asReal();
+    if (sd.has("deposit_melts")) mDeposit.mMelts = (F32)sd["deposit_melts"].asReal();
 
     if (sd.has("snd_light")) mSounds.mAmbientLight = sd["snd_light"].asString();
     if (sd.has("snd_medium")) mSounds.mAmbientMedium = sd["snd_medium"].asString();
@@ -618,6 +650,9 @@ void SSPrecipPresetManager::buildDefaults()
         p.mSnowRate = 0.00004f; p.mSnowMelt = 0.0000045f;
         p.mSnowDepth = 0.09f;   p.mSnowRepose = 46.f;
 
+        // <SS:Nexii> Surface weather slice B: the snow deposit look (doc sec 2/8) - 0.93/0.95/0.99, sparkle 0.7, translucency 0.45, depthFull 0.02, washes never (melts instead).
+        p.mDeposit = { {0.93f, 0.95f, 0.99f}, 0.7f, 0.45f, 0.02f, 0.f, 1.f };
+
         // <SS:Nexii> Granular transport: light saltation in a breeze, gentle lee banking, a little creep moving the drift sheets. The cascade look shares the creep dial.
         p.mSnowLiftRate = 0.002f;   p.mSnowDepositRate = 0.0008f;
         p.mSnowCreepRate = 0.4f;    p.mSnowDriftAge = 2.5f;
@@ -644,6 +679,9 @@ void SSPrecipPresetManager::buildDefaults()
         p.mSnowRate = 0.00013f; p.mSnowMelt = 0.0000035f;
         p.mSnowDepth = 0.22f;   p.mSnowRepose = 52.f;
 
+        // <SS:Nexii> Surface weather slice B: Blizzard's deposit look - same snow palette, depthFull a touch deeper (the drift banks thicker before it reads as a full layer).
+        p.mDeposit = { {0.93f, 0.95f, 0.99f}, 0.7f, 0.45f, 0.03f, 0.f, 1.f };
+
         // <SS:Nexii> Ground-blizzard rates: sustained wind scours the open ground and banks it in every lee. Erosion must comfortably beat settle (mSnowRate) or the storm never strips a cell; deposit runs about a fifth of lift, creep feeding the drift sheets and eave spill. The falling rate is rain's - a blizzard dumps as hard as rain does, and the old 0.15 was why snow skies read empty beside a rain preset.
         p.mRate = 0.55f;
         p.mSnowLiftRate = 0.010f;   p.mSnowDepositRate = 0.0015f;
@@ -669,6 +707,9 @@ void SSPrecipPresetManager::buildDefaults()
         p.mTiers[TIER_DROPS]    = { true, KIND_ROUND, 0.02f, 0.02f, 0.50f, 20.f };
         p.mTiers[TIER_CLUSTERS] = { true, KIND_ROUND, 0.25f, 0.25f, 0.20f, 48.f };
         p.mTiers[TIER_SHEETS]   = { true, KIND_SHEET, 4.f,   6.f,   0.07f, 96.f };
+
+        // <SS:Nexii> Surface weather slice B: Diamond Dust's deposit look - same snow palette per the doc's built-in list.
+        p.mDeposit = { {0.93f, 0.95f, 0.99f}, 0.7f, 0.45f, 0.02f, 0.f, 1.f };
         mPresets.push_back(p);
     }
 
@@ -744,6 +785,8 @@ void SSPrecipPresetManager::buildDefaults()
         p.mRate = 0.5f;
         p.mTint = LLColor4(0.82f, 0.71f, 0.52f, 1.f);
         p.mImpactStrength = 0.f;
+        // <SS:Nexii> AUDIT (finding 6): without this the struct default (the Snow look: white, sparkly, mMelts 1) was what Sand deposited with - a tan preset that read as white and melted above freezing. Also fixes Ash/Dust below, which copy sandBase.mDeposit.mDepthFull.
+        p.mDeposit = { {0.82f, 0.71f, 0.52f}, 0.15f, 0.f, 0.03f, 0.2f, 0.f };
         p.mTiers[TIER_DROPS]    = { true, KIND_ROUND, 0.05f, 0.05f, 0.70f, 24.f };
         p.mTiers[TIER_CLUSTERS] = { true, KIND_ROUND, 0.30f, 0.30f, 0.30f, 64.f };
         p.mTiers[TIER_SHEETS]   = { true, KIND_SHEET, 4.f,   8.f,   0.10f, 128.f };
@@ -756,6 +799,51 @@ void SSPrecipPresetManager::buildDefaults()
 
         p.mWetRate = 0.f;       p.mDryRate = 0.002f;
         p.mPuddleRate = 0.f;    p.mPuddleDepth = 0.f;   p.mPuddleDrain = 0.f;
+        mPresets.push_back(p);
+    }
+
+    // <SS:Nexii> Surface weather slice B: Ink Rain - a copy of Rain, near-black liquid that stains what it touches (doc sec 2/9). Guarded the same way the Sand lookup below is (audit finding 15) rather than a bare mPresets.front() - safe today only because "Rain" is pushed first above, but a future reorder would otherwise copy the wrong preset instead of dereferencing end().
+    {
+        SSPrecipPreset rainBase;
+        {
+            const auto it = std::find_if(mPresets.begin(), mPresets.end(),
+                [](const SSPrecipPreset& e) { return e.mName == "Rain"; });
+            if (it != mPresets.end()) rainBase = *it;
+        }
+        SSPrecipPreset p = rainBase;
+        p.mName = "Ink Rain";
+        p.mBuiltIn = true;
+        p.mTint = LLColor4(0.05f, 0.05f, 0.08f, 1.f);
+        p.mLiquid = { {0.02f, 0.02f, 0.05f}, 0.95f, 0.8f, 0.f };
+        mPresets.push_back(p);
+    }
+
+    // <SS:Nexii> AUDIT (finding 15): guarded rather than a bare dereference - safe today only because "Sand" is pushed above and mPresets.clear() (buildDefaults's own caller) always precedes this, but a future rename of "Sand" would otherwise dereference end().
+    SSPrecipPreset sandBase;
+    {
+        const auto it = std::find_if(mPresets.begin(), mPresets.end(),
+            [](const SSPrecipPreset& e) { return e.mName == "Sand"; });
+        if (it != mPresets.end()) sandBase = *it;
+    }
+
+    // <SS:Nexii> Surface weather slice B: Ash - a copy of Sand, warm grey, opaque, never melts, washes fully (doc sec 2/8).
+    {
+        SSPrecipPreset p = sandBase;
+        p.mName = "Ash";
+        p.mBuiltIn = true;
+        p.mTint = LLColor4(0.45f, 0.44f, 0.43f, 1.f);
+        p.mDeposit = { {0.35f, 0.34f, 0.33f}, 0.f, 0.1f, p.mDeposit.mDepthFull, 1.f, 0.f };
+        mPresets.push_back(p);
+    }
+
+    // <SS:Nexii> Surface weather slice B: Dust - a copy of Sand, ochre, thinner full-depth, washes fully (doc sec 2/8).
+    {
+        SSPrecipPreset p = sandBase;
+        p.mName = "Dust";
+        p.mBuiltIn = true;
+        p.mTint = LLColor4(0.78f, 0.66f, 0.48f, 1.f);
+        p.mSnowDepth = 0.06f;
+        p.mDeposit = { {0.72f, 0.6f, 0.42f}, 0.1f, 0.2f, p.mDeposit.mDepthFull, 1.f, 0.f };
         mPresets.push_back(p);
     }
 }

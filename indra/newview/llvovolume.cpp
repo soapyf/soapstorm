@@ -1752,7 +1752,9 @@ bool LLVOVolume::calcLOD()
         }
     }
 
-    distance *= sDistanceFactor;
+    // <SS:Nexii> The landscape LOD stretch folds in here: ssLODDistanceScale returns 1.0 for
+    // every stock volume, so the multiply is a no-op outside Atmo landscape objects.
+    distance *= sDistanceFactor * ssLODDistanceScale();
 
     F32 rampDist = LLVOVolume::sLODFactor * 2;
 

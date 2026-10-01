@@ -185,12 +185,17 @@ LLGLSLShader            gSSPrecipRainProgram;
 LLGLSLShader            gSSPrecipLitProgram;
 LLGLSLShader            gSSSurfaceWetProgram;
 LLGLSLShader            gSSVolCloudProgram;
+LLGLSLShader            gSSVortexProgram;
 LLGLSLShader            gSSLightningProgram;
 LLGLSLShader            gSSCelestialProgram;
 LLGLSLShader            gSSSurfaceNormalProgram;
 LLGLSLShader            gSSSurfaceCommitProgram;
-LLGLSLShader            gSSSurfaceSnowProgram;
-LLGLSLShader            gSSWhiteoutProgram;
+LLGLSLShader            gSSSurfaceAlbedoProgram; // <SS:Nexii> was gSSSurfaceSnowProgram
+// <SS:Nexii> Atmo Magic surface weather: post-processing screen-space layers (replace the old whiteout)
+LLGLSLShader            gSSPostFogProgram;
+LLGLSLShader            gSSPostHeatProgram;
+LLGLSLShader            gSSPostLensProgram;
+LLGLSLShader            gSSInfoLookProgram;
 LLGLSLShader            gSSPrecipProjProgram;
 LLGLSLShader            gSSWindInitProgram;
 LLGLSLShader            gSSWindDivProgram;
@@ -199,6 +204,8 @@ LLGLSLShader            gSSWindProjectProgram;
 LLGLSLShader            gSSWindSeedProgram;
 LLGLSLShader            gSSWindRestrictProgram;
 LLGLSLShader            gSSWindProlongProgram;
+LLGLSLShader            gSSHiZProgram; // <SS:Nexii> GPU culling Hi-Z build
+LLGLSLShader            gSSCullProgram; // <SS:Nexii> GPU culling visibility test
 LLGLSLShader            gHUDAlphaProgram;
 LLGLSLShader            gDeferredSkinnedAlphaProgram;
 LLGLSLShader            gDeferredAlphaImpostorProgram;
@@ -465,12 +472,15 @@ void LLViewerShaderMgr::finalizeShaderList()
     mShaderList.push_back(&gSSPrecipLitProgram);
     mShaderList.push_back(&gSSSurfaceWetProgram);
     mShaderList.push_back(&gSSVolCloudProgram);
+    mShaderList.push_back(&gSSVortexProgram);
     mShaderList.push_back(&gSSLightningProgram);
     mShaderList.push_back(&gSSCelestialProgram);
     mShaderList.push_back(&gSSSurfaceNormalProgram);
     mShaderList.push_back(&gSSSurfaceCommitProgram);
-    mShaderList.push_back(&gSSSurfaceSnowProgram);
-    mShaderList.push_back(&gSSWhiteoutProgram);
+    mShaderList.push_back(&gSSSurfaceAlbedoProgram);
+    mShaderList.push_back(&gSSPostFogProgram);
+    mShaderList.push_back(&gSSPostHeatProgram);
+    mShaderList.push_back(&gSSPostLensProgram);
     mShaderList.push_back(&gSSPrecipProjProgram);
     mShaderList.push_back(&gHUDFullbrightProgram);
     mShaderList.push_back(&gDeferredFullbrightAlphaMaskProgram);
@@ -910,6 +920,15 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     attribs["MAX_JOINTS_PER_MESH_OBJECT"] =
         std::to_string(LLSkinningUtil::getMaxJointCount());
 
+    // <SS:Nexii> atmosphericsFuncs.glsl is a basic shader object (compiled once here, not per-program), so the
+    // per-program addPermutation("SS_ATMO", ...) above never reaches it - it needs the define here too, or the
+    // whole SS_ATMO block in that file (haze falloff, dominant-light handover, sun-rise glow ramp) never compiles.
+    static LLCachedControl<bool> basic_atmo(gSavedSettings, "SSAtmoEnabled", false);
+    if (basic_atmo)
+    {
+        attribs["SS_ATMO"] = "1";
+    }
+
     static LLCachedControl<bool> emissive(gSavedSettings, "RenderEnableEmissiveBuffer", false);
 
     if (emissive)
@@ -1253,12 +1272,16 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gSSPrecipProjProgram.unload();
         gSSSurfaceWetProgram.unload();
         gSSVolCloudProgram.unload();
+        gSSVortexProgram.unload();
         gSSLightningProgram.unload();
         gSSCelestialProgram.unload();
         gSSSurfaceNormalProgram.unload();
         gSSSurfaceCommitProgram.unload();
-        gSSSurfaceSnowProgram.unload();
-        gSSWhiteoutProgram.unload();
+        gSSSurfaceAlbedoProgram.unload();
+        gSSPostFogProgram.unload();
+        gSSPostHeatProgram.unload();
+        gSSPostLensProgram.unload();
+        gSSInfoLookProgram.unload();
         gHUDFullbrightProgram.unload();
         gDeferredFullbrightAlphaMaskProgram.unload();
         gHUDFullbrightAlphaMaskProgram.unload();
@@ -2113,6 +2136,29 @@ bool LLViewerShaderMgr::loadShadersDeferred()
             gSSVolCloudProgram.unload();
         }
 
+        // <SS:Nexii> Same feature set and SG_SKY group as gSSVolCloudProgram (see its own comment above): the funnel
+        // is shaded by the sky's own sunlight_color/ambient_color/cloud_color/lightnorm uniforms so a dark
+        // condensation funnel and its lit rim track the same sunrise/sunset the deck and the dome band do, rather
+        // than carrying a second, disagreeing light.
+        gSSVortexProgram.mName = "SS Vortex Shader";
+        gSSVortexProgram.mFeatures.calculatesAtmospherics = true;
+        gSSVortexProgram.mFeatures.hasAtmospherics = true;
+        gSSVortexProgram.mFeatures.hasGamma = true;
+        gSSVortexProgram.mFeatures.hasSrgb = true;
+        gSSVortexProgram.mShaderFiles.clear();
+        gSSVortexProgram.mShaderFiles.push_back(make_pair("deferred/ssVortexV.glsl", GL_VERTEX_SHADER));
+        gSSVortexProgram.mShaderFiles.push_back(make_pair("deferred/ssVortexF.glsl", GL_FRAGMENT_SHADER));
+        gSSVortexProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gSSVortexProgram.mShaderGroup = LLGLSLShader::SG_SKY;
+        gSSVortexProgram.clearPermutations();
+        add_common_permutations(&gSSVortexProgram);
+        if (!gSSVortexProgram.createShader())
+        {
+            LL_WARNS("Shader") << "SS vortex shader failed to compile;"
+                               << " tornado/waterspout/landspout funnels will not draw" << LL_ENDL;
+            gSSVortexProgram.unload();
+        }
+
         gSSLightningProgram.mName = "SS Lightning Shader";
         gSSLightningProgram.mShaderFiles.clear();
         gSSLightningProgram.mShaderFiles.push_back(make_pair("deferred/ssLightningV.glsl", GL_VERTEX_SHADER));
@@ -2221,6 +2267,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gSSSurfaceWetProgram.mShaderFiles.clear();
         gSSSurfaceWetProgram.mShaderFiles.push_back(make_pair("deferred/blurLightV.glsl", GL_VERTEX_SHADER));
         gSSSurfaceWetProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceFieldF.glsl", GL_FRAGMENT_SHADER));
+        gSSSurfaceWetProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceStateF.glsl", GL_FRAGMENT_SHADER));
         gSSSurfaceWetProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceWetF.glsl", GL_FRAGMENT_SHADER));
         gSSSurfaceWetProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         gSSSurfaceWetProgram.clearPermutations();
@@ -2246,6 +2293,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gSSSurfaceNormalProgram.mShaderFiles.clear();
         gSSSurfaceNormalProgram.mShaderFiles.push_back(make_pair("deferred/blurLightV.glsl", GL_VERTEX_SHADER));
         gSSSurfaceNormalProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceFieldF.glsl", GL_FRAGMENT_SHADER));
+        gSSSurfaceNormalProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceStateF.glsl", GL_FRAGMENT_SHADER));
         gSSSurfaceNormalProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceNormalF.glsl", GL_FRAGMENT_SHADER));
         gSSSurfaceNormalProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         gSSSurfaceNormalProgram.clearPermutations();
@@ -2281,48 +2329,46 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         }
     }
 
-    // Snow surfaces. The same shape as the wetness shader - screen space over
+    // Albedo surfaces (was snow-only). The same shape as the wetness shader - screen space over
     // the gbuffer, the field window for coverage - but writing the diffuse
-    // attachment instead of the specular one: the settled depth the field has
-    // always carried becomes visible albedo.
+    // attachment instead of the specular one: wet darkening, liquid tint, stain, ice, frost and
+    // deposit palette all land here now (doc/atmo_magic_surface_weather.md sec 3).
     if (success)
     {
-        gSSSurfaceSnowProgram.mName = "SS Surface Snow Shader";
-        gSSSurfaceSnowProgram.mFeatures.isDeferred = true;
-        gSSSurfaceSnowProgram.mShaderFiles.clear();
-        gSSSurfaceSnowProgram.mShaderFiles.push_back(make_pair("deferred/blurLightV.glsl", GL_VERTEX_SHADER));
-        gSSSurfaceSnowProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceFieldF.glsl", GL_FRAGMENT_SHADER));
-        gSSSurfaceSnowProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceSnowF.glsl", GL_FRAGMENT_SHADER));
-        gSSSurfaceSnowProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
-        gSSSurfaceSnowProgram.clearPermutations();
-        add_common_permutations(&gSSSurfaceSnowProgram);
-        if (!gSSSurfaceSnowProgram.createShader())
+        gSSSurfaceAlbedoProgram.mName = "SS Surface Albedo Shader";
+        gSSSurfaceAlbedoProgram.mFeatures.isDeferred = true;
+        gSSSurfaceAlbedoProgram.mShaderFiles.clear();
+        gSSSurfaceAlbedoProgram.mShaderFiles.push_back(make_pair("deferred/blurLightV.glsl", GL_VERTEX_SHADER));
+        gSSSurfaceAlbedoProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceFieldF.glsl", GL_FRAGMENT_SHADER));
+        gSSSurfaceAlbedoProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceStateF.glsl", GL_FRAGMENT_SHADER));
+        gSSSurfaceAlbedoProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceAlbedoF.glsl", GL_FRAGMENT_SHADER));
+        gSSSurfaceAlbedoProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gSSSurfaceAlbedoProgram.clearPermutations();
+        add_common_permutations(&gSSSurfaceAlbedoProgram);
+        if (!gSSSurfaceAlbedoProgram.createShader())
         {
-            LL_WARNS("Shader") << "SS Surface snow shader failed to compile;"
-                               << " settled snow will not shade" << LL_ENDL;
-            gSSSurfaceSnowProgram.unload();
+            LL_WARNS("Shader") << "SS Surface albedo shader failed to compile;"
+                               << " settled surface state will not shade" << LL_ENDL;
+            gSSSurfaceAlbedoProgram.unload();
         }
     }
 
-    // The whiteout veil. Deferred util for the depth/normal reads and the
-    // surface field include for the exposure march; the call site composites
-    // it as an alpha fog lerp over the lit screen.
+    // <SS:Nexii> The info-view LOOK (doc/atmo_magic_phase8_show.md section 6 item 4): the warm-gray post-screen pass that replaced the debug overlay's world-dim quad. Registered here beside the whiteout because it is the same KIND of shader - a full-screen triangle over the finished frame - but it is NOT a post program in the pipeline's sense and must never join mShaderList: it wants no sky/light uniforms (its whole light model is two direction uniforms the call site uploads), and it does not run from renderFinalize at all. isDeferred is what pulls deferredUtil.glsl in for getDepth/getNormRaw/decodeNormal/getPositionWithDepth and the normalMap/depthMap/inv_proj declarations those need; the vertex stage is its own file rather than postDeferredNoTCV.glsl only because that one declares a screen_res this pass has no use for. Failure to compile is not fatal: the overlay simply draws over an untouched world. [interaction: SSAtmoInfoView::renderInfoLook]
     if (success)
     {
-        gSSWhiteoutProgram.mName = "SS Whiteout Shader";
-        gSSWhiteoutProgram.mFeatures.isDeferred = true;
-        gSSWhiteoutProgram.mShaderFiles.clear();
-        gSSWhiteoutProgram.mShaderFiles.push_back(make_pair("deferred/blurLightV.glsl", GL_VERTEX_SHADER));
-        gSSWhiteoutProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceFieldF.glsl", GL_FRAGMENT_SHADER));
-        gSSWhiteoutProgram.mShaderFiles.push_back(make_pair("deferred/ssWhiteoutF.glsl", GL_FRAGMENT_SHADER));
-        gSSWhiteoutProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
-        gSSWhiteoutProgram.clearPermutations();
-        add_common_permutations(&gSSWhiteoutProgram);
-        if (!gSSWhiteoutProgram.createShader())
+        gSSInfoLookProgram.mName = "SS Info View Look Shader";
+        gSSInfoLookProgram.mFeatures.isDeferred = true;
+        gSSInfoLookProgram.mShaderFiles.clear();
+        gSSInfoLookProgram.mShaderFiles.push_back(make_pair("deferred/ssInfoLookV.glsl", GL_VERTEX_SHADER));
+        gSSInfoLookProgram.mShaderFiles.push_back(make_pair("deferred/ssInfoLookF.glsl", GL_FRAGMENT_SHADER));
+        gSSInfoLookProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gSSInfoLookProgram.clearPermutations();
+        add_common_permutations(&gSSInfoLookProgram);
+        if (!gSSInfoLookProgram.createShader())
         {
-            LL_WARNS("Shader") << "SS Whiteout shader failed to compile;"
-                               << " no whiteout layer" << LL_ENDL;
-            gSSWhiteoutProgram.unload();
+            LL_WARNS("Shader") << "SS info view look shader failed to compile;"
+                               << " the info views will draw over an unmodified world" << LL_ENDL;
+            gSSInfoLookProgram.unload();
         }
     }
 
@@ -2368,6 +2414,40 @@ bool LLViewerShaderMgr::loadShadersDeferred()
             {
                 LL_WARNS("Shader") << pass.name << " failed to compile;"
                                    << " the wind flowmap will stay disabled" << LL_ENDL;
+                pass.prog->unload();
+            }
+        }
+    }
+#endif
+
+#if !LL_DARWIN
+    // <SS:Nexii> GPU culling compute passes. Same contract as the wind flowmap:
+    // compute needs GL 4.3, a failure here just leaves the feature off, and
+    // attachNothing keeps the programs pure compute.
+    if (success && gGLManager.mGLVersion >= 4.29f
+#if LL_WINDOWS
+        && glDispatchCompute != nullptr
+#endif
+       )
+    {
+        struct { LLGLSLShader* prog; const char* name; const char* file; } cull_passes[] = {
+            { &gSSHiZProgram,  "SS GPU Cull Hi-Z", "deferred/ssHiZC.glsl" },
+            { &gSSCullProgram, "SS GPU Cull",      "deferred/ssCullC.glsl" },
+        };
+
+        for (auto& pass : cull_passes)
+        {
+            pass.prog->mName = pass.name;
+            pass.prog->mFeatures.attachNothing = true;
+            pass.prog->mShaderFiles.clear();
+            pass.prog->mShaderFiles.push_back(make_pair(pass.file, GL_COMPUTE_SHADER));
+            pass.prog->mShaderLevel = 1;
+            pass.prog->clearPermutations();
+
+            if (!pass.prog->createShader())
+            {
+                LL_WARNS("Shader") << pass.name << " failed to compile;"
+                                   << " GPU culling will stay disabled" << LL_ENDL;
                 pass.prog->unload();
             }
         }
@@ -3275,6 +3355,66 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredCoFProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         success = gDeferredCoFProgram.createShader();
         llassert(success);
+    }
+
+    // <SS:Nexii> Atmo Magic surface weather: the height fog layer replacing the old whiteout veil.
+    // Post program (bound directly, like gDeferredCoFProgram above): the surface field include is
+    // for the column test the veil march reads a pixel's own outdoor/indoor state from.
+    if (success)
+    {
+        gSSPostFogProgram.mName = "SS Post Height Fog Shader";
+        gSSPostFogProgram.mFeatures.isDeferred = true;
+        gSSPostFogProgram.mShaderFiles.clear();
+        gSSPostFogProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gSSPostFogProgram.mShaderFiles.push_back(make_pair("deferred/ssSurfaceFieldF.glsl", GL_FRAGMENT_SHADER));
+        gSSPostFogProgram.mShaderFiles.push_back(make_pair("deferred/ssPostFogF.glsl", GL_FRAGMENT_SHADER));
+        gSSPostFogProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gSSPostFogProgram.clearPermutations();
+        add_common_permutations(&gSSPostFogProgram);
+        if (!gSSPostFogProgram.createShader())
+        {
+            LL_WARNS("Shader") << "SS Post Height Fog shader failed to compile;"
+                               << " no height fog layer" << LL_ENDL;
+            gSSPostFogProgram.unload();
+        }
+    }
+
+    // <SS:Nexii> Atmo Magic surface weather: the heat-shimmer post pass.
+    if (success)
+    {
+        gSSPostHeatProgram.mName = "SS Post Heat Shimmer Shader";
+        gSSPostHeatProgram.mFeatures.isDeferred = true;
+        gSSPostHeatProgram.mShaderFiles.clear();
+        gSSPostHeatProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gSSPostHeatProgram.mShaderFiles.push_back(make_pair("deferred/ssPostHeatF.glsl", GL_FRAGMENT_SHADER));
+        gSSPostHeatProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gSSPostHeatProgram.clearPermutations();
+        add_common_permutations(&gSSPostHeatProgram);
+        if (!gSSPostHeatProgram.createShader())
+        {
+            LL_WARNS("Shader") << "SS Post Heat Shimmer shader failed to compile;"
+                               << " no heat shimmer" << LL_ENDL;
+            gSSPostHeatProgram.unload();
+        }
+    }
+
+    // <SS:Nexii> Atmo Magic surface weather: the lens-drops post pass.
+    if (success)
+    {
+        gSSPostLensProgram.mName = "SS Post Lens Drops Shader";
+        gSSPostLensProgram.mFeatures.isDeferred = true;
+        gSSPostLensProgram.mShaderFiles.clear();
+        gSSPostLensProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gSSPostLensProgram.mShaderFiles.push_back(make_pair("deferred/ssPostLensF.glsl", GL_FRAGMENT_SHADER));
+        gSSPostLensProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gSSPostLensProgram.clearPermutations();
+        add_common_permutations(&gSSPostLensProgram);
+        if (!gSSPostLensProgram.createShader())
+        {
+            LL_WARNS("Shader") << "SS Post Lens Drops shader failed to compile;"
+                               << " no lens drops" << LL_ENDL;
+            gSSPostLensProgram.unload();
+        }
     }
 
     if (success)

@@ -26,16 +26,19 @@
 #include "ssatmoenvasset.h"
 
 #include "ssatmoenvplanetarystate.h"
+#include "ssatmomagic.h"
+#include "ssdaycyclecore.h"
 #include "ssprecippreset.h"
 
 #include "llagent.h"
+#include "lldate.h"
+#include "llvolumemessage.h"    // <SS:Nexii> constrainVolumeParams: a parcel notecard is untrusted input
 #include "llsettingssky.h"
 #include "llsettingswater.h"
 #include "llviewerregion.h"
 
 #include <algorithm>
 #include <cmath>
-#include <ctime>
 
 // <SS:Nexii> The stock bodies the standard setup seeds. makeDefault() plants them, and the sky import's body groups check against them: a dropped sky may only rewrite a body the author has not already redesigned into something of their own.
 namespace
@@ -141,6 +144,11 @@ LLSD SSAtmoEnvWeather::asLLSD() const
     sd["gust_length"] = mGustLength.asLLSD();
     sd["gust_veer"]   = mGustVeer.asLLSD();
 
+    // <SS:Nexii> The wind profile's authored shear, gust idiom: the auto flag always, the curves alongside it.
+    sd["shear_auto"]     = mShearAuto;
+    sd["shear_strength"] = mShearStrength.asLLSD();
+    sd["veer_deg"]       = mVeerDeg.asLLSD();
+
     sd["lightning_enabled"]   = mLightningEnabled;
     sd["lightning_charge"]    = mLightningCharge;
     sd["lightning_sparks"]    = mLightningSparks;
@@ -150,6 +158,16 @@ LLSD SSAtmoEnvWeather::asLLSD() const
     sd["lightning_core_white"] = mLightningCoreWhite.asLLSD();
 
     sd["precipitation_override"] = mPrecipitationOverride.asLLSD();
+
+    // <SS:Nexii> SCHEDULER: written only when authored (the precipitation_falls precedent above) - "none" is the
+    // default, so a document that never mentions a forced storm stays clean.
+    if (mStormOverride.hasKeyframes() || !mStormOverride.valueAt(0.0).empty())
+    {
+        sd["storm_override"] = mStormOverride.asLLSD();
+        sd["storm_override_phase"] = mStormOverridePhase.asLLSD();
+        sd["storm_override_offset_x_m"] = mStormOverrideOffsetXM.asLLSD();
+        sd["storm_override_offset_y_m"] = mStormOverrideOffsetYM.asLLSD();
+    }
 
     // <SS:Nexii> Written only when authored: falling is the default, so a document that never mentions the flag stays clean and every environment written before it existed keeps raining exactly as it did.
     if (mPrecipitationFalls.hasKeyframes() || !mPrecipitationFalls.valueAt(0.0))
@@ -176,6 +194,13 @@ bool SSAtmoEnvWeather::fromLLSD(const LLSD& sd)
     if (sd.has("gust_length")) mGustLength.fromLLSD(sd["gust_length"], 140.f);
     if (sd.has("gust_veer"))   mGustVeer.fromLLSD(sd["gust_veer"], 0.f);
 
+    // <SS:Nexii> An absent shear block means the environment predates the wind profile: auto on, curves at their defaults - the gust-auto precedent, so old documents gain the derived shear (a small default veer and jet gain) rather than rendering byte-identically; an author who wants none switches auto off and leaves the curves at zero.
+    mShearAuto = sd.has("shear_auto") ? sd["shear_auto"].asBoolean() : true;
+    if (sd.has("shear_strength")) mShearStrength.fromLLSD(sd["shear_strength"], 0.f);
+    else mShearStrength = SSAtmoEnvKeyframed<F32>(0.f);
+    if (sd.has("veer_deg")) mVeerDeg.fromLLSD(sd["veer_deg"], 0.f);
+    else mVeerDeg = SSAtmoEnvKeyframed<F32>(0.f);
+
     mLightningEnabled = sd.has("lightning_enabled") ? sd["lightning_enabled"].asBoolean() : true;
     mLightningCharge  = sd.has("lightning_charge")  ? sd["lightning_charge"].asBoolean()  : true;
     mLightningSparks  = sd.has("lightning_sparks")  ? sd["lightning_sparks"].asBoolean()  : true;
@@ -186,6 +211,21 @@ bool SSAtmoEnvWeather::fromLLSD(const LLSD& sd)
     if (sd.has("lightning_core_white")) mLightningCoreWhite.fromLLSD(sd["lightning_core_white"], 0.85f);
 
     if (sd.has("precipitation_override")) mPrecipitationOverride.fromLLSD(sd["precipitation_override"], std::string());
+
+    // An absent block means the environment predates the forced-storm cue, which means none is forced.
+    if (sd.has("storm_override")) mStormOverride.fromLLSD(sd["storm_override"], std::string());
+    else mStormOverride = SSAtmoEnvKeyframed<std::string>(std::string());
+    if (sd.has("storm_override_phase")) mStormOverridePhase.fromLLSD(sd["storm_override_phase"], 0.f);
+    else mStormOverridePhase = SSAtmoEnvKeyframed<F32>(0.f);
+    if (sd.has("storm_override_offset_x_m")) mStormOverrideOffsetXM.fromLLSD(sd["storm_override_offset_x_m"], 0.f);
+    else mStormOverrideOffsetXM = SSAtmoEnvKeyframed<F32>(0.f);
+    if (sd.has("storm_override_offset_y_m")) mStormOverrideOffsetYM.fromLLSD(sd["storm_override_offset_y_m"], 0.f);
+    else mStormOverrideOffsetYM = SSAtmoEnvKeyframed<F32>(0.f);
+    // 7b F4: the bool-correction idiom (ssatmoenvkeyframe.h SSAtmoEnvKeyframed::forceCurve) - these three ride HOLD
+    // no matter what an older or hand-edited document's keyframes carry, so the cue can never slide by interpolation.
+    mStormOverridePhase.forceCurve(SSAtmoEnvCurve::HOLD);
+    mStormOverrideOffsetXM.forceCurve(SSAtmoEnvCurve::HOLD);
+    mStormOverrideOffsetYM.forceCurve(SSAtmoEnvCurve::HOLD);
 
     // An absent flag means the environment predates it, which means it falls.
     if (sd.has("precipitation_falls")) mPrecipitationFalls.fromLLSD(sd["precipitation_falls"], true);
@@ -571,17 +611,36 @@ bool SSAtmoEnvPlanetary::removeBody(S32 index)
         remap[i] = doomed[i] ? -1 : next++;
     }
 
+    // <SS:Nexii> Bodies are edited in memory too (the floater's Space tab), not just parsed from a card, so an index that drifted out of range is treated as "no link" below rather than trusted into remap[] - the parse-time sanitiser in fromLLSD covers the notecard door, this covers every other one.
+    const S32 count = (S32)mBodies.size();
+
     std::vector<SSAtmoEnvCelestialBody> kept;
     kept.reserve((size_t)next);
     for (size_t i = 0; i < mBodies.size(); ++i)
     {
         if (doomed[i]) continue;
         SSAtmoEnvCelestialBody body = mBodies[i];
-        body.mParentIndex = (body.mParentIndex >= 0) ? remap[body.mParentIndex] : -1;
-        body.mBoundPartnerIndex = (body.mBoundPartnerIndex >= 0) ? remap[body.mBoundPartnerIndex] : -1;
+        body.mParentIndex = (body.mParentIndex >= 0 && body.mParentIndex < count) ? remap[body.mParentIndex] : -1;
+        body.mBoundPartnerIndex = (body.mBoundPartnerIndex >= 0 && body.mBoundPartnerIndex < count) ? remap[body.mBoundPartnerIndex] : -1;
         kept.push_back(body);
     }
     mBodies.swap(kept);
+
+    // <SS:Nexii> Removing the body the observer stands on used to leave homeBodyIndex() == -1 for the whole system (nothing else repairs it - normalizeSunTopology only touches sun links, autoNameBodies only names), which is the same "exactly one home" invariant fromLLSD enforces on load; adopt the biggest surviving planet instead, else any surviving non-emitter, via setHomeBody so the home-is-never-a-light-emitter rule comes along; if every survivor is an emitter the system stays homeless rather than losing its only light, which homeBodyIndex() < 0 consumers already handle.
+    if (!mBodies.empty() && homeBodyIndex() < 0)
+    {
+        S32 adopt = -1;
+        for (S32 i = 0; i < (S32)mBodies.size(); ++i)
+        {
+            if (mBodies[(size_t)i].mKind != SSAtmoEnvCelestialBody::PLANET) continue;
+            if (adopt < 0 || mBodies[(size_t)i].mDiameterM > mBodies[(size_t)adopt].mDiameterM) adopt = i;
+        }
+        for (S32 i = 0; adopt < 0 && i < (S32)mBodies.size(); ++i)
+        {
+            if (!mBodies[(size_t)i].mIsLightEmitter) adopt = i;
+        }
+        if (adopt >= 0) setHomeBody(adopt);
+    }
 
     normalizeSunTopology();
     autoNameBodies();
@@ -916,6 +975,15 @@ bool SSAtmoEnvPlanetary::fromLLSD(const LLSD& sd)
         }
     }
 
+    // <SS:Nexii> A notecard is untrusted input and mParentIndex/mBoundPartnerIndex come out of it raw; removeBody() indexes remap[] with both, so an out-of-range or self-referential link from a hand-edited or corrupt card would read off the end of that vector. Sanitise once, here, right after the array lands: anything outside [0, size) or pointing at itself becomes "no link".
+    const S32 body_count = (S32)mBodies.size();
+    for (S32 i = 0; i < body_count; ++i)
+    {
+        SSAtmoEnvCelestialBody& body = mBodies[(size_t)i];
+        if (body.mParentIndex < 0 || body.mParentIndex >= body_count || body.mParentIndex == i) body.mParentIndex = -1;
+        if (body.mBoundPartnerIndex < 0 || body.mBoundPartnerIndex >= body_count || body.mBoundPartnerIndex == i) body.mBoundPartnerIndex = -1;
+    }
+
     bool have_home = false;
     S32 emitters = 0;
     for (SSAtmoEnvCelestialBody& body : mBodies)
@@ -1227,6 +1295,7 @@ void SSAtmoEnvAtmosphere::collapseConstantKeyframes()
 
     mHazeHorizon.collapseIfConstant(SEED_COLLAPSE_EPSILON);
     mHazeDensity.collapseIfConstant(SEED_COLLAPSE_EPSILON);
+    mHazeThinFrac.collapseIfConstant(SEED_COLLAPSE_EPSILON);
     mSkyMoistureLevel.collapseIfConstant(SEED_COLLAPSE_EPSILON);
     mSkyDropletRadius.collapseIfConstant(SEED_COLLAPSE_EPSILON);
     mSkyIceLevel.collapseIfConstant(SEED_COLLAPSE_EPSILON);
@@ -1253,6 +1322,7 @@ LLSD SSAtmoEnvAtmosphere::asLLSD() const
 
     sd["haze_horizon"]        = mHazeHorizon.asLLSD();
     sd["haze_density"]        = mHazeDensity.asLLSD();
+    sd["haze_thin_frac"]      = mHazeThinFrac.asLLSD();
     sd["moisture_level"]      = mSkyMoistureLevel.asLLSD();
     sd["droplet_radius"]      = mSkyDropletRadius.asLLSD();
     sd["ice_level"]           = mSkyIceLevel.asLLSD();
@@ -1285,6 +1355,7 @@ bool SSAtmoEnvAtmosphere::fromLLSD(const LLSD& sd)
 
     if (sd.has("haze_horizon"))        mHazeHorizon.fromLLSD(sd["haze_horizon"], def.mHazeHorizon.valueAt(0.0));
     if (sd.has("haze_density"))        mHazeDensity.fromLLSD(sd["haze_density"], def.mHazeDensity.valueAt(0.0));
+    if (sd.has("haze_thin_frac"))      mHazeThinFrac.fromLLSD(sd["haze_thin_frac"], def.mHazeThinFrac.valueAt(0.0));
     if (sd.has("moisture_level"))      mSkyMoistureLevel.fromLLSD(sd["moisture_level"], def.mSkyMoistureLevel.valueAt(0.0));
     if (sd.has("droplet_radius"))      mSkyDropletRadius.fromLLSD(sd["droplet_radius"], def.mSkyDropletRadius.valueAt(0.0));
     if (sd.has("ice_level"))           mSkyIceLevel.fromLLSD(sd["ice_level"], def.mSkyIceLevel.valueAt(0.0));
@@ -1325,6 +1396,13 @@ LLSD SSAtmoEnvWeatherInfluence::asLLSD() const
     sd["corona_strength"]         = (LLSD::Real)mCoronaStrength;
     sd["ice_halo_enabled"]        = mIceHaloEnabled;
     sd["ice_halo_strength"]       = (LLSD::Real)mIceHaloStrength;
+    sd["allow_supercells"]        = mAllowSupercells;
+    sd["allow_supercells_strength"] = (LLSD::Real)mAllowSupercellsStrength;
+    sd["allow_tornadoes"]         = mAllowTornadoes;
+    sd["allow_tornadoes_strength"]  = (LLSD::Real)mAllowTornadoesStrength;
+    sd["distant_rain_enabled"]    = mDistantRainEnabled;
+    sd["distant_rain_strength"]   = (LLSD::Real)mDistantRainStrength;
+    sd["squall_lines"]            = mSquallLines;
     return sd;
 }
 
@@ -1368,6 +1446,14 @@ bool SSAtmoEnvWeatherInfluence::fromLLSD(const LLSD& sd)
     strength("corona_strength", mCoronaStrength);
     flag("ice_halo_enabled", mIceHaloEnabled);
     strength("ice_halo_strength", mIceHaloStrength);
+    flag("allow_supercells", mAllowSupercells);
+    strength("allow_supercells_strength", mAllowSupercellsStrength);
+    flag("allow_tornadoes", mAllowTornadoes);
+    strength("allow_tornadoes_strength", mAllowTornadoesStrength);
+    flag("distant_rain_enabled", mDistantRainEnabled);
+    strength("distant_rain_strength", mDistantRainStrength);
+    // An absent key means the document predates squall lines, which means they are allowed.
+    flag("squall_lines", mSquallLines);
     return true;
 }
 
@@ -1495,6 +1581,305 @@ void ssAtmoEnvEmbedReferencedPrecipTypes(SSAtmoEnvAsset& asset)
 }
 
 // One track out to its notecard document.
+// <SS:Nexii> Landscape record serialization - pretty-XML-friendly, sparse faces, tolerant.
+LLSD SSAtmoEnvLandscapeFace::asLLSD() const
+{
+    LLSD sd = LLSD::emptyMap();
+    if (mIndex >= 0)
+    {
+        sd["index"] = (LLSD::Integer)mIndex;
+    }
+    if (!mTexture.isNull())
+    {
+        sd["texture"] = mTexture;
+    }
+    if (!mMaterial.isNull())
+    {
+        sd["material"] = mMaterial;
+    }
+    sd["repeats"] = LLSD::emptyArray();
+    sd["repeats"].append((LLSD::Real)mRepeats.mV[VX]);
+    sd["repeats"].append((LLSD::Real)mRepeats.mV[VY]);
+    sd["repeats"].append((LLSD::Real)mRepeats.mV[VZ]);
+    sd["repeats"].append((LLSD::Real)mRepeats.mV[VW]);
+    if (mRotation != 0.f)
+    {
+        sd["rotation"] = (LLSD::Real)mRotation;
+    }
+    sd["color"] = LLSD::emptyArray();
+    sd["color"].append((LLSD::Real)mColor.mV[VRED]);
+    sd["color"].append((LLSD::Real)mColor.mV[VGREEN]);
+    sd["color"].append((LLSD::Real)mColor.mV[VBLUE]);
+    sd["color"].append((LLSD::Real)mColor.mV[VALPHA]);
+    if (mAlphaMode != 0)
+    {
+        sd["alpha_mode"] = (LLSD::Integer)mAlphaMode;
+    }
+    if (mOverride.isMap() && mOverride.size() > 0)
+    {
+        sd["override"] = mOverride;
+    }
+    return sd;
+}
+
+bool SSAtmoEnvLandscapeFace::fromLLSD(const LLSD& sd)
+{
+    if (!sd.isMap()) return false;
+
+    mIndex = sd.has("index") ? (S32)sd["index"].asInteger() : -1;
+    mTexture = sd.has("texture") ? sd["texture"].asUUID() : LLUUID::null;
+    mMaterial = sd.has("material") ? sd["material"].asUUID() : LLUUID::null;
+    mAlphaMode = sd.has("alpha_mode") ? (S32)sd["alpha_mode"].asInteger() : 0;
+    mOverride = (sd.has("override") && sd["override"].isMap()) ? sd["override"] : LLSD();
+    if (sd.has("repeats") && sd["repeats"].isArray())
+    {
+        const LLSD& r = sd["repeats"];
+        for (S32 i = 0; i < 4 && i < (S32)r.size(); ++i)
+        {
+            mRepeats.mV[i] = (F32)r[i].asReal();
+        }
+    }
+    else mRepeats = LLVector4(1.f, 1.f, 0.f, 0.f);
+    mRotation = sd.has("rotation") ? (F32)sd["rotation"].asReal() : 0.f;
+    if (sd.has("color") && sd["color"].isArray())
+    {
+        const LLSD& c = sd["color"];
+        for (S32 i = 0; i < 4 && i < (S32)c.size(); ++i)
+        {
+            mColor.mV[i] = (F32)c[i].asReal();
+        }
+    }
+    else mColor = LLColor4::white;
+    return true;
+}
+
+// The mesh behind a part is its sculpt entry when the sculpt type is mesh.
+LLUUID SSAtmoEnvLandscapePart::meshId() const
+{
+    return (mVolume.getSculptType() & LL_SCULPT_TYPE_MASK) == LL_SCULPT_TYPE_MESH ? mVolume.getSculptID() : LLUUID::null;
+}
+
+LLSD SSAtmoEnvLandscapePart::asLLSD() const
+{
+    LLSD sd = LLSD::emptyMap();
+    sd["volume"] = mVolume.asLLSD();
+    sd["offset"] = LLSD::emptyArray();
+    sd["offset"].append((LLSD::Real)mOffset.mV[VX]);
+    sd["offset"].append((LLSD::Real)mOffset.mV[VY]);
+    sd["offset"].append((LLSD::Real)mOffset.mV[VZ]);
+    sd["rotation"] = LLSD::emptyArray();
+    sd["rotation"].append((LLSD::Real)mRotation.mQ[VX]);
+    sd["rotation"].append((LLSD::Real)mRotation.mQ[VY]);
+    sd["rotation"].append((LLSD::Real)mRotation.mQ[VZ]);
+    sd["rotation"].append((LLSD::Real)mRotation.mQ[VW]);
+    sd["scale"] = LLSD::emptyArray();
+    sd["scale"].append((LLSD::Real)mScale.mV[VX]);
+    sd["scale"].append((LLSD::Real)mScale.mV[VY]);
+    sd["scale"].append((LLSD::Real)mScale.mV[VZ]);
+    if (!mFaces.empty())
+    {
+        LLSD faces = LLSD::emptyArray();
+        for (const SSAtmoEnvLandscapeFace& f : mFaces)
+        {
+            faces.append(f.asLLSD());
+        }
+        sd["faces"] = faces;
+    }
+    if (mLight.isMap()) sd["light"] = mLight;
+    if (mFlexi.isMap()) sd["flexi"] = mFlexi;
+    return sd;
+}
+
+bool SSAtmoEnvLandscapePart::fromLLSD(const LLSD& sd)
+{
+    if (!sd.isMap()) return false;
+    if (sd.has("volume") && sd["volume"].isMap())
+    {
+        LLSD copy = sd["volume"];
+        mVolume.fromLLSD(copy);
+        // <SS:Nexii> Every wire path into LLVolumeParams runs this validator; a raw notecard is the one path that did not, and LLProfile::generate LL_ERRS on an unknown profile curve - a parcel-supplied card could abort the viewer. Clamp in place, as the sim's own objects are.
+        if (!LLVolumeMessage::constrainVolumeParams(mVolume))
+        {
+            LL_WARNS("AtmoMagicEnv") << "Atmo landscape part carried out-of-range volume params; clamped" << LL_ENDL;
+        }
+    }
+    if (sd.has("offset") && sd["offset"].isArray())
+    {
+        const LLSD& o = sd["offset"];
+        for (S32 i = 0; i < 3 && i < (S32)o.size(); ++i) mOffset.mV[i] = (F32)o[i].asReal();
+    }
+    if (sd.has("rotation") && sd["rotation"].isArray() && sd["rotation"].size() == 4)
+    {
+        const LLSD& r = sd["rotation"];
+        mRotation.mQ[VX] = (F32)r[0].asReal();
+        mRotation.mQ[VY] = (F32)r[1].asReal();
+        mRotation.mQ[VZ] = (F32)r[2].asReal();
+        mRotation.mQ[VW] = (F32)r[3].asReal();
+    }
+    if (sd.has("scale") && sd["scale"].isArray())
+    {
+        const LLSD& s = sd["scale"];
+        for (S32 i = 0; i < 3 && i < (S32)s.size(); ++i) mScale.mV[i] = llmax(0.001f, (F32)s[i].asReal());
+    }
+    mFaces.clear();
+    if (sd.has("faces") && sd["faces"].isArray())
+    {
+        const LLSD& faces = sd["faces"];
+        for (U32 i = 0; i < faces.size(); ++i)
+        {
+            SSAtmoEnvLandscapeFace f;
+            if (f.fromLLSD(faces[i])) mFaces.push_back(f);
+        }
+    }
+    mLight = (sd.has("light") && sd["light"].isMap()) ? sd["light"] : LLSD();
+    mFlexi = (sd.has("flexi") && sd["flexi"].isMap()) ? sd["flexi"] : LLSD();
+    return true;
+}
+
+// A record always has a root part; a pre-linkset document gets one built from its legacy keys.
+void SSAtmoEnvLandscape::ensureRoot()
+{
+    if (mParts.empty()) mParts.push_back(SSAtmoEnvLandscapePart());
+    mParts[0].mOffset.clearVec();
+    mParts[0].mRotation.loadIdentity();
+}
+
+LLSD SSAtmoEnvLandscape::asLLSD() const
+{
+    LLSD sd = LLSD::emptyMap();
+    sd["record_id"] = mRecordId;
+    // <SS:Nexii> Legacy keys for the root part stay alongside "parts" so a pre-linkset build still renders the root mesh (and its scale and faces) instead of rejecting the document; a prim root reads as a null mesh there and draws its proxy box, which is the graceful floor.
+    sd["mesh_id"] = rootMeshId();
+    sd["name"] = mName;
+    sd["desc"] = mDesc;
+    if (!mCreator.isNull()) sd["creator"] = mCreator;
+    if (!mLastOwner.isNull()) sd["last_owner"] = mLastOwner;
+    if (mCreated != 0.0) sd["created"] = (LLSD::Real)mCreated;
+
+    sd["pos_mode"] = mLocked ? "locked" : "free";
+    sd["offset"] = LLSD::emptyArray();
+    sd["offset"].append((LLSD::Real)mLockedOffset.mV[VX]);
+    sd["offset"].append((LLSD::Real)mLockedOffset.mV[VY]);
+    sd["offset"].append((LLSD::Real)mLockedOffset.mV[VZ]);
+    sd["global"] = LLSD::emptyArray();
+    sd["global"].append((LLSD::Real)mFreeGlobal.mdV[VX]);
+    sd["global"].append((LLSD::Real)mFreeGlobal.mdV[VY]);
+    sd["global"].append((LLSD::Real)mFreeGlobal.mdV[VZ]);
+    sd["rotation"] = LLSD::emptyArray();
+    sd["rotation"].append((LLSD::Real)mRotation.mQ[VX]);
+    sd["rotation"].append((LLSD::Real)mRotation.mQ[VY]);
+    sd["rotation"].append((LLSD::Real)mRotation.mQ[VZ]);
+    sd["rotation"].append((LLSD::Real)mRotation.mQ[VW]);
+    const LLVector3 root_scale = mParts.empty() ? LLVector3(1.f, 1.f, 1.f) : mParts[0].mScale;
+    sd["scale"] = LLSD::emptyArray();
+    sd["scale"].append((LLSD::Real)root_scale.mV[VX]);
+    sd["scale"].append((LLSD::Real)root_scale.mV[VY]);
+    sd["scale"].append((LLSD::Real)root_scale.mV[VZ]);
+
+    if (!mParts.empty() && !mParts[0].mFaces.empty())
+    {
+        LLSD faces = LLSD::emptyArray();
+        for (const SSAtmoEnvLandscapeFace& f : mParts[0].mFaces)
+        {
+            faces.append(f.asLLSD());
+        }
+        sd["faces"] = faces;
+    }
+
+    LLSD parts = LLSD::emptyArray();
+    for (const SSAtmoEnvLandscapePart& p : mParts)
+    {
+        parts.append(p.asLLSD());
+    }
+    sd["parts"] = parts;
+    return sd;
+}
+
+bool SSAtmoEnvLandscape::fromLLSD(const LLSD& sd)
+{
+    if (!sd.isMap()) return false;
+
+    mRecordId = sd.has("record_id") ? sd["record_id"].asUUID() : LLUUID::null;
+    if (mRecordId.isNull()) mRecordId.generate();
+    if (sd.has("name")) mName = sd["name"].asString();
+    if (sd.has("desc")) mDesc = sd["desc"].asString();
+    if (sd.has("creator")) mCreator = sd["creator"].asUUID();
+    if (sd.has("last_owner")) mLastOwner = sd["last_owner"].asUUID();
+    if (sd.has("created")) mCreated = sd["created"].asReal();
+
+    if (sd.has("pos_mode")) mLocked = (sd["pos_mode"].asString() != "free");
+    if (sd.has("offset") && sd["offset"].isArray())
+    {
+        const LLSD& o = sd["offset"];
+        for (S32 i = 0; i < 3 && i < (S32)o.size(); ++i)
+        {
+            mLockedOffset.mV[i] = (F32)o[i].asReal();
+        }
+    }
+    if (sd.has("global") && sd["global"].isArray())
+    {
+        const LLSD& g = sd["global"];
+        for (S32 i = 0; i < 3 && i < (S32)g.size(); ++i)
+        {
+            mFreeGlobal.mdV[i] = g[i].asReal();
+        }
+    }
+    if (sd.has("rotation") && sd["rotation"].isArray())
+    {
+        const LLSD& r = sd["rotation"];
+        if (r.size() == 4)
+        {
+            mRotation.mQ[VX] = (F32)r[0].asReal();
+            mRotation.mQ[VY] = (F32)r[1].asReal();
+            mRotation.mQ[VZ] = (F32)r[2].asReal();
+            mRotation.mQ[VW] = (F32)r[3].asReal();
+        }
+    }
+    mParts.clear();
+    if (sd.has("parts") && sd["parts"].isArray())
+    {
+        const LLSD& parts = sd["parts"];
+        for (U32 i = 0; i < parts.size(); ++i)
+        {
+            if ((S32)mParts.size() >= SS_ATMOENV_MAX_LANDSCAPE_PARTS_PER_RECORD)
+            {
+                LL_WARNS("AtmoMagicEnv") << "Atmo landscape record '" << mName << "' asks for more than "
+                                         << SS_ATMOENV_MAX_LANDSCAPE_PARTS_PER_RECORD << " parts; dropping the rest" << LL_ENDL;
+                break;
+            }
+            SSAtmoEnvLandscapePart p;
+            if (p.fromLLSD(parts[i])) mParts.push_back(p);
+        }
+    }
+    if (mParts.empty())
+    {
+        // <SS:Nexii> Pre-linkset document: one mesh root from the legacy keys. The mesh id becomes the root part's sculpt entry on the ctor's default box params, which is exactly what the old applyMesh did.
+        SSAtmoEnvLandscapePart root;
+        if (sd.has("mesh_id") && sd["mesh_id"].asUUID().notNull())
+        {
+            root.mVolume.setSculptID(sd["mesh_id"].asUUID(), LL_SCULPT_TYPE_MESH);
+        }
+        if (sd.has("scale") && sd["scale"].isArray())
+        {
+            const LLSD& s = sd["scale"];
+            for (S32 i = 0; i < 3 && i < (S32)s.size(); ++i) root.mScale.mV[i] = llmax(0.001f, (F32)s[i].asReal());
+        }
+        if (sd.has("faces") && sd["faces"].isArray())
+        {
+            const LLSD& faces = sd["faces"];
+            for (U32 i = 0; i < faces.size(); ++i)
+            {
+                SSAtmoEnvLandscapeFace f;
+                if (f.fromLLSD(faces[i])) root.mFaces.push_back(f);
+            }
+        }
+        mParts.push_back(root);
+    }
+    ensureRoot();
+    return true;
+}
+// </SS:Nexii>
+
 LLSD SSAtmoEnvTrack::asLLSD() const
 {
     LLSD sd = LLSD::emptyMap();
@@ -1514,6 +1899,17 @@ LLSD SSAtmoEnvTrack::asLLSD() const
     sd["atmosphere"] = mAtmosphere.asLLSD();
     sd["weather_influence"] = mWeatherInfluence.asLLSD();
     sd["weather_source_deck"] = (LLSD::Integer)mWeatherSourceDeck;
+    // <SS:Nexii> Landscape scenery, sparse.
+    if (!mLandscapes.empty())
+    {
+        LLSD landscapes = LLSD::emptyArray();
+        for (const SSAtmoEnvLandscape& l : mLandscapes)
+        {
+            landscapes.append(l.asLLSD());
+        }
+        sd["landscape"] = landscapes;
+    }
+    // </SS:Nexii>
     return sd;
 }
 
@@ -1541,18 +1937,64 @@ bool SSAtmoEnvTrack::fromLLSD(const LLSD& sd)
     mWeatherSourceDeck = sd.has("weather_source_deck")
         ? (S32)sd["weather_source_deck"].asInteger() : SS_ATMOENV_DECK_DERIVED;
 
+    // <SS:Nexii> Landscape scenery: absent key is an empty (no scenery) track.
+    mLandscapes.clear();
+    if (sd.has("landscape") && sd["landscape"].isArray())
+    {
+        const LLSD& ls = sd["landscape"];
+        for (U32 i = 0; i < ls.size(); ++i)
+        {
+            // <SS:Nexii> SS_ATMOENV_MAX_LANDSCAPE_PER_TRACK used to be enforced only at add time (SSAtmoLandscapeWorld::appendRecord), never on the parse, so a parcel-supplied notecard could spawn as many client-side mesh objects as it liked. Clamp here rather than reject: an over-budget card still loads, it just stops at the budget - the break makes the warning fire once.
+            if ((S32)mLandscapes.size() >= SS_ATMOENV_MAX_LANDSCAPE_PER_TRACK)
+            {
+                LL_WARNS("AtmoMagicEnv") << "Atmo v3 track '" << mName << "' asks for more than "
+                                         << SS_ATMOENV_MAX_LANDSCAPE_PER_TRACK
+                                         << " landscape objects; dropping the rest" << LL_ENDL;
+                break;
+            }
+            SSAtmoEnvLandscape l;
+            if (l.fromLLSD(ls[i]))
+            {
+                mLandscapes.push_back(l);
+            }
+        }
+    }
+    // </SS:Nexii>
+
     return true;
 }
 
-// Where in the day cycle this track is right now, from shared wall-clock time.
+// The ONE shared clock, continuous: SSAtmoMagic's per-frame latch of UTC epoch seconds, or a fresh read of the same clock before the first frame.
+static F64 ss_shared_now_seconds()
+{
+    // <SS:Nexii> D3 follow-up (fifth build report, "still seeing the issue of clouds jumping each second") [interaction: SSAtmoMagic::sharedTime]: THE ROOT CLOCK. currentDayCyclePhase() below used to read `(F64)time(nullptr)`, which advances in WHOLE SECONDS, so the day-cycle phase was a 1 Hz staircase and EVERY quantity resolved from it stepped together once a second - the deck's coverage/thickness/base/density/churn/gloom (ssvolcloud.cpp update()), the wind profile the puff shear table is baked from (SSWindProfile::shearOffset x SHEAR_LEAN_S = 600 s, so a wind step of dv m/s moves every puff 600 dv metres in one frame), the sky modulation the puffs are lit by (ssatmoenvapplier.cpp) and the weather bridge's precipitation/wind (ssatmoenvbridge.cpp). The D3 boil fix removed the rate-times-absolute-clock AMPLIFICATION of that staircase; it did not make the staircase itself continuous, which is what this does. WHY THIS SOURCE and not a monotonic uptime clock: the phase must be IDENTICAL ON EVERY CLIENT sharing the asset and the seed (doc/atmo_magic_phase8_show.md section 2, PLAN lesson 31 - one clock for state), so it has to be UTC epoch, not LLTimer::getElapsedSeconds / gFrameTimeSeconds, which count from viewer start and differ per client. SSAtmoMagic::mNow is LLDate::now().secondsSinceEpoch() (LLTimer::getTotalSeconds - the same UTC epoch time(nullptr) reads, at microsecond resolution) latched ONCE at the top of SSAtmoMagic::idle(), which runs before SSVolCloud::update() and before SSAtmoEnvApplier::apply(), so every consumer of the phase in one frame resolves at ONE instant rather than at four slightly different reads of the clock. The fallback covers the frames before the first idle() (mNow still 0) and any call from a tool that never ticks the singleton; it is the same clock, sampled fresh.
+    if (SSAtmoMagic::instanceExists())
+    {
+        const F64 latched = SSAtmoMagic::getInstance()->sharedTime();
+        if (latched > 0.0) return latched;
+    }
+    return LLDate::now().secondsSinceEpoch();
+}
+
+// Where in the day cycle this track is right now, from the one shared continuous clock.
 F64 SSAtmoEnvTrack::currentDayCyclePhase() const
 {
-    if (mDayLengthSeconds <= 0.0) return 0.0;
+    return dayCyclePhaseAt(ss_shared_now_seconds());
+}
 
-    const F64 utc_now = (F64)time(nullptr);
-    F64 t = fmod(utc_now - mDayOffsetSeconds, mDayLengthSeconds);
-    if (t < 0.0) t += mDayLengthSeconds;
-    return t / mDayLengthSeconds;
+// The phase at any UTC second - see the header. 7b F3 (lesson 22): the formula itself now lives in
+// ssdaycyclecore.h (SSDayCycle::phaseAt), moved there VERBATIM so the storm scheduler's forced-cue conversion can
+// share it too; this is a one-line forward with this track's own length/offset.
+F64 SSAtmoEnvTrack::dayCyclePhaseAt(F64 utc_seconds) const
+{
+    return SSDayCycle::phaseAt(utc_seconds, mDayLengthSeconds, mDayOffsetSeconds);
+}
+
+// <SS:Nexii> SCHEDULER: the inverse of dayCyclePhaseAt - see the header. 7b F3: a one-line forward to
+// SSDayCycle::wallTimeAtPhase (ssdaycyclecore.h), moved there VERBATIM alongside phaseAt above.
+F64 SSAtmoEnvTrack::wallTimeAtPhase(F64 phase, F64 near_utc_seconds) const
+{
+    return SSDayCycle::wallTimeAtPhase(phase, near_utc_seconds, mDayLengthSeconds, mDayOffsetSeconds);
 }
 
 // The fresh-creation default: one ground track, Earth-like planetary system, sensible weather.
@@ -1759,7 +2201,12 @@ bool SSAtmoEnvAsset::fromLLSD(const LLSD& sd, std::string& out_error)
     for (S32 i = 0; i < count; ++i)
     {
         SSAtmoEnvTrack track;
-        track.fromLLSD(tracks_sd[i]);
+        // <SS:Nexii> The return used to be discarded and the track pushed regardless, so a malformed element (anything that is not a map - a null, a string, or the undefined LLSD the clamp to SS_ATMOENV_MIN_TRACKS can read past the end of a short array) became a phantom default track sitting in the altitude stack. Skip it instead; the existing "no tracks survived parsing" check below is the failure door if nothing is left.
+        if (!track.fromLLSD(tracks_sd[i]))
+        {
+            LL_WARNS("AtmoMagicEnv") << "Atmo v3 track " << i << " is malformed; skipping it" << LL_ENDL;
+            continue;
+        }
         parsed.mTracks.push_back(track);
     }
 
@@ -1768,6 +2215,46 @@ bool SSAtmoEnvAsset::fromLLSD(const LLSD& sd, std::string& out_error)
         out_error = "no tracks survived parsing";
         *this = makeDefault();
         return false;
+    }
+
+    // <SS:Nexii> The landscape caps used to live only at add time (SSAtmoLandscapeWorld::appendRecord), so a parcel notecard - untrusted, and applied without the author ever seeing it - could ask for unlimited client-side mesh objects. The per-track cap is enforced in SSAtmoEnvTrack::fromLLSD; this is the asset-wide one. Clamp, never fail: a card that overshoots still loads, it just stops at the budget.
+    S32 landscape_total = 0;
+    bool landscape_warned = false;
+    for (SSAtmoEnvTrack& t : parsed.mTracks)
+    {
+        const S32 room = llmax(0, SS_ATMOENV_MAX_LANDSCAPE_TOTAL - landscape_total);
+        if ((S32)t.mLandscapes.size() > room)
+        {
+            if (!landscape_warned)
+            {
+                landscape_warned = true;
+                LL_WARNS("AtmoMagicEnv") << "Atmo v3 asset asks for more than " << SS_ATMOENV_MAX_LANDSCAPE_TOTAL
+                                         << " landscape objects in total; truncating the later tracks" << LL_ENDL;
+            }
+            t.mLandscapes.resize((size_t)room);
+        }
+        landscape_total += (S32)t.mLandscapes.size();
+    }
+    // <SS:Nexii> The prim budget, asset-wide: a record past the remaining room keeps its root and drops its later parts, so a card that overshoots still shows every record at least as its root.
+    S32 parts_total = 0;
+    bool parts_warned = false;
+    for (SSAtmoEnvTrack& t : parsed.mTracks)
+    {
+        for (SSAtmoEnvLandscape& l : t.mLandscapes)
+        {
+            const S32 room = llmax(1, SS_ATMOENV_MAX_LANDSCAPE_PARTS_TOTAL - parts_total);
+            if (l.partCount() > room)
+            {
+                if (!parts_warned)
+                {
+                    parts_warned = true;
+                    LL_WARNS("AtmoMagicEnv") << "Atmo v3 asset asks for more than " << SS_ATMOENV_MAX_LANDSCAPE_PARTS_TOTAL
+                                             << " landscape parts in total; truncating the later linksets" << LL_ENDL;
+                }
+                l.mParts.resize((size_t)room);
+            }
+            parts_total += l.partCount();
+        }
     }
 
     parsed.sortTracksByAltitude();

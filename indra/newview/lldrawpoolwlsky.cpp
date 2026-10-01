@@ -610,7 +610,8 @@ void LLDrawPoolWLSky::renderSkyCloudsDeferred(const LLVector3& camPosLocal, F32 
         // ...and how far the deck itself has travelled on the wind. Zero
         // unless an Atmo Magic environment is driving the sky, which is also
         // the only thing that knows what the wind is doing.
-        const LLVector2 drift = SSAtmoEnvApplier::instance().cloudDriftMetres();
+        // <SS:Nexii> The band rides the deck-base drift plus its own bounded shear offset (SSAtmoEnvApplier::cirrusDriftMetres), not the raw accumulator - the wind profile's dome seam.
+        const LLVector2 drift = SSAtmoEnvApplier::instance().cirrusDriftMetres();
         cloudshader->uniform2f(sCloudDrift, drift.mV[0], drift.mV[1]);
 
         // <SS:Nexii> The band's Scale crossfade (SSAtmoEnvApplier::cloudScaleTo/cloudScaleBlend): the fragment ground mapping samples the band at both endpoint scales and blends the two renderings by the eased weight - the sky's own cloud_scale uniform keeps the FROM endpoint. Zero when no Atmo environment drives the sky, or between equal keyframes, which leaves the shader on its single-sample branch - idle EEP skies are untouched.

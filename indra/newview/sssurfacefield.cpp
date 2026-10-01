@@ -52,6 +52,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <set>
 #include <sstream>
 
 #include <glm/gtc/type_ptr.hpp>
@@ -76,6 +77,24 @@ static F32 ssPuddleMaskNoise(F32 mx, F32 my, F32 scale_m)
     const F32 sy = ty * ty * (3.f - 2.f * ty);
     return lerp(lerp(latticeHash(ix, iy),     latticeHash(ix + 1, iy),     sx),
                 lerp(latticeHash(ix, iy + 1), latticeHash(ix + 1, iy + 1), sx), sy);
+}
+
+// <SS:Nexii> Look equality within tolerance - a preset whose look already matches the mix's mA must start no crossfade (doc sec 2). Every field, not just the tint, so a preset that only bumped depthFull still counts as "different".
+static bool looksEqual(const SSSurfaceState::LiquidLook& a, const SSSurfaceState::LiquidLook& b)
+{
+    const F32 eps = 1.0e-4f;
+    return fabsf(a.mTint.r - b.mTint.r) < eps && fabsf(a.mTint.g - b.mTint.g) < eps
+        && fabsf(a.mTint.b - b.mTint.b) < eps && fabsf(a.mOpacity - b.mOpacity) < eps
+        && fabsf(a.mStain - b.mStain) < eps && fabsf(a.mMetal - b.mMetal) < eps;
+}
+
+static bool looksEqual(const SSSurfaceState::DepositLook& a, const SSSurfaceState::DepositLook& b)
+{
+    const F32 eps = 1.0e-4f;
+    return fabsf(a.mTint.r - b.mTint.r) < eps && fabsf(a.mTint.g - b.mTint.g) < eps
+        && fabsf(a.mTint.b - b.mTint.b) < eps && fabsf(a.mSparkle - b.mSparkle) < eps
+        && fabsf(a.mTranslucency - b.mTranslucency) < eps && fabsf(a.mDepthFull - b.mDepthFull) < eps
+        && fabsf(a.mWash - b.mWash) < eps && fabsf(a.mMelts - b.mMelts) < eps;
 }
 
 extern bool gCubeSnapshot;
@@ -117,14 +136,18 @@ void SSSurfaceField::clear()
     mWindowValid = false;
     mLastStep = -1.0;
     mPeakWet = mPeakSnow = mPeakPuddle = 0.f;
+    mPeakIce = mPeakFrost = mPeakStain = 0.f;
+    mPeakWetGain = mPeakDepositGain = 0.f;
+    mPeakWetPresent = mPeakDepositPresent = 0.f;
+    // <SS:Nexii> A full rebuild resets the looks and rings too - nothing left on the ground for them to describe.
+    mLiquidMix = SSSurfaceState::Mix<SSSurfaceState::LiquidLook>();
+    mDepositMix = SSSurfaceState::Mix<SSSurfaceState::DepositLook>();
+    mRings = SSSurfaceState::RingBuffer();
 }
 
 static const F32 SLOPE_RUN_FULL = 0.85f;
 
 static const F32 GEOM_EDGE_DROP = 1.5f;
-
-static const F32 SHED_FEED_FLAT  = 1.5f;
-static const F32 SHED_FEED_STEEP = 9.f;
 
 static const F32 SHED_MERGE = 12.f;
 
@@ -280,6 +303,285 @@ void SSSurfaceField::buildGeometry(const SSRainShadowMap::SurfaceGrid& grid, Geo
     }
 }
 
+// <SS:Nexii> The liquid runoff network: the DRAINAGE_NETWORK channel at its
+// own finer resolution, traced over the same source grid the wet field reads
+// at GEOM_RES. buildDrainage fills the surface's depressions, directs D8 down
+// the filled surface and accumulates catchment with the eave rule terminating
+// flow at the capture's discontinuities; this pass picks the lip cells that
+// termination leaves holding catchment, floods them into runs - the connected
+// lines water actually leaves a roof along - and refines each lip point
+// against the world field's full-resolution column tops so a stream or drip
+// leaves the edge of the object rather than the centre of whichever cell
+// happened to straddle it. Runs carry everything the shed needs: summed
+// catchment, the mean way the water leaves, the span to cut curtain slots
+// across, and a key that survives retraces which keep the run's biggest
+// feeder, so a run's reservoir outlives a prim edit next door.
+void SSSurfaceField::buildRunoff(U64 region_handle, Geometry& out, SSWorldField* field)
+{
+    static const F32 EAVE_DROP_M  = 0.75f;  // at least a storey-step of fall
+    static const F32 EAVE_SLOPE   = 2.0f;   // steeper than any roof pitch (~63 deg)
+    static const F32 RUN_Z_JOIN   = 2.f;    // members of a run sit within this of each other
+    static const F32 RUN_DIR_COS  = 0.5f;   // ...and shed within 60 degrees of the same way
+    static const S32 RUN_MAX        = 128;
+    static const S32 RUN_MEMBER_MAX = 64;
+
+    out.mRunoff = Geometry::Runoff();
+
+    // The network's own resolution - finer than the wet field's lattice by
+    // default, because an eave is a line and 2 m cells draw it as dots. Both
+    // sources serve the same SurfaceGrid contract; the world field's 0.25 m
+    // store additionally gives the lip refinement below full-resolution
+    // column tops to walk against.
+    static LLCachedControl<S32> res_setting(gSavedSettings, "SSAtmoRunoffRes", 256);
+    const S32 rn = llclamp((S32)res_setting, 64, 512);
+
+    SSRainShadowMap::SurfaceGrid rgrid;
+    const bool have = field ? field->buildSurfaceGrid(region_handle, rn, rgrid)
+                            : SSRainShadowMap::getInstance()->buildSurfaceGrid(region_handle, rn, rgrid);
+    if (!have) return;
+
+    const S32 n = rgrid.mN;
+    const F32 cell = rgrid.mCell;
+    if (n < 3 || cell <= 0.f) return;
+
+    SSWorldField::Drainage drain;
+    if (!SSWorldField::buildDrainage(rgrid, drain)) return;
+
+    Geometry::Runoff& ro = out.mRunoff;
+    ro.mGeomSerial = rgrid.mGeomSerial;
+    ro.mN = n;
+    ro.mCell = cell;
+    ro.mCatch = std::move(drain.mCatch);
+
+    static LLCachedControl<F32> edge_min_above(gSavedSettings, "SSAtmoRunoffEdgeMinAbove", 1.f);
+    const F32 min_above = llmax((F32)edge_min_above, 0.f);
+
+    // Lips, at the network's own resolution. The same two questions the wet
+    // field's coarse edge pass asks - is a neighbour open air, or is it a
+    // discontinuity the water leaves the surface by - with the eave pair
+    // (steep enough AND tall enough) the finer cells can actually resolve.
+    static const S32 DX[4] = { 1, -1, 0, 0 };
+    static const S32 DY[4] = { 0, 0, 1, -1 };
+
+    std::vector<LLVector3> out_dir;
+    out_dir.assign((size_t)n * n, LLVector3::zero);
+
+    for (S32 y = 0; y < n; ++y)
+    {
+        for (S32 x = 0; x < n; ++x)
+        {
+            const size_t i = (size_t)y * n + x;
+            const U8 f = rgrid.mFlags[i];
+            if (f == 0 || (f & SSRainShadowMap::SURF_WATER) != 0) continue;
+            if (rgrid.mZ[i] <= -FLT_MAX * 0.5f) continue;
+            if (rgrid.mAbove[i] < min_above) continue;
+
+            const F32 z0 = rgrid.mZ[i];
+            F32 ox = 0.f, oy = 0.f;
+
+            for (S32 d = 0; d < 4; ++d)
+            {
+                const S32 nx = x + DX[d], ny = y + DY[d];
+                if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;
+
+                const size_t ni = (size_t)ny * n + nx;
+                const U8 nf = rgrid.mFlags[ni];
+                const bool open = (nf == 0) || rgrid.mZ[ni] <= -FLT_MAX * 0.5f;
+                const F32 drop = z0 - rgrid.mZ[ni];
+                const bool below = !open && (nf & SSRainShadowMap::SURF_WATER) == 0
+                    && drop >= EAVE_DROP_M && drop >= EAVE_SLOPE * cell;
+                if (!open && !below) continue;
+
+                ox += (F32)DX[d];
+                oy += (F32)DY[d];
+            }
+
+            const F32 len = sqrtf(ox * ox + oy * oy);
+            if (len < 0.0001f) continue;
+
+            out_dir[i].setVec(ox / len, oy / len, 0.f);
+            ro.mEdgeCells.push_back((S32)i);
+        }
+    }
+
+    if (ro.mEdgeCells.empty()) return;
+
+    // Runs: flood-fill the lips into the lines water leaves along. Members
+    // join when they touch, sit at much the same height, and shed the same
+    // way - a run is split where its direction turns, so one run is one
+    // straightish stretch of eave and a slot cut across it is one curtain.
+    const size_t cells = (size_t)n * n;
+    std::vector<U8> visited(cells, 0);
+    std::vector<S32> queue;
+
+    LLViewerRegion* regionp = LLWorld::getInstance()->getRegionFromHandle(region_handle);
+    const LLVector3 origin = regionp ? regionp->getOriginAgent() : LLVector3::zero;
+
+    for (const S32 seed_cell : ro.mEdgeCells)
+    {
+        if (visited[(size_t)seed_cell]) continue;
+
+        queue.clear();
+        queue.push_back(seed_cell);
+        visited[(size_t)seed_cell] = 1;
+
+        std::vector<S32> members;
+        while (!queue.empty())
+        {
+            const S32 c = queue.back();
+            queue.pop_back();
+            members.push_back(c);
+
+            const size_t ui = (size_t)c;
+            const F32 z0 = rgrid.mZ[ui];
+            const LLVector3& d0 = out_dir[ui];
+
+            const S32 cx = c % n;
+            const S32 cy = c / n;
+            for (S32 dy = -1; dy <= 1; ++dy)
+            {
+                for (S32 dx = -1; dx <= 1; ++dx)
+                {
+                    if (dx == 0 && dy == 0) continue;
+                    const S32 nx = cx + dx, ny = cy + dy;
+                    if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;
+
+                    const size_t ni = (size_t)ny * n + nx;
+                    if (visited[ni] || out_dir[ni].magVecSquared() < 0.0001f) continue;
+                    if (fabsf(rgrid.mZ[ni] - z0) > RUN_Z_JOIN) continue;
+                    if (out_dir[ni] * d0 < RUN_DIR_COS) continue;
+
+                    visited[ni] = 1;
+                    queue.push_back((S32)ni);
+                }
+            }
+        }
+
+        Geometry::Run run;
+        F32 total_catch = 0.f;
+        F32 sx = 0.f, sy = 0.f;
+        F32 cx_sum = 0.f, cy_sum = 0.f, cz_sum = 0.f;
+
+        for (const S32 c : members)
+        {
+            const size_t ui = (size_t)c;
+            total_catch += ro.mCatch[ui];
+            sx += out_dir[ui].mV[VX];
+            sy += out_dir[ui].mV[VY];
+            cx_sum += ((F32)(c % n) + 0.5f) * cell;
+            cy_sum += ((F32)(c / n) + 0.5f) * cell;
+            cz_sum += rgrid.mZ[ui];
+        }
+
+        if (total_catch <= 0.f) continue;
+
+        const F32 out_len = sqrtf(sx * sx + sy * sy);
+        if (out_len < 0.0001f) continue;
+        run.mOut.setVec(sx / out_len, sy / out_len, 0.f);
+        run.mCatch = total_catch;
+
+        // Along the run: the axis the streams measure their pitch by is
+        // z cross out - the convention the stream renderer reads the slope
+        // back in. Members order themselves along it, endpoints to endpoints.
+        const LLVector3 axis(-run.mOut.mV[VY], run.mOut.mV[VX], 0.f);
+
+        std::sort(members.begin(), members.end(),
+                  [&](S32 a, S32 b)
+                  {
+                      const F32 pa = ((F32)(a % n) + 0.5f) * cell * axis.mV[VX]
+                                   + ((F32)(a / n) + 0.5f) * cell * axis.mV[VY];
+                      const F32 pb = ((F32)(b % n) + 0.5f) * cell * axis.mV[VX]
+                                   + ((F32)(b / n) + 0.5f) * cell * axis.mV[VY];
+                      if (pa != pb) return pa < pb;
+                      return a < b;
+                  });
+
+        run.mCentroid.setVec(cx_sum / (F32)members.size(),
+                             cy_sum / (F32)members.size(),
+                             cz_sum / (F32)members.size());
+
+        // The key is the run's biggest feeder - the cell the most catchment
+        // drains through. A retrace that keeps the roof keeps the feeder, so
+        // the reservoir the shed holds under this key survives the edit.
+        U32 key = (U32)members.front();
+        F32 best_catch = -1.f;
+        for (const S32 c : members)
+        {
+            const F32 catch_c = ro.mCatch[(size_t)c];
+            if (catch_c > best_catch)
+            {
+                best_catch = catch_c;
+                key = (U32)c;
+            }
+        }
+        run.mKey = key;
+
+        // Thinning keeps the whole line covered: stride, never truncate, and
+        // always the two ends a slot's pitch is measured between.
+        if ((S32)members.size() > RUN_MEMBER_MAX)
+        {
+            const S32 stride = (S32)((members.size() + RUN_MEMBER_MAX - 1) / RUN_MEMBER_MAX);
+            std::vector<S32> thinned;
+            thinned.reserve(members.size() / stride + 2);
+            for (size_t k = 0; k < members.size(); k += (size_t)stride)
+            {
+                thinned.push_back(members[k]);
+            }
+            if (thinned.back() != members.back()) thinned.push_back(members.back());
+            members.swap(thinned);
+        }
+
+        run.mCells = std::move(members);
+
+        // Refine the lip points against the world field's own resolution -
+        // walk outward from each cell centre at storey-step granularity until
+        // the surface falls away, and leave the drip at the last point still
+        // standing on it. Without the field (the rain shadow source), the
+        // cell centres stand in, as they always have.
+        run.mLips.reserve(run.mCells.size());
+        const F32 refine_step = field ? 0.25f : cell;
+        for (const S32 c : run.mCells)
+        {
+            const size_t ui = (size_t)c;
+            const F32 lx = ((F32)(c % n) + 0.5f) * cell;
+            const F32 ly = ((F32)(c / n) + 0.5f) * cell;
+            F32 z = rgrid.mZ[ui];
+            F32 bx = lx, by = ly;
+
+            const LLVector3& dir = out_dir[ui];
+            for (F32 t = refine_step; t <= cell + refine_step * 0.5f; t += refine_step)
+            {
+                const LLVector3 probe = origin + LLVector3(lx + dir.mV[VX] * t,
+                                                           ly + dir.mV[VY] * t,
+                                                           0.f);
+                F32 probe_z = 0.f;
+                U8 probe_flags = 0;
+                if (!field || !field->surfaceTop(probe, probe_z, probe_flags)) break;
+                if (probe_z < z - 0.05f) break;
+
+                bx = lx + dir.mV[VX] * t;
+                by = ly + dir.mV[VY] * t;
+                z = probe_z;
+            }
+
+            run.mLips.emplace_back(bx, by, z);
+        }
+
+        ro.mRuns.push_back(std::move(run));
+    }
+
+    // The budget goes to the biggest gutters first.
+    std::sort(ro.mRuns.begin(), ro.mRuns.end(),
+              [](const Geometry::Run& a, const Geometry::Run& b)
+              {
+                  return a.mCatch > b.mCatch;
+              });
+    if ((S32)ro.mRuns.size() > RUN_MAX)
+    {
+        ro.mRuns.resize(RUN_MAX);
+    }
+}
+
 // Rebuilds geometry for tiles whose captures changed - the retrace gate.
 // The grid source is the rain shadow capture by default; SSWorldFieldSurfaceTop
 // routes it through the shared world field's SURFACE_TOP channel instead. The
@@ -318,9 +620,64 @@ void SSSurfaceField::refreshGeometry()
         if (field)
         {
             SSWorldField::Drainage drain;
-            if (field->buildDrainage(grid, drain) && drain.mPool.size() == geom.mPool.size())
+            if (SSWorldField::buildDrainage(grid, drain) && drain.mPool.size() == geom.mPool.size())
             {
                 geom.mPool = std::move(drain.mPool);
+            }
+        }
+
+        // <SS:Nexii> The liquid runoff network, at its own finer resolution
+        // (SSAtmoRunoffRes) off the same source. Both sources serve the same
+        // SurfaceGrid contract, so the network follows the grid switch the
+        // wet field already uses; the world field's 0.25 m store also gives
+        // buildRunoff the full-resolution column tops it refines lip points
+        // against, which is why the source pointer rides along.
+        buildRunoff(entry.first, geom, field);
+
+        // <SS:Nexii> Carry the liquid reservoirs across the retrace: a run
+        // keeps its water when its biggest feeder cell survives the edit, and
+        // whatever belonged to runs that no longer exist is shared out over
+        // the new ones by catchment - the same hand-over the trace has always
+        // needed so a prim edit next door reads as invisible rather than as
+        // every eave on the region pausing for a drain cycle.
+        auto fld_it = mFields.find(entry.first);
+        if (fld_it != mFields.end() && fld_it->second.mN == geom.mN)
+        {
+            Field& fld = fld_it->second;
+
+            std::set<U32> live;
+            F32 total_catch = 0.f;
+            for (const Geometry::Run& run : geom.mRunoff.mRuns)
+            {
+                live.insert(run.mKey);
+                total_catch += run.mCatch;
+            }
+
+            F32 orphan = 0.f;
+            for (auto it = fld.mRunStore.begin(); it != fld.mRunStore.end(); )
+            {
+                if (live.count(it->first))
+                {
+                    ++it;
+                }
+                else
+                {
+                    orphan += it->second;
+                    it = fld.mRunStore.erase(it);
+                }
+            }
+            for (auto it = fld.mRunAccum.begin(); it != fld.mRunAccum.end(); )
+            {
+                if (live.count(it->first)) ++it;
+                else it = fld.mRunAccum.erase(it);
+            }
+
+            if (orphan > 0.f && total_catch > 0.f)
+            {
+                for (const Geometry::Run& run : geom.mRunoff.mRuns)
+                {
+                    fld.mRunStore[run.mKey] += orphan * run.mCatch / total_catch;
+                }
             }
         }
     }
@@ -340,7 +697,8 @@ static const F32 SHED_DRAIN_TAU = 6.f;
 
 static const F32 SHED_STORE_CEILING = 8.f;
 
-// Spends the frame's rain on every region's shelter edges, spawning runoff drips.
+// Spends the frame's weather on every region's shed: granular drains the
+// creep spill at the lips, liquid fills and drains the runoff network's runs.
 void SSSurfaceField::shedEdges(F32 dt)
 {
     LL_RECORD_BLOCK_TIME(FTM_SS_SURFACE_SHED);
@@ -373,12 +731,17 @@ void SSSurfaceField::shedEdges(F32 dt)
     }
 }
 
-// One region's edge shedding: collected water becomes drip and stream spawns near the camera.
+// One region's edge shedding. Granular weather drains the transport's creep
+// spill through the per-lip stores it was debited to - one ledger, one
+// cursor, unchanged. Liquid sheds from the runoff network's runs instead: a
+// run is a stretch of eave with a catchment, so it holds one reservoir, puts
+// up curtain streams cut across its span when it sheds faster than drips can
+// carry, and lets individual drips fall wherever its own flows converge -
+// weighted by the catchment each member drains, so the valley corner a whole
+// roof plane runs into gets the drips a straight rake never earns.
 void SSSurfaceField::shedRegion(U64 region_handle, const Geometry& geom, Field& fld,
                                 F32 dt, F32 rate_m2, const LLVector3& camera_agent)
 {
-    if (geom.mEdgeCells.empty()) return;
-
     SSAtmoMagic* atmo = SSAtmoMagic::getInstance();
     SSPrecipSim* sim = atmo->sim();
 
@@ -386,8 +749,6 @@ void SSSurfaceField::shedRegion(U64 region_handle, const Geometry& geom, Field& 
     if (!regionp) return;
 
     const LLVector3 origin = regionp->getOriginAgent();
-    const F32 cell = geom.mCell;
-    const F32 cell_area = cell * cell;
 
     static LLCachedControl<F32> radius_setting(gSavedSettings, "SSAtmoRunoffRadius", 48.f);
     const F32 radius = llclamp((F32)radius_setting, 8.f, 128.f);
@@ -399,68 +760,154 @@ void SSSurfaceField::shedRegion(U64 region_handle, const Geometry& geom, Field& 
 
     const F64 now = atmo->sharedTime();
 
-    S32& cursor = mShedCursor[region_handle];
-    const S32 lip_count = (S32)geom.mEdgeCells.size();
-    if (cursor >= lip_count) cursor = 0;
-
-    S32 visited = 0;
-
-    for (S32 k = 0; k < lip_count; ++k)
+    if (atmo->granularWeather())
     {
-        const S32 i = geom.mEdgeCells[(size_t)k];
-        const size_t ui = (size_t)i;
+        if (geom.mEdgeCells.empty()) return;
 
-        // <SS:Nexii> Granular weather feeds the store from the transport's creep spill, not from the rain rate - the lip is debited where the creep pass delivers, and this cursor only drains it into cascades. Liquid keeps the inflow it always had.
-        const F32 inflow = atmo->granularWeather() ? 0.f
-                                                   : cell_area * lerp(SHED_FEED_FLAT, SHED_FEED_STEEP, llclamp(geom.mSlope[ui] / SLOPE_RUN_FULL, 0.f, 1.f)) * rate_m2;
+        const F32 cell = geom.mCell;
 
-        if (inflow > 0.f)
+        S32& cursor = mShedCursor[region_handle];
+        const S32 lip_count = (S32)geom.mEdgeCells.size();
+        if (cursor >= lip_count) cursor = 0;
+
+        S32 visited = 0;
+
+        for (S32 k = 0; k < lip_count; ++k)
         {
-            fld.mStore[ui] = llmin(fld.mStore[ui] + inflow * dt,
-                                   inflow * SHED_STORE_CEILING + 1.f);
+            const S32 i = geom.mEdgeCells[(size_t)k];
+            const size_t ui = (size_t)i;
+
+            // The store is debited where the creep pass delivers; this cursor
+            // only drains it into cascades.
+            const F32 outflow = fld.mStore[ui] / SHED_DRAIN_TAU;
+            fld.mStore[ui] = llmax(0.f, fld.mStore[ui] - outflow * dt);
+
+            if (outflow <= 0.01f)
+            {
+                fld.mAccum[ui] = 0.f;
+                continue;
+            }
+
+            const S32 offset = (k - cursor + lip_count) % lip_count;
+            if (offset >= SHED_VISIT_PER_FRAME) continue;
+            ++visited;
+
+            const S32 x = i % geom.mN;
+            const S32 y = i / geom.mN;
+            const LLVector3 lip = origin
+                + LLVector3(((F32)x + 0.5f) * cell, ((F32)y + 0.5f) * cell, 0.f);
+            const LLVector3 lip_agent(lip.mV[VX], lip.mV[VY], geom.mZ[ui]);
+
+            const LLVector3 delta = lip_agent - camera_agent;
+            if (delta.magVecSquared() > radius_sq)
+            {
+                fld.mAccum[ui] = 0.f;
+                continue;
+            }
+
+            const LLVector3 out_dir(geom.mEdgeX[ui], geom.mEdgeY[ui], 0.f);
+
+            LLVector3 land = lip_agent;
+            bool on_water = false;
+            SSRainShadowMap::getInstance()->resolveColumn(
+                lip_agent + out_dir * (cell * 0.5f) - LLVector3(0.f, 0.f, 0.1f), land, on_water);
+
+            const F32 raw_rate = llmin(outflow / SHED_MERGE, SHED_MAX_RATE);
+
+            const F32 stream_drive = llclamp(
+                (raw_rate - SHED_STREAM_MIN) / SHED_STREAM_FULL, 0.f, 1.f);
+
+            const U32 key = SSAtmoNoise::combine(
+                SSAtmoNoise::combine((U32)region_handle, (U32)(region_handle >> 32)),
+                (U32)i);
+
+            SSRandStream rng(SSAtmoNoise::combine(atmo->seed(),
+                SSAtmoNoise::combine((U32)(S64)(now * 8.0), key)));
+            rng.next();
+
+            if (stream_drive > 0.f)
+            {
+                const SSPrecipPreset& preset = atmo->preset();
+                const F32 width = (preset.mStreamSpan > 0.f)
+                    ? llclamp(preset.mStreamSpan, 1.f, STREAM_SPAN_MAX) : cell;
+
+                sim->refreshStream(key, lip_agent, out_dir, land,
+                                   stream_drive, width, 0.f, rng);
+            }
+
+            const F32 drips_per_s = raw_rate * (1.f - 0.9f * stream_drive);
+            if (budget <= 0.f) continue;
+
+            fld.mAccum[ui] += drips_per_s * budget * dt;
+            S32 shed_now = (S32)fld.mAccum[ui];
+            if (shed_now <= 0) continue;
+
+            shed_now = llmin(shed_now, SHED_MAX_BURST);
+            fld.mAccum[ui] -= (F32)shed_now;
+
+            for (S32 d = 0; d < shed_now; ++d)
+            {
+                const LLVector3 along(-out_dir.mV[VY], out_dir.mV[VX], 0.f);
+                const LLVector3 jitter = along * (rng.frand(-0.5f, 0.5f) * cell);
+                sim->spawnDrip(lip_agent + jitter, out_dir, land + jitter, SHED_MERGE, rng);
+            }
         }
 
-        const F32 outflow = fld.mStore[ui] / SHED_DRAIN_TAU;
-        fld.mStore[ui] = llmax(0.f, fld.mStore[ui] - outflow * dt);
+        cursor = (cursor + llmax(1, visited)) % lip_count;
+        return;
+    }
+
+    const Geometry::Runoff& ro = geom.mRunoff;
+    if (!ro.valid() || ro.mRuns.empty()) return;
+
+    const F32 cell = ro.mCell;
+
+    for (const Geometry::Run& run : ro.mRuns)
+    {
+        F32& store = fld.mRunStore[run.mKey];
+        F32& accum = fld.mRunAccum[run.mKey];
+
+        // The roof's reservoir: the run's whole catchment fills it, it drains
+        // on its own time constant, and what drains is what the eave sheds. A
+        // gust lull overhead empties the store, not the eave.
+        const F32 inflow = run.mCatch * rate_m2;
+        if (inflow > 0.f)
+        {
+            store = llmin(store + inflow * dt, inflow * SHED_STORE_CEILING + 1.f);
+        }
+
+        const F32 outflow = store / SHED_DRAIN_TAU;
+        store = llmax(0.f, store - outflow * dt);
 
         if (outflow <= 0.01f)
         {
-            fld.mAccum[ui] = 0.f;
+            accum = 0.f;
             continue;
         }
 
-        const S32 offset = (k - cursor + lip_count) % lip_count;
-        if (offset >= SHED_VISIT_PER_FRAME) continue;
-        ++visited;
-
-        const S32 x = i % geom.mN;
-        const S32 y = i / geom.mN;
-        const LLVector3 lip = origin
-            + LLVector3(((F32)x + 0.5f) * cell, ((F32)y + 0.5f) * cell, 0.f);
-        const LLVector3 lip_agent(lip.mV[VX], lip.mV[VY], geom.mZ[ui]);
-
-        const LLVector3 delta = lip_agent - camera_agent;
+        const LLVector3 run_centroid(run.mCentroid.mV[VX] + origin.mV[VX],
+                                     run.mCentroid.mV[VY] + origin.mV[VY],
+                                     run.mCentroid.mV[VZ]);
+        const LLVector3 delta = run_centroid - camera_agent;
         if (delta.magVecSquared() > radius_sq)
         {
-            fld.mAccum[ui] = 0.f;
+            accum = 0.f;
             continue;
         }
-
-        const LLVector3 out_dir(geom.mEdgeX[ui], geom.mEdgeY[ui], 0.f);
-
-        LLVector3 land = lip_agent;
-        bool on_water = false;
-        SSRainShadowMap::getInstance()->resolveColumn(
-            lip_agent + out_dir * (cell * 0.5f) - LLVector3(0.f, 0.f, 0.1f), land, on_water);
 
         const F32 raw_rate = llmin(outflow / SHED_MERGE, SHED_MAX_RATE);
 
         const F32 stream_drive = llclamp(
             (raw_rate - SHED_STREAM_MIN) / SHED_STREAM_FULL, 0.f, 1.f);
 
+        const LLVector3 out_dir = run.mOut;
+        // Along the lip: z cross out, the axis the network ordered the run by
+        // and the one the stream renderer reads its pitch back in.
+        const LLVector3 along(-out_dir.mV[VY], out_dir.mV[VX], 0.f);
+
         const U32 key = SSAtmoNoise::combine(
             SSAtmoNoise::combine((U32)region_handle, (U32)(region_handle >> 32)),
-            (U32)i);
+            run.mKey);
 
         SSRandStream rng(SSAtmoNoise::combine(atmo->seed(),
             SSAtmoNoise::combine((U32)(S64)(now * 8.0), key)));
@@ -468,33 +915,131 @@ void SSSurfaceField::shedRegion(U64 region_handle, const Geometry& geom, Field& 
 
         if (stream_drive > 0.f)
         {
+            // The curtain spans what the art was drawn for: the preset's span,
+            // or its sheet tier's quad width, cut into slots across the run so
+            // together they are the length of the eave - a gutter, without
+            // anything having to know that the run exists.
             const SSPrecipPreset& preset = atmo->preset();
-            const F32 width = (preset.mStreamSpan > 0.f)
-                ? llclamp(preset.mStreamSpan, 1.f, STREAM_SPAN_MAX) : cell;
+            const F32 span = (preset.mStreamSpan > 0.f)
+                ? llclamp(preset.mStreamSpan, 1.f, STREAM_SPAN_MAX)
+                : llclamp(preset.mTiers[TIER_SHEETS].mSizeX * 2.f, 1.f, STREAM_SPAN_MAX);
 
-            sim->refreshStream(key, lip_agent, out_dir, land,
-                               stream_drive, width, 0.f, rng);
+            const size_t count = run.mCells.size();
+            auto proj_at = [&](size_t m)
+            {
+                const LLVector3& lip = run.mLips[m];
+                return lip.mV[VX] * along.mV[VX] + lip.mV[VY] * along.mV[VY];
+            };
+
+            // The run's own span, measured over the refined lip points.
+            const F32 run_len = llmax(proj_at(count - 1) - proj_at(0), 0.f) + cell;
+            const S32 slots = llclamp((S32)(run_len / span + 0.5f), 1, 64);
+            const F32 slot_len = run_len / (F32)slots;
+
+            size_t m = 0;
+            for (S32 s = 0; s < slots; ++s)
+            {
+                const F32 lo = proj_at(0) + (F32)s * slot_len;
+                const F32 hi = lo + slot_len;
+                const F32 mid = lo + 0.5f * slot_len;
+
+                size_t first = count, last = 0, mid_at = 0;
+                F32 near_dp = FLT_MAX;
+                while (m < count)
+                {
+                    const F32 p = proj_at(m);
+                    if (p >= hi) break;
+                    if (p >= lo)
+                    {
+                        if (first == count) first = m;
+                        last = m;
+                        const F32 dp = fabsf(p - mid);
+                        if (dp < near_dp)
+                        {
+                            near_dp = dp;
+                            mid_at = m;
+                        }
+                    }
+                    ++m;
+                }
+                if (first == count)
+                {
+                    // A thinned long run can leave a slot between members:
+                    // anchor it on the nearest member there is.
+                    mid_at = last = first = llmin(m, count - 1);
+                }
+
+                const LLVector3& lip_local = run.mLips[mid_at];
+                const LLVector3 lip_agent(lip_local.mV[VX] + origin.mV[VX],
+                                          lip_local.mV[VY] + origin.mV[VY],
+                                          lip_local.mV[VZ]);
+
+                // The pitch of this stretch of lip, so a curtain off a rake
+                // hangs along the rake instead of cutting through the roof.
+                F32 pitch = 0.f;
+                if (last > first)
+                {
+                    const F32 run_m = llmax(proj_at(last) - proj_at(first), 0.01f);
+                    pitch = llclamp((run.mLips[last].mV[VZ] - run.mLips[first].mV[VZ]) / run_m,
+                                    -4.f, 4.f);
+                }
+
+                LLVector3 land = lip_agent;
+                bool on_water = false;
+                SSRainShadowMap::getInstance()->resolveColumn(
+                    lip_agent + out_dir * (cell * 0.5f) - LLVector3(0.f, 0.f, 0.1f), land, on_water);
+
+                const U32 slot_key = SSAtmoNoise::combine(key, (U32)s);
+                sim->refreshStream(slot_key, lip_agent, out_dir, land,
+                                   stream_drive, slot_len, pitch, rng);
+            }
         }
 
         const F32 drips_per_s = raw_rate * (1.f - 0.9f * stream_drive);
         if (budget <= 0.f) continue;
 
-        fld.mAccum[ui] += drips_per_s * budget * dt;
-        S32 shed_now = (S32)fld.mAccum[ui];
+        accum += drips_per_s * budget * dt;
+        S32 shed_now = (S32)accum;
         if (shed_now <= 0) continue;
 
         shed_now = llmin(shed_now, SHED_MAX_BURST);
-        fld.mAccum[ui] -= (F32)shed_now;
+        accum -= (F32)shed_now;
 
         for (S32 d = 0; d < shed_now; ++d)
         {
-            const LLVector3 along(-out_dir.mV[VY], out_dir.mV[VX], 0.f);
+            // Members are picked weighted by the catchment each drains: a
+            // drip lands where the roof's flows gathered, which is why a
+            // valley corner runs while the plain rake beside it stays quiet.
+            F32 pick_total = 0.f;
+            for (const S32 c : run.mCells)
+            {
+                pick_total += ro.mCatch[(size_t)c];
+            }
+
+            F32 pick = rng.frand(0.f, pick_total);
+            size_t mi = 0;
+            for (; mi < run.mCells.size(); ++mi)
+            {
+                pick -= ro.mCatch[(size_t)run.mCells[mi]];
+                if (pick <= 0.f) break;
+            }
+            if (mi >= run.mCells.size()) mi = run.mCells.size() - 1;
+
+            const LLVector3& lip_local = run.mLips[mi];
+            const LLVector3 lip_agent(lip_local.mV[VX] + origin.mV[VX],
+                                      lip_local.mV[VY] + origin.mV[VY],
+                                      lip_local.mV[VZ]);
             const LLVector3 jitter = along * (rng.frand(-0.5f, 0.5f) * cell);
-            sim->spawnDrip(lip_agent + jitter, out_dir, land + jitter, SHED_MERGE, rng);
+
+            LLVector3 land = lip_agent;
+            bool on_water = false;
+            SSRainShadowMap::getInstance()->resolveColumn(
+                lip_agent + jitter + out_dir * (cell * 0.5f) - LLVector3(0.f, 0.f, 0.1f),
+                land, on_water);
+
+            sim->spawnDrip(lip_agent + jitter, out_dir, land, SHED_MERGE, rng);
         }
     }
-
-    cursor = (cursor + llmax(1, visited)) % lip_count;
 }
 
 // The per-region wet/snow/puddle field, created to match its geometry.
@@ -512,6 +1057,11 @@ SSSurfaceField::Field* SSSurfaceField::fieldFor(U64 region_handle, const Geometr
         fld.mWet.assign(geom.mZ.size(), 0.f);
         fld.mSnow.assign(geom.mZ.size(), 0.f);
         fld.mPuddle.assign(geom.mZ.size(), 0.f);
+        fld.mIce.assign(geom.mZ.size(), 0.f);
+        fld.mFrost.assign(geom.mZ.size(), 0.f);
+        fld.mStain.assign(geom.mZ.size(), 0.f);
+        fld.mAge.assign(geom.mZ.size(), 0.f);
+        fld.mGroundSpeed01.assign(geom.mZ.size(), 0.f);
         fld.mScorch.assign(geom.mZ.size(), 0.f);
         fld.mLift.assign(geom.mZ.size(), 0.f);
         fld.mInflow.assign(geom.mZ.size(), 0.f);
@@ -592,7 +1142,24 @@ void SSSurfaceField::tick(Field& fld, const Geometry& geom, F32 dt,
     static LLCachedControl<F32> snow_struct(gSavedSettings, "SSAtmoSnowStructDepth", 0.4f);
     const F32 snow_struct_frac = llclamp((F32)snow_struct, 0.f, 1.f);
 
+    // <SS:Nexii> Surface weather state (doc sec 2): the tick's shared scalars, assembled once and copied per cell below. mExposure has no sky-view figure to read yet - TODO(core): a WorldField COVERAGE channel would replace the flat 1.0. [interaction: SSAtmoMagic::temperatureC/humidity/sunUp, none else]
+    SSAtmoMagic* atmo = SSAtmoMagic::getInstance();
+    const bool liquidFalling = falling && !preset.isGranular();
+    const SSSurfaceState::DepositLook resolved_deposit = depositLook();
+    SSSurfaceState::CellIn state_in_template;
+    state_in_template.mExposure = 1.f;
+    state_in_template.mTempC = atmo->temperatureC();
+    state_in_template.mHumidity = atmo->humidity();
+    state_in_template.mSunlit = atmo->sunUp();
+    state_in_template.mLiquidStain = liquidFalling ? preset.mLiquid.mStain : 0.f;
+    state_in_template.mLiquidIntensity = liquidFalling ? intensity : 0.f;
+    state_in_template.mDepositWash = resolved_deposit.mWash;
+    state_in_template.mDepositFull = llmax(resolved_deposit.mDepthFull, 1.0e-6f);
+    const F32 deposit_melts = resolved_deposit.mMelts;
+
     F32 peak_wet = 0.f, peak_snow = 0.f, peak_puddle = 0.f;
+    F32 peak_ice = 0.f, peak_frost = 0.f, peak_stain = 0.f;
+    F32 peak_wet_gain = 0.f, peak_deposit_gain = 0.f;
 
     for (S32 y = 0; y < n; ++y)
     {
@@ -603,6 +1170,7 @@ void SSSurfaceField::tick(Field& fld, const Geometry& geom, F32 dt,
             if (!geom.solid(i))
             {
                 fld.mWet[i] = fld.mSnow[i] = fld.mPuddle[i] = 0.f;
+                fld.mIce[i] = fld.mFrost[i] = fld.mStain[i] = fld.mAge[i] = 0.f;
                 fld.mZ[i] = geom.mZ[i];
                 continue;
             }
@@ -610,12 +1178,14 @@ void SSSurfaceField::tick(Field& fld, const Geometry& geom, F32 dt,
             if (fabsf(geom.mZ[i] - fld.mZ[i]) > REBUILD_DZ)
             {
                 fld.mWet[i] = fld.mSnow[i] = fld.mPuddle[i] = 0.f;
+                fld.mIce[i] = fld.mFrost[i] = fld.mStain[i] = fld.mAge[i] = 0.f;
                 fld.mZ[i] = geom.mZ[i];
             }
 
             if (geom.water(i))
             {
                 fld.mWet[i] = fld.mSnow[i] = fld.mPuddle[i] = 0.f;
+                fld.mIce[i] = fld.mFrost[i] = fld.mStain[i] = fld.mAge[i] = 0.f;
                 continue;
             }
 
@@ -653,24 +1223,25 @@ void SSSurfaceField::tick(Field& fld, const Geometry& geom, F32 dt,
             const bool scorched = !fld.mScorch.empty() && fld.mScorch[i] > 0.f;
             if (scorched) fld.mScorch[i] = llmax(0.f, fld.mScorch[i] - dt);
 
+            const F32 wet_before = fld.mWet[i];
             fld.mWet[i] += ((scorched ? 0.f : wet_target) - fld.mWet[i])
                          * (scorched ? (1.f - expf(-(preset.mDryRate > 0.f ? preset.mDryRate : FALLBACK_DRY) * dt)) : wet_blend);
 
+            F32 deposit_gain_applied = 0.f;
             if (snowing && !scorched)
             {
                 const F32 depth_scale = lerp(1.f, snow_struct_frac, structFactor(i));
                 const F32 room = preset.mSnowDepth * depth_scale * lieHere() - fld.mSnow[i];
                 if (room > 0.f)
                 {
-                    fld.mSnow[i] += llmin(room, snow_gain);
-                }
-                else
-                {
+                    deposit_gain_applied = llmin(room, snow_gain);
+                    fld.mSnow[i] += deposit_gain_applied;
                 }
             }
             else if (fld.mSnow[i] > 0.f)
             {
-                fld.mSnow[i] = llmax(0.f, fld.mSnow[i] - snow_loss);
+                // <SS:Nexii> Melt scaled by the resolved deposit look's mMelts - a deposit with melts 0 (sand, ash) never melts here; it only leaves through washRemoval below. doc sec 8.
+                fld.mSnow[i] = llmax(0.f, fld.mSnow[i] - snow_loss * deposit_melts);
             }
 
             // Standing water is a grade phenomenon: a hollow in a street
@@ -691,15 +1262,51 @@ void SSSurfaceField::tick(Field& fld, const Geometry& geom, F32 dt,
                 fld.mPuddle[i] = llmax(0.f, fld.mPuddle[i] - puddle_loss);
             }
 
+            // <SS:Nexii> The state step and the wash removal, in that order, right after settle so both read this tick's post-settle wet/puddle/deposit - doc sec 2's tick order (settle -> stepCell -> washRemoval -> transport).
+            {
+                SSSurfaceState::CellIn cell_in = state_in_template;
+                cell_in.mWet = fld.mWet[i];
+                cell_in.mPuddle = fld.mPuddle[i];
+                cell_in.mDeposit = fld.mSnow[i];
+                cell_in.mDepositGain = deposit_gain_applied;
+                cell_in.mWetGain = llmax(0.f, fld.mWet[i] - wet_before);
+
+                SSSurfaceState::CellState cell_state;
+                cell_state.mIce = fld.mIce[i];
+                cell_state.mFrost = fld.mFrost[i];
+                cell_state.mStain = fld.mStain[i];
+                cell_state.mAge = fld.mAge[i];
+                SSSurfaceState::stepCell(cell_state, cell_in, dt);
+                fld.mIce[i] = cell_state.mIce;
+                fld.mFrost[i] = cell_state.mFrost;
+                fld.mStain[i] = cell_state.mStain;
+                fld.mAge[i] = cell_state.mAge;
+
+                fld.mSnow[i] = llmax(0.f, fld.mSnow[i] - SSSurfaceState::washRemoval(cell_in, dt));
+
+                peak_wet_gain = llmax(peak_wet_gain, cell_in.mWetGain);
+                peak_deposit_gain = llmax(peak_deposit_gain, cell_in.mDepositGain);
+            }
+
             peak_wet = llmax(peak_wet, fld.mWet[i]);
             peak_snow = llmax(peak_snow, fld.mSnow[i]);
             peak_puddle = llmax(peak_puddle, fld.mPuddle[i]);
+            peak_ice = llmax(peak_ice, fld.mIce[i]);
+            peak_frost = llmax(peak_frost, fld.mFrost[i]);
+            peak_stain = llmax(peak_stain, fld.mStain[i]);
         }
     }
 
     mPeakWet = llmax(mPeakWet, peak_wet);
     mPeakSnow = llmax(mPeakSnow, peak_snow);
     mPeakPuddle = llmax(mPeakPuddle, peak_puddle);
+    mPeakIce = llmax(mPeakIce, peak_ice);
+    mPeakFrost = llmax(mPeakFrost, peak_frost);
+    mPeakStain = llmax(mPeakStain, peak_stain);
+    mPeakWetGain = llmax(mPeakWetGain, peak_wet_gain);
+    mPeakDepositGain = llmax(mPeakDepositGain, peak_deposit_gain);
+    mPeakWetPresent = llmax(mPeakWetPresent, peak_wet);
+    mPeakDepositPresent = llmax(mPeakDepositPresent, peak_snow);
 
     // <SS:Nexii> Granular transport: what the wind does to what settle just left. Runs after the settle pass so fresh snow can lift in the same step it landed; the peak scan is re-run afterwards because erosion and banking both move it.
     if (flow)
@@ -715,6 +1322,7 @@ void SSSurfaceField::tick(Field& fld, const Geometry& geom, F32 dt,
         }
         peak_snow = llmax(peak_snow, wind_peak);
         mPeakSnow = llmax(mPeakSnow, peak_snow);
+        mPeakDepositPresent = llmax(mPeakDepositPresent, peak_snow);
     }
 }
 
@@ -744,6 +1352,9 @@ void SSSurfaceField::evict(F64 now)
 void SSSurfaceField::idle(F32 dt)
 {
     (void)dt; // the transport steps on shared time; presentation below uses the fixed quanta too
+
+    // <SS:Nexii> Rings expire once per frame regardless of the early returns below - a ring's life is camera time, not the field's own tick cadence. doc sec 6. The rate is what turns the ring's own clock into seconds, so a fast ripple setting retires the buffer sooner as well as drawing it quicker.
+    mRings.expire(gFrameTimeSeconds, ringRate());
 
     SSAtmoMagic* atmo = SSAtmoMagic::getInstance();
 
@@ -785,6 +1396,9 @@ void SSSurfaceField::idle(F32 dt)
                                    MELT_SUBLIMATION, MELT_WARM_MAX);
 
     mPeakWet = mPeakSnow = mPeakPuddle = 0.f;
+    mPeakIce = mPeakFrost = mPeakStain = 0.f;
+    mPeakWetGain = mPeakDepositGain = 0.f;
+    mPeakWetPresent = mPeakDepositPresent = 0.f;
 
     refreshGeometry();
 
@@ -804,7 +1418,11 @@ void SSSurfaceField::idle(F32 dt)
     const bool blows_here = granular.mLiftRate > 0.f || granular.mDepositRate > 0.f
                          || granular.mCreepRate > 0.f;
 
-    std::vector<LLVector4> flow_grid;
+    // <SS:Nexii> AUDIT (finding 16): per-region setup (fld/flow) stays a once-per-idle cost exactly as before - only the TICK loop below moved, so a stalled client catching up (ran > 1) still samples the flow grid once, not `ran` times. Each region now owns its own flow grid vector (mFlowGrid) rather than sharing one reused buffer: the old code used a region's flow pointer immediately, in the same loop iteration that filled it, but the tick calls are deferred to the s-loop below now, so an earlier region's pointer into a shared, since-refilled buffer would dangle.
+    struct RegionTick { Field* mFld; const Geometry* mGeom; std::vector<LLVector4> mFlowGrid; const LLVector4* mFlow; };
+    std::vector<RegionTick> region_ticks;
+    region_ticks.reserve(mGeometry.size());
+
     for (const auto& entry : mGeometry)
     {
         const Geometry& geom = entry.second;
@@ -813,23 +1431,64 @@ void SSSurfaceField::idle(F32 dt)
         Field* fld = fieldFor(entry.first, geom, now);
         if (!fld) continue;
 
-        const LLVector4* flow = nullptr;
+        region_ticks.push_back({ fld, &geom, {}, nullptr });
+        RegionTick& rt = region_ticks.back();
+
         if (blows_here)
         {
             LL_RECORD_BLOCK_TIME(FTM_SS_SURFACE_FLOW);
 
             LLViewerRegion* regionp = LLWorld::getInstance()->getRegionFromHandle(entry.first);
-            flow_grid.clear();
             if (regionp && SSWindFlowMap::getInstance()->sampleGroundGrid(regionp, geom.mN, geom.mCell,
-                                                                          geom.mZ.data(), flow_grid))
+                                                                          geom.mZ.data(), rt.mFlowGrid))
             {
-                flow = flow_grid.data();
+                rt.mFlow = rt.mFlowGrid.data();
             }
         }
 
-        for (U32 s = 0; s < ran; ++s)
+        // <SS:Nexii> Wind carry (doc sec 8): a static figure per solve, taken straight from the flow grid already sampled above - never integrated, never decayed here. Left untouched (whatever the last solve wrote) when this idle() has no flow grid for the region.
+        if (rt.mFlow && fld->mGroundSpeed01.size() == fld->mZ.size())
         {
-            tick(*fld, geom, TICK_INTERVAL, preset, intensity, melt_scale, granular, flow);
+            static LLCachedControl<F32> lift_hi_setting(gSavedSettings, "SSAtmoSnowLiftHi", 8.0f);
+            const F32 lift_hi = llmax((F32)lift_hi_setting, 0.1f);
+            for (size_t i = 0; i < fld->mGroundSpeed01.size(); ++i)
+            {
+                const F32 speed = sqrtf(rt.mFlow[i].mV[0] * rt.mFlow[i].mV[0] + rt.mFlow[i].mV[1] * rt.mFlow[i].mV[1]);
+                fld->mGroundSpeed01[i] = llclamp(speed / lift_hi, 0.f, 1.f);
+            }
+        }
+    }
+
+    // <SS:Nexii> AUDIT (finding 16): the look crossfade now advances once per TICK (s), using that tick's own gain across every region, rather than once per idle() using a gain maxed over up to MAX_STEPS_PER_FRAME ticks - a client that stalled and is replaying several quanta this frame no longer crosses fades several times slower than one that didn't. mPeakWet/mPeakSnow (the render-gate other callers read via peakWet()/peakSnow()) are deliberately left accumulating for the WHOLE idle() as before; the *Gain accumulators AND the present normaliser they divide by are both tick-scoped, so two clients replaying the same shared-time quanta at different frame rates land on the same mT.
+    for (U32 s = 0; s < ran; ++s)
+    {
+        mPeakWetGain = mPeakDepositGain = 0.f;
+        mPeakWetPresent = mPeakDepositPresent = 0.f;
+        for (const RegionTick& rt : region_ticks)
+        {
+            tick(*rt.mFld, *rt.mGeom, TICK_INTERVAL, preset, intensity, melt_scale, granular, rt.mFlow);
+        }
+
+        // Advance toward whatever the active preset currently prescribes; a preset already equal to mA starts nothing, so switching presets with nothing yet fallen changes the ground not at all. [interaction: none - reads only the preset already fetched above]
+        if (!looksEqual(preset.mLiquid, mLiquidMix.mA))
+        {
+            mLiquidMix.mB = preset.mLiquid;
+            mLiquidMix.mT = SSSurfaceState::advanceMix(mLiquidMix.mT, mPeakWetGain, mPeakWetPresent, 1.f);
+            if (mLiquidMix.mT >= 1.f)
+            {
+                mLiquidMix.mA = mLiquidMix.mB;
+                mLiquidMix.mT = 0.f;
+            }
+        }
+        if (!looksEqual(preset.mDeposit, mDepositMix.mA))
+        {
+            mDepositMix.mB = preset.mDeposit;
+            mDepositMix.mT = SSSurfaceState::advanceMix(mDepositMix.mT, mPeakDepositGain, mPeakDepositPresent, mDepositMix.mB.mDepthFull);
+            if (mDepositMix.mT >= 1.f)
+            {
+                mDepositMix.mA = mDepositMix.mB;
+                mDepositMix.mT = 0.f;
+            }
         }
     }
 
@@ -926,6 +1585,10 @@ SSSurfaceField::Sample SSSurfaceField::sample(const LLVector3& pos_agent) const
     out.mSnow = fld.mSnow[i];
     out.mPuddle = fld.mPuddle[i];
     out.mLift = fld.mLift.empty() ? 0.f : fld.mLift[i];
+    out.mIce = fld.mIce.empty() ? 0.f : fld.mIce[i];
+    out.mFrost = fld.mFrost.empty() ? 0.f : fld.mFrost[i];
+    out.mStain = fld.mStain.empty() ? 0.f : fld.mStain[i];
+    out.mAge = fld.mAge.empty() ? 0.f : fld.mAge[i];
     out.mValid = true;
 
     // <SS:Nexii> The HEIGHT is bilinear over the four surrounding cell centres, where wetness, snow and puddles stay nearest-cell. A stair-stepped surface is a fair answer for a material property and a bad one for a height: every consumer that walks it - the ground crawl above all, stepping 1.5-3m against a 2m continuity guard - reads a cell boundary as a cliff and stops there. Over the Linden heightmap neighbouring cells differ by centimetres and it never showed; over a sculpted or mesh sim surround they differ by the whole relief, so the crawl died on its first step every time. Sampling at cell CENTRES (the half-cell shift) is what keeps the interpolant from leaning half a cell off the data. doc/atmo_magic_lightning_strike.md
@@ -1092,6 +1755,10 @@ void SSSurfaceField::updateWindow()
         mWindowData[t * 4] = WINDOW_NO_SURFACE;
     }
     mWindowFlowData.assign((size_t)WINDOW_RES * WINDOW_RES * 4, 0.f);
+    mWindowStateData.assign((size_t)WINDOW_RES * WINDOW_RES * 4, 0.f);
+    // <SS:Nexii> The cover window inits to "no verdict" - every cell the loop below does not
+    // answer (past the stitched regions) must read as no-answer in the shader, never as open.
+    mWindowCoverData.assign((size_t)WINDOW_RES * WINDOW_RES * 4, -1.f);
 
     bool any = false;
     for (const auto& entry : mFields)
@@ -1112,6 +1779,17 @@ void SSSurfaceField::updateWindow()
         const Geometry* geom = (geom_it != mGeometry.end()) ? &geom_it->second : nullptr;
         const bool have_slope = geom && geom->valid() && geom->mN == fld.mN;
 
+        // <SS:Nexii> The cover window's source: the shared world field's
+        // enclosure spectrum. Sampled a quarter metre above the cell's stored
+        // surface - the air a fog sample sits in when the covered test gates
+        // it - and answered by the flood's touching classification with its
+        // sub-band resolution. -1 wherever the world field has no verdict
+        // (off, tile stale, point inside a band's implied solid), which the
+        // fog shader reads as the old binary covered test. The bulk form
+        // resolves the region's tile once per region loop, not once per cell.
+        // [interaction: SSWorldField]
+        SSWorldField* worldfield = SSWorldField::getInstance();
+
         for (S32 wy = y0; wy < y1; ++wy)
         {
             const S32 fy = wy - off_y;
@@ -1125,12 +1803,25 @@ void SSSurfaceField::updateWindow()
                 mWindowData[wi + 2] = fld.mSnow[fi];
                 mWindowData[wi + 3] = fld.mPuddle[fi];
 
+                // <SS:Nexii> The state window - ice, frost, stain, age - same lattice, uploaded beside the field data (doc sec 2).
+                mWindowStateData[wi]     = fld.mIce.empty() ? 0.f : fld.mIce[fi];
+                mWindowStateData[wi + 1] = fld.mFrost.empty() ? 0.f : fld.mFrost[fi];
+                mWindowStateData[wi + 2] = fld.mStain.empty() ? 0.f : fld.mStain[fi];
+                mWindowStateData[wi + 3] = fld.mAge.empty() ? 0.f : fld.mAge[fi];
+
+                mWindowCoverData[wi] = worldfield->enclosureAtRegion(entry.first, LLVector3(
+                    forigin.mV[VX] + ((F32)fx + 0.5f) * fld.mCell,
+                    forigin.mV[VY] + ((F32)fy + 0.5f) * fld.mCell,
+                    fld.mZ[fi] + 0.25f));
+
                 if (have_slope && geom->solid(fi) && !geom->water(fi))
                 {
                     mWindowFlowData[wi]     = geom->mSlopeX[fi];
                     mWindowFlowData[wi + 1] = geom->mSlopeY[fi];
                     mWindowFlowData[wi + 2] =
                         llclamp(geom->mSlope[fi] / SLOPE_RUN_FULL, 0.f, 1.f) * fld.mWet[fi];
+                    // <SS:Nexii> Wind carry spare channel (doc sec 8): ssFieldFlowMap.w reads as ground wind 0..1 so the deposit passes can settle snow in a lee the sky-view term alone would leave bare.
+                    mWindowFlowData[wi + 3] = fld.mGroundSpeed01.empty() ? 0.f : fld.mGroundSpeed01[fi];
                 }
             }
         }
@@ -1179,6 +1870,26 @@ void SSSurfaceField::updateWindow()
         glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, WINDOW_RES, WINDOW_RES);
         glBindTexture(GL_TEXTURE_2D, 0);
 
+        glGenTextures(1, &mWindowStateTex);
+        glBindTexture(GL_TEXTURE_2D, mWindowStateTex);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, WINDOW_RES, WINDOW_RES);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        glGenTextures(1, &mWindowCoverTex);
+        glBindTexture(GL_TEXTURE_2D, mWindowCoverTex);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, WINDOW_RES, WINDOW_RES);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
         const GLenum err = glGetError();
         if (err != GL_NO_ERROR)
         {
@@ -1207,6 +1918,16 @@ void SSSurfaceField::updateWindow()
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WINDOW_RES, WINDOW_RES,
                         GL_RGBA, GL_FLOAT, mWindowFlowData.data());
         glBindTexture(GL_TEXTURE_2D, 0);
+
+        glBindTexture(GL_TEXTURE_2D, mWindowStateTex);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WINDOW_RES, WINDOW_RES,
+                        GL_RGBA, GL_FLOAT, mWindowStateData.data());
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        glBindTexture(GL_TEXTURE_2D, mWindowCoverTex);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WINDOW_RES, WINDOW_RES,
+                        GL_RGBA, GL_FLOAT, mWindowCoverData.data());
+        glBindTexture(GL_TEXTURE_2D, 0);
     }
 
     mWindowCell = cell;
@@ -1217,7 +1938,8 @@ void SSSurfaceField::updateWindow()
 // Binds the field window texture.
 bool SSSurfaceField::bindForShader(LLGLSLShader& shader, S32 channel)
 {
-    if (!hasWindow() || channel < 0) return false;
+    // <SS:Nexii> Nothing upstream clamps the running channel count against the driver's actual unit budget - a shader with enough other samplers already bound could hand this an out-of-range unit, which is an out-of-bounds gGL.getTexUnit() index rather than merely "one fewer effect".
+    if (!hasWindow() || channel < 0 || channel >= gGLManager.mNumTextureImageUnits) return false;
 
     static LLStaticHashedString field_map("ssFieldMap");
     static LLStaticHashedString field_origin("ssFieldOrigin");
@@ -1234,7 +1956,7 @@ bool SSSurfaceField::bindForShader(LLGLSLShader& shader, S32 channel)
 // Binds the flow window texture.
 bool SSSurfaceField::bindFlowForShader(LLGLSLShader& shader, S32 channel)
 {
-    if (!hasFlowWindow() || channel < 0) return false;
+    if (!hasFlowWindow() || channel < 0 || channel >= gGLManager.mNumTextureImageUnits) return false;
 
     static LLStaticHashedString field_flow_map("ssFieldFlowMap");
 
@@ -1243,6 +1965,149 @@ bool SSSurfaceField::bindFlowForShader(LLGLSLShader& shader, S32 channel)
     shader.uniform1i(field_flow_map, channel);
 
     return true;
+}
+
+// Binds the state window texture (ice, frost, stain, age).
+bool SSSurfaceField::bindStateForShader(LLGLSLShader& shader, S32 channel)
+{
+    if (!hasStateWindow() || channel < 0 || channel >= gGLManager.mNumTextureImageUnits) return false;
+
+    static LLStaticHashedString field_state_map("ssFieldStateMap");
+
+    gGL.getTexUnit(channel)->activate();
+    gGL.getTexUnit(channel)->bindManual(LLTexUnit::TT_TEXTURE, mWindowStateTex);
+    shader.uniform1i(field_state_map, channel);
+
+    return true;
+}
+
+// Binds the cover window texture (the world field's enclosure spectrum).
+bool SSSurfaceField::bindCoverForShader(LLGLSLShader& shader, S32 channel)
+{
+    if (!hasCoverWindow() || channel < 0 || channel >= gGLManager.mNumTextureImageUnits) return false;
+
+    static LLStaticHashedString field_cover_map("ssFieldCoverMap");
+
+    gGL.getTexUnit(channel)->activate();
+    gGL.getTexUnit(channel)->bindManual(LLTexUnit::TT_TEXTURE, mWindowCoverTex);
+    shader.uniform1i(field_cover_map, channel);
+
+    return true;
+}
+
+// Uploads the resolved liquid/deposit looks and the plain weather scalars every surface pass shares (doc sec 2/3).
+void SSSurfaceField::bindLooksForShader(LLGLSLShader& shader) const
+{
+    static LLStaticHashedString liquid_look_u("ssLiquidLook");
+    static LLStaticHashedString liquid_look2_u("ssLiquidLook2");
+    static LLStaticHashedString deposit_look_u("ssDepositLook");
+    static LLStaticHashedString deposit_look2_u("ssDepositLook2");
+    static LLStaticHashedString intensity_u("ssSurfaceIntensity");
+    static LLStaticHashedString temp_u("ssSurfaceTempC");
+    static LLStaticHashedString drops_u("ssSurfaceDrops");
+    static LLStaticHashedString drop_scale_u("ssSurfaceDropScale");
+    static LLStaticHashedString ice_on_u("ssSurfaceIceOn");
+    static LLStaticHashedString frost_on_u("ssSurfaceFrostOn");
+    static LLStaticHashedString frost_strength_u("ssSurfaceFrostStrength");
+    static LLStaticHashedString debug_u("ssSurfaceDebug");
+    static LLStaticHashedString wind_u("ssSurfaceWind");
+    static LLStaticHashedString time_u("ssTime");
+
+    const SSSurfaceState::LiquidLook liquid = liquidLook();
+    const SSSurfaceState::DepositLook deposit = depositLook();
+
+    shader.uniform4f(liquid_look_u, liquid.mTint.r, liquid.mTint.g, liquid.mTint.b, liquid.mOpacity);
+    shader.uniform2f(liquid_look2_u, liquid.mStain, liquid.mMetal);
+    shader.uniform4f(deposit_look_u, deposit.mTint.r, deposit.mTint.g, deposit.mTint.b, deposit.mSparkle);
+    shader.uniform4f(deposit_look2_u, deposit.mTranslucency, deposit.mDepthFull, deposit.mWash, deposit.mMelts);
+
+    SSAtmoMagic* atmo = SSAtmoMagic::getInstance();
+    // <SS:Nexii> Liquid precipitation intensity only - 0 while a granular type falls (doc sec 3's ssSurfaceIntensity).
+    const bool liquidFalling = atmo->hasWeather() && !atmo->preset().isGranular();
+    shader.uniform1f(intensity_u, liquidFalling ? llclamp(atmo->precipitation(), 0.f, 1.f) : 0.f);
+    shader.uniform1f(temp_u, atmo->temperatureC());
+
+    static LLCachedControl<F32> drops(gSavedSettings, "SSAtmoSurfaceDrops", 1.f);
+    static LLCachedControl<F32> drop_scale(gSavedSettings, "SSAtmoSurfaceDropScale", 1.f);
+    static LLCachedControl<bool> ice_on(gSavedSettings, "SSAtmoSurfaceIce", true);
+    static LLCachedControl<bool> frost_on(gSavedSettings, "SSAtmoSurfaceFrost", true);
+    static LLCachedControl<F32> frost_strength(gSavedSettings, "SSAtmoSurfaceFrostStrength", 1.f);
+    static LLCachedControl<S32> debug(gSavedSettings, "SSAtmoSurfaceDebug", 0);
+
+    shader.uniform1f(drops_u, llclamp((F32)drops, 0.f, 1.f));
+    shader.uniform1f(drop_scale_u, llmax((F32)drop_scale, 0.f));
+    shader.uniform1f(ice_on_u, ice_on ? 1.f : 0.f);
+    shader.uniform1f(frost_on_u, frost_on ? 1.f : 0.f);
+    shader.uniform1f(frost_strength_u, llmax((F32)frost_strength, 0.f));
+    shader.uniform1f(debug_u, (F32)(S32)debug);
+
+    const LLVector3 wind = SSWindFlowMap::getInstance()->sampleGround(LLViewerCamera::getInstance()->getOrigin());
+    shader.uniform3fv(wind_u, 1, wind.mV);
+    shader.uniform1f(time_u, gFrameTimeSeconds);
+}
+
+// The analytic ring's clock rate, from the preset's own landing ring and the taste controls that scale it (doc sec 6).
+F32 SSSurfaceField::ringRate() const
+{
+    // <SS:Nexii> The same two controls spawnRipple builds its landing quad from, read the same way (clamped to the same bands), so the analytic ring and the quad it stands in for cannot drift apart: the quad's radius is mRippleSize * scale and it crosses it in mRippleLife / speed seconds. The per-impact strength jitter that also scales a quad is deliberately NOT in here - one rate serves the whole buffer, and a ring that ran at its own speed would need its own uniform per ring.
+    static LLCachedControl<F32> ripple_scale_setting(gSavedSettings, "SSAtmoRippleScale", 1.f);
+    static LLCachedControl<F32> ripple_speed_setting(gSavedSettings, "SSAtmoRippleSpeed", 2.f);
+    const F32 ripple_scale = llclamp((F32)ripple_scale_setting, 0.25f, 3.f);
+    const F32 ripple_speed = llclamp((F32)ripple_speed_setting, 0.5f, 5.f);
+
+    const SSPrecipPreset& preset = SSAtmoMagic::getInstance()->preset();
+    if (!preset.makesRipples()) return 1.f;
+
+    return SSSurfaceState::ringRate(preset.mRippleSize * ripple_scale, preset.mRippleLife / ripple_speed);
+}
+
+// Uploads the live impact ring buffer (doc sec 6) - expire() already ran this frame in idle().
+void SSSurfaceField::bindRingsForShader(LLGLSLShader& shader) const
+{
+    static LLStaticHashedString ring_count_u("ssRingCount");
+    static LLStaticHashedString rings_u("ssRings");
+    static LLStaticHashedString rings_z_u("ssRingZ");
+    static LLStaticHashedString ring_rate_u("ssRingRate");
+
+    shader.uniform1f(ring_rate_u, ringRate());
+
+    // <SS:Nexii> SSAtmoSurfaceRings gates the shader upload only - the buffer itself keeps recording and expiring regardless, so toggling this back on picks up whatever is still live rather than a cold buffer.
+    static LLCachedControl<bool> rings_on(gSavedSettings, "SSAtmoSurfaceRings", true);
+    const S32 count = rings_on ? mRings.mCount : 0;
+    shader.uniform1i(ring_count_u, count);
+    if (count <= 0) return;
+
+    F32 rings[SSSurfaceState::RING_MAX * 4];
+    F32 z[SSSurfaceState::RING_MAX];
+    for (S32 i = 0; i < count; ++i)
+    {
+        const SSSurfaceState::Ring& r = mRings.mRings[i];
+        rings[i * 4]     = r.mX;
+        rings[i * 4 + 1] = r.mY;
+        rings[i * 4 + 2] = r.mBirth;
+        rings[i * 4 + 3] = r.mStrength;
+        z[i] = r.mZ;
+    }
+    shader.uniform4fv(rings_u, count, rings);
+    shader.uniform1fv(rings_z_u, count, z);
+}
+
+// Records an impact into the ring buffer if it fell within RING_NEAR_M of the camera - farther ones stay ripple quads (doc sec 6).
+void SSSurfaceField::noteImpact(const LLVector3& pos_agent, F32 strength)
+{
+    const LLVector3 cam = LLViewerCamera::getInstance()->getOrigin();
+    const F32 dx = pos_agent.mV[VX] - cam.mV[VX];
+    const F32 dy = pos_agent.mV[VY] - cam.mV[VY];
+    const F32 dz = pos_agent.mV[VZ] - cam.mV[VZ];
+    if (dx * dx + dy * dy + dz * dz > SSSurfaceState::RING_NEAR_M * SSSurfaceState::RING_NEAR_M) return;
+
+    SSSurfaceState::Ring ring;
+    ring.mX = pos_agent.mV[VX];
+    ring.mY = pos_agent.mV[VY];
+    ring.mZ = pos_agent.mV[VZ];
+    ring.mBirth = gFrameTimeSeconds;
+    ring.mStrength = llclamp(strength, 0.f, 1.f);
+    mRings.push(ring);
 }
 
 // Frees the GL objects.
@@ -1257,6 +2122,16 @@ void SSSurfaceField::releaseGL()
     {
         glDeleteTextures(1, &mWindowFlowTex);
         mWindowFlowTex = 0;
+    }
+    if (mWindowStateTex)
+    {
+        glDeleteTextures(1, &mWindowStateTex);
+        mWindowStateTex = 0;
+    }
+    if (mWindowCoverTex)
+    {
+        glDeleteTextures(1, &mWindowCoverTex);
+        mWindowCoverTex = 0;
     }
     mWindowRes = 0;
     mWindowValid = false;
@@ -1322,6 +2197,19 @@ void SSSurfaceField::renderWetPass()
                               << "m" << LL_ENDL;
     }
 
+    // <SS:Nexii> Probe BEFORE the draw: an error already pending here was raised somewhere earlier in the
+    // frame, and pinning that boundary is what narrows the hunt for the raiser (observed 2026-09-11: a
+    // per-frame GL_INVALID_OPERATION began the second an Atmo environment unloaded and the world fell
+    // back to stock EEP).
+    {
+        const GLenum pending = glGetError();
+        if (pending != GL_NO_ERROR)
+        {
+            LL_WARNS_ONCE("AtmoMagic") << "GL error 0x" << std::hex << (U32)pending << std::dec
+                                       << " already pending BEFORE the wetness draw" << LL_ENDL;
+        }
+    }
+
     LL_PROFILE_GPU_ZONE("atmo surface wetness");
 
     mScratch.bindTarget();
@@ -1330,6 +2218,12 @@ void SSSurfaceField::renderWetPass()
 
     const S32 field_channel = gSSSurfaceWetProgram.mActiveTextureChannels;
     bindForShader(gSSSurfaceWetProgram, field_channel);
+    // <SS:Nexii> Flow and state now bind on every surface program, not just the normal pass - the wet pass needs the wind carry channel (doc sec 8) and the state window for ice/frost/deposit matte (doc sec 3/4/7).
+    const S32 wet_flow_channel = field_channel + 1;
+    bindFlowForShader(gSSSurfaceWetProgram, wet_flow_channel);
+    const S32 wet_state_channel = wet_flow_channel + 1;
+    bindStateForShader(gSSSurfaceWetProgram, wet_state_channel);
+    bindLooksForShader(gSSSurfaceWetProgram);
 
     SSAvatarWet::getInstance()->bindForShader(gSSSurfaceWetProgram);
 
@@ -1431,8 +2325,8 @@ void SSSurfaceField::renderWetPass()
 
     static LLStaticHashedString wet_cos_full("ssWetFlattenCosFull");
     static LLStaticHashedString wet_cos_zero("ssWetFlattenCosZero");
-    static LLCachedControl<F32> wet_angle_full(gSavedSettings, "SSAtmoWetFlattenAngleFull", 25.f);
-    static LLCachedControl<F32> wet_angle_zero(gSavedSettings, "SSAtmoWetFlattenAngleZero", 65.f);
+    static LLCachedControl<F32> wet_angle_full(gSavedSettings, "SSAtmoWetFlattenAngleFull", 10.f);
+    static LLCachedControl<F32> wet_angle_zero(gSavedSettings, "SSAtmoWetFlattenAngleZero", 30.f);
     gSSSurfaceWetProgram.uniform1f(wet_cos_full,
         cosf(llclamp((F32)wet_angle_full, 0.f, 89.f) * DEG_TO_RAD));
     gSSSurfaceWetProgram.uniform1f(wet_cos_zero,
@@ -1454,14 +2348,27 @@ void SSSurfaceField::renderWetPass()
     }
 
     gGL.getTexUnit(field_channel)->unbind(LLTexUnit::TT_TEXTURE);
+    gGL.getTexUnit(wet_flow_channel)->unbind(LLTexUnit::TT_TEXTURE);
+    gGL.getTexUnit(wet_state_channel)->unbind(LLTexUnit::TT_TEXTURE);
     gPipeline.unbindDeferredShader(gSSSurfaceWetProgram);
 
     {
-        const GLenum err = glGetError();
-        if (err != GL_NO_ERROR)
+        // <SS:Nexii> Drain the whole queue rather than popping one: several errors can stack within a frame,
+        // and a strand left behind reads as "already pending" to every later checker (the wind flow's
+        // contextLooksHealthy saw exactly that).
+        U32 drained = 0;
+        GLenum first = GL_NO_ERROR;
+        GLenum err;
+        while ((err = glGetError()) != GL_NO_ERROR)
         {
-            LL_WARNS("AtmoMagic") << "GL error 0x" << std::hex << (U32)err << std::dec
-                                  << " after the wetness draw" << LL_ENDL;
+            if (!drained) first = err;
+            ++drained;
+        }
+        if (drained)
+        {
+            LL_WARNS("AtmoMagic") << "GL error 0x" << std::hex << (U32)first << std::dec
+                                  << " after the wetness draw (" << drained
+                                  << (drained == 1 ? " error" : " errors") << " this frame)" << LL_ENDL;
         }
     }
 
@@ -1531,7 +2438,8 @@ void SSSurfaceField::renderWetPass()
 
         static LLStaticHashedString wave_map("ssWaveMap");
         bool have_wave = false;
-        if (wave_tex)
+        // <SS:Nexii> Same out-of-bounds guard as bindForShader/bindFlowForShader/bindStateForShader - this bind is manual (no field window to gate it) so it needs its own channel-budget check.
+        if (wave_tex && wave_channel < gGLManager.mNumTextureImageUnits)
         {
             wave_tex->addTextureStats(1024.f * 1024.f);
             gGL.getTexUnit(wave_channel)->activate();
@@ -1539,6 +2447,15 @@ void SSSurfaceField::renderWetPass()
             gSSSurfaceNormalProgram.uniform1i(wave_map, wave_channel);
             have_wave = true;
         }
+
+        // <SS:Nexii> State after the last texture slot already in use here (field, flow, wave) - the normal pass also needs looks (ice freeze, deposit soften) and the ring buffer (doc sec 3/6/7).
+        const S32 normal_state_channel = wave_channel + 1;
+        bindStateForShader(gSSSurfaceNormalProgram, normal_state_channel);
+        bindLooksForShader(gSSSurfaceNormalProgram);
+        bindRingsForShader(gSSSurfaceNormalProgram);
+
+        // <SS:Nexii> The capsules are the only "is this a person" answer a screen-space pass has (ssavatarwet.h): the field's height rejection sits 1.5 cells up - 3 m at the window's 2 m cell, above a body's reach - so without them the normal pass stamps the ground's drop lattices on whoever stands there. Same bind the wet pass gets; uniforms the pass does not declare are skipped silently.
+        SSAvatarWet::getInstance()->bindForShader(gSSSurfaceNormalProgram);
 
         static LLStaticHashedString norm_inv_view("ssFieldInvView");
         static LLStaticHashedString norm_wet_str("ssWetStrength");
@@ -1558,8 +2475,8 @@ void SSSurfaceField::renderWetPass()
         static LLCachedControl<F32> flatten_amount(gSavedSettings, "SSAtmoWetNormalFlatten", 0.6f);
         gSSSurfaceNormalProgram.uniform1f(norm_flatten, llclamp((F32)flatten_amount, 0.f, 1.f));
 
-        static LLCachedControl<F32> flatten_angle_full(gSavedSettings, "SSAtmoWetFlattenAngleFull", 25.f);
-        static LLCachedControl<F32> flatten_angle_zero(gSavedSettings, "SSAtmoWetFlattenAngleZero", 65.f);
+        static LLCachedControl<F32> flatten_angle_full(gSavedSettings, "SSAtmoWetFlattenAngleFull", 10.f);
+        static LLCachedControl<F32> flatten_angle_zero(gSavedSettings, "SSAtmoWetFlattenAngleZero", 30.f);
         const F32 cos_full = cosf(llclamp((F32)flatten_angle_full, 0.f, 89.f) * DEG_TO_RAD);
         const F32 cos_zero = cosf(llclamp((F32)flatten_angle_zero, 1.f, 90.f) * DEG_TO_RAD);
         gSSSurfaceNormalProgram.uniform1f(norm_cos_full, cos_full);
@@ -1605,6 +2522,7 @@ void SSSurfaceField::renderWetPass()
         gGL.getTexUnit(normal_field_channel)->unbind(LLTexUnit::TT_TEXTURE);
         gGL.getTexUnit(flow_field_channel)->unbind(LLTexUnit::TT_TEXTURE);
         if (have_wave) gGL.getTexUnit(wave_channel)->unbind(LLTexUnit::TT_TEXTURE);
+        gGL.getTexUnit(normal_state_channel)->unbind(LLTexUnit::TT_TEXTURE);
         gPipeline.unbindDeferredShader(gSSSurfaceNormalProgram);
 
         {
@@ -1752,19 +2670,20 @@ void SSSurfaceField::renderWetPass()
     gbuffer->flush();
 }
 
-// <SS:Nexii> Snow surfaces. The same screen-space shape as the wet pass - field window in, scratch target, commit back into the gbuffer - but writing the diffuse attachment: the snow channel the field has always carried becomes visible albedo. Runs after the wet pass so it covers it; the gloss interplay (wet ground going matte under snow) is the commit's next target, not this pass's job yet.
-void SSSurfaceField::renderSnowPass()
+// <SS:Nexii> Was renderSnowPass(): now the albedo pass (doc sec 3) - the same screen-space shape as the wet pass - field window in, scratch target, commit back into the gbuffer - but writing the diffuse attachment. Gated on any of wet/snow/ice/frost/stain having accumulated rather than snow depth alone, since ice glaze and frost and a stain all need this pass with nothing settled in mSnow. Program renamed gSSSurfaceAlbedoProgram elsewhere in the shader manager (out of Slice A's file scope) to match. Runs after the wet pass so it covers it.
+void SSSurfaceField::renderAlbedoPass()
 {
     if (gCubeSnapshot) return;
     if (!hasWindow()) return;
-    if (!gSSSurfaceSnowProgram.isComplete()) return;
+    if (!gSSSurfaceAlbedoProgram.isComplete()) return;
     if (!gSSSurfaceCommitProgram.isComplete()) return;
 
+    // <SS:Nexii> AUDIT (finding 11): SSAtmoSnowSurfaces/Strength used to early-return the WHOLE pass, which also killed wet darkening, ice, frost and stain the moment a user turned "snow surfaces" off - it now only scales the deposit layer itself (ssSnowStrength, read in the shader's item (g)); the pass's own gate stays the peak check below.
     static LLCachedControl<F32> strength(gSavedSettings, "SSAtmoSnowSurfaceStrength", 1.f);
-    const F32 snow_strength = llclamp((F32)strength, 0.f, 2.f);
     static LLCachedControl<bool> snow_on(gSavedSettings, "SSAtmoSnowSurfaces", true);
-    if (snow_strength <= 0.f || !snow_on) return;
-    if (peakSnow() <= 0.f) return;
+    const F32 snow_strength = snow_on ? llclamp((F32)strength, 0.f, 2.f) : 0.f;
+    if (peakWet() <= 0.f && peakSnow() <= 0.f && peakIce() <= 0.f
+        && peakFrost() <= 0.f && peakStain() <= 0.f) return;
 
     LLRenderTarget* gbuffer = &gPipeline.mRT->deferredScreen;
     const U32 w = gbuffer->getWidth();
@@ -1777,29 +2696,56 @@ void SSSurfaceField::renderSnowPass()
         if (!mScratch.allocate(w, h, GL_RGBA, false)) return;
     }
 
-    LL_PROFILE_GPU_ZONE("atmo surface snow");
+    LL_PROFILE_GPU_ZONE("atmo surface albedo");
 
     mScratch.bindTarget();
 
-    gPipeline.bindDeferredShader(gSSSurfaceSnowProgram);
+    gPipeline.bindDeferredShader(gSSSurfaceAlbedoProgram);
 
-    const S32 field_channel = gSSSurfaceSnowProgram.mActiveTextureChannels;
-    bindForShader(gSSSurfaceSnowProgram, field_channel);
+    const S32 field_channel = gSSSurfaceAlbedoProgram.mActiveTextureChannels;
+    bindForShader(gSSSurfaceAlbedoProgram, field_channel);
+    // <SS:Nexii> Flow (wind carry, doc sec 8) and state bind here too now - the albedo pass paints ice/frost/deposit tint and needs both.
+    const S32 albedo_flow_channel = field_channel + 1;
+    bindFlowForShader(gSSSurfaceAlbedoProgram, albedo_flow_channel);
+    const S32 albedo_state_channel = albedo_flow_channel + 1;
+    bindStateForShader(gSSSurfaceAlbedoProgram, albedo_state_channel);
+    bindLooksForShader(gSSSurfaceAlbedoProgram);
 
     static LLStaticHashedString inv_view("ssFieldInvView");
     static LLStaticHashedString snow_strength_u("ssSnowStrength");
-    static LLStaticHashedString snow_depth_full("ssSnowDepthFull");
-    static LLStaticHashedString snow_sparkle("ssSnowSparkle");
 
     const glm::mat4 inv = glm::inverse(get_current_modelview());
-    gSSSurfaceSnowProgram.uniformMatrix4fv(inv_view, 1, GL_FALSE, glm::value_ptr(inv));
+    gSSSurfaceAlbedoProgram.uniformMatrix4fv(inv_view, 1, GL_FALSE, glm::value_ptr(inv));
 
-    static LLCachedControl<F32> depth_full(gSavedSettings, "SSAtmoSnowDepthFull", 0.02f);
-    static LLCachedControl<F32> sparkle(gSavedSettings, "SSAtmoSnowSparkle", 0.6f);
+    gSSSurfaceAlbedoProgram.uniform1f(snow_strength_u, snow_strength);
 
-    gSSSurfaceSnowProgram.uniform1f(snow_strength_u, snow_strength);
-    gSSSurfaceSnowProgram.uniform1f(snow_depth_full, llmax((F32)depth_full, 0.005f));
-    gSSSurfaceSnowProgram.uniform1f(snow_sparkle, llclamp((F32)sparkle, 0.f, 1.f));
+    // <SS:Nexii> AUDIT (finding 10): same settings, same names, as ssSurfaceWetF.glsl's own upload (renderWetPass) - the albedo pass declares these uniforms (doc section 3/4) but nothing was ever binding them for THIS program, so they read as GL's default zero: ssWetFlattenCosZero/Full both 0 made ssSurfaceLevel's smoothstep(0,0,x) undefined, and ssWetPuddleDepthFull 0 made every puddle read as instantly full. [interaction: renderWetPass's own copy of this block]
+    static LLStaticHashedString wet_puddle_depth_u("ssWetPuddleDepthFull");
+    static LLStaticHashedString wet_cos_full_u("ssWetFlattenCosFull");
+    static LLStaticHashedString wet_cos_zero_u("ssWetFlattenCosZero");
+    static LLStaticHashedString mask_amt_u("ssPuddleMaskAmt");
+    static LLStaticHashedString mask_scale_u("ssPuddleMaskScaleM");
+    static LLStaticHashedString mask_anchor_u("ssPuddleMaskAnchor");
+    static LLCachedControl<F32> puddle_depth_full(gSavedSettings, "SSAtmoWetPuddleDepthFull", 0.02f);
+    static LLCachedControl<F32> wet_angle_full(gSavedSettings, "SSAtmoWetFlattenAngleFull", 10.f);
+    static LLCachedControl<F32> wet_angle_zero(gSavedSettings, "SSAtmoWetFlattenAngleZero", 30.f);
+    static LLCachedControl<F32> m_strength(gSavedSettings, "SSAtmoWetPuddleMask", 0.75f);
+    static LLCachedControl<F32> m_scale(gSavedSettings, "SSAtmoWetPuddleMaskScale", 7.f);
+    gSSSurfaceAlbedoProgram.uniform1f(wet_puddle_depth_u, llmax((F32)puddle_depth_full, 0.001f));
+    gSSSurfaceAlbedoProgram.uniform1f(wet_cos_full_u,
+        cosf(llclamp((F32)wet_angle_full, 0.f, 89.f) * DEG_TO_RAD));
+    gSSSurfaceAlbedoProgram.uniform1f(wet_cos_zero_u,
+        cosf(llclamp((F32)wet_angle_zero, 1.f, 90.f) * DEG_TO_RAD));
+    gSSSurfaceAlbedoProgram.uniform1f(mask_amt_u, llclamp((F32)m_strength, 0.f, 1.f));
+    // <SS:Nexii> ssPuddleMaskScaleM is used by ssPuddleMaskNoise inside ssSurfaceStateF.glsl, not by this pass file directly - but uniform locations are resolved against the whole LINKED program, not the file that happened to declare them, so this program's copy still needs its own upload.
+    gSSSurfaceAlbedoProgram.uniform1f(mask_scale_u, llmax((F32)m_scale, 1.f));
+    LLVector3 mask_anchor(0.f, 0.f, 0.f);
+    if (LLViewerRegion* cam_region = LLWorld::getInstance()->getRegionFromPosAgent(
+            LLViewerCamera::getInstance()->getOrigin()))
+    {
+        mask_anchor = cam_region->getOriginAgent();
+    }
+    gSSSurfaceAlbedoProgram.uniform2f(mask_anchor_u, mask_anchor.mV[VX], mask_anchor.mV[VY]);
 
     {
         LLGLDepthTest depth(GL_FALSE);
@@ -1810,7 +2756,9 @@ void SSSurfaceField::renderSnowPass()
     }
 
     gGL.getTexUnit(field_channel)->unbind(LLTexUnit::TT_TEXTURE);
-    gPipeline.unbindDeferredShader(gSSSurfaceSnowProgram);
+    gGL.getTexUnit(albedo_flow_channel)->unbind(LLTexUnit::TT_TEXTURE);
+    gGL.getTexUnit(albedo_state_channel)->unbind(LLTexUnit::TT_TEXTURE);
+    gPipeline.unbindDeferredShader(gSSSurfaceAlbedoProgram);
 
     mScratch.flush();
 
@@ -1956,66 +2904,117 @@ void SSSurfaceField::renderDebug()
 void SSSurfaceField::renderRunoffLips(U32 view, const LLVector3& cam,
                                       F32 radius_sq, F32 budget, bool context_only) const
 {
+    const bool granular = SSAtmoMagic::getInstance()->granularWeather();
+
     for (const auto& entry : mGeometry)
     {
         const Geometry& geom = entry.second;
-        if (!geom.valid() || geom.mEdgeCells.empty()) continue;
+        if (!geom.valid()) continue;
 
         LLViewerRegion* regionp = LLWorld::getInstance()->getRegionFromHandle(entry.first);
         if (!regionp) continue;
 
         const LLVector3 origin = regionp->getOriginAgent();
-        const S32 n = geom.mN;
-        const F32 cell = geom.mCell;
-        const F32 half = cell * 0.35f;
 
         auto field_it = mFields.find(entry.first);
-        const Field* fld = (field_it != mFields.end() && field_it->second.mN == n)
+        const Field* fld = (field_it != mFields.end() && field_it->second.mN == geom.mN)
                                ? &field_it->second : nullptr;
 
-        auto cursor_it = mShedCursor.find(entry.first);
-        const S32 cursor = (cursor_it != mShedCursor.end()) ? cursor_it->second : 0;
-        const S32 lip_count = (S32)geom.mEdgeCells.size();
-
-        gGL.begin(LLRender::TRIANGLES);
-        for (S32 k = 0; k < lip_count; ++k)
+        if (granular)
         {
-            const S32 i = geom.mEdgeCells[(size_t)k];
-            const size_t ui = (size_t)i;
+            // Granular sheds at the lips: the cascade debug is per lip cell.
+            if (geom.mEdgeCells.empty()) continue;
 
-            const F32 cx = origin.mV[VX] + ((F32)(i % n) + 0.5f) * cell;
-            const F32 cy = origin.mV[VY] + ((F32)(i / n) + 0.5f) * cell;
-            const F32 cz = geom.mZ[ui] + 0.05f;
+            const S32 n = geom.mN;
+            const F32 cell = geom.mCell;
+            const F32 half = cell * 0.35f;
+
+            gGL.begin(LLRender::TRIANGLES);
+            for (const S32 i : geom.mEdgeCells)
+            {
+                const size_t ui = (size_t)i;
+
+                const F32 cx = origin.mV[VX] + ((F32)(i % n) + 0.5f) * cell;
+                const F32 cy = origin.mV[VY] + ((F32)(i / n) + 0.5f) * cell;
+                const F32 cz = geom.mZ[ui] + 0.05f;
+
+                F32 r = 0.4f, g = 0.45f, b = 0.5f, a = 0.12f;
+                if (!context_only)
+                {
+                    const F32 store = fld ? fld->mStore[ui] : 0.f;
+                    const F32 outflow = store / SHED_DRAIN_TAU;
+                    const F32 raw_rate = llmin(outflow / SHED_MERGE, SHED_MAX_RATE);
+                    const F32 t = llclamp(raw_rate / SHED_STREAM_MIN, 0.f, 1.f);
+
+                    r = lerp(0.15f, 0.1f, t);
+                    g = lerp(0.3f, 0.7f, t);
+                    b = lerp(0.6f, 0.95f, t);
+                    a = llmax(0.2f + 0.6f * t, (view == 0) ? 0.3f : 0.f);
+                }
+
+                gGL.color4f(r, g, b, a);
+
+                gGL.vertex3f(cx - half, cy - half, cz);
+                gGL.vertex3f(cx + half, cy - half, cz);
+                gGL.vertex3f(cx + half, cy + half, cz);
+
+                gGL.vertex3f(cx - half, cy - half, cz);
+                gGL.vertex3f(cx + half, cy + half, cz);
+                gGL.vertex3f(cx - half, cy + half, cz);
+
+                // An arrowhead out over the edge: the way the water leaves.
+                const F32 ex = geom.mEdgeX[ui], ey = geom.mEdgeY[ui];
+                const F32 px = -ey * half * 0.55f, py = ex * half * 0.55f;
+                const F32 bx = cx + ex * half, by = cy + ey * half;
+                const F32 tx = cx + ex * half * 2.4f, ty = cy + ey * half * 2.4f;
+
+                gGL.vertex3f(bx + px, by + py, cz);
+                gGL.vertex3f(bx - px, by - py, cz);
+                gGL.vertex3f(tx, ty, cz);
+            }
+            gGL.end();
+            continue;
+        }
+
+        const Geometry::Runoff& ro = geom.mRunoff;
+        if (!ro.valid() || ro.mRuns.empty()) continue;
+
+        const F32 cell = ro.mCell;
+
+        gGL.begin(LLRender::LINES);
+        for (const Geometry::Run& run : ro.mRuns)
+        {
+            const LLVector3 centroid(run.mCentroid.mV[VX] + origin.mV[VX],
+                                     run.mCentroid.mV[VY] + origin.mV[VY],
+                                     run.mCentroid.mV[VZ]);
 
             F32 r = 0.4f, g = 0.45f, b = 0.5f, a = 0.12f;
             if (!context_only)
             {
-                const F32 store = fld ? fld->mStore[ui] : 0.f;
-                const F32 outflow = store / SHED_DRAIN_TAU;
-                const F32 raw_rate = llmin(outflow / SHED_MERGE, SHED_MAX_RATE);
-                const F32 stream_drive = llclamp((raw_rate - SHED_STREAM_MIN)
-                                                     / SHED_STREAM_FULL, 0.f, 1.f);
-
                 if (view == 2)
                 {
-                    // The first gate shedRegion applies that still holds
-                    // this lip back - dry, waiting on the visit window,
-                    // beyond the shed radius, starved by the drip budget,
-                    // or actually producing.
+                    // The first gate that still holds this run back - dry,
+                    // beyond the shed radius, starved by the drip budget, or
+                    // actually producing.
+                    F32 store = 0.f;
+                    if (fld)
+                    {
+                        auto store_it = fld->mRunStore.find(run.mKey);
+                        if (store_it != fld->mRunStore.end()) store = store_it->second;
+                    }
+                    const F32 outflow = store / SHED_DRAIN_TAU;
+                    const F32 raw_rate = llmin(outflow / SHED_MERGE, SHED_MAX_RATE);
+                    const F32 stream_drive = llclamp((raw_rate - SHED_STREAM_MIN)
+                                                         / SHED_STREAM_FULL, 0.f, 1.f);
+
                     if (outflow <= 0.01f)
                     {
                         r = 0.35f; g = 0.35f; b = 0.38f; a = 0.15f;
                     }
                     else
                     {
-                        const S32 offset = (k - cursor + lip_count) % lip_count;
-                        const LLVector3 delta(cx - cam.mV[VX], cy - cam.mV[VY],
-                                              cz - cam.mV[VZ]);
-                        if (offset >= SHED_VISIT_PER_FRAME)
-                        {
-                            r = 1.f; g = 0.75f; b = 0.2f; a = 0.5f;
-                        }
-                        else if (delta.magVecSquared() > radius_sq)
+                        const LLVector3 delta = centroid - cam;
+                        if (delta.magVecSquared() > radius_sq)
                         {
                             r = 1.f; g = 0.25f; b = 0.2f; a = 0.5f;
                         }
@@ -2034,47 +3033,78 @@ void SSSurfaceField::renderRunoffLips(U32 view, const LLVector3& cam,
                         }
                     }
                 }
-                else
+                else if (view == 1)
                 {
-                    // Eaves (0) and shed flow (1) share one ramp: dry slate
-                    // filling toward the stream threshold, white once the
-                    // lip is driving a stream. Eaves never disappear, so
-                    // the geometry reads even between rains.
+                    // Water the run holds, ramped the same slate-to-white the
+                    // lips drew: filling toward the stream threshold, white
+                    // once the run is driving a curtain.
+                    F32 store = 0.f;
+                    if (fld)
+                    {
+                        auto store_it = fld->mRunStore.find(run.mKey);
+                        if (store_it != fld->mRunStore.end()) store = store_it->second;
+                    }
+                    const F32 outflow = store / SHED_DRAIN_TAU;
+                    const F32 raw_rate = llmin(outflow / SHED_MERGE, SHED_MAX_RATE);
+                    const F32 stream_drive = llclamp((raw_rate - SHED_STREAM_MIN)
+                                                         / SHED_STREAM_FULL, 0.f, 1.f);
                     const F32 t = llclamp(raw_rate / SHED_STREAM_MIN, 0.f, 1.f);
+
                     r = lerp(lerp(0.15f, 0.1f, t), 1.f, stream_drive);
                     g = lerp(lerp(0.3f, 0.7f, t), 1.f, stream_drive);
                     b = lerp(lerp(0.6f, 0.95f, t), 1.f, stream_drive);
-                    a = llmax(0.2f + 0.6f * t, (view == 0) ? 0.3f : 0.f);
+                    a = llmax(0.2f + 0.6f * t, 0.f);
+                }
+                else
+                {
+                    // The network itself: brightening with the catchment the
+                    // run collects, so a gutter reads as a gutter between
+                    // rains as well as under them.
+                    const F32 t = llclamp(run.mCatch / 64.f, 0.f, 1.f);
+                    r = lerp(0.15f, 0.1f, t);
+                    g = lerp(0.3f, 0.7f, t);
+                    b = lerp(0.6f, 0.95f, t);
+                    a = 0.2f + 0.6f * t;
                 }
             }
 
             gGL.color4f(r, g, b, a);
 
-            gGL.vertex3f(cx - half, cy - half, cz);
-            gGL.vertex3f(cx + half, cy - half, cz);
-            gGL.vertex3f(cx + half, cy + half, cz);
+            // The run as the connected line it is.
+            const size_t members = run.mLips.size();
+            for (size_t k = 0; k + 1 < members; ++k)
+            {
+                const LLVector3& a_lip = run.mLips[k];
+                const LLVector3& b_lip = run.mLips[k + 1];
+                gGL.vertex3f(a_lip.mV[VX] + origin.mV[VX], a_lip.mV[VY] + origin.mV[VY],
+                             a_lip.mV[VZ] + 0.05f);
+                gGL.vertex3f(b_lip.mV[VX] + origin.mV[VX], b_lip.mV[VY] + origin.mV[VY],
+                             b_lip.mV[VZ] + 0.05f);
+            }
 
-            gGL.vertex3f(cx - half, cy - half, cz);
-            gGL.vertex3f(cx + half, cy + half, cz);
-            gGL.vertex3f(cx - half, cy + half, cz);
-
-            // An arrowhead out over the edge: the way the water leaves.
-            const F32 ex = geom.mEdgeX[ui], ey = geom.mEdgeY[ui];
+            // An arrowhead out over the edge at the run's middle: the way the
+            // water leaves.
+            const F32 ex = run.mOut.mV[VX], ey = run.mOut.mV[VY];
+            const F32 half = cell * 0.5f;
             const F32 px = -ey * half * 0.55f, py = ex * half * 0.55f;
-            const F32 bx = cx + ex * half, by = cy + ey * half;
-            const F32 tx = cx + ex * half * 2.4f, ty = cy + ey * half * 2.4f;
+            const F32 bx = centroid.mV[VX] + ex * half, by = centroid.mV[VY] + ey * half;
+            const F32 tx = centroid.mV[VX] + ex * half * 2.4f;
+            const F32 ty = centroid.mV[VY] + ey * half * 2.4f;
+            const F32 tz = centroid.mV[VZ] + 0.05f;
 
-            gGL.vertex3f(bx + px, by + py, cz);
-            gGL.vertex3f(bx - px, by - py, cz);
-            gGL.vertex3f(tx, ty, cz);
+            gGL.vertex3f(bx + px, by + py, tz);
+            gGL.vertex3f(bx - px, by - py, tz);
+            gGL.vertex3f(tx, ty, tz);
         }
         gGL.end();
     }
 }
 
 // The runoff overlay: one stage of the shed per SSAtmoRunoffDebugView - the
-// eaves, the water they hold, the gates that quiet them, or the drips and
-// gutter streams they have actually spawned.
+// runs and the catchment they collect, the water they hold, the gates that
+// quiet them, or the drips and gutter streams they have actually spawned.
+// Granular weather sheds at the lips instead, so every view draws the per-lip
+// cascade surface there.
 void SSSurfaceField::renderRunoffDebug()
 {
     static LLCachedControl<U32> view_setting(gSavedSettings, "SSAtmoRunoffDebugView", 0);

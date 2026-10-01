@@ -192,7 +192,7 @@
      height="14"
      width="110"
      name="cloud_coverage_label"
-     tool_tip="Multiplies the coverage moisture derives, which fills fast then saturates. 1 is the meteorological answer; below it the sky keeps holes a wet cube would have closed, above it fills in early"
+     tool_tip="Multiplies the coverage moisture derives, which fills fast then saturates. 1 is the meteorological answer; below it the sky keeps holes a wet cube would have closed, above it fills in early. With Auto on, multiplies the derived coverage; 1 = as derived"
      font="SansSerifSmall">
         Coverage Scale
     </text>
@@ -204,7 +204,7 @@
      height="18"
      right="-174"
      name="cloud_coverage_slider"
-     tool_tip="Multiplies the coverage moisture derives, which fills fast then saturates. 1 is the meteorological answer; below it the sky keeps holes a wet cube would have closed, above it fills in early"
+     tool_tip="Multiplies the coverage moisture derives, which fills fast then saturates. 1 is the meteorological answer; below it the sky keeps holes a wet cube would have closed, above it fills in early. With Auto on, multiplies the derived coverage; 1 = as derived"
      show_text="false"
      min_val="0"
      max_val="2"
@@ -219,7 +219,7 @@
      width="70"
      label_width="0"
      name="cloud_coverage_value_spinner"
-     tool_tip="Multiplies the coverage moisture derives, which fills fast then saturates. 1 is the meteorological answer; below it the sky keeps holes a wet cube would have closed, above it fills in early"
+     tool_tip="Multiplies the coverage moisture derives, which fills fast then saturates. 1 is the meteorological answer; below it the sky keeps holes a wet cube would have closed, above it fills in early. With Auto on, multiplies the derived coverage; 1 = as derived"
      min_val="0"
      max_val="2"
      increment="0.01"

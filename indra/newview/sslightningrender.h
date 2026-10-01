@@ -49,6 +49,9 @@ public:
     // Drops the pass's vertex buffer (shader reload, GL teardown); it is rebuilt lazily on the next draw.
     void releaseGL();
 
+    // GL teardown: releaseGL plus the bolt texture reference.
+    void shutdownGL();
+
     struct DrawStats
     {
         bool mShaderOk = false;

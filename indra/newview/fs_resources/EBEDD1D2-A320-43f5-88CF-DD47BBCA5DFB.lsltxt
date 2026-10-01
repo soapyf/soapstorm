@@ -7,7 +7,7 @@
 //
 
 // Bridge platform
-string BRIDGE_VERSION = "2.33"; // This should match fslslbridge.cpp
+string BRIDGE_VERSION = "2.35"; // This should match fslslbridge.cpp
 string gLatestURL;
 integer gViewerIsFirestorm;
 integer gTryHandshakeOnce = TRUE;
@@ -679,11 +679,13 @@ default
                 // <SS:Nexii> Fetch notecard contents. This is a synchronous operation, so it will block the script until the notecard is fully loaded or a timeout occurs.
                 llResetTime();
                 string notecardUUID = llList2String(commandList, 1);
+                llGetNotecardLine(notecardUUID, 0); // Queue sim to download it
                 string notecard;
                 integer line = 0;
+                string result = NAK;
                 do
                 {
-                    string result = llGetNotecardLineSync(notecardUUID, line);
+                    result = llGetNotecardLineSync(notecardUUID, line);
                     if(result == NAK)
                     {
                         llSleep(4/45.); // Wait for notecard to load
@@ -707,8 +709,6 @@ default
                         {
                             llHTTPResponse(httpReqID, 200, "<llsd><string>" + notecard + "</string></llsd>");
                         }
-                        
-                        notecard = "";
                     }
 
                     else
@@ -717,7 +717,9 @@ default
                         ++line;
                     }
                 }
-                while(notecard);
+                while(result != EOF); // <SS:Nexii> a leading NAK (cold asset) left notecard empty, so while(notecard) exited silently with no reply at all
+                
+                return;
             }
 
             else if (cmd == "RelockMoveLockAfterMovement")
@@ -754,6 +756,8 @@ default
                 // If bridge doesn't receive "URL Confirmed" message as a reply to handshake it'll automatically detach after next region change anyway
                 detachBridge();
             }
+
+            else if (cmd == "GetTrackedAgents") return;
 
             // Acknowledgment of receipt for all commands, which are not sending back HTTP response for FSLSLBridgeRequestResponder
             llHTTPResponse(httpReqID, 200, "<llsd><string>ok</string></llsd>");

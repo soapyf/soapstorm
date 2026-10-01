@@ -34,7 +34,7 @@
      left="0"
      top="0"
        width="406"
-       height="810"
+       height="1100"
        background_visible="false">
 
     <!-- <SS:Nexii> Snow: the layer enable and master dial for quick toggling while tuning. The snow debug views moved to the Atmo Magic Debug floater. -->
@@ -96,6 +96,212 @@
       name="D_whiteout_strength" label="D"
       tool_tip="Reset to the default value">
         <button.commit_callback function="ResetControl" parameter="SSAtmoWhiteoutStrength" />
+    </button>
+
+    <!-- <SS:Nexii> Height fog layer: ground/precip dials, rows copied from the whiteout markup above -->
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="106"
+      name="T_heightfog_ground"
+      tool_tip="Master dial on the ground fog term of the height fog layer; 0 removes it entirely">
+        Ground fog:
+    </text>
+    <slider_bar
+      control_name="SSAtmoHeightFogGround" name="SB_heightfog_ground"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0" max_val="2" increment="0.05"
+      tool_tip="Master dial on the ground fog term of the height fog layer; 0 removes it entirely" />
+    <spinner
+      control_name="SSAtmoHeightFogGround" name="S_heightfog_ground"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="2" increment="0.05" decimal_digits="2"
+      tool_tip="Master dial on the ground fog term of the height fog layer; 0 removes it entirely" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_heightfog_ground" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoHeightFogGround" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_heightfog_precip"
+      tool_tip="Master dial on the precipitation veil term of the height fog layer; 0 removes it entirely">
+        Rain veil:
+    </text>
+    <slider_bar
+      control_name="SSAtmoHeightFogPrecip" name="SB_heightfog_precip"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0" max_val="2" increment="0.05"
+      tool_tip="Master dial on the precipitation veil term of the height fog layer; 0 removes it entirely" />
+    <spinner
+      control_name="SSAtmoHeightFogPrecip" name="S_heightfog_precip"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="2" increment="0.05" decimal_digits="2"
+      tool_tip="Master dial on the precipitation veil term of the height fog layer; 0 removes it entirely" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_heightfog_precip" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoHeightFogPrecip" />
+    </button>
+
+    <!-- <SS:Nexii> Screen fx: heat shimmer and lens drops dials, rows copied from the whiteout markup above -->
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="8" height="16" width="106"
+      name="T_heat_shimmer"
+      tool_tip="Master dial on the heat-shimmer post pass' mirage strength; 0 removes it entirely">
+        Heat shimmer:
+    </text>
+    <slider_bar
+      control_name="SSAtmoHeatShimmerStrength" name="SB_heat_shimmer"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0" max_val="3" increment="0.05"
+      tool_tip="Master dial on the heat-shimmer post pass' mirage strength; 0 removes it entirely" />
+    <spinner
+      control_name="SSAtmoHeatShimmerStrength" name="S_heat_shimmer"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="3" increment="0.05" decimal_digits="2"
+      tool_tip="Master dial on the heat-shimmer post pass' mirage strength; 0 removes it entirely" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_heat_shimmer" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoHeatShimmerStrength" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_lens_drops"
+      tool_tip="Master dial on the lens drops post pass' size/intensity; 0 removes them entirely">
+        Lens drops:
+    </text>
+    <slider_bar
+      control_name="SSAtmoLensDropsStrength" name="SB_lens_drops"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0" max_val="2" increment="0.05"
+      tool_tip="Master dial on the lens drops post pass' size/intensity; 0 removes them entirely" />
+    <spinner
+      control_name="SSAtmoLensDropsStrength" name="S_lens_drops"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="2" increment="0.05" decimal_digits="2"
+      tool_tip="Master dial on the lens drops post pass' size/intensity; 0 removes them entirely" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_lens_drops" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoLensDropsStrength" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_lens_fog"
+      tool_tip="Master dial on the lens drops post pass' condensation fog; 0 removes it entirely">
+        Lens fog:
+    </text>
+    <slider_bar
+      control_name="SSAtmoLensCondensation" name="SB_lens_fog"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0" max_val="2" increment="0.05"
+      tool_tip="Master dial on the lens drops post pass' condensation fog; 0 removes it entirely" />
+    <spinner
+      control_name="SSAtmoLensCondensation" name="S_lens_fog"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="2" increment="0.05" decimal_digits="2"
+      tool_tip="Master dial on the lens drops post pass' condensation fog; 0 removes it entirely" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_lens_fog" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoLensCondensation" />
+    </button>
+
+    <!-- <SS:Nexii> Surface: per-fragment drop/drip/frost dials from doc/atmo_magic_surface_weather.md sec 13, rows copied from the whiteout markup above -->
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="16" height="16" width="106"
+      name="T_surface_drops"
+      tool_tip="Master dial on rain drops and drips drawn on wet surfaces; 0 removes them entirely">
+        Drops:
+    </text>
+    <slider_bar
+      control_name="SSAtmoSurfaceDrops" name="SB_surface_drops"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0" max_val="2" increment="0.05"
+      tool_tip="Master dial on rain drops and drips drawn on wet surfaces; 0 removes them entirely" />
+    <spinner
+      control_name="SSAtmoSurfaceDrops" name="S_surface_drops"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="2" increment="0.05" decimal_digits="2"
+      tool_tip="Master dial on rain drops and drips drawn on wet surfaces; 0 removes them entirely" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_surface_drops" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoSurfaceDrops" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_surface_drop_scale"
+      tool_tip="Scale of the per-fragment drop and drip lattice - larger drops, fewer of them">
+        Drop size:
+    </text>
+    <slider_bar
+      control_name="SSAtmoSurfaceDropScale" name="SB_surface_drop_scale"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0.25" max_val="3" increment="0.05"
+      tool_tip="Scale of the per-fragment drop and drip lattice - larger drops, fewer of them" />
+    <spinner
+      control_name="SSAtmoSurfaceDropScale" name="S_surface_drop_scale"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0.25" max_val="3" increment="0.05" decimal_digits="2"
+      tool_tip="Scale of the per-fragment drop and drip lattice - larger drops, fewer of them" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_surface_drop_scale" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoSurfaceDropScale" />
+    </button>
+    <text
+      follows="left|top" layout="topleft"
+      left="12" top_pad="6" height="16" width="106"
+      name="T_surface_frost_strength"
+      tool_tip="Strength multiplier on the hoar frost look - lift, grain and glint; 0 removes it entirely">
+        Frost:
+    </text>
+    <slider_bar
+      control_name="SSAtmoSurfaceFrostStrength" name="SB_surface_frost_strength"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="16" width="160" min_val="0" max_val="2" increment="0.05"
+      tool_tip="Strength multiplier on the hoar frost look - lift, grain and glint; 0 removes it entirely" />
+    <spinner
+      control_name="SSAtmoSurfaceFrostStrength" name="S_surface_frost_strength"
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="-2" height="20" width="62"
+      label_width="0" min_val="0" max_val="2" increment="0.05" decimal_digits="2"
+      tool_tip="Strength multiplier on the hoar frost look - lift, grain and glint; 0 removes it entirely" />
+    <button
+      follows="left|top" layout="topleft"
+      left_pad="4" top_delta="0" height="20" width="24"
+      name="D_surface_frost_strength" label="D"
+      tool_tip="Reset to the default value">
+        <button.commit_callback function="ResetControl" parameter="SSAtmoSurfaceFrostStrength" />
     </button>
 
 

@@ -268,7 +268,7 @@ private:
     void fetchObjectCostsCoro(std::string url, uuid_set_t staleObjects);
 
     static void reportPhysicsFlagFailure(LLSD &obejectList);
-    void fetchPhisicsFlagsCoro(std::string url);
+    void fetchPhisicsFlagsCoro(std::string url, LLSD idList);
 
     // <FS:Ansariel> FIRE-20288: Option to render friends only
     bool isNonFriendDerendered(const LLUUID& id, LLPCode pcode);

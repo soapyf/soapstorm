@@ -66,7 +66,8 @@ public:
     typedef std::function<void(const LLSD &)> Callback_t;
 
     bool lslToViewer(std::string_view message, const LLUUID& fromID, const LLUUID& ownerID);
-    bool viewerToLSL(std::string_view message, Callback_t = nullptr);
+    // <SS:Nexii> The failure callback used to be hardwired to the log-only FSLSLBridgeRequest_Failure, so a non-2xx reply (the bridge script answers 404 when a cold notecard read times out) never reached the caller and any request-scoped state the caller latched stayed latched for the session; an optional second callback lets a caller learn about the failure, and nullptr keeps every existing caller on exactly the old log-only behaviour. </SS:Nexii>
+    bool viewerToLSL(std::string_view message, Callback_t = nullptr, Callback_t aFailureCallback = nullptr);
 
     bool updateBoolSettingValue(const std::string& msgVal);
     bool updateBoolSettingValue(const std::string& msgVal, bool contentVal);

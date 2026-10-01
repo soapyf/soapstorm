@@ -28,6 +28,14 @@
 
 #include "llsd.h"
 #include "lluuid.h"
+// <SS:Nexii> Landscape records carry a global double position and a placement quaternion,
+// per-face colour and repeats.
+#include "m3math.h"
+#include "v3dmath.h"
+#include "v4color.h"
+#include "v4math.h"
+#include "llvolume.h"       // <SS:Nexii> a landscape part carries its LLVolumeParams: mesh and prim alike
+// </SS:Nexii>
 
 #include <cfloat>
 #include <map>
@@ -39,7 +47,9 @@
 class LLSettingsSky;
 class LLSettingsWater;
 
-const S32 SS_ATMOENV_VERSION = 1;
+// <SS:Nexii> 2: landscape scenery arrays landed in 1.x -> 2 carries the per-track
+// "landscape" key. Older builds hard-reject a v2 document (never silently drop scenery).
+const S32 SS_ATMOENV_VERSION = 2;
 
 const S32 SS_ATMOENV_MIN_TRACKS = 1;
 const S32 SS_ATMOENV_MAX_TRACKS = 8;
@@ -62,6 +72,111 @@ const F32 SS_ATMOENV_UDECK_BASE_MIN = -10000.f;
 const F32 SS_ATMOENV_UDECK_BASE_MAX = 10000.f;
 
 const S32 SS_ATMOENV_PREVIEW_STEPS = 100;
+
+// <SS:Nexii> Landscape caps - a notecard-budget decision, not a code limit. Worst case per
+// record is ~4.5 KB of pretty XML (a 40-face mesh fully authored); 8 per track and 12 per
+// asset keep even that pathological case under the 64 KiB notecard ceiling, and a typical
+// sparse record (2-8 faces) is 0.3-1.5 KB. Enforced at add time in the landscape UI, surfaced
+// as a friendly error, never a silent truncation. See doc/atmo_landscape/design_synthesis.md.
+const S32 SS_ATMOENV_MAX_LANDSCAPE_PER_TRACK = 8;
+const S32 SS_ATMOENV_MAX_LANDSCAPE_TOTAL = 12;
+// <SS:Nexii> The prim budget, since a record is a linkset now: a part is ~1 KB of pretty XML (path, profile, sculpt, a few faces), so 48 in an asset stays under the notecard ceiling beside the skies. Parsed over budget clamps with a warning, exactly like the record caps. doc/atmo_landscape/design_synthesis.md 15.
+const S32 SS_ATMOENV_MAX_LANDSCAPE_PARTS_PER_RECORD = 32;
+const S32 SS_ATMOENV_MAX_LANDSCAPE_PARTS_TOTAL = 48;
+
+// <SS:Nexii> Atmo Magic landscape scenery: a client-side linkset owned by the environment
+// asset instead of the region. The record is everything the runtime objects need to exist -
+// placement, one part per prim (volume params, root-relative transform, sparse faces, light
+// and flexi extras) - and everything the objects capture back when the author edits them.
+// Faces are sparse: a face block is only present for a face that differs from the default
+// texture entry, keeping plain parts tiny on disk.
+struct SSAtmoEnvLandscapeFace
+{
+    // <SS:Nexii> Set when this face is authored away from the TE default; a face may carry a
+    // texture, a material, or neither (a texture-less face is tint-only). mIndex is the
+    // mesh face this block belongs to - faces are sparse and compaction would otherwise
+    // shift positions and put a face's art on the wrong TE. A hand-edited document may
+    // omit the index; then the block applies to the position it occupies in the array.
+    S32 mIndex = -1;
+
+    LLUUID mTexture;
+    LLVector4 mRepeats{1.f, 1.f, 0.f, 0.f}; // U,V repeats + S,T offset, the TE layout
+    F32 mRotation = 0.f;
+    LLColor4 mColor{LLColor4::white};
+    S32 mAlphaMode = 0;
+
+    // <SS:Nexii> The PBR render material id when this face was authored with one - empty when
+    // the face is legacy lit.
+    LLUUID mMaterial;
+
+    // <SS:Nexii> The face's material override (LLGLTFMaterial::getOverrideLLSD: only the fields edited away from the base material), undefined when there is none. The sim keeps this per face for its own objects; a local object's record is where it lives instead.
+    LLSD mOverride;
+
+    LLSD asLLSD() const;
+    bool fromLLSD(const LLSD& sd);
+};
+
+// <SS:Nexii> One prim of the linkset. Part 0 is the root: its offset and rotation are ignored (the
+// record's placement is the root's), its scale is the root's. A mesh part is simply a part whose
+// sculpt entry is a mesh; there is no separate mesh record any more.
+struct SSAtmoEnvLandscapePart
+{
+    LLVolumeParams mVolume;
+    LLVector3 mOffset;                          // root-relative position, in the root's frame
+    LLQuaternion mRotation;                     // root-relative rotation
+    LLVector3 mScale{1.f, 1.f, 1.f};
+    std::vector<SSAtmoEnvLandscapeFace> mFaces; // sparse, indexed by face
+    LLSD mLight;                                // LLLightParams::asLLSD() when the part is a light, else undefined
+    LLSD mFlexi;                                // LLFlexibleObjectData::asLLSD() when flexible, else undefined
+
+    // The mesh asset behind the part, or null for a prim.
+    LLUUID meshId() const;
+
+    LLSD asLLSD() const;
+    bool fromLLSD(const LLSD& sd);
+};
+
+struct SSAtmoEnvLandscape
+{
+    // <SS:Nexii> The stable key every live object, menu path and floater row pairs on. Generated
+    // when the record is made and persisted; a document without one (pre-linkset) gets a fresh id
+    // on load, which is stable for the session and written back on the next save.
+    LLUUID mRecordId;
+
+    std::string mName;
+    std::string mDesc;
+
+    // <SS:Nexii> Read-only provenance captured at drop - surfaced in the landscape list, not
+    // edited in-world.
+    LLUUID mCreator;
+    LLUUID mLastOwner;
+    F64 mCreated = 0.0;
+
+    // <SS:Nexii> Placement. "locked" stores a region-local offset and re-anchors into whatever
+    // region the agent is in, so an environment copied across an estate renders the scenery at
+    // the same spot relative to every region's origin. "free" stores one global position the
+    // object keeps no matter which region is crossed. Z needs no anchoring either way: it is a
+    // shared sea-level datum.
+    bool mLocked = true;
+    LLVector3 mLockedOffset;
+    LLVector3d mFreeGlobal;
+
+    LLQuaternion mRotation;
+
+    // <SS:Nexii> The linkset, root first. Never empty once loaded (ensureRoot); the root's own
+    // scale and faces live in mParts[0].
+    std::vector<SSAtmoEnvLandscapePart> mParts;
+
+    // Guarantees a root part exists.
+    void ensureRoot();
+    S32 partCount() const { return (S32)mParts.size(); }
+    // The root part's mesh, or null for a prim root: the floater's "Mesh" column and the availability check.
+    LLUUID rootMeshId() const { return mParts.empty() ? LLUUID::null : mParts[0].meshId(); }
+
+    LLSD asLLSD() const;
+    bool fromLLSD(const LLSD& sd);
+};
+// </SS:Nexii>
 
 // <SS:Nexii> EEP's reference disc: the angular diameter a stock sky's disc scale of 1.0 states - the real Sun's apparent size, which is what scale 1.0 was always MEANT to draw. It is the convention a sky's disc scale is read under when an import becomes a body (see SSAtmoEnvPlanetary::translateSettingsSky); what the quad GEOMETRY actually draws at scale 1.0 is the much larger ss_atmoenv_quad_deg below, which is exactly the bug the quad angles exist to fix - the two numbers used to be one, and every body drew ~10x its authored size.
 const F32 SS_ATMOENV_REFERENCE_DISC_DEG = 0.53f;
@@ -97,6 +212,11 @@ struct SSAtmoEnvWeather
     SSAtmoEnvKeyframed<F32> mGustLength{140.f};
     SSAtmoEnvKeyframed<F32> mGustVeer{0.f};
 
+    // <SS:Nexii> The altitude wind profile's two authored scalars (doc/atmo_magic_wind_profile.md section 3), the mGustAuto idiom exactly: while mShearAuto holds, both are derived from moisture/convection/temperature (SSWindProfile::autoShear) and these curves are ignored; off, they are ordinary keyframes. mShearStrength is S in [0,1] - how much jet and deep-layer veer the day carries - and mVeerDeg the total heading turn from the 10m wind to anvil level, degrees, positive clockwise with height. They live on the weather cube, never on the flowmap, because the flowmap's exponent is derived from the CAMERA's region and two clients in different regions must not disagree about the sky.
+    bool mShearAuto = true;
+    SSAtmoEnvKeyframed<F32> mShearStrength{0.f};
+    SSAtmoEnvKeyframed<F32> mVeerDeg{0.f};
+
     bool mLightningEnabled = true;
     bool mLightningCharge = true;
     bool mLightningSparks = true;
@@ -109,6 +229,21 @@ struct SSAtmoEnvWeather
     SSAtmoEnvKeyframed<F32> mLightningCoreWhite{0.85f};
 
     SSAtmoEnvKeyframed<std::string> mPrecipitationOverride{std::string()};
+
+    // <SS:Nexii> SCHEDULER: forced-storm cue, doc/atmo_magic_storm_dynamics.md section 6 layer 3, the
+    // mPrecipitationOverride idiom exactly. mStormOverride is the kind ("none" default/"supercell"/"tornado"/
+    // "waterspout"/"anticyclonic" - SSStormCells maps the string to SSSquall::ForcedOverride::mKind's small int),
+    // mStormOverridePhase the CUE phase within the day cycle (converted to a wall-clock instant by
+    // SSAtmoEnvTrack::wallTimeAtPhase, never read as a time itself), mStormOverrideOffsetXM/YM the track-floor-
+    // relative XY offset from the weather-domain anchor the cued cell is pinned near (SSSquall::forcedCandidate).
+    // All four read at the CURRENT day-cycle phase (not a candidate's birth phase - a forced cue is a single
+    // authored instant, not an epoch-keyed lattice draw). Authored from panel_ss_atmo_env_weather_conditions.xml's
+    // storm-override rows (ssfloateratmoenv.cpp); the three F32 curves (phase, offset x/y) are forced to HOLD on
+    // every write and every load (7b F4) so the cue stays piecewise constant and cannot slide.
+    SSAtmoEnvKeyframed<std::string> mStormOverride{std::string()};
+    SSAtmoEnvKeyframed<F32> mStormOverridePhase{0.f};
+    SSAtmoEnvKeyframed<F32> mStormOverrideOffsetXM{0.f};
+    SSAtmoEnvKeyframed<F32> mStormOverrideOffsetYM{0.f};
 
     // <SS:Nexii> Whether anything falls at all. Moisture used to be the sole switch - the sky wet enough to be overcast was the sky that rained - so an overcast, stormy, dry sky was unauthorable. Keyframed, because when it starts and stops is the whole point: flag keyframes HOLD (ss_atmoenv_default_curve<bool>), so the rain starts at the key that turns it on and stops at the key that turns it off - where the author put the marks, not between them. Off suppresses only the precipitation half of the resolve - cloud cover, gloom, wind and lightning stay exactly as authored. [interaction: precipitation]
     SSAtmoEnvKeyframed<bool> mPrecipitationFalls{true};
@@ -366,6 +501,12 @@ struct SSAtmoEnvAtmosphere
     SSAtmoEnvKeyframed<F32> mHazeHorizon{0.19f};
     SSAtmoEnvKeyframed<F32> mHazeDensity{0.7f};
 
+    // <SS:Nexii> Atmo Magic: share of the AUTHORED cloud dome height (SSAtmoEnvCloudDome::mHeightM at phase, never
+    // the live cirrusAltitudeMetres()) used as the haze's exponential scale height H, via SSHaze::invHeight
+    // (sshazecore.h). 0 is off - every environment seeded before this existed keeps the stock homogeneous haze
+    // bit-for-bit. See SSAtmoEnvApplier for where domeH and this frac turn into the invH/camHeightM uniform pair.
+    SSAtmoEnvKeyframed<F32> mHazeThinFrac{0.f};
+
     SSAtmoEnvKeyframed<F32> mSkyMoistureLevel{0.f};
     SSAtmoEnvKeyframed<F32> mSkyDropletRadius{800.f};
     SSAtmoEnvKeyframed<F32> mSkyIceLevel{0.f};
@@ -427,6 +568,29 @@ struct SSAtmoEnvWeatherInfluence
     bool mIceHaloEnabled = true;
     F32  mIceHaloStrength = 1.f;
 
+    // <SS:Nexii> Severe-weather permissions for the storm scheduler (doc/atmo_magic_storm_dynamics.md section 6, layer 1): a lattice candidate may become a supercell only with mAllowSupercells, and only a supercell under mAllowTornadoes is tornado-eligible (SSStormCell::gate). Default OFF - a severe event is something an author opts a track into. Read by SSStormCells at each candidate's BIRTH time, so flipping them affects new births, not cells already alive. The strengths are the Weather Influence rows' dials (enable+strength idiom): STORED AND SERIALISED ONLY in this phase - the gate still decides on the core's constants (SUPERCELL_ROT_MIN, HERO_MIN_LIFE_S); the design has them scale those thresholds once the deck coupling phase wires the gate to them. Randomize Severe Day IS that opt-in: a severe roll turns mEnabled and both Allow flags on itself (SSAtmoEnvWeatherGenerator::randomize), an ordinary roll leaves them untouched.
+    bool mAllowSupercells = false;
+    F32  mAllowSupercellsStrength = 1.f;
+    bool mAllowTornadoes = false;
+    F32  mAllowTornadoesStrength = 1.f;
+
+    // <SS:Nexii> Distant rain shafts (ssvirgacore.h, doc/atmo_magic_far_clouds.md section 3): scales down the
+    // qualifying threshold for a cell's virga curtain (SSVirga::qualifies - higher strength admits more cells at
+    // a given precip_intensity x presence x tower drive), enable+strength row idiom like every mapping above.
+    // Default ON at full strength - unlike the severe-weather gates above, a curtain under an existing storm is
+    // not an opt-in event, it is what falling rain already looks like from a distance.
+    bool mDistantRainEnabled = true;
+    F32  mDistantRainStrength = 1.f;
+
+    // <SS:Nexii> Squall lines (doc/atmo_magic_storm_dynamics.md section 5, sssquallcore.h SSSquall::lineEvent):
+    // whether a qualifying severe epoch may roll a LINE event at all. A lone bool, not the enable+strength pair
+    // above - there is no live effect figure to dial down, the lattice draw is either a line or it is not.
+    // Default ON, unlike Allow Supercells/Tornadoes: a line is built from ordinary storm cells the track already
+    // allows, not a new severe-weather opt-in of its own. Gated (7b F11) the same way the two Allow flags are:
+    // ssstormcells.cpp's lineAtEpoch returns no line whenever mEnabled (the influence master) and this flag are
+    // not BOTH true, so a qualifying epoch resolves discrete cells only.
+    bool mSquallLines = true;
+
     LLSD asLLSD() const;
     bool fromLLSD(const LLSD& sd);
 };
@@ -464,7 +628,26 @@ struct SSAtmoEnvTrack
     // <SS:Nexii> Which deck precipitation falls from. Derived by default - the lowest enabled deck above the reference surface, which resolves to the main deck for a sky build because the under deck hangs below the platform floor. Authored only for the case of wanting weather from the upper deck while a lower one is enabled for looks. Not keyframed: it is a property of the track, not of a moment. See doc/atmo_magic_env_ui.md.
     S32 mWeatherSourceDeck = SS_ATMOENV_DECK_DERIVED;
 
+    // <SS:Nexii> The track's landscape scenery. Optional - an empty list is a sky track with no
+    // scenery. Lifecycle is track-bound: crossing into this track hydrates its records, crossing
+    // out is an instant cut to the next track's set. See ssatmolandscape.cpp.
+    std::vector<SSAtmoEnvLandscape> mLandscapes;
+    // </SS:Nexii>
+
+    // <SS:Nexii> D3 follow-up (fifth build report): dayCyclePhaseAt on the ONE shared CONTINUOUS clock - SSAtmoMagic::sharedTime(), the per-frame latch of LLDate::now().secondsSinceEpoch(), never `(F64)time(nullptr)`, whose whole-second tread made this phase a 1 Hz staircase and stepped every deck dial, wind-profile shear and sky modulation resolved from it together once a second. Still UTC epoch, so it stays identical on every client sharing the asset (PLAN lesson 31); see the .cpp's ss_shared_now_seconds for why that rules out every uptime-based clock. Guarded by tests/unit_phase_clock.cpp.
     F64 currentDayCyclePhase() const;
+
+    // <SS:Nexii> The day-cycle phase this track is at for an arbitrary UTC wall-clock second - the same fmod over mDayOffsetSeconds / mDayLengthSeconds that currentDayCyclePhase runs on the shared clock, so the storm scheduler can evaluate the weather cube at a cell's BIRTH time rather than at now (SSStormCells). Pure: no clock read. 7b F3: a one-line forward to SSDayCycle::phaseAt (ssdaycyclecore.h) with this track's own length/offset - the formula itself lives there so the storm scheduler's forced-cue conversion (SSStormCells::wallTimeAtPhase) can share it.
+    F64 dayCyclePhaseAt(F64 utc_seconds) const;
+
+    // <SS:Nexii> SCHEDULER (doc/atmo_magic_storm_dynamics.md section 6 layer 3): the inverse of dayCyclePhaseAt - the
+    // UTC wall-clock second nearest near_utc_seconds whose phase (mod 1) equals phase, so an authored forced-storm
+    // cue phase converts to a wall-clock cueTime the same way for every client sharing the wall clock, rather than
+    // the frame clock. Pure: no clock read. Invariant: dayCyclePhaseAt(wallTimeAtPhase(p, t)) == frac(p) for any
+    // finite t and any dayLengthSeconds > 0; |wallTimeAtPhase(p, t) - t| <= 0.5 * mDayLengthSeconds (the nearest
+    // occurrence, never an arbitrary one); returns near_utc_seconds unchanged when mDayLengthSeconds <= 0. 7b F3: a
+    // one-line forward to SSDayCycle::wallTimeAtPhase (ssdaycyclecore.h), moved there VERBATIM alongside phaseAt.
+    F64 wallTimeAtPhase(F64 phase, F64 near_utc_seconds) const;
 
     LLSD asLLSD() const;
     bool fromLLSD(const LLSD& sd);

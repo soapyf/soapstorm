@@ -37,17 +37,16 @@ SSFloaterWorldField::SSFloaterWorldField(const LLSD& key) :
 {
 }
 
-// Wires the recapture button and tuning watchers. A cell/band/ceiling change
-// must rebuild the cached tiles to take effect - staleness checks compare cell
-// and band against the live settings, but no recent tile is forced to retouch,
-// so the watchers drop them. MaxAge is deliberately unwatched: consumed live by
-// every needsBuild check; a clear on a timing tweak would force an immediate
-// full recapture the new age would have waited out on its own. The field's
-// debug views moved to the debug floater.
+// Wires the reclassify button and the tuning watchers. Every dial here is baked
+// into the published grid, so a change has to drop the cached grids to take
+// effect - the cell size is part of the sheet-set stamp and would rebuild on its
+// own, but the sky angle and the ground reach are read at classify time and at
+// query time respectively and nothing else would notice them move. The field's
+// debug views live in the debug floater.
 bool SSFloaterWorldField::postBuild()
 {
     const char* tuning_controls[] = {
-        "SSWorldFieldCell", "SSWorldFieldBand", "SSWorldFieldCeiling"
+        "SSWorldFieldCell", "SSWorldFieldOpenAngle", "SSWorldFieldGroundReach"
     };
     for (const char* name : tuning_controls)
     {
@@ -63,10 +62,9 @@ bool SSFloaterWorldField::postBuild()
     return true;
 }
 
-// A tuning change drops the cached tiles so the field rebuilds under the new
-// geometry; without this a cell/band/ceiling change would never be picked up
-// downstream - staleness checks compare against the live
-// settings but nothing forces an already-recent tile to retouch.
+// A tuning change drops the cached grids so every region reclassifies under the
+// new geometry; without this a dial the classification baked in would never be
+// picked up downstream.
 void SSFloaterWorldField::watch(const std::string& control)
 {
     LLControlVariable* var = gSavedSettings.getControl(control);

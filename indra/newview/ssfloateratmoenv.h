@@ -55,6 +55,22 @@ public:
                            EDragAndDropType cargo_type, void* cargo_data,
                            EAcceptance* accept, std::string& tooltip_msg) override;
 
+    // <SS:Nexii> Landscape scenery list: repopulated from the active track's records when
+    // the tab is current and the record set changed (signature-guarded so an idle list is
+    // never rebuilt under the user's mouse).
+    void refreshLandscape();
+    void onClickLandscapeDelete();
+    void onClickLandscapeLock();
+    void onClickLandscapeSelect();
+    // <SS:Nexii> Rez a linkset with the stock tools, select it, press this: the landscape world
+    // captures it into a record and derezzes the original. Replaces the inventory drop, which
+    // could never work. doc/atmo_landscape/design_synthesis.md 15.
+    void onClickLandscapeConvert();
+
+    // <SS:Nexii> The signature the landscape list was last built from - mesh ids, names and
+    // lock states joined; a changed signature (or a call while it is stale) rebuilds.
+    std::string mLandscapeListSignature;
+
     // <SS:Nexii> The EEP sky import dialog drives the same preview/status refresh the drop path used to - the stamp happens there now, and the poll alone would leave fresh keyframes and the modified asterisk up to half a second late.
     friend class SSFloaterAtmoSkyImport;
 
@@ -262,6 +278,11 @@ private:
         bool mIntegerDisplay = false;
 
         F32 mScale = 1.f;
+
+        // <SS:Nexii> 7b F4: true for the three forced-storm override rows (storm_override_phase/offset_x/offset_y)
+        // - every keyframe this row adds or edits is forced to SSAtmoEnvCurve::HOLD instead of F32's ordinary
+        // default (EASE), since the cue is read at one phase and must be piecewise constant.
+        bool mHoldCurve = false;
     };
     std::vector<FloatRow> mFloatRows;
 
@@ -364,13 +385,16 @@ private:
 
     template <typename T>
     void refreshKeyframeControls(const std::string& prefix, const SSAtmoEnvKeyframed<T>& field, F64 phase);
+    // <SS:Nexii> 7b F4: `curve` defaults to this field's ordinary default so every existing call site is
+    // unaffected; FloatRow::mHoldCurve rows pass SSAtmoEnvCurve::HOLD explicitly (see toggleFloatRowKeyframe).
     template <typename T>
-    void toggleKeyframe(SSAtmoEnvKeyframed<T>& field);
+    void toggleKeyframe(SSAtmoEnvKeyframed<T>& field, SSAtmoEnvCurve curve = ss_atmoenv_default_curve<T>());
     template <typename T>
     void jumpKeyframe(const SSAtmoEnvKeyframed<T>& field, bool next);
 
     template <typename T>
-    void bindKeyframeButtons(const std::string& prefix, std::function<SSAtmoEnvKeyframed<T>&()> field);
+    void bindKeyframeButtons(const std::string& prefix, std::function<SSAtmoEnvKeyframed<T>&()> field,
+                              SSAtmoEnvCurve curve = ss_atmoenv_default_curve<T>());
 
     void refreshColorRow(const KeyRow<LLColor3>& row, F64 phase);
     void commitColorRow(const KeyRow<LLColor3>& row);
@@ -388,8 +412,20 @@ private:
 
     bool mPreviewPlaying = false;
     F64 mPreviewPlayLast = 0.0;
+    F64 mPreviewPlayLapS = 60.0;   // <SS:Nexii> seconds per full cycle for the current playback: 60 (plain click), the track's day length (SHIFT: real time), 180 (ALT: a third), 120 (SHIFT+ALT: half)
     void onClickPreviewPlay();
     void advancePreviewPlayback();
+    void refreshPreviewPlayButton(); // <SS:Nexii> per frame: the speed suffix on the time label while hovering the play button / while playing
+    std::string previewTimeText() const; // apparent time + the speed suffix
+    std::string mPreviewPlayLabel;   // the suffix currently showing ("" = none)
+    bool mPreviewPlayHover = false;  // the play button's own mouse-enter/leave signals
+    MASK mPreviewClickMask = MASK_NONE; // the modifier mask the OS delivered with the last mouse-down in this floater (read by onClickPreviewPlay)
+    MASK mPreviewHoverMask = MASK_NONE; // ... and with the last hover event (read for the speed suffix)
+public:
+    // <SS:Nexii> Modifier masks come from the events, not from polling the keyboard (which missed a modifier held through a click).
+    /*virtual*/ bool handleMouseDown(S32 x, S32 y, MASK mask) override;
+    /*virtual*/ bool handleHover(S32 x, S32 y, MASK mask) override;
+private:
 
     F64 mLastPoll = 0.0;
 };

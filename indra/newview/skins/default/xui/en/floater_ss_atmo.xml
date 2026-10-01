@@ -143,4 +143,14 @@
      name="debug_button"
      label="Debug..."
      tool_tip="Every debug view, marker and diagnostic overlay - the switches that used to hang off Develop > Render Metadata, and the pickers that shape what each draws" />
+    <button
+     follows="left|top"
+     layout="topleft"
+     left_pad="16"
+     top_delta="0"
+     height="23"
+     width="160"
+     name="navmesh_button"
+     label="Navmesh..."
+     tool_tip="The census navmesh console: build status, overlay switches, and a test path between two points" />
 </floater>
