@@ -40,6 +40,7 @@ class LLWebRTCProtocolParser;
 #include "llcoros.h"
 #include "llparcel.h"
 #include "llmutelist.h"
+#include "workqueue.h"
 #include <queue>
 #include "boost/json.hpp"
 
@@ -85,6 +86,8 @@ public:
     // drainConnections() and ~LLVoiceWebRTCConnection().
     static bool isWebRTCTerminated() { return sWebRTCTerminated; }
 
+    LL::WorkQueue::weak_t getVoiceWorkQueue() const { return mVoiceWorkQueue; }
+
     const LLVoiceVersionInfo& getVersion() override;
     void                      updateVersion();
 
@@ -93,7 +96,11 @@ public:
     // Returns true if WebRTC has successfully logged in and is not in error state
     bool isVoiceWorking() const override;
 
+// <FS:TJ> Keep Vivox only for OpenSim viewers
+#ifdef OPENSIM
     std::string sipURIFromID(const LLUUID &id) const override;
+#endif
+// </FS:TJ>
     LLSD getP2PChannelInfoTemplate(const LLUUID& id) const override;
 
     void setHidden(bool hidden) override;  // virtual
@@ -471,7 +478,7 @@ private:
     /// llwebrtc::terminate().  Bounded and best effort.
     void drainConnections();
 
-    LL::WorkQueue::weak_t mMainQueue;
+    LL::WorkQueue::ptr_t mVoiceWorkQueue;
 
     F32 mTuningMicGain;
     int mTuningSpeakerVolume;
@@ -691,7 +698,7 @@ class LLVoiceWebRTCConnection :
     } EVoiceConnectionState;
 
     EVoiceConnectionState mVoiceConnectionState;
-    LL::WorkQueue::weak_t mMainQueue;
+    LL::WorkQueue::weak_t mVoiceMainQueue;
 
     void setVoiceConnectionState(EVoiceConnectionState new_voice_connection_state)
     {
