@@ -1,0 +1,100 @@
+{
+	"name": "Mixamo",
+	"hint": "mixamorig",
+	"mirror": [
+		[
+			"Left",
+			"Right"
+		]
+	],
+	"bones": {
+		"mPelvis": [
+			"Hips"
+		],
+		"mTorso": [
+			"Spine"
+		],
+		"mChest": [
+			"Spine2",
+			"Spine1"
+		],
+		"mNeck": [
+			"Neck"
+		],
+		"mHead": [
+			"Head"
+		],
+		"mCollarLeft": [
+			"LeftShoulder"
+		],
+		"mShoulderLeft": [
+			"LeftArm"
+		],
+		"mElbowLeft": [
+			"LeftForeArm"
+		],
+		"mWristLeft": [
+			"LeftHand"
+		],
+		"mHipLeft": [
+			"LeftUpLeg"
+		],
+		"mKneeLeft": [
+			"LeftLeg"
+		],
+		"mAnkleLeft": [
+			"LeftFoot"
+		],
+		"mFootLeft": [
+			"LeftToeBase"
+		],
+		"mToeLeft": [
+			"LeftToe_End"
+		],
+		"mHandThumb1Left": [
+			"LeftHandThumb1"
+		],
+		"mHandThumb2Left": [
+			"LeftHandThumb2"
+		],
+		"mHandThumb3Left": [
+			"LeftHandThumb3"
+		],
+		"mHandIndex1Left": [
+			"LeftHandIndex1"
+		],
+		"mHandIndex2Left": [
+			"LeftHandIndex2"
+		],
+		"mHandIndex3Left": [
+			"LeftHandIndex3"
+		],
+		"mHandMiddle1Left": [
+			"LeftHandMiddle1"
+		],
+		"mHandMiddle2Left": [
+			"LeftHandMiddle2"
+		],
+		"mHandMiddle3Left": [
+			"LeftHandMiddle3"
+		],
+		"mHandRing1Left": [
+			"LeftHandRing1"
+		],
+		"mHandRing2Left": [
+			"LeftHandRing2"
+		],
+		"mHandRing3Left": [
+			"LeftHandRing3"
+		],
+		"mHandPinky1Left": [
+			"LeftHandPinky1"
+		],
+		"mHandPinky2Left": [
+			"LeftHandPinky2"
+		],
+		"mHandPinky3Left": [
+			"LeftHandPinky3"
+		]
+	}
+}

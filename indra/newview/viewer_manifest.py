@@ -116,6 +116,9 @@ class ViewerManifest(LLManifest,FSViewerManifest):
                 # ... and the entire image filters directory
                 self.path("filters")
 
+                # <FS> Viewport Avatar Toolset editor run-time files (rig tables, fonts, props, help)
+                self.path("vats")
+
                 # ... and the included spell checking dictionaries
                 # <FS:LO> Copy dictionaries to a place where the viewer can find them if ran from visual studio
                 # ... and the included spell checking dictionaries

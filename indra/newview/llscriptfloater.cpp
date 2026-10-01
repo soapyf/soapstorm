@@ -51,6 +51,7 @@
 #include "llbutton.h"
 #include "llnavigationbar.h"
 #include "omnifilterengine.h"   // Omnifilter support
+#include "fsvatshost.h" // VATs editor
 // </FS:Zi>
 
 //////////////////////////////////////////////////////////////////////////
@@ -1169,6 +1170,9 @@ LLScriptFloater* LLScriptFloater::show(const LLUUID& notification_id)
             LL_WARNS() << "dialog_position value " << dialog_position << " not handled in switch() statement." << LL_ENDL;
         }
     }
+
+    if (LLRect vats_area; FSVATsEditor::toastArea(vats_area)) // VATs editor: top right of its view
+        pos.setOriginAndSize(vats_area.mRight - width, vats_area.mTop - height - topPad, width, height);
 
     //LLDialog(LLGiveInventory and LLLoadURL) should no longer steal focus (see EXT-5445)
     LLFloaterReg::showTypedInstance<LLScriptFloater>("script_floater", notification_id, false);

@@ -17997,6 +17997,50 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <string>English (United States),Second Life Glossary</string>
     </map>
+    <key>VATsEditor</key>
+    <map>
+      <key>Comment</key>
+      <string>Shows the VATs editor (Viewport Avatar Toolset's own UI) over the world. Avatar menu: VATs Editor.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>VATsShowViewerUI</key>
+    <map>
+      <key>Comment</key>
+      <string>While the VATs editor is open: shows the viewer's own UI (toolbars, bars, windows) over it, and moves the editor's panels in so they don't overlap. Avatar menu or the editor's Viewer menu: Show Firestorm UI; Alt+Shift+U.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>VATsFaceCheck</key>
+    <map>
+      <key>Comment</key>
+      <string>Set to run the VATs editor's face-positions check once (Developer menu: VATs: Check Face Positions): the upload bytes played locally against the editor's preview, and the SL Default control; the result goes to the log, the editor's status bar and a tip.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>VATsImGuiTest</key>
+    <map>
+      <key>Comment</key>
+      <string>Shows the VATs ImGui host test (the Dear ImGui demo and a docking test window) over the viewer. Develop menu: VATs UI test.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
     <key>UseNewWalkRun</key>
     <map>
       <key>Comment</key>

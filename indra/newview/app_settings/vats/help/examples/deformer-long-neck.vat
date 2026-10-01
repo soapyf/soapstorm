@@ -1,0 +1,36 @@
+{
+	"format": "vats-project",
+	"version": 1,
+	"euler_order": "xyz-extrinsic",
+	"fps": 30,
+	"end_frame": 30,
+	"loop": false,
+	"loop_in": 0,
+	"loop_out": 30,
+	"priority": 3,
+	"ease_in": 0.3,
+	"ease_out": 0.3,
+	"hand_pose": 1,
+	"emote": "",
+	"mirror_export": false,
+	"export": {},
+	"curves": {
+		"mNeck": {
+			"pos_x": [
+				[0, 0, 2, 0, 0, -1, 0, 10, 0],
+				[30, 0, 2, 0, 0, 20, 0, 31, 0]
+			],
+			"pos_y": [
+				[0, 0, 2, 0, 0, -1, 0, 10, 0],
+				[30, 0, 2, 0, 0, 20, 0, 31, 0]
+			],
+			"pos_z": [
+				[0, 0, 2, 0, 0, -1, 0, 10, 0],
+				[30, 0.25, 2, 0, 0, 20, 0.25, 31, 0.25]
+			]
+		}
+	},
+	"props": [],
+	"anchors": [],
+	"meta": {}
+}

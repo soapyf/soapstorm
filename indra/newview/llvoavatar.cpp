@@ -134,6 +134,7 @@
 #include "fsdiscordconnect.h" // <FS:LO> tapping a place that happens on landing in world to start up discord
 #include "fslslbridge.h" // <FS:PP> Movelock position refresh
 #include "fssoundemitterblacklist.h"
+#include "fsvatshost.h" // VATs editor
 #include "lfsimfeaturehandler.h"    // <FS:CR> Opensim
 #include "lggcontactsets.h"
 #include "llcontrol.h"
@@ -3861,6 +3862,7 @@ void LLVOAvatar::idleUpdateNameTag(const LLVector3& root_pos_last)
         static LLCachedControl<S32> name_tag_mode(gSavedSettings, "AvatarNameTagMode");
         render_name = render_name
             && !gAgentCamera.cameraMouselook()
+            && !FSVATsEditor::hidesYourAvatar() // VATs editor: no name tag over the body swapped into your place
             && (visible_chat || (render_name_show_self && name_tag_mode));
     }
 
@@ -7490,6 +7492,7 @@ bool LLVOAvatar::startMotion(const LLUUID& id, F32 time_offset)
     // <FS:Zi> Animation Overrider
     //LLUUID remap_id = remapMotionID(id, getSex());
     LLUUID remap_id;
+    if (isSelf() && FSVATsEditor::takesLocomotion(id)) return true; // VATs editor: its walk test plays this walk
     if (isSelf())
     {
         remap_id = AOEngine::getInstance()->override(id, true);
@@ -9676,6 +9679,7 @@ bool LLVOAvatar::isVisible() const
     {
         return false;
     }
+    if (isSelf() && FSVATsEditor::hidesYourAvatar()) return false; // VATs editor: its body swap shows another body in your place
     static LLCachedControl<bool> friends_only(gSavedSettings, "RenderAvatarFriendsOnly", false);
     return mDrawable.notNull()
         && (!mOrphaned || isSelf())
@@ -13820,6 +13824,7 @@ F32 LLVOAvatar::getAverageGPURenderTime()
 
 bool LLVOAvatar::isBuddy() const
 {
+    if (FSVATsEditor::hidesOtherAvatars()) return false; // VATs editor: Render Only Friends hides friends too
     bool is_friend = false;
     F64 now = LLFrameTimer::getTotalSeconds();
     if (now < mCachedBuddyListUpdateTime)

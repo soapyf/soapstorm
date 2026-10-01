@@ -241,6 +241,8 @@
 #include "fsrezqueue.h" // <SS:Nexii> Rez queue watch
 #include "ssatmomagic.h" // <SS:Nexii> Atmo Magic weather
 #include "fspanellogin.h"
+#include "fsvatsimgui.h" // VATs ImGui UI
+#include "fsvatshost.h" // VATs editor
 
 #include "lltracerecording.h"
 
@@ -1123,6 +1125,7 @@ void LLViewerWindow::handlePieMenu(S32 x, S32 y, MASK mask)
 
 bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK mask, EMouseClickType clicktype, bool down, bool& is_toolmgr_action)
 {
+    if (FSVATsImGui::mouseButton(pos, mask, clicktype, down)) return true; // VATs ImGui UI
     const char* buttonname = "";
     const char* buttonstatestr = "";
     S32 x = pos.mX;
@@ -1272,6 +1275,7 @@ bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK m
         }
     }
 
+    if (FSVATsImGui::worldClick(pos, mask, clicktype, down)) return true; // VATs ImGui UI: clicks no viewer window took
     // Do not allow tool manager to handle mouseclicks if we have disconnected
     if(!gDisconnected && LLToolMgr::getInstance()->getCurrentTool()->handleAnyMouseClick( x, y, mask, clicktype, down ) )
     {
@@ -1552,6 +1556,7 @@ bool LLViewerWindow::handleOtherMouseUp(LLWindow *window, LLCoordGL pos, MASK ma
 // WARNING: this is potentially called multiple times per frame
 void LLViewerWindow::handleMouseMove(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
+    FSVATsImGui::mouseMove(pos, mask); // VATs ImGui UI
     S32 x = pos.mX;
     S32 y = pos.mY;
 
@@ -1604,6 +1609,7 @@ void LLViewerWindow::handleMouseDragged(LLWindow *window,  LLCoordGL pos, MASK m
 
 void LLViewerWindow::handleMouseLeave(LLWindow *window)
 {
+    FSVATsImGui::mouseLeave(); // VATs ImGui UI
     // Note: we won't get this if we have captured the mouse.
     llassert( gFocusMgr.getMouseCapture() == NULL );
     mMouseInWindow = false;
@@ -1689,6 +1695,7 @@ void LLViewerWindow::handleFocus(LLWindow *window)
 // The top-level window has lost focus (e.g. via ALT-TAB)
 void LLViewerWindow::handleFocusLost(LLWindow *window)
 {
+    FSVATsImGui::focusLost(); // VATs ImGui UI
     gFocusMgr.setAppHasFocus(false);
     //LLModalDialog::onAppFocusLost();
     LLToolMgr::getInstance()->onAppFocusLost();
@@ -1751,6 +1758,7 @@ bool LLViewerWindow::handleTranslatedKeyDown(KEY key,  MASK mask, bool repeated)
 
 bool LLViewerWindow::handleTranslatedKeyUp(KEY key,  MASK mask)
 {
+    FSVATsImGui::keyUp(key, mask); // VATs ImGui UI
     // Handle non-consuming global keybindings, like voice
     // Never affects event processing.
     gViewerInput.handleGlobalBindsKeyUp(key, mask);
@@ -1871,11 +1879,13 @@ bool LLViewerWindow::handlePaint(LLWindow *window,  S32 x,  S32 y, S32 width,  S
 
 void LLViewerWindow::handleScrollWheel(LLWindow *window,  S32 clicks)
 {
+    if (FSVATsImGui::scrollWheel(clicks, false)) return; // VATs ImGui UI
     handleScrollWheel( clicks );
 }
 
 void LLViewerWindow::handleScrollHWheel(LLWindow *window,  S32 clicks)
 {
+    if (FSVATsImGui::scrollWheel(clicks, true)) return; // VATs ImGui UI
     handleScrollHWheel(clicks);
 }
 
@@ -2994,6 +3004,9 @@ void LLViewerWindow::drawDebugText()
     {
         // scale view by UI global scale factor and aspect ratio correction factor
         gGL.scaleUI(mDisplayScale.mV[VX], mDisplayScale.mV[VY], 1.f);
+        // VATs editor: in the bottom right of its view, not over its panels (the text starts 64 up from the world's bottom)
+        if (LLRect vats_area; FSVATsEditor::toastArea(vats_area))
+            gGL.translateUI((F32)(vats_area.mRight - getWorldViewRectScaled().mRight), (F32)(vats_area.mBottom - 56), 0.f);
         mDebugText->draw();
     }
     gGL.popUIMatrix();
@@ -3719,6 +3732,7 @@ bool LLViewerWindow::handleKey(KEY key, MASK mask)
 
 bool LLViewerWindow::handleUnicodeChar(llwchar uni_char, MASK mask)
 {
+    if (FSVATsImGui::unicodeChar(uni_char, mask)) return true; // VATs ImGui UI
     // HACK:  We delay processing of return keys until they arrive as a Unicode char,
     // so that if you're typing chat text at low frame rate, we don't send the chat
     // until all keystrokes have been entered. JC
@@ -4019,6 +4033,7 @@ void LLViewerWindow::updateUI()
 
     updateMouseDelta();
     updateKeyboardFocus();
+    if (FSVATsImGui::capturesMouse()) mMouseInWindow = false; // VATs ImGui UI: no viewer hover during its drags
 
     bool handled = false;
 
@@ -4284,6 +4299,7 @@ void LLViewerWindow::updateUI()
                 }
             }
 
+            if (!handled) handled = FSVATsImGui::worldHover(mask); // VATs ImGui UI: no world hover under the editor
             if (!handled)
             {
                 LLTool *tool = LLToolMgr::getInstance()->getCurrentTool();
@@ -7201,6 +7217,8 @@ void LLViewerWindow::stopGL()
 
         LLManipTranslate::destroyGL() ;
         stop_glerror();
+
+        FSVATsImGui::destroyGL(); // VATs ImGui UI
 
         gBumpImageList.destroyGL();
         stop_glerror();

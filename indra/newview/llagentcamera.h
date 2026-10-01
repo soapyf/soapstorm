@@ -238,6 +238,8 @@ public:
     void            setNextCameraAnimationDuration(F32 seconds) { mNextAnimationDuration = seconds; }
     void            startCameraAnimation();
     void            stopCameraAnimation();
+    // <FS> VATs Editor: the next camera update goes straight to its position, unsmoothed (as a pan does)
+    void            stopCameraSmoothing() { mCameraSmoothingStop = true; }
 private:
     LLFrameTimer    mAnimationTimer;    // Seconds that transition animation has been active
     F32             mAnimationDuration; // In seconds

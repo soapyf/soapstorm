@@ -207,6 +207,9 @@ set(viewer_SOURCE_FILES
     fsposeranimator.cpp
     fsposestate.cpp
     fsposingmotion.cpp
+    fsvatsclipmotion.cpp  # Viewport Avatar Toolset
+    fsvatsimgui.cpp
+    fsvatshost.cpp
     fsprimfeedauth.cpp
     fsradar.cpp
     fsradarentry.cpp
@@ -1146,6 +1149,9 @@ set(viewer_HEADER_FILES
     fsposeranimator.h
 	fsposestate.h
     fsposingmotion.h
+    fsvatsclipmotion.h
+    fsvatsimgui.h
+    fsvatshost.h
     fsprimfeedauth.h
     fsradar.h
     fsradarentry.h
@@ -2771,6 +2777,9 @@ endif (WINDOWS)
 target_link_libraries(${VIEWER_BINARY_NAME}
         llaudio
         llcharacter
+        vats::core
+        vats::ui
+        imgui
         llimage
         llinventory
         llmessage
