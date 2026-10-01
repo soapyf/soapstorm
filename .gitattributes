@@ -13,6 +13,9 @@
 *.tga binary
 *.tif binary
 
+# Audio
+*.wav binary
+
 # Viewer resources
 *.db2 binary
 *.llm binary

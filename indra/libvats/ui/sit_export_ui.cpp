@@ -1,0 +1,110 @@
+// Viewport Avatar Toolset - sit-system lines for couples and groups (spec 08 GR-2): AVsitter2 and nPose.
+// Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
+//
+// The Actors panel shows ready-to-paste lines for both systems, with Copy and Save as .txt; the placement note
+// written with the export carries them too. Animation names are the export names, from the active actor's export
+// settings, as Export writes them. The furniture root offset is kept in every actor's export settings as
+// "sit_root": [x, y, z, rx, ry, rz] (metres, Euler degrees), so it is the same whichever actor is edited; the first
+// actor that has it wins.
+#include <algorithm>
+#include <utility>
+
+#include "app.h"
+#include "icon_button.h"
+#include "icons.h"
+#include "theme.h"
+#include "vats/export_name.h"
+#include "vats/height_variant.h"
+#include "vats/sit_export.h"
+
+namespace vats {
+
+namespace {
+
+// The first actor's that has one: an actor added later has none yet.
+SitRoot read_sit_root(const Project& p) {
+    SitRoot r;
+    for (int i = 0; i < int(std::max<size_t>(p.actors.size(), 1)); ++i)
+        if (const Json* a = actor_clip(p, i).export_settings.find("sit_root"); a && a->is_array() && a->arr.size() == 6) {
+            for (int k = 0; k < 3; ++k) r.pos[k] = a->arr[k].is_number() ? a->arr[k].num : 0;
+            for (int k = 0; k < 3; ++k) r.rot[k] = a->arr[3 + k].is_number() ? a->arr[3 + k].num : 0;
+            break;
+        }
+    return r;
+}
+
+}  // namespace
+
+// fmt 0: AVsitter2 AVpos lines, 1: nPose V4 XANIM lines, for every actor. height > 0: that height variant's names,
+// each actor raised by lift[actor] (HV).
+std::string App::sit_lines(int fmt, double height, const std::vector<double>& lift) const {
+    const Project& p = doc_.project;
+    ExportNaming naming = export_naming();  // the active clip's (08 CL-4)
+    const std::string stem = export_stem();
+    auto base = [&](bool mirrored) {
+        std::string n = variant_file_name(naming, stem, {mirrored, height}, "anim");
+        return n.substr(0, n.size() - 5);
+    };
+    const std::string pose = base(false);  // the placement note's name
+    std::vector<Sitter> sitters;
+    for (size_t k = 0; k < p.actors.size(); ++k) {
+        const Actor& a = p.actors[k];
+        naming.actor = a.name;
+        Xform place = a.placement();
+        if (k < lift.size()) place.pos.z += lift[k];
+        sitters.push_back({a.name, base(doc_.clip().mirror_export), place});
+    }
+    const SitRoot root = read_sit_root(p);
+    return fmt == 0 ? avsitter_lines(pose, sitters, root) : npose_lines(sitters, root);
+}
+
+void App::save_sit_lines(const std::string& path) {
+    std::string why;
+    if (!write_text(path, sit_lines(sit_format_), false, why)) return message("Could not save " + path, why);
+    status("Saved " + path.substr(path.find_last_of('/') + 1));
+}
+
+void App::draw_sit_export() {
+    if (host_.world_view()) draw_seat_section();  // spec 09 build 20, items 4 and 46
+    if (std::exchange(sit_scroll_, false)) ImGui::SetScrollHereY(0);
+    ImGui::SeparatorText("Sit systems (furniture)");
+    const SitRoot root = read_sit_root(doc_.project);
+    // Typed values apply on Enter, as one undo step for every actor.
+    float pos[3] = {float(root.pos.x), float(root.pos.y), float(root.pos.z)};
+    float rot[3] = {float(root.rot.x), float(root.rot.y), float(root.rot.z)};
+    const bool pos_set = ImGui::InputFloat3("Sit target (m)", pos, "%.3f", ImGuiInputTextFlags_EnterReturnsTrue);
+    ImGui::SetItemTooltip("Where the shared sit target is from the furniture's root prim. Press Enter to apply.");
+    const bool rot_set = ImGui::InputFloat3("Rotation (deg)", rot, "%.1f", ImGuiInputTextFlags_EnterReturnsTrue);
+    ImGui::SetItemTooltip("The sit target's rotation in the root prim, as the build window shows it. Press Enter to apply.");
+    if (pos_set || rot_set) {
+        Json a = Json::array();
+        for (float v : pos) a.push(double(v));
+        for (float v : rot) a.push(double(v));
+        scene_edit("Furniture Root Offset", [a](Project& pr) {
+            for (int k = 0; k < int(pr.actors.size()); ++k) {
+                Json& ex = actor_clip(pr, k).export_settings;
+                if (!ex.is_object()) ex = Json::object();
+                ex.set("sit_root", a);
+            }
+        });
+    }
+    const char* names[] = {"AVsitter2 (AVpos notecard)", "nPose V4 (SET card)"};
+    for (int fmt = 0; fmt < 2; ++fmt) {
+        ImGui::PushID(fmt);
+        std::string lines = sit_lines(fmt);
+        ImGui::TextUnformatted(names[fmt]);
+        ImGui::InputTextMultiline("##lines", lines.data(), lines.size() + 1,
+                                  ImVec2(-1, ImGui::GetTextLineHeight() * (fmt ? 4.5f : 8.5f)), ImGuiInputTextFlags_ReadOnly);
+        if (icon_label_button(icon::kCopy, "Copy")) {
+            ImGui::SetClipboardText(lines.c_str());
+            status(std::string("Copied the ") + (fmt ? "nPose" : "AVsitter") + " lines");
+        }
+        ImGui::SameLine();
+        if (icon_label_button(icon::kText, "Save as .txt...")) sit_format_ = fmt, show_dialog(Dialog::SitLines);
+        ImGui::PopID();
+    }
+    hint("AVsitter: paste into the AVpos notecard; the prim needs one [AV]sitA/B pair per actor. nPose: paste into a SET "
+         "card; the .init card needs SEAT_INIT|<number of actors>.");
+}
+
+}  // namespace vats

@@ -104,6 +104,7 @@
 // [/RLVa:KB]
 #include "llpresetsmanager.h"
 #include "fsdata.h"
+#include "fsvatsimgui.h" // VATs ImGui UI
 
 // <FS:PP> Render chat range spheres in 3D world
 #include "lfsimfeaturehandler.h"
@@ -216,6 +217,7 @@ void display_startup()
 
     if (gViewerWindow)
     gViewerWindow->setup2DRender();
+    FSVATsImGui::renderWorld(); // VATs ImGui UI: under the login screen's windows
     if (gViewerWindow)
     gViewerWindow->draw();
     gGL.flush();
@@ -224,6 +226,7 @@ void display_startup()
 
     LLGLState::checkStates();
 
+    FSVATsImGui::render(); // VATs ImGui UI: the cursor
     if (gViewerWindow && gViewerWindow->getWindow())
     gViewerWindow->getWindow()->swapBuffers();
 
@@ -1798,6 +1801,7 @@ void swap()
     LLPerfStats::RecordSceneTime T ( LLPerfStats::StatType_t::RENDER_SWAP ); // render time capture - Swap buffer time - can signify excessive data transfer to/from GPU
     LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("Swap");
     LL_PROFILE_GPU_ZONE("swap");
+    FSVATsImGui::render(); // VATs ImGui UI: frames without a pass before LLUI, and the cursor
     if (gDisplaySwapBuffers)
     {
         gViewerWindow->getWindow()->swapBuffers();
@@ -2033,6 +2037,7 @@ void render_ui_2d()
     }
 
 
+    if (!gSnapshot) FSVATsImGui::renderWorld(); // VATs ImGui UI: with the world, under the viewer's UI
     if (LLPipeline::RenderUIBuffer)
     {
         if (LLView::sIsRectDirty)

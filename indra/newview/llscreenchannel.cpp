@@ -42,6 +42,7 @@
 #include "llfloaterimsession.h"
 #include "llscriptfloater.h"
 #include "llrootview.h"
+#include "fsvatshost.h" // VATs editor
 
 #include <algorithm>
 
@@ -55,6 +56,8 @@ LLRect LLScreenChannelBase::getChannelRect()
 {
     LL_PROFILE_ZONE_SCOPED;
 
+    if (LLRect vats_area; FSVATsEditor::toastArea(vats_area)) return vats_area; // VATs editor: toasts stay in its view
+
     if (mFloaterSnapRegion == NULL)
     {
         mFloaterSnapRegion = gViewerWindow->getFloaterSnapRegion();
@@ -67,6 +70,9 @@ LLRect LLScreenChannelBase::getChannelRect()
 
     LLRect channel_rect;
     LLRect chiclet_rect;
+
+    if (!mFloaterSnapRegion || !mChicletRegion) // VATs editor: redraws may reach a channel before the world UI exists
+        return channel_rect;
 
     mFloaterSnapRegion->localRectToScreen(mFloaterSnapRegion->getLocalRect(), &channel_rect);
     mChicletRegion->localRectToScreen(mChicletRegion->getLocalRect(), &chiclet_rect);
@@ -592,6 +598,12 @@ void LLScreenChannel::modifyToastByNotificationID(LLUUID id, LLPanel* panel)
 //--------------------------------------------------------------------------
 void LLScreenChannel::redrawToasts()
 {
+    if (!mFloaterSnapRegion) // VATs editor: it redraws every channel, some before their postBuild
+    {
+        mFloaterSnapRegion = gViewerWindow->getFloaterSnapRegion();
+        if (!mFloaterSnapRegion)
+            return;
+    }
     if (!getParent())
     {
         // connect to floater snap region just to get resize events, we don't care about being a proper widget
@@ -602,7 +614,10 @@ void LLScreenChannel::redrawToasts()
     if(mToastList.size() == 0)
         return;
 
-    switch(mToastAlignment)
+    // VATs editor: in its view, toasts stack from the top right and alerts are centred
+    LLRect vats_area;
+    const bool vats = FSVATsEditor::toastArea(vats_area);
+    switch(vats && mToastAlignment == NA_BOTTOM ? NA_TOP : mToastAlignment)
     {
     case NA_TOP :
         showToastsTop();
@@ -610,6 +625,9 @@ void LLScreenChannel::redrawToasts()
 
     case NA_CENTRE :
         showToastsCentre();
+        for (ToastElem& elem : mToastList) // VATs editor
+            if (LLToast* toast = vats ? elem.getToast() : nullptr)
+                toast->setOrigin(vats_area.getCenterX() - toast->getRect().getWidth() / 2, vats_area.getCenterY() - toast->getRect().getHeight() / 2);
         break;
 
     case NA_BOTTOM :

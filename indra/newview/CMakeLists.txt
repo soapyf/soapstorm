@@ -207,6 +207,9 @@ set(viewer_SOURCE_FILES
     fsposeranimator.cpp
     fsposestate.cpp
     fsposingmotion.cpp
+    fsvatsclipmotion.cpp  # Viewport Avatar Toolset
+    fsvatsimgui.cpp
+    fsvatshost.cpp
     fsprimfeedauth.cpp
     fsradar.cpp
     fsradarentry.cpp
@@ -944,7 +947,6 @@ set(viewer_SOURCE_FILES
     llvoicechannel.cpp
     llvoiceclient.cpp
     llvoicevisualizer.cpp
-    llvoicevivox.cpp
     llvoicewebrtc.cpp
     llvoinventorylistener.cpp
     llvopartgroup.cpp
@@ -995,6 +997,14 @@ set(viewer_SOURCE_FILES
     NACLantispam.cpp
     NACLfloaterexploresounds.cpp
     )
+
+# <FS:TJ> Keep Vivox only for OpenSim viewers
+if (OPENSIM)
+    list(APPEND viewer_SOURCE_FILES
+        llvoicevivox.cpp
+        )
+endif ()
+# </FS:TJ>
 
 # <FS:Ansariel> Group GLTF files into their subfolders
 set(viewer_GLTF_SOURCE_FILES
@@ -1146,6 +1156,9 @@ set(viewer_HEADER_FILES
     fsposeranimator.h
 	fsposestate.h
     fsposingmotion.h
+    fsvatsclipmotion.h
+    fsvatsimgui.h
+    fsvatshost.h
     fsprimfeedauth.h
     fsradar.h
     fsradarentry.h
@@ -1878,7 +1891,6 @@ set(viewer_HEADER_FILES
     llvoicechannel.h
     llvoiceclient.h
     llvoicevisualizer.h
-    llvoicevivox.h
     llvoicewebrtc.h
     llvoinventorylistener.h
     llvopartgroup.h
@@ -1934,6 +1946,14 @@ set(viewer_HEADER_FILES
     NACLantispam.h
     NACLfloaterexploresounds.h
     )
+
+# <FS:TJ> Keep Vivox only for OpenSim viewers
+if (OPENSIM)
+    list(APPEND viewer_HEADER_FILES
+        llvoicevivox.h
+        )
+endif ()
+# </FS:TJ>
 
   list(APPEND viewer_SOURCE_FILES llperfstats.cpp)
   list(APPEND viewer_HEADER_FILES llperfstats.h)
@@ -2496,9 +2516,11 @@ if (WINDOWS)
       ${CMAKE_SOURCE_DIR}/../scripts/messages/message_template.msg
       #${SHARED_LIB_STAGING_DIR}/openjp2.dll # <FS:Ansariel> Only copy OpenJPEG dll if needed
       ${SHARED_LIB_STAGING_DIR}/llwebrtc.dll
-      #${SHARED_LIB_STAGING_DIR}/${LL_INTDIR}/SLVoice.exe
       #${SHARED_LIB_STAGING_DIR}/${LL_INTDIR}/libsndfile-1.dll
+      # <FS:TJ> Keep Vivox only for OpenSim viewers
+      #${SHARED_LIB_STAGING_DIR}/${LL_INTDIR}/SLVoice.exe
       #${SHARED_LIB_STAGING_DIR}/${LL_INTDIR}/vivoxoal.dll
+      # </FS:TJ>
       ${AUTOBUILD_INSTALL_DIR}/ca-bundle.crt
       ${CMAKE_CURRENT_SOURCE_DIR}/licenses-win32.txt
       ${CMAKE_CURRENT_SOURCE_DIR}/featuretable.txt
@@ -2519,17 +2541,21 @@ if (WINDOWS)
     endif (NOT USE_KDU)
     # </FS:Ansariel>
 
-    if (ADDRESS_SIZE EQUAL 64)
-       list(APPEND COPY_INPUT_DEPENDENCIES
-               ${SHARED_LIB_STAGING_DIR}/vivoxsdk_x64.dll
-               ${SHARED_LIB_STAGING_DIR}/ortp_x64.dll
-               )
-    else (ADDRESS_SIZE EQUAL 64)
-       list(APPEND COPY_INPUT_DEPENDENCIES
-               ${SHARED_LIB_STAGING_DIR}/vivoxsdk.dll
-               ${SHARED_LIB_STAGING_DIR}/ortp.dll
-               )
-    endif (ADDRESS_SIZE EQUAL 64)
+    # <FS:TJ> Keep Vivox only for OpenSim viewers
+    if (OPENSIM)
+        if (ADDRESS_SIZE EQUAL 64)
+           list(APPEND COPY_INPUT_DEPENDENCIES
+                   ${SHARED_LIB_STAGING_DIR}/vivoxsdk_x64.dll
+                   ${SHARED_LIB_STAGING_DIR}/ortp_x64.dll
+                   )
+        else (ADDRESS_SIZE EQUAL 64)
+           list(APPEND COPY_INPUT_DEPENDENCIES
+                   ${SHARED_LIB_STAGING_DIR}/vivoxsdk.dll
+                   ${SHARED_LIB_STAGING_DIR}/ortp.dll
+                   )
+        endif (ADDRESS_SIZE EQUAL 64)
+    endif ()
+    # </FS:TJ>
 
     if (TARGET ll::discord_sdk)
         list(APPEND COPY_INPUT_DEPENDENCIES
@@ -2771,6 +2797,9 @@ endif (WINDOWS)
 target_link_libraries(${VIEWER_BINARY_NAME}
         llaudio
         llcharacter
+        vats::core
+        vats::ui
+        imgui
         llimage
         llinventory
         llmessage

@@ -4,8 +4,8 @@
 #include "linden_common.h"
 #include "llkeyboardsdl2.h"
 #include "llwindowcallbacks.h"
-#include "SDL2/SDL.h"
-#include "SDL2/SDL_keycode.h"
+#include "SDL3/SDL.h"
+#include "SDL3/SDL_keycode.h"
 
 LLKeyboardSDL::LLKeyboardSDL()
 {
@@ -94,13 +94,13 @@ LLKeyboardSDL::LLKeyboardSDL()
     mTranslateKeyMap[SDLK_COMMA]  = ','; // <FS:ND/> Those are handled by SDL2 via text input, do not map them
     mTranslateKeyMap[SDLK_MINUS]  = '-'; // <FS:ND/> Those are handled by SDL2 via text input, do not map them
     mTranslateKeyMap[SDLK_PERIOD] = '.'; // <FS:ND/> Those are handled by SDL2 via text input, do not map them
-    mTranslateKeyMap[SDLK_BACKQUOTE] = '`'; // <FS:ND/> Those are handled by SDL2 via text input, do not map them
+    mTranslateKeyMap[SDLK_GRAVE] = '`'; // <FS:ND/> Those are handled by SDL2 via text input, do not map them
     mTranslateKeyMap[SDLK_SLASH] = KEY_DIVIDE; // <FS:ND/> Those are handled by SDL2 via text input, do not map them
     mTranslateKeyMap[SDLK_SEMICOLON] = ';'; // <FS:ND/> Those are handled by SDL2 via text input, do not map them
     mTranslateKeyMap[SDLK_LEFTBRACKET] = '['; // <FS:ND/> Those are handled by SDL2 via text input, do not map them
     mTranslateKeyMap[SDLK_BACKSLASH] = '\\'; // <FS:ND/> Those are handled by SDL2 via text input, do not map them
     mTranslateKeyMap[SDLK_RIGHTBRACKET] = ']'; // <FS:ND/> Those are handled by SDL2 via text input, do not map them
-    mTranslateKeyMap[SDLK_QUOTE] = '\''; // <FS:ND/> Those are handled by SDL2 via text input, do not map them
+    mTranslateKeyMap[SDLK_APOSTROPHE] = '\''; // <FS:ND/> Those are handled by SDL2 via text input, do not map them
 
     // Build inverse map
     for (auto iter = mTranslateKeyMap.begin(); iter != mTranslateKeyMap.end(); iter++)
@@ -138,17 +138,17 @@ void LLKeyboardSDL::resetMaskKeys()
     //    It looks a bit suspicious, as it won't correct for keys that have been released.
     //    Is this the way it's supposed to work?
 
-    if(mask & KMOD_SHIFT)
+    if(mask & SDL_KMOD_SHIFT)
     {
         mKeyLevel[KEY_SHIFT] = true;
     }
 
-    if(mask & KMOD_CTRL)
+    if(mask & SDL_KMOD_CTRL)
     {
         mKeyLevel[KEY_CONTROL] = true;
     }
 
-    if(mask & KMOD_ALT)
+    if(mask & SDL_KMOD_ALT)
     {
         mKeyLevel[KEY_ALT] = true;
     }
@@ -160,17 +160,17 @@ MASK LLKeyboardSDL::updateModifiers(const U32 mask)
     // translate the mask
     MASK out_mask = MASK_NONE;
 
-    if(mask & KMOD_SHIFT)
+    if(mask & SDL_KMOD_SHIFT)
     {
         out_mask |= MASK_SHIFT;
     }
 
-    if(mask & KMOD_CTRL)
+    if(mask & SDL_KMOD_CTRL)
     {
         out_mask |= MASK_CONTROL;
     }
 
-    if(mask & KMOD_ALT)
+    if(mask & SDL_KMOD_ALT)
     {
         out_mask |= MASK_ALT;
     }
@@ -184,7 +184,7 @@ static U32 adjustNativekeyFromUnhandledMask(const U32 key, const U32 mask)
     // SDL doesn't automatically adjust the keysym according to
     // whether NUMLOCK is engaged, so we massage the keysym manually.
     U32 rtn = key;
-    if (!(mask & KMOD_NUM))
+    if (!(mask & SDL_KMOD_NUM))
     {
         switch (key)
         {
@@ -248,17 +248,17 @@ MASK LLKeyboardSDL::currentMask(bool for_mouse_event)
     MASK result = MASK_NONE;
     SDL_Keymod mask = SDL_GetModState();
 
-    if (mask & KMOD_SHIFT)
+    if (mask & SDL_KMOD_SHIFT)
         result |= MASK_SHIFT;
-    if (mask & KMOD_CTRL)
+    if (mask & SDL_KMOD_CTRL)
         result |= MASK_CONTROL;
-    if (mask & KMOD_ALT)
+    if (mask & SDL_KMOD_ALT)
         result |= MASK_ALT;
 
     // For keyboard events, consider Meta keys equivalent to Control
     if (!for_mouse_event)
     {
-        if (mask & KMOD_GUI)
+        if (mask & SDL_KMOD_GUI)
             result |= MASK_CONTROL;
     }
 
@@ -491,7 +491,7 @@ U32 LLKeyboardSDL::mapSDL2toWin( U32 aSymbol )
         mSDL2_to_Win[ 19 ] = (U32)WindowsVK::VK_PAUSE;
         mSDL2_to_Win[ SDLK_ESCAPE ] = (U32)WindowsVK::VK_ESCAPE;
         mSDL2_to_Win[ SDLK_SPACE ] = (U32)WindowsVK::VK_SPACE;
-        mSDL2_to_Win[ SDLK_QUOTE ] = (U32)WindowsVK::VK_OEM_7;
+        mSDL2_to_Win[ SDLK_APOSTROPHE ] = (U32)WindowsVK::VK_OEM_7;
         mSDL2_to_Win[ SDLK_COMMA ] = (U32)WindowsVK::VK_OEM_COMMA;
         mSDL2_to_Win[ SDLK_MINUS ] = (U32)WindowsVK::VK_OEM_MINUS;
         mSDL2_to_Win[ SDLK_PERIOD ] = (U32)WindowsVK::VK_OEM_PERIOD;
@@ -516,34 +516,34 @@ U32 LLKeyboardSDL::mapSDL2toWin( U32 aSymbol )
         mSDL2_to_Win[ SDLK_LEFTBRACKET ] = (U32)WindowsVK::VK_OEM_4;
         mSDL2_to_Win[ SDLK_BACKSLASH ] = (U32)WindowsVK::VK_OEM_5;
         mSDL2_to_Win[ SDLK_RIGHTBRACKET ] = (U32)WindowsVK::VK_OEM_6;
-        mSDL2_to_Win[ SDLK_BACKQUOTE ] = (U32)WindowsVK::VK_OEM_8;
+        mSDL2_to_Win[ SDLK_GRAVE ] = (U32)WindowsVK::VK_OEM_8;
 
-        mSDL2_to_Win[ SDLK_a ] = (U32)WindowsVK::VK_A;
-        mSDL2_to_Win[ SDLK_b ] = (U32)WindowsVK::VK_B;
-        mSDL2_to_Win[ SDLK_c ] = (U32)WindowsVK::VK_C;
-        mSDL2_to_Win[ SDLK_d ] = (U32)WindowsVK::VK_D;
-        mSDL2_to_Win[ SDLK_e ] = (U32)WindowsVK::VK_E;
-        mSDL2_to_Win[ SDLK_f ] = (U32)WindowsVK::VK_F;
-        mSDL2_to_Win[ SDLK_g ] = (U32)WindowsVK::VK_G;
-        mSDL2_to_Win[ SDLK_h ] = (U32)WindowsVK::VK_H;
-        mSDL2_to_Win[ SDLK_i ] = (U32)WindowsVK::VK_I;
-        mSDL2_to_Win[ SDLK_j ] = (U32)WindowsVK::VK_J;
-        mSDL2_to_Win[ SDLK_k ] = (U32)WindowsVK::VK_K;
-        mSDL2_to_Win[ SDLK_l ] = (U32)WindowsVK::VK_L;
-        mSDL2_to_Win[ SDLK_m ] = (U32)WindowsVK::VK_M;
-        mSDL2_to_Win[ SDLK_n ] = (U32)WindowsVK::VK_N;
-        mSDL2_to_Win[ SDLK_o ] = (U32)WindowsVK::VK_O;
-        mSDL2_to_Win[ SDLK_p ] = (U32)WindowsVK::VK_P;
-        mSDL2_to_Win[ SDLK_q ] = (U32)WindowsVK::VK_Q;
-        mSDL2_to_Win[ SDLK_r ] = (U32)WindowsVK::VK_R;
-        mSDL2_to_Win[ SDLK_s ] = (U32)WindowsVK::VK_S;
-        mSDL2_to_Win[ SDLK_t ] = (U32)WindowsVK::VK_T;
-        mSDL2_to_Win[ SDLK_u ] = (U32)WindowsVK::VK_U;
-        mSDL2_to_Win[ SDLK_v ] = (U32)WindowsVK::VK_V;
-        mSDL2_to_Win[ SDLK_w ] = (U32)WindowsVK::VK_W;
-        mSDL2_to_Win[ SDLK_x ] = (U32)WindowsVK::VK_X;
-        mSDL2_to_Win[ SDLK_y ] = (U32)WindowsVK::VK_Y;
-        mSDL2_to_Win[ SDLK_z ] = (U32)WindowsVK::VK_Z;
+        mSDL2_to_Win[ SDLK_A ] = (U32)WindowsVK::VK_A;
+        mSDL2_to_Win[ SDLK_B ] = (U32)WindowsVK::VK_B;
+        mSDL2_to_Win[ SDLK_C ] = (U32)WindowsVK::VK_C;
+        mSDL2_to_Win[ SDLK_D ] = (U32)WindowsVK::VK_D;
+        mSDL2_to_Win[ SDLK_E ] = (U32)WindowsVK::VK_E;
+        mSDL2_to_Win[ SDLK_F ] = (U32)WindowsVK::VK_F;
+        mSDL2_to_Win[ SDLK_G ] = (U32)WindowsVK::VK_G;
+        mSDL2_to_Win[ SDLK_H ] = (U32)WindowsVK::VK_H;
+        mSDL2_to_Win[ SDLK_I ] = (U32)WindowsVK::VK_I;
+        mSDL2_to_Win[ SDLK_J ] = (U32)WindowsVK::VK_J;
+        mSDL2_to_Win[ SDLK_K ] = (U32)WindowsVK::VK_K;
+        mSDL2_to_Win[ SDLK_L ] = (U32)WindowsVK::VK_L;
+        mSDL2_to_Win[ SDLK_M ] = (U32)WindowsVK::VK_M;
+        mSDL2_to_Win[ SDLK_N ] = (U32)WindowsVK::VK_N;
+        mSDL2_to_Win[ SDLK_O ] = (U32)WindowsVK::VK_O;
+        mSDL2_to_Win[ SDLK_P ] = (U32)WindowsVK::VK_P;
+        mSDL2_to_Win[ SDLK_Q ] = (U32)WindowsVK::VK_Q;
+        mSDL2_to_Win[ SDLK_R ] = (U32)WindowsVK::VK_R;
+        mSDL2_to_Win[ SDLK_S ] = (U32)WindowsVK::VK_S;
+        mSDL2_to_Win[ SDLK_T ] = (U32)WindowsVK::VK_T;
+        mSDL2_to_Win[ SDLK_U ] = (U32)WindowsVK::VK_U;
+        mSDL2_to_Win[ SDLK_V ] = (U32)WindowsVK::VK_V;
+        mSDL2_to_Win[ SDLK_W ] = (U32)WindowsVK::VK_W;
+        mSDL2_to_Win[ SDLK_X ] = (U32)WindowsVK::VK_X;
+        mSDL2_to_Win[ SDLK_Y ] = (U32)WindowsVK::VK_Y;
+        mSDL2_to_Win[ SDLK_Z ] = (U32)WindowsVK::VK_Z;
 
         mSDL2_to_Win[ SDLK_DELETE ] = (U32)WindowsVK::VK_DELETE;
 

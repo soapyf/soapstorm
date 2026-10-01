@@ -1673,6 +1673,9 @@ http://secondlife.com/support pour vous aider à résoudre ce problème.
 	<string name="InventoryNoTexture">
 		Vous n&apos;avez pas de copie de cette texture dans votre inventaire
 	</string>
+	<string name="InventoryNoMaterial">
+		Vous n'avez pas de copie de ce matériau dans votre inventaire.
+	</string>
 	<string name="InventoryInboxNoItems">
 		Les achats que vous avez effectués sur Marketplace s&apos;affichent ici. Vous pouvez alors les faire glisser vers votre inventaire afin de les utiliser.
 	</string>
@@ -3118,7 +3121,7 @@ Si vous continuez à recevoir ce message, veuillez contacter l'assistance de Sec
 		Lire/pauser le média
 	</string>
 	<string name="StreamtitleNowPlaying">
-		En cours de lecture :
+		En cours de lecture : [TITLE]
 	</string>
 	<string name="IntelDriverPage">
 		http://www.intel.com/p/fr_FR/support/detect/graphics
@@ -7226,5 +7229,8 @@ Votre position actuelle : [AVATAR_POS]
 	</string>
 	<string name="FSAvatarAlignToggleFull">
 		Complet
+	</string>
+	<string name="FSMacOSNewViewerInstance">
+		Nouvelle instance du client
 	</string>
 </strings>

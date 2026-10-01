@@ -2545,6 +2545,13 @@ LLTextureCache::ESSJ2CProbe LLTextureCache::ssProbeJ2C(const LLUUID& id, bool wa
 
     out_data.resize((size_t)total);
 
+    // A null pool would send the reads below to LLAPRFile's global pool, and APR pools are not thread safe. The BC7Encode workers do this concurrently with each other and with the main thread's own file use, which corrupts that pool's cleanup list until closing the logout marker at quit spins forever. So each calling thread gets its own pool. It is never deleted on purpose: apr_terminate() reclaims its APR memory with every other root pool, and deleting it from a thread that outlived ll_cleanup_apr() would free that memory twice.
+    if (!pool)
+    {
+        static thread_local LLVolatileAPRPool* thread_pool = new LLVolatileAPRPool();
+        pool = thread_pool;
+    }
+
     // The first record's worth lives in texture.cache at a fixed stride, exactly as the HEADER stage reads it. A texture smaller than one record occupies a whole padded record, so the read is clamped to what the asset actually is rather than to the record size.
     const S32 header_bytes = llmin(total, (S32)TEXTURE_CACHE_ENTRY_SIZE);
     const S32 header_read  = LLAPRFile::readEx(mHeaderDataFileName, &out_data[0], idx * TEXTURE_CACHE_ENTRY_SIZE, header_bytes, pool);

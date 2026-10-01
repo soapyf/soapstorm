@@ -1,0 +1,901 @@
+{
+	"format": "vats-face-table",
+	"version": 1,
+	"name": "ARKit / VRM onto Bento face bones (SL default head)",
+	"note": "Each shape lists Bento face-bone motion at full weight: rot in degrees (VATs Euler), pos in metres from rest. Right-side shapes mirror the left (Y negated). Values are a starting point for the SL default head; tune gains in the Motion Capture window. SL's default skeleton has the lip corner bones swapped by name (mFaceLipCornerLeft sits on the avatar's right), so the corners here go by position: a left-side shape moves mFaceLipCornerRight.",
+	"shapes": {
+		"eyeBlinkLeft": {
+			"mFaceEyeLidUpperLeft": {
+				"rot": [
+					0,
+					32,
+					0
+				]
+			},
+			"mFaceEyeLidLowerLeft": {
+				"rot": [
+					0,
+					-6,
+					0
+				]
+			}
+		},
+		"eyeBlinkRight": {
+			"mFaceEyeLidUpperRight": {
+				"rot": [
+					0,
+					32,
+					0
+				]
+			},
+			"mFaceEyeLidLowerRight": {
+				"rot": [
+					0,
+					-6,
+					0
+				]
+			}
+		},
+		"eyeSquintLeft": {
+			"mFaceEyeLidLowerLeft": {
+				"rot": [
+					0,
+					-12,
+					0
+				]
+			},
+			"mFaceCheekUpperLeft": {
+				"pos": [
+					0,
+					0,
+					0.002
+				]
+			}
+		},
+		"eyeSquintRight": {
+			"mFaceEyeLidLowerRight": {
+				"rot": [
+					0,
+					-12,
+					0
+				]
+			},
+			"mFaceCheekUpperRight": {
+				"pos": [
+					0,
+					0,
+					0.002
+				]
+			}
+		},
+		"eyeWideLeft": {
+			"mFaceEyeLidUpperLeft": {
+				"rot": [
+					0,
+					-12,
+					0
+				]
+			},
+			"mFaceEyeLidLowerLeft": {
+				"rot": [
+					0,
+					5,
+					0
+				]
+			}
+		},
+		"eyeWideRight": {
+			"mFaceEyeLidUpperRight": {
+				"rot": [
+					0,
+					-12,
+					0
+				]
+			},
+			"mFaceEyeLidLowerRight": {
+				"rot": [
+					0,
+					5,
+					0
+				]
+			}
+		},
+		"eyeLookUpLeft": {
+			"mEyeLeft": {
+				"rot": [
+					0,
+					-18,
+					0
+				]
+			}
+		},
+		"eyeLookUpRight": {
+			"mEyeRight": {
+				"rot": [
+					0,
+					-18,
+					0
+				]
+			}
+		},
+		"eyeLookDownLeft": {
+			"mEyeLeft": {
+				"rot": [
+					0,
+					18,
+					0
+				]
+			}
+		},
+		"eyeLookDownRight": {
+			"mEyeRight": {
+				"rot": [
+					0,
+					18,
+					0
+				]
+			}
+		},
+		"eyeLookInLeft": {
+			"mEyeLeft": {
+				"rot": [
+					0,
+					0,
+					-20
+				]
+			}
+		},
+		"eyeLookInRight": {
+			"mEyeRight": {
+				"rot": [
+					0,
+					0,
+					20
+				]
+			}
+		},
+		"eyeLookOutLeft": {
+			"mEyeLeft": {
+				"rot": [
+					0,
+					0,
+					20
+				]
+			}
+		},
+		"eyeLookOutRight": {
+			"mEyeRight": {
+				"rot": [
+					0,
+					0,
+					-20
+				]
+			}
+		},
+		"browDownLeft": {
+			"mFaceEyebrowInnerLeft": {
+				"pos": [
+					0,
+					-0.001,
+					-0.004
+				]
+			},
+			"mFaceEyebrowCenterLeft": {
+				"pos": [
+					0,
+					0,
+					-0.003
+				]
+			},
+			"mFaceEyebrowOuterLeft": {
+				"pos": [
+					0,
+					0,
+					-0.002
+				]
+			}
+		},
+		"browDownRight": {
+			"mFaceEyebrowInnerRight": {
+				"pos": [
+					0,
+					0.001,
+					-0.004
+				]
+			},
+			"mFaceEyebrowCenterRight": {
+				"pos": [
+					0,
+					0,
+					-0.003
+				]
+			},
+			"mFaceEyebrowOuterRight": {
+				"pos": [
+					0,
+					0,
+					-0.002
+				]
+			}
+		},
+		"browInnerUp": {
+			"mFaceEyebrowInnerLeft": {
+				"pos": [
+					0,
+					0,
+					0.005
+				]
+			},
+			"mFaceEyebrowInnerRight": {
+				"pos": [
+					0,
+					0,
+					0.005
+				]
+			},
+			"mFaceForeheadCenter": {
+				"pos": [
+					0,
+					0,
+					0.002
+				]
+			}
+		},
+		"browOuterUpLeft": {
+			"mFaceEyebrowOuterLeft": {
+				"pos": [
+					0,
+					0,
+					0.005
+				]
+			},
+			"mFaceEyebrowCenterLeft": {
+				"pos": [
+					0,
+					0,
+					0.002
+				]
+			}
+		},
+		"browOuterUpRight": {
+			"mFaceEyebrowOuterRight": {
+				"pos": [
+					0,
+					0,
+					0.005
+				]
+			},
+			"mFaceEyebrowCenterRight": {
+				"pos": [
+					0,
+					0,
+					0.002
+				]
+			}
+		},
+		"cheekPuff": {
+			"mFaceCheekLowerLeft": {
+				"pos": [
+					0.001,
+					0.005,
+					0
+				]
+			},
+			"mFaceCheekLowerRight": {
+				"pos": [
+					0.001,
+					-0.005,
+					0
+				]
+			}
+		},
+		"cheekSquintLeft": {
+			"mFaceCheekUpperLeft": {
+				"pos": [
+					0,
+					0,
+					0.003
+				]
+			},
+			"mFaceEyeLidLowerLeft": {
+				"rot": [
+					0,
+					-5,
+					0
+				]
+			}
+		},
+		"cheekSquintRight": {
+			"mFaceCheekUpperRight": {
+				"pos": [
+					0,
+					0,
+					0.003
+				]
+			},
+			"mFaceEyeLidLowerRight": {
+				"rot": [
+					0,
+					-5,
+					0
+				]
+			}
+		},
+		"noseSneerLeft": {
+			"mFaceNoseLeft": {
+				"pos": [
+					0,
+					0,
+					0.003
+				]
+			},
+			"mFaceCheekUpperLeft": {
+				"pos": [
+					0,
+					0,
+					0.001
+				]
+			}
+		},
+		"noseSneerRight": {
+			"mFaceNoseRight": {
+				"pos": [
+					0,
+					0,
+					0.003
+				]
+			},
+			"mFaceCheekUpperRight": {
+				"pos": [
+					0,
+					0,
+					0.001
+				]
+			}
+		},
+		"jawOpen": {
+			"mFaceJaw": {
+				"rot": [
+					0,
+					20,
+					0
+				]
+			}
+		},
+		"jawForward": {
+			"mFaceJaw": {
+				"pos": [
+					0.006,
+					0,
+					0
+				]
+			}
+		},
+		"jawLeft": {
+			"mFaceJaw": {
+				"rot": [
+					0,
+					0,
+					6
+				]
+			}
+		},
+		"jawRight": {
+			"mFaceJaw": {
+				"rot": [
+					0,
+					0,
+					-6
+				]
+			}
+		},
+		"mouthClose": {
+			"mFaceLipLowerCenter": {
+				"pos": [
+					0,
+					0,
+					0.004
+				]
+			},
+			"mFaceLipLowerLeft": {
+				"pos": [
+					0,
+					0,
+					0.004
+				]
+			},
+			"mFaceLipLowerRight": {
+				"pos": [
+					0,
+					0,
+					0.004
+				]
+			},
+			"mFaceLipUpperCenter": {
+				"pos": [
+					0,
+					0,
+					-0.002
+				]
+			}
+		},
+		"mouthFunnel": {
+			"mFaceLipUpperCenter": {
+				"pos": [
+					0.003,
+					0,
+					0.002
+				]
+			},
+			"mFaceLipLowerCenter": {
+				"pos": [
+					0.003,
+					0,
+					-0.002
+				]
+			},
+			"mFaceLipCornerRight": {
+				"pos": [
+					0,
+					-0.004,
+					0
+				]
+			},
+			"mFaceLipCornerLeft": {
+				"pos": [
+					0,
+					0.004,
+					0
+				]
+			}
+		},
+		"mouthPucker": {
+			"mFaceLipUpperCenter": {
+				"pos": [
+					0.004,
+					0,
+					0
+				]
+			},
+			"mFaceLipLowerCenter": {
+				"pos": [
+					0.004,
+					0,
+					0
+				]
+			},
+			"mFaceLipCornerRight": {
+				"pos": [
+					0.001,
+					-0.006,
+					0
+				]
+			},
+			"mFaceLipCornerLeft": {
+				"pos": [
+					0.001,
+					0.006,
+					0
+				]
+			}
+		},
+		"mouthLeft": {
+			"mFaceLipCornerRight": {
+				"pos": [
+					0,
+					0.005,
+					0
+				]
+			},
+			"mFaceLipCornerLeft": {
+				"pos": [
+					0,
+					0.005,
+					0
+				]
+			},
+			"mFaceLipUpperCenter": {
+				"pos": [
+					0,
+					0.005,
+					0
+				]
+			},
+			"mFaceLipLowerCenter": {
+				"pos": [
+					0,
+					0.005,
+					0
+				]
+			}
+		},
+		"mouthRight": {
+			"mFaceLipCornerRight": {
+				"pos": [
+					0,
+					-0.005,
+					0
+				]
+			},
+			"mFaceLipCornerLeft": {
+				"pos": [
+					0,
+					-0.005,
+					0
+				]
+			},
+			"mFaceLipUpperCenter": {
+				"pos": [
+					0,
+					-0.005,
+					0
+				]
+			},
+			"mFaceLipLowerCenter": {
+				"pos": [
+					0,
+					-0.005,
+					0
+				]
+			}
+		},
+		"mouthSmileLeft": {
+			"mFaceLipCornerRight": {
+				"pos": [
+					-0.003,
+					0.004,
+					0.006
+				]
+			},
+			"mFaceCheekUpperLeft": {
+				"pos": [
+					0,
+					0,
+					0.002
+				]
+			}
+		},
+		"mouthSmileRight": {
+			"mFaceLipCornerLeft": {
+				"pos": [
+					-0.003,
+					-0.004,
+					0.006
+				]
+			},
+			"mFaceCheekUpperRight": {
+				"pos": [
+					0,
+					0,
+					0.002
+				]
+			}
+		},
+		"mouthFrownLeft": {
+			"mFaceLipCornerRight": {
+				"pos": [
+					0,
+					0,
+					-0.006
+				]
+			}
+		},
+		"mouthFrownRight": {
+			"mFaceLipCornerLeft": {
+				"pos": [
+					0,
+					0,
+					-0.006
+				]
+			}
+		},
+		"mouthDimpleLeft": {
+			"mFaceLipCornerRight": {
+				"pos": [
+					-0.003,
+					0.002,
+					0
+				]
+			}
+		},
+		"mouthDimpleRight": {
+			"mFaceLipCornerLeft": {
+				"pos": [
+					-0.003,
+					-0.002,
+					0
+				]
+			}
+		},
+		"mouthStretchLeft": {
+			"mFaceLipCornerRight": {
+				"pos": [
+					0,
+					0.005,
+					-0.002
+				]
+			}
+		},
+		"mouthStretchRight": {
+			"mFaceLipCornerLeft": {
+				"pos": [
+					0,
+					-0.005,
+					-0.002
+				]
+			}
+		},
+		"mouthRollLower": {
+			"mFaceLipLowerCenter": {
+				"pos": [
+					-0.003,
+					0,
+					0.002
+				]
+			}
+		},
+		"mouthRollUpper": {
+			"mFaceLipUpperCenter": {
+				"pos": [
+					-0.003,
+					0,
+					-0.002
+				]
+			}
+		},
+		"mouthShrugLower": {
+			"mFaceLipLowerCenter": {
+				"pos": [
+					0,
+					0,
+					0.003
+				]
+			},
+			"mFaceChin": {
+				"pos": [
+					0,
+					0,
+					0.003
+				]
+			}
+		},
+		"mouthShrugUpper": {
+			"mFaceLipUpperCenter": {
+				"pos": [
+					0,
+					0,
+					0.003
+				]
+			}
+		},
+		"mouthPressLeft": {
+			"mFaceLipUpperLeft": {
+				"pos": [
+					0,
+					0,
+					-0.001
+				]
+			},
+			"mFaceLipLowerLeft": {
+				"pos": [
+					0,
+					0,
+					0.001
+				]
+			}
+		},
+		"mouthPressRight": {
+			"mFaceLipUpperRight": {
+				"pos": [
+					0,
+					0,
+					-0.001
+				]
+			},
+			"mFaceLipLowerRight": {
+				"pos": [
+					0,
+					0,
+					0.001
+				]
+			}
+		},
+		"mouthLowerDownLeft": {
+			"mFaceLipLowerLeft": {
+				"pos": [
+					0,
+					0,
+					-0.004
+				]
+			}
+		},
+		"mouthLowerDownRight": {
+			"mFaceLipLowerRight": {
+				"pos": [
+					0,
+					0,
+					-0.004
+				]
+			}
+		},
+		"mouthUpperUpLeft": {
+			"mFaceLipUpperLeft": {
+				"pos": [
+					0,
+					0,
+					0.004
+				]
+			}
+		},
+		"mouthUpperUpRight": {
+			"mFaceLipUpperRight": {
+				"pos": [
+					0,
+					0,
+					0.004
+				]
+			}
+		},
+		"tongueOut": {
+			"mFaceTongueBase": {
+				"pos": [
+					0.012,
+					0,
+					0
+				]
+			},
+			"mFaceTongueTip": {
+				"pos": [
+					0.012,
+					0,
+					-0.002
+				]
+			}
+		}
+	},
+	"gaze": {
+		"note": "Eye rotation comes from the sender's eye angles when it sends them (iFacialMocap eye fields, VMC LeftEye/RightEye bones), otherwise from the eyeLook shapes on the first eye bone. Every bone in eyes gets the same rotation. lids: the fraction of the eye's pitch each lid follows (looking down lowers the upper lid).",
+		"left": {
+			"eyes": [
+				"mEyeLeft",
+				"mFaceEyeAltLeft"
+			],
+			"lids": {
+				"mFaceEyeLidUpperLeft": 0.4,
+				"mFaceEyeLidLowerLeft": 0.15
+			}
+		},
+		"right": {
+			"eyes": [
+				"mEyeRight",
+				"mFaceEyeAltRight"
+			],
+			"lids": {
+				"mFaceEyeLidUpperRight": 0.4,
+				"mFaceEyeLidLowerRight": 0.15
+			}
+		}
+	},
+	"aliases": {
+		"a": {
+			"jawOpen": 0.7
+		},
+		"i": {
+			"jawOpen": 0.2,
+			"mouthStretchLeft": 0.6,
+			"mouthStretchRight": 0.6
+		},
+		"u": {
+			"jawOpen": 0.2,
+			"mouthPucker": 0.8
+		},
+		"e": {
+			"jawOpen": 0.4,
+			"mouthStretchLeft": 0.4,
+			"mouthStretchRight": 0.4
+		},
+		"o": {
+			"jawOpen": 0.5,
+			"mouthFunnel": 0.7
+		},
+		"aa": {
+			"jawOpen": 0.7
+		},
+		"ih": {
+			"jawOpen": 0.2,
+			"mouthStretchLeft": 0.6,
+			"mouthStretchRight": 0.6
+		},
+		"ou": {
+			"jawOpen": 0.2,
+			"mouthPucker": 0.8
+		},
+		"ee": {
+			"jawOpen": 0.4,
+			"mouthStretchLeft": 0.4,
+			"mouthStretchRight": 0.4
+		},
+		"oh": {
+			"jawOpen": 0.5,
+			"mouthFunnel": 0.7
+		},
+		"blink": {
+			"eyeBlinkLeft": 1,
+			"eyeBlinkRight": 1
+		},
+		"blink_l": {
+			"eyeBlinkLeft": 1
+		},
+		"blink_r": {
+			"eyeBlinkRight": 1
+		},
+		"blinkleft": {
+			"eyeBlinkLeft": 1
+		},
+		"blinkright": {
+			"eyeBlinkRight": 1
+		},
+		"joy": {
+			"mouthSmileLeft": 1,
+			"mouthSmileRight": 1,
+			"cheekSquintLeft": 0.5,
+			"cheekSquintRight": 0.5,
+			"eyeSquintLeft": 0.4,
+			"eyeSquintRight": 0.4
+		},
+		"happy": {
+			"mouthSmileLeft": 1,
+			"mouthSmileRight": 1,
+			"cheekSquintLeft": 0.5,
+			"cheekSquintRight": 0.5,
+			"eyeSquintLeft": 0.4,
+			"eyeSquintRight": 0.4
+		},
+		"angry": {
+			"browDownLeft": 1,
+			"browDownRight": 1,
+			"mouthFrownLeft": 0.5,
+			"mouthFrownRight": 0.5
+		},
+		"sorrow": {
+			"browInnerUp": 1,
+			"mouthFrownLeft": 0.7,
+			"mouthFrownRight": 0.7
+		},
+		"sad": {
+			"browInnerUp": 1,
+			"mouthFrownLeft": 0.7,
+			"mouthFrownRight": 0.7
+		},
+		"fun": {
+			"mouthSmileLeft": 0.8,
+			"mouthSmileRight": 0.8
+		},
+		"relaxed": {
+			"mouthSmileLeft": 0.5,
+			"mouthSmileRight": 0.5,
+			"eyeSquintLeft": 0.3,
+			"eyeSquintRight": 0.3
+		},
+		"surprised": {
+			"browInnerUp": 1,
+			"browOuterUpLeft": 1,
+			"browOuterUpRight": 1,
+			"eyeWideLeft": 1,
+			"eyeWideRight": 1,
+			"jawOpen": 0.4
+		}
+	},
+	"presets": {
+		"Natural": {
+			"*": 1.0
+		},
+		"Subtle": {
+			"*": 0.6
+		},
+		"Expressive": {
+			"*": 1.35,
+			"jawOpen": 1.1
+		}
+	}
+}

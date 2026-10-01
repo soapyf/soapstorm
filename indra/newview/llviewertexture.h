@@ -454,6 +454,9 @@ public:
     // An uncompressed create is queued or already running for this texture. Both flags are needed: mCreatePending is the main-thread queue and mNeedsCreateTexture covers the LLImageGLThread route, which does the GL work on a worker and would otherwise be touching the same LLImageGL as a BC7 upload. Not const because LLAtomicBase's conversion operator is not.
     bool ssBC7CreateInFlight()            { return mNeedsCreateTexture || mCreatePending; }
 
+    // Re-reads the alpha-mask verdict after an upload and dirties every face when it differs from the one the faces were built with; canRenderAsMask is baked into the pass assignment at genDrawInfo time, so a verdict that flips between discard levels reaches nothing without this. Main thread only. doc/alpha_mask_verdict.md
+    void ssSyncAlphaMaskVerdict();
+
     // Uploads a stored BC7 mip prefix. Mirrors by hand what LLGLTexture::createGLTexture(discard, imageraw, ...) does around the raw overload, because there is no LLGLTexture wrapper for the data_hasmips form and processTextureStats divides by mTexelsPerImage.
     // <SS:Nexii/> Squeeze pick masks - `pick_mask` is the stored per-texel click mask for the FULL base level, or null for an opaque texture; installed on the LLImageGL after the compressed upload, which cannot build its own.
     bool ssBC7UploadFromStore(const U8* data_in, S32 serve_discard, S32 full_width, S32 full_height, S32 src_components, S32 mip_count, bool alpha_is_mask,
@@ -565,6 +568,7 @@ protected:
     // This needs to be atomic, since it is written both in the main thread
     // and in the GL image worker thread... HB
     LLAtomicBool  mNeedsCreateTexture;
+    bool   mSSFaceMaskVerdict;      // <SS:Nexii/> the getIsAlphaMask() answer the faces last built against, see ssSyncAlphaMaskVerdict
 
     bool   mForSculpt ; //a flag if the texture is used as sculpt data.
     bool   mIsFetched ; //is loaded from remote or from cache, not generated locally.

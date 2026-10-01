@@ -54,6 +54,7 @@
 #include "llfloaterwebcontent.h"
 #include "fsfloatersearch.h"
 #include "llvoiceclient.h"
+#include "fsvatsimgui.h" // VATs ImGui UI
 
 //
 // Constants
@@ -1240,6 +1241,7 @@ bool LLViewerInput::mouseFromString(const std::string& string, EMouseClickType *
 
 bool LLViewerInput::handleKey(KEY translated_key, MASK translated_mask, bool repeated)
 {
+    if (FSVATsImGui::keyDown(translated_key, translated_mask)) return mKeyHandledByUI[translated_key] = true; // VATs ImGui UI
     // check for re-map
     EKeyboardMode mode = gViewerInput.getMode();
     U32 keyidx = (translated_mask<<16) | translated_key;

@@ -421,8 +421,12 @@ void FSFloaterKillFeed::drawOverlay()
     const F32 scale = llclamp((F32)text_scale, 0.5f, 3.f);
 
     gGL.pushMatrix();
-    gGL.translatef((F32)view_width * llclamp((F32)screen_x, 0.f, 1.f),
-                   (F32)view_height * llclamp((F32)screen_y, 0.f, 1.f), 0.f);
+    // <SS:KillFeed> Whole pixels: LLFontGL snaps each glyph to the pixel grid in its own
+    // coordinates, so a fractional origin here (a screen fraction of the view, which also
+    // changes height going in and out of mouselook) put every glyph between pixel rows and
+    // clipped their edges.
+    gGL.translatef((F32)ll_round((F32)view_width * llclamp((F32)screen_x, 0.f, 1.f)),
+                   (F32)ll_round((F32)view_height * llclamp((F32)screen_y, 0.f, 1.f)), 0.f);
     gGL.scalef(scale, scale, 1.f);
 
     // The block ALWAYS occupies max_lines rows stacking down from FSKillFeedScreenX/Y, whichever

@@ -3,7 +3,7 @@
 #define LL_LLKEYBOARDSDL2_H
 
 #include "llkeyboard.h"
-#include "SDL2/SDL.h"
+#include "SDL3/SDL.h"
 
 class LLKeyboardSDL : public LLKeyboard
 {

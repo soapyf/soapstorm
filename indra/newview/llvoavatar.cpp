@@ -134,6 +134,7 @@
 #include "fsdiscordconnect.h" // <FS:LO> tapping a place that happens on landing in world to start up discord
 #include "fslslbridge.h" // <FS:PP> Movelock position refresh
 #include "fssoundemitterblacklist.h"
+#include "fsvatshost.h" // VATs editor
 #include "lfsimfeaturehandler.h"    // <FS:CR> Opensim
 #include "lggcontactsets.h"
 #include "llcontrol.h"
@@ -1314,6 +1315,14 @@ void LLVOAvatar::cleanupClass()
 }
 
 LLPartSysData LLVOAvatar::sCloud;
+
+// <FS:TP> [FIRE-36987] track the signal connections so initCloud() can
+// disconnect and reconnect cleanly if it runs more than once (there is
+// a menu option to reload the particle cloud)
+boost::signals2::connection LLVOAvatar::sCloudColorStartConnection;
+boost::signals2::connection LLVOAvatar::sCloudColorEndConnection;
+// </FS:TP>
+
 void LLVOAvatar::initCloud()
 {
     // fancy particle cloud designed by Brent
@@ -1350,7 +1359,50 @@ void LLVOAvatar::initCloud()
     // llifstream in_file_muted(filename);
     llifstream in_file_muted(filename.c_str());
     // </FS:ND>
+
+    // <FS:TP> [FIRE-36987] Selectable avatar loading/bakefail cloud color
+    // Apply whatever start/end colors are currently saved, on top of
+    // whatever cloud.xml just loaded above, then keep re-applying live if
+    // the user changes either preference later (no restart needed - see
+    // applyCloudColor()).
+    applyCloudColor();
+
+    // disconnect any previous connection first, since initCloud() can run
+    // more than once (menu option to reload the particle cloud), then bind
+    // straight to applyCloudColor() - no wrapper needed since the signal's
+    // new_value/old_value aren't used
+    if (sCloudColorStartConnection.connected())
+    {
+        sCloudColorStartConnection.disconnect();
+    }
+    sCloudColorStartConnection = gSavedSettings.getControl("FSCloudColorStart")->getSignal()->connect(
+        boost::bind(&LLVOAvatar::applyCloudColor));
+
+    if (sCloudColorEndConnection.connected())
+    {
+        sCloudColorEndConnection.disconnect();
+    }
+    sCloudColorEndConnection = gSavedSettings.getControl("FSCloudColorEnd")->getSignal()->connect(
+        boost::bind(&LLVOAvatar::applyCloudColor));
+    // </FS:TP>
 }
+
+void LLVOAvatar::applyCloudColor()
+{
+    // Same alpha envelope (0.1 -> 0.9) and burst/scale/pattern as the
+    // stock Firestorm cloud.xml - only the start/end hues are user
+    // configurable, so changing colors doesn't change the shape/behavior
+    // of the effect. Alpha is intentionally not exposed to the color
+    // pickers and is forced back to the stock values here.
+    LLColor4 start_color = gSavedSettings.getColor4("FSCloudColorStart");
+    LLColor4 end_color   = gSavedSettings.getColor4("FSCloudColorEnd");
+    start_color.mV[VALPHA] = 0.1f;
+    end_color.mV[VALPHA]   = 0.9f;
+
+    sCloud.mPartData.mStartColor = start_color;
+    sCloud.mPartData.mEndColor   = end_color;
+}
+// </FS:TP>
 
 // virtual
 void LLVOAvatar::initInstance()
@@ -3861,6 +3913,7 @@ void LLVOAvatar::idleUpdateNameTag(const LLVector3& root_pos_last)
         static LLCachedControl<S32> name_tag_mode(gSavedSettings, "AvatarNameTagMode");
         render_name = render_name
             && !gAgentCamera.cameraMouselook()
+            && !FSVATsEditor::hidesYourAvatar() // VATs editor: no name tag over the body swapped into your place
             && (visible_chat || (render_name_show_self && name_tag_mode));
     }
 
@@ -7490,6 +7543,7 @@ bool LLVOAvatar::startMotion(const LLUUID& id, F32 time_offset)
     // <FS:Zi> Animation Overrider
     //LLUUID remap_id = remapMotionID(id, getSex());
     LLUUID remap_id;
+    if (isSelf() && FSVATsEditor::takesLocomotion(id)) return true; // VATs editor: its walk test plays this walk
     if (isSelf())
     {
         remap_id = AOEngine::getInstance()->override(id, true);
@@ -9676,6 +9730,7 @@ bool LLVOAvatar::isVisible() const
     {
         return false;
     }
+    if (isSelf() && FSVATsEditor::hidesYourAvatar()) return false; // VATs editor: its body swap shows another body in your place
     static LLCachedControl<bool> friends_only(gSavedSettings, "RenderAvatarFriendsOnly", false);
     return mDrawable.notNull()
         && (!mOrphaned || isSelf())
@@ -13820,6 +13875,7 @@ F32 LLVOAvatar::getAverageGPURenderTime()
 
 bool LLVOAvatar::isBuddy() const
 {
+    if (FSVATsEditor::hidesOtherAvatars()) return false; // VATs editor: Render Only Friends hides friends too
     bool is_friend = false;
     F64 now = LLFrameTimer::getTotalSeconds();
     if (now < mCachedBuddyListUpdateTime)
@@ -13886,12 +13942,36 @@ bool LLVOAvatar::isUsingServerBakes() const
     // Sanity check - visual param for appearance version should match mUseServerBakes
     LLVisualParam* appearance_version_param = getVisualParam(11000);
     llassert(appearance_version_param);
-    F32 wt = appearance_version_param->getWeight();
-    F32 expect_wt = mUseServerBakes ? 1.0f : 0.0f;
-    if (!is_approx_equal(wt,expect_wt))
+    // <SS:Nexii> Null-guarded, named, and reported once per avatar rather than once per read.
+    //
+    // llassert compiles out of a release build, so the getWeight() below used to dereference
+    // whatever getVisualParam returned -- a null there was a crash, not an assert.
+    //
+    // This is a read-side detector for a write-side divergence: mUseServerBakes is only ever
+    // assigned in the constructor and in setIsUsingServerBakes, which keeps the param in step,
+    // so a mismatch means appearance processing rewrote visual param 11000 underneath it. That
+    // is worth knowing once. It is not worth knowing on every call, and isUsingServerBakes() is
+    // called per baked texture per avatar from updateTextures. An untagged LL_WARNS fired 233
+    // times in one session on a crowded sim, each one a formatted write under log-always-flush.
+    //
+    // The avatar id is in the message because LL_WARNS_ONCE dedupes on message text: that makes
+    // it once per diverging avatar, which is the granularity that tells you anything.
+    if (appearance_version_param)
     {
-        LL_WARNS() << "wt " << wt << " differs from expected " << expect_wt << LL_ENDL;
+        F32 wt = appearance_version_param->getWeight();
+        F32 expect_wt = mUseServerBakes ? 1.0f : 0.0f;
+        if (!is_approx_equal(wt, expect_wt))
+        {
+            // Weights are rounded in the message so the LL_WARNS_ONCE key stays bounded: param
+            // 11000 is group 0, so animateTweakableVisualParams can interpolate it, and a
+            // continuously varying wt would put a distinct key in the global dedupe map for
+            // every intermediate value. The reachable weights are 0 and 1 either way.
+            LL_WARNS_ONCE("Avatar") << "Avatar " << getID() << ": appearance version param weight "
+                                    << ll_round(wt) << " differs from the expected " << ll_round(expect_wt)
+                                    << " for mUseServerBakes; the flag is authoritative." << LL_ENDL;
+        }
     }
+    // </SS:Nexii>
 #endif
 
     return mUseServerBakes;
@@ -13902,6 +13982,13 @@ void LLVOAvatar::setIsUsingServerBakes(bool newval)
     mUseServerBakes = newval;
     LLVisualParam* appearance_version_param = getVisualParam(11000);
     llassert(appearance_version_param);
-    appearance_version_param->setWeight(newval ? 1.0f : 0.0f, false);
+    // <SS:Nexii> Same null guard as the read side above, and for the same reason: llassert
+    // compiles out of a release build, so a missing param 11000 was a dereference of null here
+    // too. The flag is still set either way -- it is the authoritative value.
+    if (appearance_version_param)
+    {
+        appearance_version_param->setWeight(newval ? 1.0f : 0.0f, false);
+    }
+    // </SS:Nexii>
 }
 // </FS:Ansariel> [Legacy Bake]

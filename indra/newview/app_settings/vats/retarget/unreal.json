@@ -1,0 +1,101 @@
+{
+	"name": "Unreal Mannequin",
+	"mirror": [
+		[
+			"Left",
+			"Right"
+		],
+		[
+			"_l",
+			"_r"
+		]
+	],
+	"bones": {
+		"mPelvis": [
+			"pelvis"
+		],
+		"mTorso": [
+			"spine_01"
+		],
+		"mChest": [
+			"spine_05",
+			"spine_04",
+			"spine_03"
+		],
+		"mNeck": [
+			"neck_01"
+		],
+		"mHead": [
+			"head"
+		],
+		"mCollarLeft": [
+			"clavicle_l"
+		],
+		"mShoulderLeft": [
+			"upperarm_l"
+		],
+		"mElbowLeft": [
+			"lowerarm_l"
+		],
+		"mWristLeft": [
+			"hand_l"
+		],
+		"mHipLeft": [
+			"thigh_l"
+		],
+		"mKneeLeft": [
+			"calf_l"
+		],
+		"mAnkleLeft": [
+			"foot_l"
+		],
+		"mFootLeft": [
+			"ball_l"
+		],
+		"mHandThumb1Left": [
+			"thumb_01_l"
+		],
+		"mHandThumb2Left": [
+			"thumb_02_l"
+		],
+		"mHandThumb3Left": [
+			"thumb_03_l"
+		],
+		"mHandIndex1Left": [
+			"index_01_l"
+		],
+		"mHandIndex2Left": [
+			"index_02_l"
+		],
+		"mHandIndex3Left": [
+			"index_03_l"
+		],
+		"mHandMiddle1Left": [
+			"middle_01_l"
+		],
+		"mHandMiddle2Left": [
+			"middle_02_l"
+		],
+		"mHandMiddle3Left": [
+			"middle_03_l"
+		],
+		"mHandRing1Left": [
+			"ring_01_l"
+		],
+		"mHandRing2Left": [
+			"ring_02_l"
+		],
+		"mHandRing3Left": [
+			"ring_03_l"
+		],
+		"mHandPinky1Left": [
+			"pinky_01_l"
+		],
+		"mHandPinky2Left": [
+			"pinky_02_l"
+		],
+		"mHandPinky3Left": [
+			"pinky_03_l"
+		]
+	}
+}

@@ -15,7 +15,7 @@ with the same filename but different name
   preload="true" (optional, false by default)
     - If true, we will attempt to load the image before displaying any UI.
       If false, we will load in the background after initializing the UI.
-  use_mips="true" (currently unused)
+  use_mips="true" (optional: load with mipmaps, for images drawn much smaller than their size)
   scale.left="1"
   scale.bottom="1"
   scale.top="15"
@@ -134,6 +134,10 @@ with the same filename but different name
   <texture name="Cam_Store_Pos" file_name="bottomtray/camera_store.png" preload="false" />
   <texture name="Cam_Load_Pos" file_name="bottomtray/camera_load.png" preload="false" />
   <!-- END FS:Ansariel: FIRE-7758: 7758 -->
+  
+  <texture name="Camera_Off" file_name="icons/Camera_Off.png" preload="false" />
+  <texture name="Camera_Over" file_name="icons/Camera_Over.png" preload="false" />
+  <texture name="Camera_Press" file_name="icons/Camera_Press.png" preload="false" />
   
   <texture name="Checkbox_Off_Disabled" file_name="widgets/Checkbox_Disabled.png" preload="true" />
   <texture name="Checkbox_On_Disabled" file_name="widgets/Checkbox_On_Disabled.png" preload="true" />

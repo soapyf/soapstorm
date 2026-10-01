@@ -1,0 +1,115 @@
+{
+	"name": "CMU / Rokoko BVH",
+	"mirror": [
+		[
+			"Left",
+			"Right"
+		]
+	],
+	"bones": {
+		"mPelvis": [
+			"Hips"
+		],
+		"mTorso": [
+			"Spine",
+			"LowerBack"
+		],
+		"mChest": [
+			"Spine4",
+			"Spine3",
+			"Spine2",
+			"Spine1"
+		],
+		"mNeck": [
+			"Neck"
+		],
+		"mHead": [
+			"Head"
+		],
+		"mCollarLeft": [
+			"LeftShoulder"
+		],
+		"mShoulderLeft": [
+			"LeftArm"
+		],
+		"mElbowLeft": [
+			"LeftForeArm"
+		],
+		"mWristLeft": [
+			"LeftHand"
+		],
+		"mHipLeft": [
+			"LeftUpLeg"
+		],
+		"mKneeLeft": [
+			"LeftLeg"
+		],
+		"mAnkleLeft": [
+			"LeftFoot"
+		],
+		"mFootLeft": [
+			"LeftToeBase",
+			"LeftToe"
+		],
+		"mHandThumb1Left": [
+			"LeftFinger11",
+			"Left1Proximal"
+		],
+		"mHandThumb2Left": [
+			"LeftFinger12",
+			"Left1Medial"
+		],
+		"mHandThumb3Left": [
+			"LeftFinger13",
+			"Left1Distal"
+		],
+		"mHandIndex1Left": [
+			"LeftFinger21",
+			"Left2Proximal"
+		],
+		"mHandIndex2Left": [
+			"LeftFinger22",
+			"Left2Medial"
+		],
+		"mHandIndex3Left": [
+			"LeftFinger23",
+			"Left2Distal"
+		],
+		"mHandMiddle1Left": [
+			"LeftFinger31",
+			"Left3Proximal"
+		],
+		"mHandMiddle2Left": [
+			"LeftFinger32",
+			"Left3Medial"
+		],
+		"mHandMiddle3Left": [
+			"LeftFinger33",
+			"Left3Distal"
+		],
+		"mHandRing1Left": [
+			"LeftFinger41",
+			"Left4Proximal"
+		],
+		"mHandRing2Left": [
+			"LeftFinger42",
+			"Left4Medial"
+		],
+		"mHandRing3Left": [
+			"LeftFinger43",
+			"Left4Distal"
+		],
+		"mHandPinky1Left": [
+			"LeftFinger51",
+			"Left5Proximal"
+		],
+		"mHandPinky2Left": [
+			"LeftFinger52",
+			"Left5Medial"
+		],
+		"mHandPinky3Left": [
+			"LeftFinger53",
+			"Left5Distal"
+		]
+	}
+}

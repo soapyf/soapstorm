@@ -328,10 +328,45 @@ LLSD LLSettingsBase::interpolateSDValue(const std::string& key_name, const LLSD 
 
     if (other_value.type() != setting_type)
     {
-        // The data type mismatched between this and other. Hard switch when we pass the break point
-        // but issue a warning.
-        LL_WARNS("SETTINGS") << "Setting lerp between mismatched types for '" << key_name << "'." << LL_ENDL;
-        new_value = (mix > BREAK_POINT) ? other_value : value;
+        // <SS:Nexii> The mismatch branch computed a hard switch and then fell through into the
+        // switch below, which overwrote it -- so for Integer, Real, Map, Array and UUID the
+        // documented behaviour never happened and mismatched types were blended anyway. Taking
+        // the switch matters most for a slerp key: an Array blended against an Undefined built
+        // LLQuaternion(undef) == (0,0,0,0) and slerp() does not renormalise.
+        //
+        // An undefined TARGET holds the source value for the whole transition instead. Hard
+        // switching to it would hand back the undef across the upper half of the blend, which
+        // for a slerp key is LLQuaternion(undef) == (0,0,0,0) all over again, over a wider range
+        // than the old code produced. The other direction -- an undefined SOURCE -- falls
+        // through to the hard switch below, which is what the old default: arm already did.
+        //
+        // Types that asReal() blends sensibly are exempt and still lerp, so that arithmetic is
+        // untouched: Integer and Real, plus Boolean and String, which unvalidated grid data can
+        // legitimately carry for a numeric key.
+        //
+        // The warning is throttled because the sole caller, LLSettingsInjected::applyInjections
+        // in llenvironment.cpp, runs per frame per injected key, and any key the source settings
+        // lack arrives here as a mismatch on every one of those frames.
+        if (other_value.isUndefined())
+        {
+            return value;       // nothing to switch to
+        }
+
+        auto blends_as_number = [](LLSD::Type t)
+        {
+            return t == LLSD::TypeInteger || t == LLSD::TypeReal
+                || t == LLSD::TypeBoolean || t == LLSD::TypeString;
+        };
+        const bool both_numeric = blends_as_number(setting_type) && blends_as_number(other_value.type());
+
+        if (!both_numeric)
+        {
+            LL_WARNS_ONCE("SETTINGS") << "Setting lerp between mismatched types for '" << key_name
+                                      << "': " << LLSD::typeString(setting_type) << " against "
+                                      << LLSD::typeString(other_value.type())
+                                      << ". Taking one side rather than blending them." << LL_ENDL;
+            return (mix > BREAK_POINT) ? other_value : value;
+        }
     }
 
     switch (setting_type)

@@ -29,6 +29,8 @@
 
 #include "llagent.h"
 
+#include "fsvatshost.h" // VATs editor
+
 #include "pipeline.h"
 
 #include "llagentaccess.h"
@@ -1743,6 +1745,7 @@ U32 LLAgent::getControlFlags()
 //-----------------------------------------------------------------------------
 void LLAgent::setControlFlags(U32 mask)
 {
+    mask = FSVATsEditor::filterControls(mask); // VATs editor: no movement or Stand Up while it holds the avatar
     mControlFlags |= mask;
 }
 

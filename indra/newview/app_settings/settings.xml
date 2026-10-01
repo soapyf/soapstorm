@@ -12889,6 +12889,17 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Backup</key>
       <integer>1</integer>
     </map>
+    <key>SSAlphaMaskTrustedDiscard</key>
+    <map>
+      <key>Comment</key>
+      <string>Coarsest texture discard level whose automatic alpha-mask verdict is trusted (finer levels are also trusted; coarser levels are provisional). Textures uploaded at a coarser level than this are treated as alpha masks when nearly every texel is opaque, instead of being alpha-blended (and depth-sorted) until a trusted level arrives. 2 = quarter resolution and finer are trusted (eighth resolution and coarser are provisional). -1 = stock behaviour, every level is trusted.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>2</integer>
+    </map>
     <!-- </SS:Nexii> -->
     <key>RenderHighlightSelections</key>
     <map>
@@ -17986,6 +17997,50 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <string>English (United States),Second Life Glossary</string>
     </map>
+    <key>VATsEditor</key>
+    <map>
+      <key>Comment</key>
+      <string>Shows the VATs editor (Viewport Avatar Toolset's own UI) over the world. Avatar menu: VATs Editor.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>VATsShowViewerUI</key>
+    <map>
+      <key>Comment</key>
+      <string>While the VATs editor is open: shows the viewer's own UI (toolbars, bars, windows) over it, and moves the editor's panels in so they don't overlap. Avatar menu or the editor's Viewer menu: Show Firestorm UI; Alt+Shift+U.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>VATsFaceCheck</key>
+    <map>
+      <key>Comment</key>
+      <string>Set to run the VATs editor's face-positions check once (Developer menu: VATs: Check Face Positions): the upload bytes played locally against the editor's preview, and the SL Default control; the result goes to the log, the editor's status bar and a tip.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>VATsImGuiTest</key>
+    <map>
+      <key>Comment</key>
+      <string>Shows the VATs ImGui host test (the Dear ImGui demo and a docking test window) over the viewer. Develop menu: VATs UI test.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
     <key>UseNewWalkRun</key>
     <map>
       <key>Comment</key>
@@ -18168,6 +18223,7 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <real>2.0</real>
     </map>
+    <!-- # <FS:TJ> Keep Vivox only for OpenSim viewers -->
     <key>VivoxAutoPostCrashDumps</key>
     <map>
       <key>Comment</key>
@@ -18279,50 +18335,91 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Backup</key>
       <integer>0</integer>
     </map>
-  <key>VivoxVadAuto</key>
-  <map>
-    <key>Comment</key>
-    <string>A flag indicating if the automatic VAD is enabled (1) or disabled (0). The individual settings are ignored if the auto-mode is enabled</string>
-    <key>Persist</key>
-    <integer>1</integer>
-    <key>Type</key>
-    <string>U32</string>
-    <key>Value</key>
-    <integer>0</integer>
-  </map>
-  <key>VivoxVadHangover</key>
-  <map>
-    <key>Comment</key>
-    <string>The time (in milliseconds) that it takes or the VAD to switch back to silence from speech mode after the last speech frame has been detected</string>
-    <key>Persist</key>
-    <integer>1</integer>
-    <key>Type</key>
-    <string>U32</string>
-    <key>Value</key>
-    <integer>2000</integer>
-  </map>
-  <key>VivoxVadNoiseFloor</key>
-  <map>
-    <key>Comment</key>
-    <string>A dimensionless value between 0 and 20000 (default 576) that controls the maximum level at which the noise floor may be set at by the VAD's noise tracking</string>
-    <key>Persist</key>
-    <integer>1</integer>
-    <key>Type</key>
-    <string>U32</string>
-    <key>Value</key>
-    <integer>576</integer>
-  </map>
-  <key>VivoxVadSensitivity</key>
-  <map>
-    <key>Comment</key>
-    <string>A dimensionless value between 0 and 100, indicating the 'sensitivity of the VAD'. Increasing this value corresponds to decreasing the sensitivity of the VAD and 0 is turned off altogether</string>
-    <key>Persist</key>
-    <integer>1</integer>
-    <key>Type</key>
-    <string>U32</string>
-    <key>Value</key>
-    <integer>0</integer>
-  </map>
+    <key>VivoxVadAuto</key>
+    <map>
+      <key>Comment</key>
+      <string>A flag indicating if the automatic VAD is enabled (1) or disabled (0). The individual settings are ignored if the auto-mode is enabled</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>U32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>VivoxVadHangover</key>
+    <map>
+      <key>Comment</key>
+      <string>The time (in milliseconds) that it takes or the VAD to switch back to silence from speech mode after the last speech frame has been detected</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>U32</string>
+      <key>Value</key>
+      <integer>2000</integer>
+    </map>
+    <key>VivoxVadNoiseFloor</key>
+    <map>
+      <key>Comment</key>
+      <string>A dimensionless value between 0 and 20000 (default 576) that controls the maximum level at which the noise floor may be set at by the VAD's noise tracking</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>U32</string>
+      <key>Value</key>
+      <integer>576</integer>
+    </map>
+    <key>VivoxVadSensitivity</key>
+    <map>
+      <key>Comment</key>
+      <string>A dimensionless value between 0 and 100, indicating the 'sensitivity of the VAD'. Increasing this value corresponds to decreasing the sensitivity of the VAD and 0 is turned off altogether</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>U32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>VoiceHost</key>
+    <map>
+      <key>Comment</key>
+      <string>Client SLVoice host to connect to</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>String</string>
+      <key>Value</key>
+      <string>127.0.0.1</string>
+      <key>Backup</key>
+      <integer>0</integer>
+    </map>
+    <key>VoiceLogFile</key>
+    <map>
+      <key>Comment</key>
+      <string>Log file to use when launching the voice daemon</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>String</string>
+      <key>Value</key>
+      <string></string>
+      <key>Backup</key>
+      <integer>0</integer>
+    </map>
+    <key>VoicePort</key>
+    <map>
+      <key>Comment</key>
+      <string>Client SLVoice port to connect to</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>U32</string>
+      <key>Value</key>
+      <integer>44125</integer>
+      <key>Backup</key>
+      <integer>0</integer>
+    </map>
+    <!-- </FS:TJ> -->
+
     <key>VoiceCallsRejectGroup</key>
     <!-- deprecated (see SL-12871) -->
     <map>
@@ -18410,19 +18507,6 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Type</key>
       <string>S32</string>
       <key>Value</key>
-      <integer>0</integer>
-    </map>
-    <key>VoiceHost</key>
-    <map>
-      <key>Comment</key>
-      <string>Client SLVoice host to connect to</string>
-      <key>Persist</key>
-      <integer>1</integer>
-      <key>Type</key>
-      <string>String</string>
-      <key>Value</key>
-      <string>127.0.0.1</string>
-      <key>Backup</key>
       <integer>0</integer>
     </map>
     <key>VoiceImageLevel0</key>
@@ -18513,19 +18597,6 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <string>Default</string>
     </map>
-    <key>VoiceLogFile</key>
-    <map>
-      <key>Comment</key>
-      <string>Log file to use when launching the voice daemon</string>
-      <key>Persist</key>
-      <integer>1</integer>
-      <key>Type</key>
-      <string>String</string>
-      <key>Value</key>
-      <string></string>
-      <key>Backup</key>
-      <integer>0</integer>
-    </map>
     <key>VoiceOutputAudioDevice</key>
     <map>
       <key>Comment</key>
@@ -18547,19 +18618,6 @@ Change of this parameter will affect the layout of buttons in notification toast
       <string>S32</string>
       <key>Value</key>
       <integer>10</integer>
-    </map>
-    <key>VoicePort</key>
-    <map>
-      <key>Comment</key>
-      <string>Client SLVoice port to connect to</string>
-      <key>Persist</key>
-      <integer>1</integer>
-      <key>Type</key>
-      <string>U32</string>
-      <key>Value</key>
-      <integer>44125</integer>
-      <key>Backup</key>
-      <integer>0</integer>
     </map>
     <key>VoiceEchoCancellation</key>
     <map>
@@ -19291,7 +19349,18 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>OutfitListSortOrder</key>
     <map>
       <key>Comment</key>
-      <string>How outfit list in Avatar's floater is sorted. 0 - by name 1 - favorites to top</string>
+      <string>How outfit list in Avatar's floater is sorted. 0 - by name 1 - favorites to top (unused in favour of FSOutfitListSortOrder)</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>FSOutfitListSortOrder</key>
+    <map>
+      <key>Comment</key>
+      <string>How outfit list in Avatar's floater is sorted. Bitmask: 0x1 - favorites to top, 0x2 - newest first instead of alphabetical</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -24188,6 +24257,19 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>Value</key>
     <integer>1</integer>
   </map>
+  <!-- <FS:TP> [FIRE-34881] Show/hide the Library root folder -->
+  <key>FSShowLibraryFolder</key>
+  <map>
+    <key>Comment</key>
+    <string>Show/hide the Library root folder in the Inventory floater</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>1</integer>
+  </map>
+  <!-- </FS:TP> [FIRE-34881] -->
   <key>StatsReportMaxDuration</key>
   <map>
     <key>Comment</key>
@@ -28973,7 +29055,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>FSRadarShowMutedAndDerendered</key>
     <map>
       <key>Comment</key>
-      <string>If enabled, show muted or derendered avatars in radar list</string>
+      <string>If enabled, show blocked/muted or derendered avatars in radar list</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -31638,6 +31720,51 @@ Change of this parameter will affect the layout of buttons in notification toast
       <string>Boolean</string>
       <key>Value</key>
       <integer>1</integer>
+    </map>
+    <!-- <FS:TP> [FIRE-36987] Selectable avatar loading/bakefail cloud color -->
+    <key>FSCloudColorStart</key>
+    <map>
+      <key>Comment</key>
+      <string>Start color (and alpha) of the avatar loading/bakefail "cloud" particle effect.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Color4</string>
+      <key>Value</key>
+      <array>
+        <real>0.666</real>
+        <real>0.228</real>
+        <real>0.13</real>
+        <real>0.1</real>
+      </array>
+    </map>
+    <key>FSCloudColorEnd</key>
+    <map>
+      <key>Comment</key>
+      <string>End color (and alpha) of the avatar loading/bakefail "cloud" particle effect.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Color4</string>
+      <key>Value</key>
+      <array>
+        <real>0.766</real>
+        <real>0.328</real>
+        <real>0.23</real>
+        <real>0.9</real>
+      </array>
+    </map>
+    <!-- </FS:TP> -->
+    <key>FSStreamtitleHistoryLength</key>
+    <map>
+        <key>Comment</key>
+        <string>The maximum number of stream titles shown in the history</string>
+        <key>Persist</key>
+        <integer>1</integer>
+        <key>Type</key>
+        <string>U32</string>
+        <key>Value</key>
+        <integer>10</integer>
     </map>
   </map>
 </llsd>
