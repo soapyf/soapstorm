@@ -32,50 +32,27 @@
 
     <panel
      class="panel_preference"
-     filename="panel_preferences_soapstorm_login.xml"
-     label="Login Options"
+     filename="panel_preferences_soapstorm_env.xml"
+     label="Environment"
      layout="topleft"
      help_topic="preferences_soapstorm_tab"
-     name="soapstorm_login" />
+     name="soapstorm_env" />
 
     <panel
      class="panel_preference"
-     filename="panel_preferences_soapstorm_sounds.xml"
-     label="Sounds"
+     filename="panel_preferences_soapstorm_perf.xml"
+     label="Performance"
      layout="topleft"
      help_topic="preferences_soapstorm_tab"
-     name="soapstorm_sounds" />
+     name="soapstorm_perf" />
 
     <panel
      class="panel_preference"
-     filename="panel_preferences_soapstorm_atmo.xml"
-     label="Atmo Magic"
+     filename="panel_preferences_soapstorm_general.xml"
+     label="General"
      layout="topleft"
      help_topic="preferences_soapstorm_tab"
-     name="soapstorm_atmo" />
-  
-    <panel
-     filename="panel_preferences_ss_roc.xml"
-     label="Region Object Cache"
-     layout="topleft"
-     help_topic="preferences_soapstorm_tab"
-     name="ss_roc" />
-
-    <panel
-     class="panel_preference"
-     filename="panel_preferences_ss_squeeze.xml"
-     label="Squeeze"
-     layout="topleft"
-     help_topic="preferences_soapstorm_tab"
-     name="ss_squeeze" />
-
-    <panel
-     class="panel_preference"
-     filename="panel_preferences_ss_pbr.xml"
-     label="PBR"
-     layout="topleft"
-     help_topic="preferences_soapstorm_tab"
-     name="ss_pbr" />
+     name="soapstorm_general" />
 
 </tab_container>
 

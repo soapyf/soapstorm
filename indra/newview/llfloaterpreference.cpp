@@ -68,6 +68,7 @@
 //#include "llpanellogin.h"
 #include "fspanellogin.h"
 // </FS:Ansariel> [FS Login Panel]
+#include "fscombathitmarker.h"
 #include "llpanelvoicedevicesettings.h"
 #include "llradiogroup.h"
 #include "llsearchcombobox.h"
@@ -487,6 +488,9 @@ LLFloaterPreference::LLFloaterPreference(const LLSD& key)
     mCommitCallbackRegistrar.add("Pref.KillFeedSettings",           boost::bind(&LLFloaterPreference::onClickKillFeedSettings, this));
     mCommitCallbackRegistrar.add("Pref.ADSSettings",                boost::bind(&LLFloaterPreference::onClickADSSettings, this));
     mCommitCallbackRegistrar.add("Pref.OTSSettings",                boost::bind(&LLFloaterPreference::onClickOTSSettings, this));
+    mCommitCallbackRegistrar.add("Pref.TestHitSound",               boost::bind(&LLFloaterPreference::onClickTestHitSound, this));
+    mCommitCallbackRegistrar.add("Pref.TestKillSound",              boost::bind(&LLFloaterPreference::onClickTestKillSound, this));
+    mCommitCallbackRegistrar.add("Pref.CustomizeHitSymbols",        boost::bind(&LLFloaterPreference::onClickCustomizeHitSymbols, this));
     mCommitCallbackRegistrar.add("Pref.BrowseSplashImage",          boost::bind(&LLFloaterPreference::onClickBrowseSplashImage, this));
     mCommitCallbackRegistrar.add("Pref.BrowseLoginLogo",            boost::bind(&LLFloaterPreference::onClickBrowseLoginLogo, this));
     mCommitCallbackRegistrar.add("Pref.SetCache",               boost::bind(&LLFloaterPreference::onClickSetCache, this));
@@ -1746,6 +1750,21 @@ void LLFloaterPreference::onClickADSSettings()
 void LLFloaterPreference::onClickOTSSettings()
 {
     LLFloaterReg::showInstance("fs_ots_options");
+}
+
+void LLFloaterPreference::onClickTestHitSound()
+{
+    FSCombatHitMarker::playHitSoundPreview();
+}
+
+void LLFloaterPreference::onClickTestKillSound()
+{
+    FSCombatHitMarker::playKillSoundPreview();
+}
+
+void LLFloaterPreference::onClickCustomizeHitSymbols()
+{
+    LLFloaterReg::showInstance("fs_hit_marker_emojis");
 }
 
 // Offline login splash: pick a local image for the login background

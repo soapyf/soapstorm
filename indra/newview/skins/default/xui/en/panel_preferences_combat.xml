@@ -10,316 +10,1080 @@
  label="Combat"
  name="combat">
 
-    <!-- ===== Target identification ===== -->
-    <text
-     type="string"
-     length="1"
-     follows="left|top"
-     font="SansSerifSmallBold"
-     height="16"
-     layout="topleft"
-     left="10"
-     top="10"
-     width="520">
-        Target Identification
-    </text>
-    <check_box
-     control_name="FSMouselookCombatFeatures"
-     follows="left|top"
-     enabled_control="EnableMouselook"
-     height="16"
-     label="Enable combat features"
-     layout="topleft"
-     left="10"
-     name="FSMouselookCombatFeatures"
-     top_pad="8"
-     width="256" />
-    <check_box
-     control_name="ExodusMouselookIFF"
-     follows="left|top"
-     height="16"
-     label="Draw target markers"
-     layout="topleft"
-     left="28"
-     name="ExodusMouselookIFF"
-     top_pad="5"
-     width="256" />
-    <slider
-     control_name="ExodusMouselookIFFRange"
-     follows="left|top"
-     height="15"
-     can_edit_text="true"
-     decimal_digits="0"
-     increment="5"
-     layout="topleft"
-     label="Range (m):"
-     label_width="150"
-     show_text="true"
-     left="33"
-     max_val="500"
-     name="ExodusMouselookIFFRange"
-     top_pad="5"
-     width="333" />
-    <check_box
-     control_name="ExodusMouselookIFFShowName"
-     follows="left|top"
-     height="16"
-     label="Show target name"
-     layout="topleft"
-     left="28"
-     name="ExodusMouselookIFFShowName"
-     tool_tip="Show the identified target's name under the crosshair. When off, identification still drives the crosshair color and combat feedback."
-     top_pad="5"
-     width="256" />
+<tab_container
+ label="Combat"
+ layout="topleft"
+ follows="all"
+ top="5"
+ bottom="-1"
+ left="1"
+ right="-1"
+ name="combat_tabs"
+ tab_min_width="50"
+ tab_position="top">
 
-    <!-- ===== Hit marker and crosshair ===== -->
-    <text
-     type="string"
-     length="1"
-     follows="left|top"
-     font="SansSerifSmallBold"
-     height="16"
+    <!-- ==================== TAB 1: CAMERA ==================== -->
+    <panel
+     class="panel_preference"
+     label="Camera"
      layout="topleft"
-     left="10"
-     top_pad="14"
-     width="520">
-        Hit Marker and Crosshair
-    </text>
-    <check_box
-     control_name="FSHitMarkerEnabled"
-     follows="left|top"
-     height="16"
-     label="Hitmarker (flash + sound on hit)"
-     layout="topleft"
-     left="10"
-     name="FSHitMarkerEnabledPref"
-     tool_tip="Combat 2.0 regions, via the LSL bridge"
-     top_pad="8"
-     width="256" />
-    <button
-     follows="left|top"
-     layout="topleft"
-     left_delta="260"
-     top_delta="-2"
-     height="20"
-     width="80"
-     label="Options..."
-     name="hit_marker_options_btn"
-     tool_tip="Hitmarker, crosshair, hit report and sound options">
-        <button.commit_callback
-         function="Pref.HitMarkerSettings" />
-    </button>
+     name="combat_camera">
 
-    <!-- ===== Kill feed ===== -->
-    <text
-     type="string"
-     length="1"
-     follows="left|top"
-     font="SansSerifSmallBold"
-     height="16"
-     layout="topleft"
-     left="10"
-     top_pad="14"
-     width="520">
-        Kill Feed
-    </text>
-    <check_box
-     control_name="FSKillFeedEnabled"
-     follows="left|top"
-     height="16"
-     label="Show kill feed overlay"
-     layout="topleft"
-     left="10"
-     name="kill_feed_enabled_pref"
-     tool_tip="Region-wide Combat 2.0 death events as an on-screen feed (via the LSL bridge)"
-     top_pad="8"
-     width="256" />
-    <button
-     follows="left|top"
-     layout="topleft"
-     left_delta="260"
-     top_delta="-2"
-     height="20"
-     width="80"
-     label="Options..."
-     name="kill_feed_options_btn"
-     tool_tip="Kill feed position, size, font and color options">
-        <button.commit_callback
-         function="Pref.KillFeedSettings" />
-    </button>
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         font="SansSerifSmallBold"
+         height="16"
+         layout="topleft"
+         left="10"
+         top="10"
+         width="500">
+            Over-the-Shoulder (OTS) Camera
+        </text>
+        <check_box
+         control_name="OTSEnabled"
+         follows="left|top"
+         height="16"
+         label="Enable OTS Mode (active in mouselook)"
+         layout="topleft"
+         left="10"
+         name="ots_enabled_prefs"
+         top_pad="6"
+         width="450" />
+        <slider
+         control_name="OTSCameraDistance"
+         can_edit_text="true"
+         decimal_digits="2"
+         follows="left|top"
+         height="15"
+         initial_value="3.0"
+         layout="topleft"
+         label="Distance (m):"
+         label_width="140"
+         show_text="true"
+         left="24"
+         max_val="10.0"
+         min_val="0.5"
+         increment="0.1"
+         name="OTSCameraDistancePref"
+         top_pad="6"
+         width="360" />
+        <slider
+         control_name="OTSCameraSide"
+         can_edit_text="true"
+         decimal_digits="2"
+         follows="left|top"
+         height="15"
+         initial_value="-0.5"
+         layout="topleft"
+         label="Side Offset (m):"
+         label_width="140"
+         show_text="true"
+         left="24"
+         max_val="2.0"
+         min_val="-2.0"
+         increment="0.05"
+         name="OTSCameraSidePref"
+         top_pad="5"
+         width="360" />
+        <slider
+         control_name="OTSCameraHeight"
+         can_edit_text="true"
+         decimal_digits="2"
+         follows="left|top"
+         height="15"
+         initial_value="0.5"
+         layout="topleft"
+         label="Height (m):"
+         label_width="140"
+         show_text="true"
+         left="24"
+         max_val="3.0"
+         min_val="-1.0"
+         increment="0.05"
+         name="OTSCameraHeightPref"
+         top_pad="5"
+         width="360" />
+        <slider
+         control_name="OTSFocusDistance"
+         can_edit_text="true"
+         decimal_digits="1"
+         follows="left|top"
+         height="15"
+         initial_value="10.0"
+         layout="topleft"
+         label="Focus Distance (m):"
+         label_width="140"
+         show_text="true"
+         left="24"
+         max_val="50.0"
+         min_val="2.0"
+         increment="1.0"
+         name="OTSFocusDistancePref"
+         top_pad="5"
+         width="360" />
+        <check_box
+         control_name="OTSCameraCollision"
+         follows="left|top"
+         height="16"
+         label="Camera collision (pull in when geometry blocks view)"
+         layout="topleft"
+         left="24"
+         name="ots_camera_collision_prefs"
+         tool_tip="Pull the camera in closer when world geometry is between you and it, instead of clipping through. Avatars and phantom objects never block the camera."
+         top_pad="6"
+         width="450" />
+        <check_box
+         control_name="FSOTSReportEyeCamera"
+         follows="left|top"
+         height="16"
+         label="Convergence camera in OTS (weapons fire from avatar eye, not shoulder)"
+         layout="topleft"
+         left="24"
+         name="ots_eye_camera_prefs"
+         tool_tip="While in OTS, report the mouselook-equivalent camera to the region so camera-position weapons fire from your avatar toward the crosshair instead of from the shoulder camera. Prevents shooting around cover your avatar is behind."
+         top_pad="5"
+         width="480" />
+        <check_box
+         control_name="OTSRememberLastView"
+         follows="left|top"
+         height="16"
+         label="Remember last view (return to OTS or first person as last toggled)"
+         layout="topleft"
+         left="24"
+         name="ots_remember_view_prefs"
+         tool_tip="When entering aim mode, return to whichever view (over-the-shoulder or first person) you last switched to with the view toggle key, instead of always starting in OTS."
+         top_pad="5"
+         width="450" />
 
-    <!-- ===== Mouselook Zoom ===== -->
-    <text
-     type="string"
-     length="1"
-     follows="left|top"
-     font="SansSerifSmallBold"
-     height="16"
-     layout="topleft"
-     left="10"
-     top_pad="14"
-     width="520">
-        Mouselook Zoom
-    </text>
-    <text
-     type="string"
-     length="1"
-     follows="left|top"
-     height="10"
-     layout="topleft"
-     left="10"
-     name="Mouse Sensitivity Zoomed Label"
-     top_pad="8"
-     width="230">
-        Mouselook Zoomed Mouse Sensitivity:
-    </text>
-    <slider
-     control_name="MouseSensitivityZoomed"
-     follows="left|top"
-     enabled_control="EnableMouselook"
-     height="15"
-     initial_value="10"
-     layout="topleft"
-     show_text="true"
-     can_edit_text="true"
-     decimal_digits="0"
-     left_pad="5"
-     max_val="100"
-     name="mouse_sensitivity_zoomed"
-     tool_tip="Controls how sensitive the mouse is while zoomed in mouselook mode. Lower values make precision aiming easier; higher values allow faster turning. This is applied as a fraction or multiple of your base mouse sensitivity."
-     top_delta="1"
-     width="115" />
-    <button
-     follows="left|top"
-     name="Def_MouseSensitivityZoomed"
-     height="20"
-     label="D"
-     layout="topleft"
-     left_pad="2"
-     top_delta="-2"
-     width="20"
-     tool_tip="Reset to default value">
-        <button.commit_callback
-         function="ResetControl"
-         parameter="MouseSensitivityZoomed"/>
-    </button>
-    <text
-     type="string"
-     length="1"
-     follows="left|top"
-     height="10"
-     layout="topleft"
-     left="10"
-     name="MouselookZoomTransition Label"
-     top_pad="12"
-     width="230">
-        Mouselook zoom transition:
-    </text>
-    <slider
-     control_name="MouselookZoomTransitionSpeed"
-     can_edit_text="true"
-     decimal_digits="0"
-     follows="left|top"
-     enabled_control="EnableMouselook"
-     height="15"
-     initial_value="0"
-     layout="topleft"
-     show_text="true"
-     left_pad="5"
-     max_val="1000"
-     min_val="0"
-     name="mouselook_zoom_transition_speed"
-     tool_tip="Sets how long the field-of-view smoothly transitions when zooming in mouselook, in milliseconds. Set to 0 for instant snapping. Higher values produce a gradual cinematic zoom effect (up to 1000 ms via slider, or up to 5000 ms by typing a value directly)."
-     top_delta="1"
-     width="140" />
-    <button
-     follows="left|top"
-     name="Def_MouselookZoomTransitionSpeed"
-     height="20"
-     label="D"
-     layout="topleft"
-     left_pad="2"
-     top_delta="-2"
-     width="20"
-     tool_tip="Reset to default value">
-        <button.commit_callback
-         function="ResetControl"
-         parameter="MouselookZoomTransitionSpeed"/>
-    </button>
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         font="SansSerifSmallBold"
+         height="16"
+         layout="topleft"
+         left="10"
+         top_pad="14"
+         width="500">
+            Mouselook Zoom
+        </text>
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         height="14"
+         layout="topleft"
+         left="24"
+         name="Mouse Sensitivity Zoomed Label"
+         top_pad="6"
+         width="200">
+            Zoomed mouse sensitivity:
+        </text>
+        <slider
+         control_name="MouseSensitivityZoomed"
+         follows="left|top"
+         enabled_control="EnableMouselook"
+         height="15"
+         initial_value="10"
+         layout="topleft"
+         show_text="true"
+         can_edit_text="true"
+         decimal_digits="0"
+         left_delta="204"
+         top_delta="-1"
+         max_val="100"
+         name="mouse_sensitivity_zoomed"
+         tool_tip="Controls how sensitive the mouse is while zoomed in mouselook mode. Lower values make precision aiming easier; higher values allow faster turning."
+         width="130" />
+        <button
+         follows="left|top"
+         name="Def_MouseSensitivityZoomed"
+         height="20"
+         label="D"
+         layout="topleft"
+         left_pad="4"
+         top_delta="-2"
+         width="20"
+         tool_tip="Reset to default value">
+            <button.commit_callback
+             function="ResetControl"
+             parameter="MouseSensitivityZoomed"/>
+        </button>
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         height="14"
+         layout="topleft"
+         left="24"
+         name="MouselookZoomTransition Label"
+         top_pad="8"
+         width="200">
+            Zoom transition speed (ms):
+        </text>
+        <slider
+         control_name="MouselookZoomTransitionSpeed"
+         can_edit_text="true"
+         decimal_digits="0"
+         follows="left|top"
+         enabled_control="EnableMouselook"
+         height="15"
+         initial_value="0"
+         layout="topleft"
+         show_text="true"
+         left_delta="204"
+         top_delta="-1"
+         max_val="1000"
+         min_val="0"
+         name="mouselook_zoom_transition_speed"
+         tool_tip="Sets how long the field-of-view smoothly transitions when zooming in mouselook, in milliseconds. 0 = instant snapping."
+         width="130" />
+        <button
+         follows="left|top"
+         name="Def_MouselookZoomTransitionSpeed"
+         height="20"
+         label="D"
+         layout="topleft"
+         left_pad="4"
+         top_delta="-2"
+         width="20"
+         tool_tip="Reset to default value">
+            <button.commit_callback
+             function="ResetControl"
+             parameter="MouselookZoomTransitionSpeed"/>
+        </button>
 
-    <!-- ===== Aim down sights ===== -->
-    <text
-     type="string"
-     length="1"
-     follows="left|top"
-     font="SansSerifSmallBold"
-     height="16"
-     layout="topleft"
-     left="10"
-     top_pad="14"
-     width="300">
-        Aim down sights
-    </text>
-    <check_box
-     control_name="FSDoubleTapADS"
-     follows="left|top"
-     height="16"
-     label="Enable double-tap right-click to ADS"
-     layout="topleft"
-     left="10"
-     name="ads_enabled_prefs"
-     top_pad="6"
-     width="400"
-     tool_tip="Tap, then tap-and-hold the right mouse button to aim down sights; release to exit. Works in first person and OTS." />
-    <button
-     follows="left|top"
-     layout="topleft"
-     left="448"
-     top_delta="-2"
-     height="20"
-     width="80"
-     label="Options..."
-     name="ads_options_btn"
-     tool_tip="Aim-down-sights field of view, smoothing, sensitivity and vignette options">
-        <button.commit_callback
-         function="Pref.ADSSettings" />
-    </button>
+    </panel>
 
-    <!-- ===== Over-the-Shoulder camera ===== -->
-    <text
-     type="string"
-     length="1"
-     follows="left|top"
-     font="SansSerifSmallBold"
-     height="16"
+    <!-- ==================== TAB 2: ADS ==================== -->
+    <panel
+     class="panel_preference"
+     label="ADS"
      layout="topleft"
-     left="10"
-     top_pad="14"
-     width="300">
-        Over-the-Shoulder Camera
-    </text>
-    <check_box
-     control_name="OTSEnabled"
-     follows="left|top"
-     height="16"
-     label="Enable OTS Mode (active in mouselook)"
+     name="combat_ads">
+
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         font="SansSerifSmallBold"
+         height="16"
+         layout="topleft"
+         left="10"
+         top="10"
+         width="500">
+            Aim Down Sights (ADS)
+        </text>
+        <check_box
+         control_name="FSDoubleTapADS"
+         follows="left|top"
+         height="16"
+         label="Enable double-tap right-click to ADS"
+         layout="topleft"
+         left="10"
+         name="ads_enabled_prefs"
+         top_pad="6"
+         width="450"
+         tool_tip="Tap, then tap-and-hold the right mouse button to aim down sights; release to exit. Works in first person and OTS." />
+        <check_box
+         control_name="FSADSDefaultZoom"
+         follows="left|top"
+         height="16"
+         label="Use ADS for all right-click zoom (no double-tap required)"
+         layout="topleft"
+         left="24"
+         name="ads_default_zoom_prefs"
+         top_pad="5"
+         width="450"
+         tool_tip="Hold right-click to aim down sights straight away, with no double-tap. The normal right-click zoom in first person and OTS is turned off while this is on." />
+        <slider
+         control_name="FSADSZoomFOV"
+         follows="left|top"
+         height="15"
+         layout="topleft"
+         left="24"
+         top_pad="6"
+         label="ADS field of view:"
+         label_width="160"
+         min_val="0.175"
+         max_val="1.2"
+         increment="0.01"
+         decimal_digits="2"
+         can_edit_text="true"
+         show_text="true"
+         width="380"
+         tool_tip="Aim-down-sights zoom level in radians (lower = more zoom). Scroll while in ADS to adjust live." />
+        <slider
+         control_name="FSADSZoomTransitionSpeed"
+         follows="left|top"
+         height="15"
+         layout="topleft"
+         left="24"
+         top_pad="5"
+         label="ADS zoom smoothing (ms):"
+         label_width="160"
+         min_val="0"
+         max_val="1000"
+         increment="10"
+         decimal_digits="0"
+         can_edit_text="true"
+         show_text="true"
+         width="380"
+         tool_tip="Duration of the ADS zoom transition, in milliseconds (0 = instant)." />
+        <slider
+         control_name="FSADSDoubleTapTime"
+         follows="left|top"
+         height="15"
+         layout="topleft"
+         left="24"
+         top_pad="5"
+         label="Double-tap window (sec):"
+         label_width="160"
+         min_val="0.1"
+         max_val="0.6"
+         increment="0.05"
+         decimal_digits="2"
+         show_text="true"
+         width="380"
+         tool_tip="Maximum time between the two right-clicks to register a double-tap." />
+        <slider
+         control_name="FSADSSwapTransitionSpeed"
+         follows="left|top"
+         height="15"
+         layout="topleft"
+         left="24"
+         top_pad="5"
+         label="ADS swap speed (ms):"
+         label_width="160"
+         min_val="0"
+         max_val="600"
+         increment="10"
+         decimal_digits="0"
+         can_edit_text="true"
+         show_text="true"
+         width="380"
+         tool_tip="How fast the camera swaps between OTS and first person when aiming down sights (0 = instant, higher = smoother)." />
+        <slider
+         control_name="FSADSMouseSensitivity"
+         follows="left|top"
+         height="15"
+         layout="topleft"
+         left="24"
+         top_pad="5"
+         label="ADS mouse sensitivity:"
+         label_width="160"
+         min_val="0"
+         max_val="100"
+         increment="1"
+         decimal_digits="0"
+         can_edit_text="true"
+         show_text="true"
+         width="380"
+         tool_tip="Mouse look sensitivity while aiming down sights. Lower values make precision aiming easier." />
+        <slider
+         control_name="FSADSZoomSensitivity"
+         follows="left|top"
+         height="15"
+         layout="topleft"
+         left="24"
+         top_pad="5"
+         label="ADS zoom sensitivity:"
+         label_width="160"
+         min_val="0.01"
+         max_val="0.5"
+         increment="0.01"
+         decimal_digits="2"
+         show_text="true"
+         width="380"
+         tool_tip="Scroll-wheel step for adjusting the ADS zoom level while held." />
+
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         font="SansSerifSmallBold"
+         height="16"
+         layout="topleft"
+         left="10"
+         top_pad="12"
+         width="500">
+            Vignette Effect
+        </text>
+        <check_box
+         control_name="FSADSVignetteFirstPerson"
+         follows="left|top"
+         height="16"
+         label="ADS vignette in first person"
+         layout="topleft"
+         left="10"
+         name="ads_vignette_fp_prefs"
+         top_pad="6"
+         width="240"
+         tool_tip="Darken screen edges while in ADS in first person." />
+        <check_box
+         control_name="FSADSVignetteOTS"
+         follows="left|top"
+         height="16"
+         label="ADS vignette in OTS"
+         layout="topleft"
+         left_delta="245"
+         top_delta="0"
+         name="ads_vignette_ots_prefs"
+         width="240"
+         tool_tip="Darken screen edges while in ADS in over-the-shoulder." />
+        <check_box
+         control_name="FSADSVignetteScaleWithZoom"
+         follows="left|top"
+         height="16"
+         label="Vignette grows with zoom"
+         layout="topleft"
+         left="10"
+         top_pad="5"
+         name="ads_vignette_scale_prefs"
+         width="450"
+         tool_tip="Scale the vignette with how far the ADS zoom is pushed: scroll in for a darker edge, back off for a lighter one." />
+        <slider
+         control_name="FSADSVignetteStrength"
+         follows="left|top"
+         height="15"
+         layout="topleft"
+         left="24"
+         top_pad="5"
+         label="Vignette strength:"
+         label_width="160"
+         min_val="0"
+         max_val="1"
+         increment="0.05"
+         decimal_digits="2"
+         show_text="true"
+         width="380"
+         tool_tip="How dark the ADS screen-edge vignette is." />
+
+    </panel>
+
+    <!-- ==================== TAB 3: RETICLE ==================== -->
+    <panel
+     class="panel_preference"
+     label="Reticle"
      layout="topleft"
-     left="10"
-     name="ots_enabled_prefs"
-     top_pad="6"
-     width="400" />
-    <button
-     follows="left|top"
+     name="combat_reticle">
+
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         font="SansSerifSmallBold"
+         height="16"
+         layout="topleft"
+         left="10"
+         top="10"
+         width="500">
+            Target Identification (IFF)
+        </text>
+        <check_box
+         control_name="FSMouselookCombatFeatures"
+         follows="left|top"
+         enabled_control="EnableMouselook"
+         height="16"
+         label="Enable combat features"
+         layout="topleft"
+         left="10"
+         name="FSMouselookCombatFeatures"
+         top_pad="6"
+         width="450" />
+        <check_box
+         control_name="ExodusMouselookIFF"
+         follows="left|top"
+         height="16"
+         label="Draw target markers"
+         layout="topleft"
+         left="28"
+         name="ExodusMouselookIFF"
+         top_pad="5"
+         width="450" />
+        <slider
+         control_name="ExodusMouselookIFFRange"
+         follows="left|top"
+         height="15"
+         can_edit_text="true"
+         decimal_digits="0"
+         increment="5"
+         layout="topleft"
+         label="Detection range (m):"
+         label_width="150"
+         show_text="true"
+         left="33"
+         max_val="500"
+         name="ExodusMouselookIFFRange"
+         top_pad="5"
+         width="360" />
+        <check_box
+         control_name="ExodusMouselookIFFShowName"
+         follows="left|top"
+         height="16"
+         label="Show target name under crosshair"
+         layout="topleft"
+         left="28"
+         name="ExodusMouselookIFFShowName"
+         tool_tip="Show the identified target's name under the crosshair. When off, identification still drives the crosshair color and combat feedback."
+         top_pad="5"
+         width="450" />
+
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         font="SansSerifSmallBold"
+         height="16"
+         layout="topleft"
+         left="10"
+         top_pad="14"
+         width="500">
+            Crosshair &amp; Aim Indicator
+        </text>
+        <check_box
+         control_name="FSCustomCrosshair"
+         follows="left|top"
+         layout="topleft"
+         left="10"
+         top_pad="6"
+         height="16"
+         width="450"
+         label="Custom crosshair (dot and chevrons)"
+         tool_tip="Replace the stock mouselook/OTS crosshair with the custom composite crosshair." />
+        <check_box
+         control_name="FSCrosshairTargetColor"
+         follows="left|top"
+         layout="topleft"
+         left="28"
+         top_pad="5"
+         height="16"
+         width="450"
+         label="Color crosshair by identified target"
+         tool_tip="Tint the custom crosshair with the contact set / group color of the avatar under it (requires combat features)." />
+        <check_box
+         control_name="FSOTSTrueAimDot"
+         follows="left|top"
+         layout="topleft"
+         left="28"
+         top_pad="5"
+         height="16"
+         width="450"
+         label="Line-of-sight (LOS) true aim dot in OTS"
+         tool_tip="Slide the center dot to where a shot fired from your avatar actually lands; the chevrons stay on the camera ray. Centered when your line of sight to the target is clear, and rides onto whatever is blocking the shot." />
+        <check_box
+         control_name="FSRezQueueIndicator"
+         follows="left|top"
+         layout="topleft"
+         left="10"
+         top_pad="10"
+         height="16"
+         width="450"
+         label="Rez queue warning at crosshair"
+         tool_tip="Watch the region's pending asset downloads and warn above the crosshair in mouselook and OTS while the sim is backed up and refusing to rez objects, then report how long the queue lasted." />
+
+    </panel>
+
+    <!-- ==================== TAB 4: FEEDBACK ==================== -->
+    <panel
+     class="panel_preference"
+     label="Feedback"
      layout="topleft"
-     left="448"
-     top_delta="-2"
-     height="20"
-     width="80"
-     label="Options..."
-     name="ots_options_btn"
-     tool_tip="Over-the-shoulder camera distance, offset, height, focus and behavior options">
-        <button.commit_callback
-         function="Pref.OTSSettings" />
-    </button>
+     name="combat_feedback">
+
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         font="SansSerifSmallBold"
+         height="16"
+         layout="topleft"
+         left="10"
+         top="10"
+         width="500">
+            Hit Marker &amp; Damage Report
+        </text>
+        <check_box
+         control_name="FSHitMarkerEnabled"
+         follows="left|top"
+         height="16"
+         label="Enable hitmarker (flash on hit)"
+         layout="topleft"
+         left="10"
+         name="FSHitMarkerEnabledPref"
+         tool_tip="Combat 2.0 regions, via the LSL bridge."
+         top_pad="6"
+         width="240" />
+        <check_box
+         control_name="FSHitMarkerIgnoreCollision"
+         follows="left|top"
+         layout="topleft"
+         left_delta="245"
+         top_delta="0"
+         height="16"
+         width="250"
+         label="Ignore collision and fall damage"
+         tool_tip="Skip generic Second Life physics damage so only scripted combat damage flashes a hitmarker." />
+        <slider
+         control_name="FSHitMarkerScale"
+         follows="left|top"
+         layout="topleft"
+         left="24"
+         top_pad="6"
+         height="15"
+         width="340"
+         label="Marker size:"
+         label_width="100"
+         min_val="0.5"
+         max_val="3.0"
+         increment="0.05"
+         decimal_digits="2"
+         show_text="true"
+         tool_tip="Scale for the hitmarker flash and crosshair." />
+        <check_box
+         control_name="FSHitMarkerText"
+         follows="left|top"
+         layout="topleft"
+         left="10"
+         top_pad="6"
+         height="16"
+         width="450"
+         label="Show hit report text (fading damage numbers under crosshair)" />
+        <slider
+         control_name="FSHitMarkerTextScale"
+         follows="left|top"
+         layout="topleft"
+         left="24"
+         top_pad="5"
+         height="15"
+         width="340"
+         label="Text size:"
+         label_width="100"
+         min_val="0.5"
+         max_val="3.0"
+         increment="0.05"
+         decimal_digits="2"
+         show_text="true"
+         tool_tip="Hit report text scale, independent of the marker size." />
+        <check_box
+         control_name="FSHitMarkerTextBold"
+         follows="left|top"
+         layout="topleft"
+         left="24"
+         top_pad="5"
+         height="16"
+         width="150"
+         label="Bold text" />
+        <check_box
+         control_name="FSHitMarkerShowName"
+         follows="left|top"
+         layout="topleft"
+         left_delta="160"
+         top_delta="0"
+         height="16"
+         width="280"
+         label="Include target name (Example Resident 30dmg)" />
+        <check_box
+         control_name="FSHitMarkerShortNames"
+         follows="left|top"
+         layout="topleft"
+         left="24"
+         top_pad="5"
+         height="16"
+         width="450"
+         label="Shorten names (Example Resident = Example R.)" />
+        <check_box
+         control_name="FSHitMarkerShowEmoji"
+         follows="left|top"
+         layout="topleft"
+         left="24"
+         top_pad="5"
+         height="16"
+         width="200"
+         label="Show damage type symbol"
+         tool_tip="Damage type symbol in the hit report." />
+        <button
+         name="customize_symbols_btn"
+         follows="left|top"
+         layout="topleft"
+         left_delta="205"
+         top_delta="-2"
+         height="20"
+         width="110"
+         label="Customize..."
+         tool_tip="Assign your own symbol per damage type">
+            <button.commit_callback
+             function="Pref.CustomizeHitSymbols" />
+        </button>
+
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         font="SansSerifSmallBold"
+         height="16"
+         layout="topleft"
+         left="10"
+         top_pad="12"
+         width="500">
+            Audio Feedback
+        </text>
+        <check_box
+         control_name="FSHitMarkerSounds"
+         follows="left|top"
+         layout="topleft"
+         left="10"
+         top_pad="6"
+         height="16"
+         width="200"
+         label="Play hit and kill sounds" />
+        <slider
+         control_name="FSHitMarkerSoundGain"
+         follows="left|top"
+         layout="topleft"
+         left_delta="205"
+         top_delta="0"
+         height="15"
+         width="240"
+         label="Volume:"
+         label_width="60"
+         min_val="0.0"
+         max_val="1.0"
+         increment="0.05"
+         decimal_digits="2"
+         show_text="true" />
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         height="14"
+         layout="topleft"
+         left="24"
+         name="hit_sound_label"
+         top_pad="6"
+         width="75">
+            Hit sound:
+        </text>
+        <line_editor
+         control_name="FSHitMarkerHitSound"
+         follows="left|top"
+         layout="topleft"
+         left_delta="80"
+         top_delta="-3"
+         height="20"
+         width="240"
+         name="hit_sound_uuid"
+         tool_tip="Sound UUID played when your damage lands" />
+        <button
+         name="test_hit_sound_btn"
+         follows="left|top"
+         layout="topleft"
+         left_delta="246"
+         top_delta="0"
+         height="20"
+         width="64"
+         label="Test"
+         tool_tip="Play the hit sound at current volume">
+            <button.commit_callback
+             function="Pref.TestHitSound" />
+        </button>
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         height="14"
+         layout="topleft"
+         left="24"
+         name="kill_sound_label"
+         top_pad="8"
+         width="75">
+            Kill sound:
+        </text>
+        <line_editor
+         control_name="FSHitMarkerKillSound"
+         follows="left|top"
+         layout="topleft"
+         left_delta="80"
+         top_delta="-3"
+         height="20"
+         width="240"
+         name="kill_sound_uuid"
+         tool_tip="Sound UUID played when your damage kills" />
+        <button
+         name="test_kill_sound_btn"
+         follows="left|top"
+         layout="topleft"
+         left_delta="246"
+         top_delta="0"
+         height="20"
+         width="64"
+         label="Test"
+         tool_tip="Play the kill sound at current volume">
+            <button.commit_callback
+             function="Pref.TestKillSound" />
+        </button>
+
+    </panel>
+
+    <!-- ==================== TAB 5: KILL FEED ==================== -->
+    <panel
+     class="panel_preference"
+     label="Kill Feed"
+     layout="topleft"
+     name="combat_killfeed">
+
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         font="SansSerifSmallBold"
+         height="16"
+         layout="topleft"
+         left="10"
+         top="10"
+         width="500">
+            Overlay Settings
+        </text>
+        <check_box
+         control_name="FSKillFeedEnabled"
+         follows="left|top"
+         height="16"
+         label="Show kill feed overlay"
+         layout="topleft"
+         left="10"
+         name="kill_feed_enabled_pref"
+         tool_tip="Region-wide Combat 2.0 death events as an on-screen feed (via the LSL bridge)"
+         top_pad="6"
+         width="240" />
+        <check_box
+         control_name="FSKillFeedGrowUp"
+         follows="left|top"
+         layout="topleft"
+         left_delta="245"
+         top_delta="0"
+         height="16"
+         width="240"
+         label="Grow upward (newest at bottom)"
+         tool_tip="Feed grows bottom-to-top: new kills appear at the bottom and push older lines up." />
+        <slider
+         control_name="FSKillFeedScreenX"
+         follows="left|top"
+         layout="topleft"
+         left="24"
+         top_pad="6"
+         height="15"
+         width="360"
+         label="Horizontal pos (0=L, 1=R):"
+         label_width="160"
+         min_val="0.0"
+         max_val="1.0"
+         increment="0.01"
+         decimal_digits="2"
+         show_text="true" />
+        <slider
+         control_name="FSKillFeedScreenY"
+         follows="left|top"
+         layout="topleft"
+         left="24"
+         top_pad="5"
+         height="15"
+         width="360"
+         label="Vertical pos (0=B, 1=T):"
+         label_width="160"
+         min_val="0.0"
+         max_val="1.0"
+         increment="0.01"
+         decimal_digits="2"
+         show_text="true" />
+        <slider
+         control_name="FSKillFeedMaxLines"
+         follows="left|top"
+         layout="topleft"
+         left="24"
+         top_pad="5"
+         height="15"
+         width="360"
+         label="Max lines visible:"
+         label_width="160"
+         min_val="1"
+         max_val="10"
+         increment="1"
+         decimal_digits="0"
+         show_text="true" />
+        <slider
+         control_name="FSKillFeedHoldTime"
+         follows="left|top"
+         layout="topleft"
+         left="24"
+         top_pad="5"
+         height="15"
+         width="360"
+         label="Hold time (sec, 0=infinite):"
+         label_width="160"
+         min_val="0"
+         max_val="120"
+         increment="1"
+         decimal_digits="0"
+         show_text="true" />
+
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         font="SansSerifSmallBold"
+         height="16"
+         layout="topleft"
+         left="10"
+         top_pad="12"
+         width="500">
+            Styling and Colors
+        </text>
+        <text
+         type="string"
+         follows="left|top"
+         layout="topleft"
+         left="24"
+         top_pad="6"
+         height="14"
+         width="70"
+         name="font_label">
+            Font:
+        </text>
+        <combo_box
+         control_name="FSKillFeedFontName"
+         follows="left|top"
+         layout="topleft"
+         left_delta="75"
+         top_delta="-3"
+         height="20"
+         width="120"
+         name="font_combo">
+            <combo_box.item
+             label="Small"
+             name="font_small"
+             value="SansSerifSmall" />
+            <combo_box.item
+             label="Normal"
+             name="font_normal"
+             value="SansSerif" />
+            <combo_box.item
+             label="Large"
+             name="font_large"
+             value="SansSerifBig" />
+            <combo_box.item
+             label="Huge"
+             name="font_huge"
+             value="SansSerifHuge" />
+            <combo_box.item
+             label="Monospace"
+             name="font_mono"
+             value="Monospace" />
+        </combo_box>
+        <slider
+         control_name="FSKillFeedTextScale"
+         follows="left|top"
+         layout="topleft"
+         left_delta="130"
+         top_delta="2"
+         height="15"
+         width="200"
+         label="Text size:"
+         label_width="70"
+         min_val="0.5"
+         max_val="2.5"
+         increment="0.05"
+         decimal_digits="2"
+         can_edit_text="true"
+         show_text="true" />
+        <check_box
+         control_name="FSKillFeedBoldText"
+         follows="left|top"
+         layout="topleft"
+         left="24"
+         top_pad="6"
+         height="16"
+         width="140"
+         label="Bold text" />
+        <check_box
+         control_name="FSKillFeedShortNames"
+         follows="left|top"
+         layout="topleft"
+         left_delta="145"
+         top_delta="0"
+         height="16"
+         width="160"
+         label="Shorten names" />
+        <check_box
+         control_name="FSKillFeedShowEmoji"
+         follows="left|top"
+         layout="topleft"
+         left_delta="165"
+         top_delta="0"
+         height="16"
+         width="150"
+         label="Show damage symbol" />
+
+        <color_swatch
+         control_name="FSKillFeedTextColor"
+         can_apply_immediately="true"
+         follows="left|top"
+         layout="topleft"
+         left="24"
+         top_pad="8"
+         height="22"
+         label_height="0"
+         width="40"
+         name="text_color_swatch"
+         tool_tip="Default kill feed text color, and fallback for names." />
+        <text
+         type="string"
+         length="1"
+         follows="left|top"
+         layout="topleft"
+         left_pad="6"
+         top_delta="5"
+         height="12"
+         mouse_opaque="false"
+         width="160"
+         name="text_color_label">
+            Default text color
+        </text>
+        <check_box
+         control_name="FSKillFeedColorOtherNames"
+         follows="left|top"
+         layout="topleft"
+         left_delta="170"
+         top_delta="-5"
+         height="16"
+         width="220"
+         label="Color other names (contact / group)"
+         tool_tip="Tint other players' names by contact set or group color." />
+        <check_box
+         control_name="FSKillFeedColorOwnName"
+         follows="left|top"
+         layout="topleft"
+         left="24"
+         top_pad="8"
+         height="16"
+         width="150"
+         label="Color my own name:" />
+        <color_swatch
+         control_name="FSKillFeedOwnNameColor"
+         can_apply_immediately="true"
+         follows="left|top"
+         layout="topleft"
+         left_delta="155"
+         top_delta="-3"
+         height="22"
+         label_height="0"
+         width="40"
+         name="own_name_color_swatch"
+         tool_tip="Your own name's color in the kill feed." />
+
+    </panel>
+
+</tab_container>
 
 </panel>
