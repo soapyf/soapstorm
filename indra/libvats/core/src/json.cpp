@@ -4,6 +4,7 @@
 
 #include <charconv>
 #include <cmath>
+#include "from_chars_compat.h"
 #include <system_error>
 
 namespace vats {
@@ -92,7 +93,7 @@ struct Parser {
             while (!eof() && digit(s[i])) ++i;
         }
         double d = 0;
-        auto r = std::from_chars(s.data() + b, s.data() + i, d);
+        auto r = from_chars(s.data() + b, s.data() + i, d);
         if (r.ec == std::errc::result_out_of_range && underflow(s.substr(b, i - b))) {
             d = s[b] == '-' ? -0.0 : 0.0;
         } else if (r.ec != std::errc() || !std::isfinite(d)) {

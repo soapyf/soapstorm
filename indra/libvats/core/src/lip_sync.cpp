@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <charconv>
 #include <cmath>
+#include "from_chars_compat.h"
 #include <complex>
 #include <set>
 
@@ -218,7 +219,7 @@ bool parse_rhubarb(std::string_view text, std::vector<RhubarbCue>& out, std::str
             if (line.find_first_not_of(" \t\xEF\xBB\xBF") == std::string_view::npos) continue;
             line.remove_prefix(line.find_first_not_of(" \t\xEF\xBB\xBF"));
             double t = 0;
-            auto r = std::from_chars(line.data(), line.data() + line.size(), t);
+            auto r = from_chars(line.data(), line.data() + line.size(), t);
             std::string_view rest(r.ptr, size_t(line.data() + line.size() - r.ptr));
             const size_t s = rest.find_first_not_of(" \t");
             const std::string shape(s == std::string_view::npos ? std::string_view{} : rest.substr(s));

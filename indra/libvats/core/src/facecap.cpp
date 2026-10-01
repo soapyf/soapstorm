@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <charconv>
 #include <cmath>
+#include "from_chars_compat.h"
 #include <cstring>
 #include <set>
 
@@ -53,7 +54,7 @@ Quat unity_euler_field(std::string_view rest) {
     double a[3] = {0, 0, 0};
     for (int i = 0; i < 3 && !rest.empty(); ++i) {
         const size_t c = rest.find(',');
-        auto r = std::from_chars(rest.data(), rest.data() + (c == std::string_view::npos ? rest.size() : c), a[i]);
+        auto r = from_chars(rest.data(), rest.data() + (c == std::string_view::npos ? rest.size() : c), a[i]);
         if (r.ec != std::errc() || !std::isfinite(a[i])) a[i] = 0;
         rest = c == std::string_view::npos ? std::string_view{} : rest.substr(c + 1);
     }
@@ -88,7 +89,7 @@ constexpr const char* kLiveLinkShapes[52] = {
 
 double to_double(std::string_view s) {
     double v = 0;
-    auto r = std::from_chars(s.data(), s.data() + s.size(), v);
+    auto r = from_chars(s.data(), s.data() + s.size(), v);
     return r.ec == std::errc() && std::isfinite(v) ? v : 0;
 }
 
