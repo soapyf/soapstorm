@@ -31,6 +31,7 @@ struct SceneColours {
     Rgb body{0.62f, 0.60f, 0.64f}, eye{0.92f, 0.91f, 0.88f};
     Rgb sky{0.52f, 0.56f, 0.66f}, ground{0.24f, 0.21f, 0.20f};  // hemisphere ambient
     Rgb target_ghost{0.52f, 0.88f, 0.62f};  // the target ghost: a soft green, apart from the onion ghosts
+    Rgb shell{0.50f, 0.82f, 0.96f};         // collision-volume shells: a cool sky blue against the warm grey body
 };
 
 }  // namespace vats

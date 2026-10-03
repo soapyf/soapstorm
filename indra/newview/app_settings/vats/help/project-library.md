@@ -144,7 +144,7 @@ of a community repository: its `poses`, `clips` and `animations` folders to **An
 
 **Filter by name...** at the top of the **Inventory** shows only the items whose names contain the text,
 ignoring case, in every section: projects, animations, mesh bodies, props, poses, clips and starter poses.
-Groups with no match are hidden while filtering.
+Groups and sections with no match are hidden while filtering. The **×** at the end of the box clears it.
 
 ## Configuration
 

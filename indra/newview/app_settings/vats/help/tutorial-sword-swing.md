@@ -146,7 +146,7 @@ Click frame **18** and key:
 2. With the pointer over the view, press **Ctrl+Shift+A** (**Select → Select Keyed on Frame**). The status bar
    says `Selected 7 bones and 0 IK handles`.
 3. Choose **Edit → Tag Keys Here → Hold**.
-4. Press **Ctrl+C** (**Edit → Copy Pose**): `Copied 7 item(s)`.
+4. Press **Ctrl+C** (**Edit → Copy Pose**): `Copied 7 items`.
 5. Click frame **30** and press **Ctrl+V** (**Edit → Paste Pose**): `Pasted the pose at frame 30`.
 6. Choose **Edit → Tag Keys Here → Hold** again. The timeline shows violet bars at 24 and 30.
 
@@ -228,7 +228,7 @@ and then catches up. **mWristLeft** has no keys, so it is left alone.
 ### 10. Export
 
 Press **Ctrl+S**, then **Ctrl+E** (**File → Export SL .anim...**). The top line reads
-`Length 1.60 s, priority 4, ease 0.20 / 0.40 s`: no `looping`. Press **Export SL .anim** and pick a folder when asked.
+`Length 1.60 s, priority 4, ease 0.20 / 0.40 s`: no `looping`. Press **Export .anim** and pick a folder when asked.
 The file is `sword-swing_01.anim`. See [[Export to Second Life]].
 
 ## Tips and tricks

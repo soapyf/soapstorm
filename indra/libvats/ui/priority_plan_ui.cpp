@@ -135,13 +135,12 @@ void App::draw_planner_panel() {
     }
     if (changed || ui.winner.size() != size_t(skel_.size())) resolve(ui, skel_);
 
-    place_tool_window(30, 30);
+    place_tool_window("Priority Planner", 30, 30);
     if (!ImGui::Begin("Priority Planner", &show_planner_)) return ImGui::End();
     help_button("priority-planner");
-    hint("Add the animations yours plays with. Each bone goes to the highest priority; on equal priority, to the one "
-         "started last (lowest in the list).");
+    hint("Add the animations yours plays with to see which wins each bone.");
 
-    if (icon_label_button(icon::kAdd, "Add Clips...")) {
+    if (primary_button("Add Clips...", "", 0, icon::kAdd)) {
         host_.open_file_dialog({{"Animation", "anim;vat"}}, true, [p = planner_ui_](std::vector<std::string> files) {
             std::lock_guard<std::mutex> lock(p->mutex);
             for (auto& f : files) p->added.push_back(f);
@@ -150,7 +149,7 @@ void App::draw_planner_panel() {
     ImGui::SetItemTooltip("Your own .anim files or projects: an AO stand, a dance, a furniture pose");
     if (!host_.host_name().empty()) {  // the viewer: what runs on your own avatar (PP-5)
         ImGui::SameLine();
-        if (icon_label_button(icon::kRunning, "Add Running Animations")) {
+        if (ImGui::Button("Add Running Animations")) {
             std::vector<PlanClip> running = host_.running_motions();
             if (running.empty()) status("No animations are running on your avatar");
             for (PlanClip& c : running) {
@@ -164,7 +163,7 @@ void App::draw_planner_panel() {
         ImGui::SetItemTooltip("The names and priorities of the animations playing on your avatar now");
     }
     ImGui::SameLine();
-    ImGui::Checkbox("Tint Bones", &ui.tint);
+    ImGui::Checkbox("Tint bones", &ui.tint);
     ImGui::SetItemTooltip("Colour the Bones list, the bones in the view and the timeline by who wins each bone");
 
     // The clips in start order.
@@ -215,7 +214,7 @@ void App::draw_planner_panel() {
 
     // The selected bone: who claims it, the winner first.
     if (const int p = primary(); p >= 0 && has_context(ui)) {
-        ImGui::SeparatorText(skel_[p].name.c_str());
+        subheading(skel_[p].name.c_str());
         const int w = ui.winner[size_t(p)];
         if (w < 0) hint("No clip keys it: SL's default pose (or the AO's own) shows.");
         for (int i = int(ui.clips.size()) - 1; i >= 0; --i) {  // later starts first: they win ties
@@ -227,7 +226,7 @@ void App::draw_planner_panel() {
         }
     }
 
-    ImGui::SeparatorText("Your clip");
+    subheading("Your clip");
     bool any = false;
     for (const PlanFinding& f : ui.findings)
         if (f.rule == "loses") ImGui::TextWrapped("%s", f.message.c_str()), any = true;
@@ -235,7 +234,7 @@ void App::draw_planner_panel() {
     any = false;
     for (const PlanFinding& f : ui.findings) {
         if (f.rule == "loses") continue;
-        if (!any) ImGui::SeparatorText("For AO makers"), any = true;
+        if (!any) subheading("For AO makers"), any = true;
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0.75f, 0.4f, 1));
         ImGui::TextWrapped("%s", f.message.c_str());
         ImGui::PopStyleColor();

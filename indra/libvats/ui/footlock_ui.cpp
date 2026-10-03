@@ -7,6 +7,7 @@
 #include <string>
 
 #include "app.h"
+#include "theme.h"
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui.h"
@@ -16,8 +17,9 @@ namespace vats {
 
 void App::draw_foot_lock_window() {
     if (!show_foot_lock_) return;
-    ImGui::SetNextWindowSize(ImVec2(ImGui::GetFontSize() * 24, 0), ImGuiCond_FirstUseEver);
+    place_tool_window("Clean Up Foot Sliding", 24, 20);
     if (!ImGui::Begin("Clean Up Foot Sliding", &show_foot_lock_)) return ImGui::End();
+    help_button("retargeting#Clean up foot sliding");
 
     // Both legs, or only the legs of the selected bones.
     FootLockOptions fl;
@@ -43,12 +45,12 @@ void App::draw_foot_lock_window() {
     ImGui::Text("Ground: %.1f cm %s the floor", std::fabs(foot_ground_) * 100, foot_ground_ >= 0 ? "above" : "below");
     ImGui::SetItemTooltip("The lowest heel or toe over the animation, against the floor the avatar stands on at rest");
 
-    ImGui::Checkbox("Heel and Toe", &foot_heel_toe_);
+    ImGui::Checkbox("Heel and toe", &foot_heel_toe_);
     ImGui::SetItemTooltip("Heel and toe land and leave separately (a heel-toe roll); off, the ankle alone");
-    ImGui::Checkbox("Put Feet on the Ground", &foot_to_ground_);
+    ImGui::Checkbox("Put feet on the ground", &foot_to_ground_);
     ImGui::SetItemTooltip("First moves the hips so the lowest foot touches the floor: fixes a take that floats or sinks");
 
-    if (icon_label_button(icon::kCleanUp, "Clean Up")) {
+    if (primary_button("Clean Up", "", 0, icon::kCleanUp)) {
         std::vector<std::string> report;
         edit("Clean Up Foot Sliding", [&](Clip& c) { report = lock_feet(c, *rig_, fl); });
         foot_report_ = report;
@@ -59,7 +61,7 @@ void App::draw_foot_lock_window() {
     ImGui::SetItemTooltip("Holds planted feet still with leg IK; where a leg cannot reach, lowers the hips instead of "
                           "straightening the knee");
     if (!foot_report_.empty()) {
-        ImGui::SeparatorText("Last clean-up");
+        subheading("Last clean-up");
         for (auto& line : foot_report_) ImGui::BulletText("%s", line.c_str());
     }
     ImGui::End();

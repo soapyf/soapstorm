@@ -9,15 +9,18 @@ and records takes as keys.
 
 ## Usage
 
-Open the window with **Tools → Motion Capture...**. The window has a **Setup** checklist at the top, then
-the **Connection**, **Live**, **Face**, **Record**, **Clean-up** and **Last take** sections.
+Open the window with **Tools → Motion Capture...**. It starts with **Listen** and a line saying what arrives,
+then **Source** (its tooltip says what the source is and how to point it here), then the **Setup** checklist, which
+is open while nothing arrives and folds itself once data flows, then the **Live**, **Face**, **Record**,
+**Clean-up** and **Last take** sections. **Setup** holds **Your computer**, the checklist, **Port** and **Allow
+other devices**.
 
 ![The Motion Capture window before listening: the Setup checklist, the Connection row with Source, Port and Listen, and the Live section](images/motion-capture/setup-and-connection.png)
 *Before **Listen**: a grey dot marks what is still to do, a green one what is done. The dot after **Listen** turns amber while VATs waits for a sender and green once packets arrive.*
 
 ### Sources
 
-| Source | Default port | Allow Other Devices | Sent by |
+| Source | Default port | Allow other devices | Sent by |
 |---|---|---|---|
 | **VMC protocol** | `39539` | off | webcam and VR-tracker apps, for example XR Animator, VSeeFace and VirtualMotionCapture |
 | **Rokoko Studio Live** | `14043` | off | Rokoko suits through Rokoko Studio |
@@ -25,14 +28,14 @@ the **Connection**, **Live**, **Face**, **Record**, **Clean-up** and **Last take
 | **VTube Studio (iPhone)** | `21413` | on | the VTube Studio app on an iPhone or iPad with Face ID |
 | **Live Link Face (iPhone)** | `11111` | on | the Live Link Face app on an iPhone or iPad with Face ID |
 
-The three iPhone sources always run on another device, so **Allow Other Devices** stays on for them.
+The three iPhone sources always run on another device, so **Allow other devices** stays on for them.
 
 Choosing a source sets its default port. A port you typed yourself is kept when you switch source.
 
 ### Connecting a VMC app
 
 1. Keep **Source** on **VMC protocol** and **Port** on `39539`.
-2. If the tracking app runs on another device, tick **Allow Other Devices**. Off, only apps on this
+2. If the tracking app runs on another device, tick **Allow other devices**. Off, only apps on this
    computer can send.
 3. Click **Listen**.
 4. In the tracking app, switch on its VMC sender and point it at the address shown under **Your
@@ -60,7 +63,7 @@ and documentation, and have not been checked with VATs on real hardware yet.
 | **Live Link Face** | face, head and eyes | iPhone or iPad with Face ID | free | **Live Link Face (iPhone)** |
 | **Rokoko Face Capture** | face, through Rokoko Studio | iPhone with Face ID | Rokoko Studio Pro plan | **Rokoko Studio Live** |
 
-For a sender on another device, tick **Allow Other Devices** and enter the address under **Your
+For a sender on another device, tick **Allow other devices** and enter the address under **Your
 computer** in the app. For an app on this computer, enter `127.0.0.1`.
 
 **SlimeVR Server**
@@ -113,7 +116,7 @@ The checklist shows what still stands between the sender and VATs:
 
 - **Your computer**: this computer's address, with **Copy**. Enter it in the sending app, on the same
   Wi-Fi.
-- **Listening on port N**, or **Not listening yet: press Listen below.**
+- **Listening on port N**, or **Not listening yet: press Listen above.**
 - **Other devices can send**, or a button **Allow Other Devices and Listen Again**.
 - The firewall state: checking, none found, open, unknown, or probably blocking. When a Linux firewall is
   probably blocking the port, **Allow on My Home Network** opens it for your local subnet only (your
@@ -124,7 +127,7 @@ The checklist shows what still stands between the sender and VATs:
 
 ### Watching the motion
 
-In the **Live** section, **Drive the Avatar** (on by default) shows the incoming motion on the avatar
+In the **Live** section, **Drive the avatar** (on by default) shows the incoming motion on the avatar
 while listening. The clip does not change until you record.
 
 ### Recording a take
@@ -136,8 +139,8 @@ while listening. The clip does not change until you record.
 2. Optionally tick **Stop at frame** (default `30`) to record into that range only ("punch in"). Keys
    outside the range are left alone.
 3. Set **Countdown** (0–5 seconds, default 3) to get into position.
-4. Optionally tick **Selected Body Parts Only** to record only the parts of the selected bones, for
-   example new arms over an existing walk, or **Face Only** to record only the face bones (and the head
+4. Optionally tick **Selected body parts only** to record only the parts of the selected bones, for
+   example new arms over an existing walk, or **Face only** to record only the face bones (and the head
    from an iPhone). The two are exclusive.
 5. Press **Record**. During the countdown, **Cancel** stops it. After the countdown the window shows
    **Recording frame N**; press **Stop** to end the take.
@@ -169,12 +172,12 @@ The **Clean-up** settings apply to the next take:
 | **Smoothing** | **Off**, **Box (average)**, **One-Euro**, **Savitzky-Golay**, **Butterworth** | **Off** | calms tracker jitter; see below |
 | **Reduce keys** | degrees, millimetres | on, `0.5` deg, `2.0` mm | removes keys that don't change the motion by more than these amounts |
 | **Edge blend** | 0–15 frames | 4 | eases a punched-in take in and out of the animation around it |
-| **Clean Up Foot Sliding** | on/off | off | holds planted feet still with leg [[IK]] where the take had them on the ground; see [[Retargeting#Clean up foot sliding]] |
-| **Heel and Toe** | on/off | on | holds the heel and the toe separately, so a heel-toe roll hands over from heel to toe; off, the ankle alone |
+| **Clean up foot sliding** | on/off | off | holds planted feet still with leg [[IK]] where the take had them on the ground; see [[Retargeting#Clean up foot sliding]] |
+| **Heel and toe** | on/off | on | holds the heel and the toe separately, so a heel-toe roll hands over from heel to toe; off, the ankle alone |
 
-With **Clean Up Foot Sliding** on, the **Last take** report gives the take's ground height (for example
+With **Clean up foot sliding** on, the **Last take** report gives the take's ground height (for example
 `ground: 1.2 cm above the floor`) and how far the hips were lowered where a leg could not reach its held
-foot. A take has no **Put Feet on the Ground** tick, because moving the hips would move the whole
+foot. A take has no **Put feet on the ground** tick, because moving the hips would move the whole
 animation around a punched-in take too. Use **Tools → Clean Up Foot Sliding...** on the clip afterwards.
 
 **Smoothing** choices:
@@ -207,15 +210,15 @@ of these steps; see [[Motion quality]].
 
 ## Tips and tricks
 
-- Record the body and the face in separate takes: record the body first, then a **Face Only** take over
+- Record the body and the face in separate takes: record the body first, then a **Face only** take over
   it.
 - Use **Stop at frame** with **Edge blend** to replace a few seconds in the middle of a good take.
 - VATs redraws continuously only while it is listening. Click **Stop Listening** when you are done, and
   it goes back to using no CPU when idle.
 
 > **Note:** The window's settings are saved in `settings.json` as you change them: source, port, **Allow
-> Other Devices**, phone address, **Drive the Avatar**, the face settings, **Countdown** and the
-> **Clean-up** section. The start and stop frames, **Selected Body Parts Only** and **Face Only** are
+> Other Devices**, phone address, **Drive the avatar**, the face settings, **Countdown** and the
+> **Clean-up** section. The start and stop frames, **Selected body parts only** and **Face only** are
 > chosen per take and not saved.
 
 ## Troubleshooting
@@ -224,7 +227,7 @@ of these steps; see [[Motion quality]].
 
 The sender uses another address or port, or a firewall drops the packets. Check that **Your computer**
 matches the address in the sending app and that both use the same port. For a phone or another computer,
-tick **Allow Other Devices** and follow the firewall line of the checklist. The phone and the computer
+tick **Allow other devices** and follow the firewall line of the checklist. The phone and the computer
 must be on the same network.
 
 ### Arms or legs come in twisted

@@ -1,9 +1,9 @@
 // Viewport Avatar Toolset - body shapes from the viewer's visual-param system (avatar_lad.xml).
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 //
-// Spec: docs/spec/01 SK-I3. Only the params that move the skeleton (param_skeleton) or morph the head,
-// upper body, lower body and eyelash meshes (param_morph) are evaluated; textures, hair, skirt and the
-// collision-volume parts of morphs are left out.
+// Spec: docs/spec/01 SK-I3. Only the params that move the skeleton (param_skeleton), morph the head,
+// upper body, lower body and eyelash meshes (param_morph) or size and move the collision volumes (volume_morph) are
+// evaluated; textures, hair and skirt are left out.
 #pragma once
 
 #include <map>
@@ -32,6 +32,7 @@ struct VisualParam {
     int sex = 3;                                     // bit 1 female, bit 2 male (the viewer's ESex)
     std::vector<Driven> driven;                      // param_driver
     std::vector<Bone> bones;                         // param_skeleton
+    std::vector<Bone> volumes;                       // volume_morph: a collision volume's scale and pos deltas
     std::vector<std::pair<int, std::string>> morphs; // param_morph: (mesh 0-3, morph name)
 };
 

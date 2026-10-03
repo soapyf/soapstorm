@@ -58,6 +58,7 @@ struct LintPartner {
 // the scene's other actors; the actor_contact rule checks this body against each of theirs (a hug, a handshake).
 std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const AnimExportOptions& opt,
                                    const std::vector<std::string>& off = {}, const Shape* mesh_body = nullptr,
-                                   const std::string& ao_state = {}, const std::vector<LintPartner>& partners = {});
+                                   const std::string& ao_state = {}, const std::vector<LintPartner>& partners = {},
+                                   const std::vector<const Clip*>& other_clips = {});
 
 }  // namespace vats

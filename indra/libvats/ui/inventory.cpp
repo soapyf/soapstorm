@@ -11,6 +11,7 @@
 #include <sstream>
 
 #include "app.h"
+#include "widgets.h"
 #include "icon_button.h"
 #include "icons.h"
 #include "vats/pose_presets.h"
@@ -58,11 +59,12 @@ void App::load_library() {
 void App::save_library() {
     std::string text = vats::save_library(library_), path = library_path(), tmp = path + ".tmp";
     {
-        std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+        std::ofstream f(u8path(tmp), std::ios::binary | std::ios::trunc);
         f << text;
         if (!f) return message("Could not save the pose library", path);
     }
-    std::rename(tmp.c_str(), path.c_str());
+    std::error_code ec;  // replaces the old file on Windows too, where std::rename refuses
+    std::filesystem::rename(u8path(tmp), u8path(path), ec);
 }
 
 void App::store_library_item(LibraryItem item) {
@@ -212,13 +214,13 @@ void App::draw_prop_grid(std::vector<PropLibraryItem>& items, bool user) {
         } else {  // generic prop icon until the thumbnail lands (or when the mesh is missing)
             float r = thumb * 0.22f;
             ImVec2 c((a.x + b.x) / 2, (a.y + b.y) / 2);
-            ImU32 col = ImGui::GetColorU32(ImGuiCol_TextDisabled);
-            dl->AddQuad(ImVec2(c.x, c.y - r), ImVec2(c.x + r, c.y - r / 2), ImVec2(c.x, c.y), ImVec2(c.x - r, c.y - r / 2), col, 1.5f);
-            dl->AddLine(ImVec2(c.x - r, c.y - r / 2), ImVec2(c.x - r, c.y + r / 2), col, 1.5f);
-            dl->AddLine(ImVec2(c.x + r, c.y - r / 2), ImVec2(c.x + r, c.y + r / 2), col, 1.5f);
-            dl->AddLine(ImVec2(c.x, c.y), ImVec2(c.x, c.y + r), col, 1.5f);
-            dl->AddLine(ImVec2(c.x - r, c.y + r / 2), ImVec2(c.x, c.y + r), col, 1.5f);
-            dl->AddLine(ImVec2(c.x + r, c.y + r / 2), ImVec2(c.x, c.y + r), col, 1.5f);
+            ImU32 color = ImGui::GetColorU32(ImGuiCol_TextDisabled);
+            dl->AddQuad(ImVec2(c.x, c.y - r), ImVec2(c.x + r, c.y - r / 2), ImVec2(c.x, c.y), ImVec2(c.x - r, c.y - r / 2), color, 1.5f);
+            dl->AddLine(ImVec2(c.x - r, c.y - r / 2), ImVec2(c.x - r, c.y + r / 2), color, 1.5f);
+            dl->AddLine(ImVec2(c.x + r, c.y - r / 2), ImVec2(c.x + r, c.y + r / 2), color, 1.5f);
+            dl->AddLine(ImVec2(c.x, c.y), ImVec2(c.x, c.y + r), color, 1.5f);
+            dl->AddLine(ImVec2(c.x - r, c.y + r / 2), ImVec2(c.x, c.y + r), color, 1.5f);
+            dl->AddLine(ImVec2(c.x + r, c.y + r / 2), ImVec2(c.x, c.y + r), color, 1.5f);
         }
         ImVec4 clip(p0.x, b.y, p0.x + cell, p0.y + cell_h);
         dl->AddText(ImGui::GetFont(), font, ImVec2(p0.x + 3, b.y + 3), ImGui::GetColorU32(ImGuiCol_Text), p.name.c_str(),
@@ -309,7 +311,9 @@ bool App::library_row(const LibraryItem& it, const std::string& label) {
 }
 
 // An Inventory section whose open or closed state is kept in the settings, so it stays as left across sessions.
-bool App::inventory_section(const char* name) {
+bool App::inventory_section(const char* name, bool matches) {
+    if (!inv_filter_.empty() && !matches) return false;
+    ++inv_sections_;
     std::vector<std::string>& closed = settings_.inventory_closed;
     ImGui::SetNextItemOpen(std::find(closed.begin(), closed.end(), name) == closed.end(), ImGuiCond_Once);
     const bool open = section_header(name);
@@ -331,13 +335,17 @@ void App::draw_inventory_panel() {
         ImGui::SetNextItemWidth(-1);
         char buf[128];
         std::snprintf(buf, sizeof buf, "%s", inv_filter_.c_str());
-        if (ImGui::InputTextWithHint("##invfilter", "Filter by name...", buf, sizeof buf)) inv_filter_ = buf;
+        if (filter_input("##invfilter", "Filter by name...", buf, sizeof buf)) inv_filter_ = buf;
     }
+    inv_sections_ = 0;
     draw_file_library();  // Projects and Animations (file_library_ui.cpp)
     draw_bodies_section();
     int remove = -1, rename = -1;
-    if (inventory_section("Poses")) {
-        if (icon_label_button(icon::kAddToLibrary, "Save Pose...")) {
+    const auto any = [&](const auto& items, auto name) {
+        return std::any_of(items.begin(), items.end(), [&](const auto& it) { return inv_match(name(it)); });
+    };
+    if (inventory_section("Poses", any(library_.items, [](const LibraryItem& it) { return it.name; }))) {
+        if (ImGui::Button("Save Pose...")) {
             name_prompt_ = selection_.empty() ? "Whole pose" : "Selected bones";
             name_action_ = NameAction::SavePose;
         }
@@ -346,7 +354,7 @@ void App::draw_inventory_panel() {
         double a, b;
         bool range = clip_range(a, b);
         ImGui::BeginDisabled(!range || selection_.empty());
-        if (icon_label_button(icon::kAddToLibrary, "Save Clip...")) {
+        if (ImGui::Button("Save Clip...")) {
             name_prompt_ = "Clip";
             name_action_ = NameAction::SaveClip;
         }
@@ -358,10 +366,12 @@ void App::draw_inventory_panel() {
         ImGui::Separator();
 
         for (int pass = 0; pass < 2; ++pass) {
-            ImGui::TextDisabled(pass == 0 ? "Poses" : "Clips");
+            subheading(pass == 0 ? "Poses" : "Clips");
+            int shown = 0;
             for (int i = 0; i < int(library_.items.size()); ++i) {
                 LibraryItem& it = library_.items[i];
                 if (it.clip != (pass == 1) || !inv_match(it.name)) continue;
+                ++shown;
                 ImGui::PushID(i);
                 std::string label = it.name + "   ";
                 if (!it.side.empty()) label += it.side + " ";
@@ -386,14 +396,21 @@ void App::draw_inventory_panel() {
                 }
                 ImGui::PopID();
             }
+            if (!shown)
+                empty_state(!inv_filter_.empty() ? (pass == 0 ? "No pose matches the filter." : "No clip matches the filter.")
+                            : pass == 0 ? "No poses yet. Save Pose... keeps this frame's pose."
+                                        : "No clips yet. Select bones and a frame range, then Save Clip...",
+                            nullptr, ImGui::GetTextLineHeightWithSpacing() * 2);
             ImGui::Spacing();
         }
     }
     // Built-in starter poses: hand shapes (authored for the left hand) and a few body poses.
-    if (inventory_section("Starter poses")) {
+    const std::vector<LibraryItem>& starters = builtin_poses(skel_);
+    if (inventory_section("Starter poses", any(starters, [](const LibraryItem& it) { return it.name; }) ||
+                                               any(starters, [](const LibraryItem& it) { return it.category; }))) {
         hint("Click a hand pose for the left hand, Shift+click for the right.");
         std::string category;
-        for (const LibraryItem& it : builtin_poses(skel_)) {
+        for (const LibraryItem& it : starters) {
             if (!inv_match(it.name) && !(it.category.size() && inv_match(it.category))) continue;
             if (it.category != category) {  // a category's poses come together, under its name
                 category = it.category;
@@ -431,14 +448,17 @@ void App::draw_inventory_panel() {
             ImGui::PopID();
         }
     }
-    if (inventory_section("Meshes")) {
+    const auto prop_name = [](const PropLibraryItem& it) { return it.prop.name; };
+    if (inventory_section("Meshes", any(prop_library_, prop_name))) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
         ImGui::TextWrapped("Drag onto a bone to attach, double-click to add, right-click for more.");
         ImGui::PopStyleColor();
         draw_prop_grid(prop_library_, true);
-        if (icon_label_button(icon::kImport, "Import .dae / .fbx...")) run_action("import_prop");
+        if (ImGui::Button("Import .dae / .fbx...")) run_action("import_prop");
     }
-    if (!starter_props_.empty() && inventory_section("Starter props")) draw_prop_grid(starter_props_, false);
+    if (!starter_props_.empty() && inventory_section("Starter props", any(starter_props_, prop_name)))
+        draw_prop_grid(starter_props_, false);
+    if (!inv_filter_.empty() && !inv_sections_) empty_state("Nothing in the Inventory matches the filter.");
     // Rename (06 section 4.2): a small prompt of its own, so it never mixes with the save prompt.
     static int renaming = -1;
     static bool renaming_prop = false;
@@ -501,7 +521,12 @@ void App::apply_library_item(const LibraryItem& it, bool mirrored) {
         Clip before = doc_.clip();
         edit("Apply Pose", [&](Clip& c) { apply_pose(c, skel_, it, std::round(frame_), mirrored); });
         offer_pose_blend(std::move(before), std::round(frame_));
-        status("Applied " + it.name + " at frame " + std::to_string(int(frame_)) + (mirrored ? " (mirrored)" : ""));
+        // A sitting pose floats at standing height: say where the one-click sit is.
+        std::string next;
+        if (it.id.find("sit") != std::string::npos)
+            next = seat_props().empty() ? ". To sit on a chair: add one (Starter props > Seating), then Tools > Sit on Seat"
+                                        : ". Right-click the view: Sit on " + doc_.clip().props[size_t(seat_props()[0])].name;
+        status("Applied " + it.name + " at frame " + std::to_string(int(frame_)) + (mirrored ? " (mirrored)" : "") + next);
     }
 }
 
@@ -524,11 +549,11 @@ void App::draw_name_prompt() {
         std::vector<int> bones;
         std::string kind = selection_.empty() ? "pose" : "selection";
         if (name_action_ == NameAction::SavePartPose) {
-            const std::string kind = context_part_.kind == PartKind::Arm ? "arm" : context_part_.kind == PartKind::Hand ? "hand"
+            const std::string part_kind = context_part_.kind == PartKind::Arm ? "arm" : context_part_.kind == PartKind::Hand ? "hand"
                                    : context_part_.kind == PartKind::Leg ? "leg" : context_part_.kind == PartKind::Wing ? "wing"
                                    : context_part_.kind == PartKind::HindLeg ? "hindleg" : context_part_.kind == PartKind::Tail ? "tail"
                                    : "head";
-            LibraryItem item = make_pose(skel_, pose_, context_part_.bones, kind, context_part_.side, false);
+            LibraryItem item = make_pose(skel_, pose_, context_part_.bones, part_kind, context_part_.side, false);
             item.name = name_buf_;
             store_library_item(std::move(item));
             status("Saved " + context_part_.label + " pose " + std::string(name_buf_));
@@ -541,12 +566,12 @@ void App::draw_name_prompt() {
                     tracks.clear();
                     for (auto& [name, t] : doc_.clip().curves) tracks.push_back(name);
                 }
-                const std::string kind = context_part_.kind == PartKind::Arm ? "arm" : context_part_.kind == PartKind::Hand ? "hand"
+                const std::string part_kind = context_part_.kind == PartKind::Arm ? "arm" : context_part_.kind == PartKind::Hand ? "hand"
                                        : context_part_.kind == PartKind::Leg ? "leg" : context_part_.kind == PartKind::Wing ? "wing"
                                        : context_part_.kind == PartKind::HindLeg ? "hindleg" : context_part_.kind == PartKind::Tail ? "tail"
                                        : context_part_.kind == PartKind::Head ? "head"
                                        : context_part_.kind == PartKind::Torso ? "torso" : "pose";
-                LibraryItem item = make_clip(doc_.clip(), tracks, a, b, kind, context_part_.side);
+                LibraryItem item = make_clip(doc_.clip(), tracks, a, b, part_kind, context_part_.side);
                 item.name = name_buf_;
                 store_library_item(std::move(item));
                 status("Saved " + context_part_.label + " clip " + std::string(name_buf_));

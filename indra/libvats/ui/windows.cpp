@@ -10,6 +10,8 @@
 
 #include "vats_version.h"
 #include "app.h"
+#include "icons.h"
+#include "icon_button.h"
 #include "vats/anim_convert.h"
 #include "vats/bvh.h"
 #include "imgui_internal.h"
@@ -17,6 +19,7 @@
 #include "vats/deformer.h"
 #include "vats/export_name.h"
 #include "vats/height_variant.h"
+#include "vats/position_reset.h"
 #include "vats/world_reduce.h"
 #include "theme.h"
 #include "widgets.h"
@@ -73,14 +76,17 @@ int json_int(const Json& obj, const char* key, int fallback) {
 // Preferences
 
 // Tool windows first open at the 3D view's top-right, stepped so two never land on the same spot.
-void App::place_tool_window(float w_em, float h_em) {
+void App::place_tool_window(const char* title, float w_em, float h_em) {
     // ImGui takes this only the first time the window opens (then layout.ini remembers where it was).
     ImGuiContext& g = *GImGui;
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     const Box work{vp->WorkPos.x, vp->WorkPos.y, vp->WorkPos.x + vp->WorkSize.x, vp->WorkPos.y + vp->WorkSize.y};
     // The avatar stands in the middle of the view (the dockspace's central node; the app's Viewport panel is there).
     const ImGuiDockNode* central = ImGui::DockBuilderGetCentralNode(dockspace_id_);
-    const float avatar_x = central && central->Size.x > 8 ? central->Pos.x + central->Size.x / 2 : (work.x0 + work.x1) / 2;
+    const Box view = central && central->Size.x > 8
+                         ? Box{central->Pos.x, central->Pos.y, central->Pos.x + central->Size.x, central->Pos.y + central->Size.y}
+                         : work;
+    const float avatar_x = (view.x0 + view.x1) / 2;
     // The other windows open over the dock: the tool windows already floating there.
     std::vector<Box> others;
     for (ImGuiWindow* w : g.Windows)
@@ -91,59 +97,33 @@ void App::place_tool_window(float w_em, float h_em) {
             others.push_back({w->Pos.x, w->Pos.y, w->Pos.x + w->Size.x, w->Pos.y + w->Size.y});
     const ImVec2 size = window_size(w_em, h_em);
     const float step = ImGui::GetFrameHeight();
-    const Box at = place_window(work, size.x, size.y, avatar_x, others, 0.5f * step, step);
+    const Box area = tool_window_area(work, view, size.x, 12 * step, 0.5f * step);
+    const Box at = place_window(area, size.x, size.y, avatar_x, others, 0.5f * step, step);
     ImGui::SetNextWindowPos(ImVec2(at.x0, at.y0), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(at.w(), at.h()), ImGuiCond_FirstUseEver);
+    // First open: as tall as its content (0 is ImGui's fit), never past the area it opened in nor 70% of the screen.
+    // Afterwards the size is the user's.
+    ImGui::SetNextWindowSize(ImVec2(at.w(), 0), ImGuiCond_FirstUseEver);
+    const ImGuiWindow* w = ImGui::FindWindowByName(title);
+    if (w ? w->AutoFitFramesY > 0 : !ImGui::FindWindowSettingsByID(ImHashStr(title)))
+        ImGui::SetNextWindowSizeConstraints(ImVec2(at.w(), 4 * step),
+                                            ImVec2(at.w(), std::min(area.y1 - at.y0 - 0.5f * step, 0.7f * work.h())));
 }
 
 void App::draw_preferences() {
     if (!show_prefs_) return;
-    ImGui::SetNextWindowSize(window_size(41, 37), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
-    if (!ImGui::Begin("Preferences", &show_prefs_, ImGuiWindowFlags_NoDocking)) return ImGui::End();
+    // A dialog: in the middle of the screen each time it opens, as tall as its rows.
+    ImGui::SetNextWindowSize(ImVec2(window_size(38, 1).x, 0), ImGuiCond_Appearing);
+    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (!ImGui::Begin("Preferences", &show_prefs_, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize))
+        return ImGui::End();
     if (ImGui::IsWindowFocused() && ImGui::IsKeyPressed(ImGuiKey_Escape)) show_prefs_ = false;
-    const float label_w = ImGui::GetFontSize() * 11;
-    auto row = [&](const char* label) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(label);
-        ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(-1);
-    };
-    row("Navigation & hotkeys");
-    const std::vector<Preset> offered = offered_presets(host_.world_view());
-    int preset = int(std::find(offered.begin(), offered.end(), settings_.preset) - offered.begin());
-    std::vector<const char*> labels;
-    for (Preset p : offered) labels.push_back(preset_label(p));
-    if (offered.size() == 1) {  // the viewer: its own controls, no picker
-        ImGui::TextUnformatted(labels[0]);
-    } else if (ImGui::Combo("##preset", &preset, labels.data(), int(labels.size()))) {
-        settings_.preset = offered[preset];
-        if (settings_.preset == Preset::SecondLife) tool_ = Tool::Move;  // SL edits with the move arrows
-        apply_preset();
-        save_settings();
-        status(std::string("Controls: ") + labels[preset]);
-    }
-    if (!settings_.key_overrides.empty()) {  // your own keys stay over any preset (Edit > Keyboard Shortcuts...)
-        ImGui::SetCursorPosX(label_w);
-        ImGui::AlignTextToFramePadding();
-        const size_t n = settings_.key_overrides.size();
-        ImGui::TextDisabled("%zu %s your own keys, over any preset", n, n == 1 ? "command keeps" : "commands keep");
-        ImGui::SameLine();
-        if (ImGui::SmallButton("Edit...")) show_shortcuts_ = true;
-        ImGui::SameLine();
-        if (ImGui::SmallButton("Clear")) {
-            settings_.key_overrides.clear();
-            apply_preset();
-            save_settings();
-            status("Keyboard shortcuts: the preset's keys");
-        }
-        ImGui::SetItemTooltip("Every command back to this preset's keys");
-    }
-    if (settings_.preset == Preset::Blender) {
-        ImGui::SetCursorPosX(label_w);
-        if (ImGui::Checkbox("Emulate 3-button mouse (Alt + left-drag = middle-drag)", &settings_.emulate_3_button))
-            save_settings();
-    }
+    help_button("preferences");
+    ImGui::Dummy(ImVec2(window_size(38, 1).x - 2 * ImGui::GetStyle().WindowPadding.x, 0));  // the width it keeps
+    const float em = 11, label_w = label_column(em);
+    auto row = [&](const char* label) { labelled_row(label, em); };
+
+    // How it looks.
+    subheading("Look");
     row("Colour theme");
     int theme = find_theme(settings_.theme);
     if (has_host_colours_) {
@@ -153,6 +133,7 @@ void App::draw_preferences() {
         for (int i = 0; i < theme_count(); ++i)
             if (ImGui::Selectable(theme_name(i), i == theme)) {
                 settings_.theme = theme_name(i);
+                session_theme_.reset();  // chosen here: saved, whatever --theme said
                 apply_look();
                 save_settings();
             }
@@ -174,16 +155,63 @@ void App::draw_preferences() {
         }
         ImGui::EndCombo();
     }
+    ImGui::SetItemTooltip("Text, buttons and the panels around the view grow or shrink together");
+    row("Layout");
+    if (bool on = settings_.workspaces; ImGui::Checkbox("Workspaces (trial)", &on)) set_workspaces_on(on);
+    ImGui::SetItemTooltip("Tabs in the menu bar for Pose, Animate, Face, Rig and Export, each showing only the panels "
+                          "that job needs. Off: every panel, as before. Also View > Workspaces.");
     row("Gizmo size");
     if (slider_float("##gizmo", &settings_.gizmo_size, 50, 220, "%.0f px")) gizmo_size_ = settings_.gizmo_size;
     if (ImGui::IsItemDeactivatedAfterEdit()) save_settings();
+    row("Camera");
+    if (ImGui::Checkbox("Reduce motion", &settings_.reduce_motion)) save_settings();
+    ImGui::SetItemTooltip("The camera jumps to a new view (view keys, the view cube, Alt-click focus) instead of "
+                          "gliding there");
+    row("Start screen");
+    if (ImGui::Button("Show Now")) {
+        show_prefs_ = false;
+        show_welcome_ = true;
+    }
+
+    // How it behaves.
+    subheading("Behaviour");
+    row("Navigation & hotkeys");
+    const std::vector<Preset> offered = offered_presets(host_.world_view());
+    int preset = int(std::find(offered.begin(), offered.end(), settings_.preset) - offered.begin());
+    std::vector<const char*> labels;
+    for (Preset p : offered) labels.push_back(preset_label(p));
+    if (offered.size() == 1) {  // the viewer: its own controls, no picker
+        ImGui::TextUnformatted(labels[0]);
+    } else if (ImGui::Combo("##preset", &preset, labels.data(), int(labels.size()))) {
+        settings_.preset = offered[preset];
+        if (settings_.preset == Preset::SecondLife) tool_ = Tool::Move;  // SL edits with the move arrows
+        apply_preset();
+        save_settings();
+        status(std::string("Controls: ") + labels[preset]);
+    }
+    ImGui::SetCursorPosX(label_w);
+    if (ImGui::Button("Change Shortcuts...")) show_shortcuts_ = true;
+    ImGui::SetItemTooltip("Edit > Keyboard Shortcuts...: every command and its keys, and keys of your own");
+    if (!settings_.key_overrides.empty()) {  // your own keys stay over any preset (Edit > Keyboard Shortcuts...)
+        ImGui::SameLine();
+        if (ImGui::Button("Clear Your Keys")) {
+            settings_.key_overrides.clear();
+            apply_preset();
+            save_settings();
+            status("Keyboard shortcuts: the preset's keys");
+        }
+        const size_t n = settings_.key_overrides.size();
+        ImGui::SetItemTooltip("%s your own keys over the preset. This puts every command back to the preset's keys.",
+                              count_noun(n, "command keeps", "commands keep").c_str());
+    }
+    if (settings_.preset == Preset::Blender) {
+        ImGui::SetCursorPosX(label_w);
+        if (ImGui::Checkbox("Emulate 3-button mouse (Alt + left-drag = middle-drag)", &settings_.emulate_3_button))
+            save_settings();
+    }
     row(settings_.preset == Preset::SecondLife ? "Rotation snap (G)" : "Rotation snap (Ctrl)");
     if (slider_float("##snap", &settings_.snap_degrees, 1, 90, "%.0f°")) snap_deg_ = settings_.snap_degrees;
     if (ImGui::IsItemDeactivatedAfterEdit()) save_settings();
-    row("BVH import");
-    if (ImGui::Checkbox("Reduce keys after import", &settings_.bvh_reduce)) save_settings();
-    ImGui::SetItemTooltip("Drops keys that linear playback reproduces within 0.05 degrees and 0.5 mm. "
-                          "Off keeps a key on every frame.");
     row("Posing");  // spec 08 PT
     if (ImGui::Checkbox("Mirror centre bones in place", &settings_.mirror_centre)) save_settings();
     ImGui::SetItemTooltip("With Mirror on, posing the spine or head keeps it symmetric: a nod stays, a turn or lean is "
@@ -191,19 +219,16 @@ void App::draw_preferences() {
     ImGui::SetCursorPosX(label_w);
     if (ImGui::Checkbox("Only key channels that already have keys", &settings_.scratch_existing_only)) save_settings();
     ImGui::SetItemTooltip("Keeping a scratch pose keys only the channels that were animated before it");
-    ImGui::SetCursorPosX(label_w);
-    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10);
+    row("Leaving a scratch pose");
     const char* scrub[] = {"ask", "keep", "discard"};
     const char* scrub_names[] = {"Ask", "Keep as keys", "Discard"};
     int sc = 0;
     for (int i = 0; i < 3; ++i) sc = settings_.scratch_scrub == scrub[i] ? i : sc;
-    if (ImGui::Combo("Leaving a scratch pose", &sc, scrub_names, 3)) settings_.scratch_scrub = scrub[sc], save_settings();
-    row("Start screen");
-    if (ImGui::Button("Show Now")) {
-        show_prefs_ = false;
-        show_welcome_ = true;
-    }
-
+    if (ImGui::Combo("##scrub", &sc, scrub_names, 3)) settings_.scratch_scrub = scrub[sc], save_settings();
+    row("BVH import");
+    if (ImGui::Checkbox("Reduce keys after import", &settings_.bvh_reduce)) save_settings();
+    ImGui::SetItemTooltip("Drops keys that linear playback reproduces within 0.05 degrees and 0.5 mm. "
+                          "Off keeps a key on every frame.");
     row("Project files");
     if (ImGui::Button("Open .vat Files with VATs")) {
         std::string msg;
@@ -218,7 +243,7 @@ void App::draw_preferences() {
     }
 
     if (host_.world_view()) {  // settings only the viewer uses (spec 09 U4b)
-        ImGui::SeparatorText("In the viewer");
+        subheading("In the viewer");
         row("Opening the editor");
         if (ImGui::Checkbox("Reset joint positions when the editor opens", &settings_.viewer_reset_joints)) save_settings();
         ImGui::SetItemTooltip("Resets your avatar's skeleton on your screen only, as the viewer's Reset Skeleton does: joint "
@@ -228,27 +253,6 @@ void App::draw_preferences() {
         ImGui::SetItemTooltip("Off: every other avatar, with its attachments and name tag, is hidden on your screen only, as the "
                               "viewer's Render Only Friends does (friends too). Also View > Show Other Avatars.");
     }
-
-    ImGui::Separator();
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Hotkeys for this preset");
-    ImGui::SameLine();
-    if (ImGui::SmallButton("Change Shortcuts...")) show_shortcuts_ = true;
-    ImGui::BeginChild("##keys", ImVec2(0, 0), ImGuiChildFlags_Borders);
-    ImGui::TextWrapped("Mouse: %s", nav_hint().c_str());
-    if (ImGui::BeginTable("##keytable", 2, ImGuiTableFlags_RowBg)) {
-        for (auto& [id, a] : actions_) {
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::TextUnformatted(a.label);
-            ImGui::TableNextColumn();
-            std::string keys = a.key ? key_label(a.key) : "-";
-            if (a.key2) keys += std::string(", ") + key_label(a.key2);
-            ImGui::TextDisabled("%s", keys.c_str());
-        }
-        ImGui::EndTable();
-    }
-    ImGui::EndChild();
     ImGui::End();
 }
 
@@ -268,15 +272,9 @@ void App::draw_controls_help() {
     ImGui::TextWrapped("%s", graph_nav_hint().c_str());
     if (ImGui::Button("Change Shortcuts...")) show_shortcuts_ = true;
     ImGui::SetItemTooltip("Edit > Keyboard Shortcuts...: give any command keys of your own");
-    ImGui::Separator();
-    for (auto& [id, a] : actions_) {
-        if (!a.key) continue;
-        std::string keys = key_label(a.key);
-        if (a.key2) keys += std::string(", ") + key_label(a.key2);
-        ImGui::TextUnformatted(a.label);
-        ImGui::SameLine(ImGui::GetFontSize() * 16);
-        ImGui::TextDisabled("%s", keys.c_str());
-    }
+    ImGui::Spacing();
+    // The keys: Keyboard Shortcuts' table, read-only, the commands with keys grouped by their menu.
+    draw_shortcut_table(false, "", 0);
     ImGui::End();
 }
 
@@ -297,6 +295,16 @@ void App::draw_welcome() {
     ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(p.x - 10, p.y - 4), ImVec2(p.x - 7, p.y + 44), accent_colour());
     ImGui::TextUnformatted("Viewport Avatar Toolset");
     ImGui::TextDisabled("Second Life animation, open source  \xC2\xB7  Version %s", kVersion);
+    ImGui::Separator();
+    // A newcomer's way in: the first tutorial and the list, before the news.
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("New to animating?");
+    ImGui::SameLine();
+    if (ImGui::Button("First Steps")) open_help("first-steps"), show_welcome_ = false;
+    ImGui::SetItemTooltip("Help > First steps: a waving animation in 15 minutes, made by dragging");
+    ImGui::SameLine();
+    if (ImGui::Button("Tutorials")) open_help("tutorials"), show_welcome_ = false;
+    ImGui::SetItemTooltip("Help > Tutorials: lessons from your first pose to a run cycle");
     ImGui::Separator();
     ImGui::BeginChild("##news", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 2));
     markdown(text);
@@ -361,21 +369,40 @@ const Shape* App::export_positions() const {
     return swap_body() ? export_shape() : host_.body_shape();  // the swapped body's joints, or the worn avatar's
 }
 
-void App::draw_export_section() {
+// The export settings and buttons: Properties > Export (body_h 0: one column, the buttons at its end), the Export panel
+// (body_h < 0: the settings scroll above a footer pinned to the panel's foot) and the Export SL .anim dialog (body_h > 0:
+// the same, the settings at most that tall). The footer says what is written and holds Export .anim.
+void App::draw_export_section(float body_h) {
     Json& ex = doc_.clip().export_settings;
     if (!ex.is_object()) ex = Json::object();
-    const float label_w = ImGui::GetFontSize() * 6.5f;
-    auto label = [&](const char* text) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(text);
-        ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(-1);
-    };
+    const float label_w = label_column();
+    auto label = [&](const char* text) { labelled_row(text); };
     // Each change is an undo step (UI-28). ponytail: typing in a text field makes one step per keystroke;
     // merge consecutive "Export Settings" steps in History if that gets noisy.
     auto set = [&](const char* key, Json v) {
         edit("Export Settings", [&](Clip& c) { c.export_settings.set(key, std::move(v)); });
     };
+    const ImGuiStyle& st = ImGui::GetStyle();
+    const float footer_h = ImGui::GetFrameHeight() + 2 * st.ItemSpacing.y + 1;
+    if (body_h < 0) {
+        ImGui::BeginChild("##export_body", ImVec2(0, -footer_h));
+    } else if (body_h > 0) {
+        ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0), ImVec2(FLT_MAX, body_h));
+        ImGui::BeginChild("##export_body", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY);
+    }
+    // The dialog and the Export panel: the clip's Priority (Properties > Animation, where the inline section sits) here
+    // too, the setting most checked last before an upload.
+    if (body_h != 0) {
+        label("Priority");
+        if (const int prio = doc_.clip().priority; ImGui::BeginCombo("##eprio", std::to_string(prio).c_str())) {
+            for (int pr = 0; pr <= 6; ++pr)
+                if (ImGui::Selectable((std::to_string(pr) + (pr > 4 ? "  (some viewers treat it as 4)" : "")).c_str(), pr == prio) &&
+                    pr != prio)
+                    edit("Priority", [pr](Clip& c) { c.priority = pr; });
+            ImGui::EndCombo();
+        }
+        ImGui::SetItemTooltip("Higher wins the bones over other animations playing at the same time; see Help > Animation priority");
+    }
     char buf[256];
     std::snprintf(buf, sizeof buf, "%s", json_str(ex, "name").c_str());
     label("Name");
@@ -391,6 +418,12 @@ void App::draw_export_section() {
     std::snprintf(buf, sizeof buf, "%s", json_str(ex, "pattern", "[NAME]_[#]_[SIDE]").c_str());
     label("Pattern");
     if (ImGui::InputTextWithHint("##epat", "[NAME]_[#]_[SIDE]", buf, sizeof buf)) set("pattern", std::string(buf));
+    const std::string folder = json_str(ex, "folder");
+    label("Folder");
+    if (ImGui::Button("Choose...")) host_.open_folder_dialog(folder, dialog_result(Dialog::ExportFolder));
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", folder.empty() ? "(asks the first time)" : folder.c_str());
+    if (!folder.empty()) ImGui::SetItemTooltip("%s", folder.c_str());
     label("Bake shape");
     {
         const std::string key = bake_shape_key(ex);
@@ -430,164 +463,300 @@ void App::draw_export_section() {
                               "actors of a couple or group use SL Default instead. On: every actor bakes against your worn avatar (or the "
                               "body View > Body swaps in).");
     }
+
+    // The options, in two folded groups whose headers count the ones that are on.
     bool both = json_bool(ex, "both"), count_up = json_bool(ex, "count_up"), mirrored = doc_.clip().mirror_export;
-    ImGui::SetCursorPosX(label_w);
-    if (ImGui::Checkbox("Also export the other side (mirrored)", &both)) set("both", both);
-    draw_height_variants(label_w);  // HV (ui/height_variant_ui.cpp)
-    ImGui::SetCursorPosX(label_w);
-    if (ImGui::Checkbox("Count the number up after each export", &count_up)) set("count_up", count_up);
-    bool to_library = json_bool(ex, "save_to_library");
-    ImGui::SetCursorPosX(label_w);
-    if (ImGui::Checkbox("Also save to Animations library", &to_library)) set("save_to_library", to_library);
-    ImGui::SetItemTooltip("Each exported%s .anim is also copied to the Inventory's Animations, replacing one of the same name",
-                          host_.can_upload() ? " or uploaded" : "");
-    ImGui::SetCursorPosX(label_w);
-    if (ImGui::Checkbox("Export mirrored (left and right swapped)", &mirrored)) {
-        edit("Export Mirrored", [&](Clip& c) { c.mirror_export = mirrored; });
-    }
-    ImGui::SetItemTooltip("Swaps the sides in the exported file only; the project is unchanged");
-    bool leave_static = json_bool(ex, "leave_static");
-    ImGui::SetCursorPosX(label_w);
-    if (ImGui::Checkbox("Leave out bones that don't move", &leave_static)) set("leave_static", leave_static);
-    ImGui::SetItemTooltip("The .anim gets no rotation keys for bones (other than the hip) that stay at rest all through, "
-                          "within the rotation tolerance below, so other animations, such as an AO's blinks, still move "
-                          "them. Off: every keyed bone is written.");
-    bool bvh_positions = json_bool(ex, "bvh_positions");
-    ImGui::SetCursorPosX(label_w);
-    if (ImGui::Checkbox("BVH: include bone positions", &bvh_positions)) set("bvh_positions", bvh_positions);
-    ImGui::SetItemTooltip("Writes position channels for moved bones other than the hip. Many tools "
-                          "expect rotation only below the hip, so this is off by default.");
+    bool to_library = json_bool(ex, "save_to_library"), bvh_positions = json_bool(ex, "bvh_positions");
+    bool leave_static = json_bool(ex, "leave_static"), reset_pos = json_bool(ex, "reset_positions");
     // 09 0l, the deformer tool: shown once a bone other than the hip has position keys (or an option is on).
     bool end_rest = json_bool(ex, "end_at_rest"), hold = json_bool(ex, "hold_no_sink"), undeform = json_bool(ex, "undeformer");
     bool moved = end_rest || hold || undeform;
     for (auto& [name, track] : doc_.clip().curves)
         moved = moved || (name != "mPelvis" && skel_.find(name) > 0 && doc_.clip().has_channels(name, kPosChannels));
-    if (moved) {
-        label("Deformer");
-        if (ImGui::Checkbox("End at rest", &end_rest)) set("end_at_rest", end_rest);
-        ImGui::SetItemTooltip("Adds a frame after the last one with every moved bone (the hip aside) back at its rest "
-                              "position. A bone keeps an animation's position after it stops, so the shape then lasts only "
-                              "while the animation plays. A looping animation stops wherever it is: pair it with an "
-                              "undeformer instead.");
+    auto header = [](const char* name, const char* id, int on) {
+        const std::string text = std::string(name) + (on ? " (" + std::to_string(on) + " on)" : "") + "###" + id;
+        return section_header(text.c_str(), false);
+    };
+    const int also_on = both + !export_heights(ex).empty() + count_up + to_library + mirrored + bvh_positions + undeform;
+    if (header("Also Write", "also_write", also_on)) {
         ImGui::SetCursorPosX(label_w);
-        if (ImGui::Checkbox("Hold without sinking", &hold)) set("hold_no_sink", hold);
-        ImGui::SetItemTooltip("Adds mSkull position keys that keep Second Life's avatar height at rest height on every "
-                              "frame, so a longer neck or body does not sink the wearer into the ground (nor a shorter one "
-                              "lift them), while it plays and after. mSkull's own position keys are kept and the counter-move "
-                              "added to them. Anything rigged to mSkull, such as system hair, may shift.");
-        if (hold) {
-            const Shape* s = export_positions() ? export_positions() : export_shape();  // deformer_body
-            const int head = skel_.find("mHead");
-            char text[160];
-            if (s && head >= 0 && size_t(head) < s->scale.size())
-                std::snprintf(text, sizeof text, "Counters for a head scale of %.3g (%s)", s->scale[size_t(head)].z,
-                              export_positions() && !swap_body() ? "your avatar's" : "the bake shape's");
-            else
-                std::snprintf(text, sizeof text, "Counters for a head scale of 1 (no bake shape to take it from)");
+        if (ImGui::Checkbox("Also export the other side (mirrored)", &both)) set("both", both);
+        draw_height_variants(label_w);  // HV (ui/height_variant_ui.cpp)
+        ImGui::SetCursorPosX(label_w);
+        if (ImGui::Checkbox("Export mirrored (left and right swapped)", &mirrored)) {
+            edit("Export Mirrored", [&](Clip& c) { c.mirror_export = mirrored; });
+        }
+        ImGui::SetItemTooltip("Swaps the sides in the exported file only; the project is unchanged");
+        ImGui::SetCursorPosX(label_w);
+        if (ImGui::Checkbox("Count the number up after each export", &count_up)) set("count_up", count_up);
+        ImGui::SetCursorPosX(label_w);
+        if (ImGui::Checkbox("Also save to Animations library", &to_library)) set("save_to_library", to_library);
+        ImGui::SetItemTooltip("Each exported%s .anim is also copied to the Inventory's Animations, replacing one of the same name",
+                              host_.can_upload() ? " or uploaded" : "");
+        if (moved) {
             ImGui::SetCursorPosX(label_w);
-            hint(text);
+            if (ImGui::Checkbox("Also export an undeformer", &undeform)) set("undeformer", undeform);
+            ImGui::SetItemTooltip("Writes [name]_undeform.anim beside the animation: the same bones at their rest positions, "
+                                  "at the same priority, %.1f s long. Playing it puts a deformer's bones back.%s",
+                                  double(kUndeformSeconds), host_.can_upload() ? " Upload Animation uploads it too." : "");
         }
         ImGui::SetCursorPosX(label_w);
-        if (ImGui::Checkbox("Also export an undeformer", &undeform)) set("undeformer", undeform);
-        ImGui::SetItemTooltip("Writes [name]_undeform.anim beside the animation: the same bones at their rest positions, "
-                              "at the same priority, %.1f s long. Playing it puts a deformer's bones back.%s",
-                              double(kUndeformSeconds), host_.can_upload() ? " Upload Animation uploads it too." : "");
+        if (ImGui::Checkbox("BVH: include bone positions", &bvh_positions)) set("bvh_positions", bvh_positions);
+        ImGui::SetItemTooltip("Writes position channels for moved bones other than the hip. Many tools "
+                              "expect rotation only below the hip, so this is off by default.");
     }
-    // IO-14: key-reduction tolerances, stored as [degrees, metres].
-    float rot_deg = 0.05f, pos_mm = 0.5f;
-    if (const Json* r = ex.find("reduce"); r && r->is_array() && r->arr.size() == 2 && r->arr[0].is_number() && r->arr[1].is_number())
-        rot_deg = float(r->arr[0].num), pos_mm = float(r->arr[1].num * 1000);
-    label("Reduce keys");
-    // IO-14w (08 WR): per bone, or by the world-space error anywhere on the body ("reduce_mode" "world").
-    const bool world = json_str(ex, "reduce_mode") == "world";
-    int mode = world;
-    const char* modes[] = {"Per bone", "Anywhere on the body"};
-    if (ImGui::Combo("##ermode", &mode, modes, 2)) set("reduce_mode", std::string(mode ? "world" : "bone"));
-    ImGui::SetItemTooltip("Per bone: each bone keeps the keys its own rotation and position need, within the two "
-                          "tolerances. Anywhere on the body: keys go while no point of the body moves further than the "
-                          "distance set, so a finger, which moves little of the body, loses more keys than a shoulder.");
-    ImGui::SetCursorPosX(label_w);
-    bool reduce_changed = false;
-    if (world) {
-        const Json* w = ex.find("reduce_world");
-        float world_mm = float((w && w->is_number() && w->num > 0 ? w->num : kReduceWorldDefault) * 1000);
-        ImGui::SetNextItemWidth(-1);
-        if (ImGui::DragFloat("##eworld", &world_mm, 0.02f, 0.05f, 50, "%.2f mm anywhere on the body",
-                             ImGuiSliderFlags_AlwaysClamp))
-            set("reduce_world", double(world_mm) / 1000);
-        ImGui::SetItemTooltip("The farthest any point of the body may move from your animation where keys are left "
-                              "out. Your keys, the first and last frames and a key every 60 frames are always kept.");
-    } else {
-        const float half = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) / 2;
-        ImGui::SetNextItemWidth(half);
-        reduce_changed = ImGui::DragFloat("##erot", &rot_deg, 0.005f, 0, 5, "%.3f deg");
-        ImGui::SetItemTooltip("Rotation tolerance. 0 and 0 keep a key on every frame.");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(half);
-        reduce_changed |= ImGui::DragFloat("##epos", &pos_mm, 0.05f, 0, 50, "%.2f mm");
-        ImGui::SetItemTooltip("Position tolerance. 0 and 0 keep a key on every frame.");
-    }
-    if (reduce_changed) {
-        Json a = Json::array();
-        a.push(double(std::max(rot_deg, 0.f)));
-        a.push(double(std::max(pos_mm, 0.f)) / 1000);
-        set("reduce", a);
-    }
-    draw_upload_meter();  // UM: live size, what costs the most, Fit to 250 KB (sl_preview_ui.cpp)
-    std::string folder = json_str(ex, "folder");
-    label("Folder");
-    ImGui::TextDisabled("%s", folder.empty() ? "(asks the first time)" : folder.c_str());
-    ImGui::SetCursorPosX(label_w);
-    if (ImGui::SmallButton("Choose...")) host_.open_folder_dialog(folder, dialog_result(Dialog::ExportFolder));
 
+    const int clean_on = leave_static + reset_pos + end_rest + hold;
+    if (header("Clean Up", "clean_up", clean_on)) {
+        ImGui::SetCursorPosX(label_w);
+        if (ImGui::Checkbox("Leave out bones that don't move", &leave_static)) set("leave_static", leave_static);
+        ImGui::SetItemTooltip("The .anim gets no rotation keys for bones (other than the hip) that stay at rest all through, "
+                              "within the rotation tolerance below, so other animations, such as an AO's blinks, still move "
+                              "them. Off: every keyed bone is written.");
+        std::string reset_label = "Reset joint positions";
+        if (reset_pos) {
+            const std::string mode_str = json_str(ex, "reset_positions_mode", "rotated");
+            if (reset_joints_serial_ != doc_.history.serial() ||
+                reset_joints_active_clip_ != doc_.project.active_clip ||
+                reset_joints_doc_gen_ != doc_generation_ ||
+                reset_joints_mode_ != mode_str) {
+                reset_joints_count_ = static_cast<int>(reset_position_joints().size());
+                reset_joints_serial_ = doc_.history.serial();
+                reset_joints_active_clip_ = doc_.project.active_clip;
+                reset_joints_doc_gen_ = doc_generation_;
+                reset_joints_mode_ = mode_str;
+            }
+            reset_label = "Reset joint positions (resets " + count_noun(size_t(reset_joints_count_), "joint") + ")";
+        }
+        ImGui::SetCursorPosX(label_w);
+        if (ImGui::Checkbox((reset_label + "###reset_pos").c_str(), &reset_pos)) set("reset_positions", reset_pos);
+        ImGui::SetItemTooltip("Keys position at rest on the first and last frames on the chosen joints, "
+                              "so this animation does not inherit leftover joint positions from other animations.");
+        if (reset_pos) {
+            const std::string mode_str = json_str(ex, "reset_positions_mode", "rotated");
+            int mode_idx = 0;
+            if (mode_str == "other_clips") mode_idx = 1;
+            else if (mode_str == "pick") mode_idx = 2;
+
+            const char* mode_names[] = {
+                "Joints this clip rotates",
+                "Joints moved by position in other clips",
+                "Pick joints"
+            };
+            ImGui::SetCursorPosX(label_w + ImGui::GetFontSize());
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - ImGui::GetFontSize());
+            if (ImGui::Combo("##reset_mode", &mode_idx, mode_names, 3)) {
+                const char* modes[] = {"rotated", "other_clips", "pick"};
+                set("reset_positions_mode", std::string(modes[mode_idx]));
+            }
+
+            if (mode_idx == 2) {
+                ImGui::SetCursorPosX(label_w + ImGui::GetFontSize());
+                std::vector<std::string> picked;
+                if (const Json* arr = ex.find("reset_positions_joints"); arr && arr->is_array()) {
+                    for (const auto& v : arr->arr) {
+                        if (v.is_string()) picked.push_back(v.str);
+                    }
+                }
+                std::string btn_label = "Pick Joints (" + std::to_string(picked.size()) + " selected)...";
+                if (ImGui::Button(btn_label.c_str())) {
+                    ImGui::OpenPopup("##pick_reset_joints");
+                }
+                if (ImGui::BeginPopup("##pick_reset_joints")) {
+                    static char filter_buf[64] = "";
+                    filter_input("##pick_filter", "Filter joints...", filter_buf, sizeof(filter_buf));
+                    const std::string filter = filter_buf;
+
+                    // Joints only (no attachment points or collision volumes, which no animation moves), by body part.
+                    // Select All leaves the face out: its position keys would pull a mesh head towards the bake shape's face.
+                    if (ImGui::SmallButton("Select All")) {
+                        Json arr = Json::array();
+                        for (int i = 1; i < skel_.joint_count(); ++i) {
+                            if (skel_[i].category != Category::Face) arr.push(skel_[i].name);
+                        }
+                        set("reset_positions_joints", std::move(arr));
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Clear")) {
+                        set("reset_positions_joints", Json::array());
+                    }
+                    ImGui::Separator();
+                    ImGui::BeginChild("##pick_list", ImVec2(ImGui::GetFontSize() * 15, ImGui::GetFontSize() * 12), true);
+                    std::set<std::string> picked_set(picked.begin(), picked.end());
+                    bool changed = false;
+                    static const char* const kParts[] = {"Body", "Hands", "Face", "Wings", "Tail", "Hind Limbs", "Groin"};
+                    for (int part = 0; part < int(std::size(kParts)); ++part) {
+                        bool shown = false;
+                        for (int i = 1; i < skel_.joint_count(); ++i) {
+                            const std::string& name = skel_[i].name;
+                            if (int(skel_[i].category) != part) continue;
+                            if (!filter.empty() && name.find(filter) == std::string::npos) continue;
+                            if (!shown) subheading(kParts[part]), shown = true;
+                            bool sel = picked_set.count(name) > 0;
+                            if (ImGui::Checkbox(name.c_str(), &sel)) {
+                                if (sel) picked_set.insert(name);
+                                else picked_set.erase(name);
+                                changed = true;
+                            }
+                        }
+                    }
+                    ImGui::EndChild();
+                    if (changed) {
+                        Json arr = Json::array();
+                        for (const auto& name : picked_set) arr.push(name);
+                        set("reset_positions_joints", std::move(arr));
+                    }
+                    ImGui::EndPopup();
+                }
+            }
+        }
+        if (moved) {
+            label("Deformer");
+            if (ImGui::Checkbox("End at rest", &end_rest)) set("end_at_rest", end_rest);
+            ImGui::SetItemTooltip("Adds a frame after the last one with every moved bone (the hip aside) back at its rest "
+                                  "position. A bone keeps an animation's position after it stops, so the shape then lasts only "
+                                  "while the animation plays. A looping animation stops wherever it is: pair it with an "
+                                  "undeformer instead.");
+            ImGui::SetCursorPosX(label_w);
+            if (ImGui::Checkbox("Hold without sinking", &hold)) set("hold_no_sink", hold);
+            ImGui::SetItemTooltip("Adds mSkull position keys that keep Second Life's avatar height at rest height on every "
+                                  "frame, so a longer neck or body does not sink the wearer into the ground (nor a shorter one "
+                                  "lift them), while it plays and after. mSkull's own position keys are kept and the counter-move "
+                                  "added to them. Anything rigged to mSkull, such as system hair, may shift.");
+            if (hold) {
+                const Shape* s = export_positions() ? export_positions() : export_shape();  // deformer_body
+                const int head = skel_.find("mHead");
+                char text[160];
+                if (s && head >= 0 && size_t(head) < s->scale.size())
+                    std::snprintf(text, sizeof text, "Counters for a head scale of %.3g (%s)", s->scale[size_t(head)].z,
+                                  export_positions() && !swap_body() ? "your avatar's" : "the bake shape's");
+                else
+                    std::snprintf(text, sizeof text, "Counters for a head scale of 1 (no bake shape to take it from)");
+                ImGui::SetCursorPosX(label_w);
+                hint(text);
+            }
+        }
+        // IO-14: key-reduction tolerances, stored as [degrees, metres].
+        float rot_deg = 0.05f, pos_mm = 0.5f;
+        if (const Json* r = ex.find("reduce"); r && r->is_array() && r->arr.size() == 2 && r->arr[0].is_number() && r->arr[1].is_number())
+            rot_deg = float(r->arr[0].num), pos_mm = float(r->arr[1].num * 1000);
+        label("Reduce keys");
+        // IO-14w (08 WR): per bone, or by the world-space error anywhere on the body ("reduce_mode" "world").
+        const bool world = json_str(ex, "reduce_mode") == "world";
+        int mode = world;
+        const char* modes[] = {"Per bone", "Anywhere on the body"};
+        if (ImGui::Combo("##ermode", &mode, modes, 2)) set("reduce_mode", std::string(mode ? "world" : "bone"));
+        ImGui::SetItemTooltip("Per bone: each bone keeps the keys its own rotation and position need, within the two "
+                              "tolerances. Anywhere on the body: keys go while no point of the body moves further than the "
+                              "distance set, so a finger, which moves little of the body, loses more keys than a shoulder.");
+        ImGui::SetCursorPosX(label_w);
+        bool reduce_changed = false;
+        if (world) {
+            const Json* w = ex.find("reduce_world");
+            float world_mm = float((w && w->is_number() && w->num > 0 ? w->num : kReduceWorldDefault) * 1000);
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::DragFloat("##eworld", &world_mm, 0.02f, 0.05f, 50, "%.2f mm anywhere on the body",
+                                 ImGuiSliderFlags_AlwaysClamp))
+                set("reduce_world", double(world_mm) / 1000);
+            ImGui::SetItemTooltip("The farthest any point of the body may move from your animation where keys are left "
+                                  "out. Your keys, the first and last frames and a key every 60 frames are always kept.");
+        } else {
+            const float half = (ImGui::GetContentRegionAvail().x - st.ItemSpacing.x) / 2;
+            ImGui::SetNextItemWidth(half);
+            reduce_changed = ImGui::DragFloat("##erot", &rot_deg, 0.005f, 0, 5, "%.3f deg");
+            ImGui::SetItemTooltip("Rotation tolerance. 0 and 0 keep a key on every frame.");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(half);
+            reduce_changed |= ImGui::DragFloat("##epos", &pos_mm, 0.05f, 0, 50, "%.2f mm");
+            ImGui::SetItemTooltip("Position tolerance. 0 and 0 keep a key on every frame.");
+        }
+        if (reduce_changed) {
+            Json a = Json::array();
+            a.push(double(std::max(rot_deg, 0.f)));
+            a.push(double(std::max(pos_mm, 0.f)) / 1000);
+            set("reduce", a);
+        }
+    }
+    draw_upload_meter();  // UM: live size, what costs the most, Fit to 250 KB when over (sl_preview_ui.cpp)
+
+    // Every file the export writes: GR-3, one per actor, plus a placement note; HV-4, the mirrored and height copies.
     ExportNaming naming = export_naming();
     const std::string stem = export_stem();
-    label("Saves as");
-    // GR-3: one file per actor, plus a placement note.
     std::vector<std::string> actor_names{""};
     if (multi_actor()) {
         actor_names.clear();
         for (const Actor& a : doc_.project.actors) actor_names.push_back(a.name);
     }
-    const std::vector<AnimVariant> variants = anim_variants(mirrored, both, export_heights(ex));  // HV-4
+    std::vector<std::string> files;
+    const std::vector<AnimVariant> variants = anim_variants(mirrored, both, export_heights(ex));
     for (size_t k = 0; k < actor_names.size(); ++k) {
         naming.actor = actor_names[k];
         for (size_t v = 0; v < variants.size(); ++v) {
-            if (k || v) ImGui::SetCursorPosX(label_w);
-            const std::string file = variant_file_name(naming, stem, variants[v], "anim");
-            ImGui::TextColored(ImVec4(0.5f, 0.85f, 0.55f, 1), "%s", file.c_str());
-            if (undeform) {  // 09 0l
-                ImGui::SetCursorPosX(label_w);
-                ImGui::TextColored(ImVec4(0.5f, 0.85f, 0.55f, 1), "%s", undeformer_path(file).c_str());
-            }
+            files.push_back(variant_file_name(naming, stem, variants[v], "anim"));
+            if (undeform) files.push_back(undeformer_path(files.back()));  // 09 0l
         }
     }
     if (multi_actor()) {
         naming.actor.clear();
-        std::string note = export_file_name(naming, stem, false, "txt");
-        ImGui::SetCursorPosX(label_w);
-        ImGui::TextDisabled("%s_placement.txt (where each actor stands)", note.substr(0, note.size() - 4).c_str());
+        const std::string note = export_file_name(naming, stem, false, "txt");
+        files.push_back(note.substr(0, note.size() - 4) + "_placement.txt (where each actor stands)");
     }
-    ImGui::Spacing();
-    if (host_.can_upload()) {
-        if (ImGui::Button("Upload Animation...", ImVec2(-1, 0))) upload_now();
-        ImGui::SetItemTooltip("Uploads the animation to the grid you are on under the name above; the viewer asks to confirm the price");
+    const ImVec4 file_colour(0.5f, 0.85f, 0.55f, 1);
+    if (body_h == 0 || files.size() > 1) {  // the whole list; the pinned footer names the first
+        label("Saves as");
+        for (size_t i = 0; i < files.size(); ++i) {
+            if (i) ImGui::SetCursorPosX(label_w);
+            ImGui::TextColored(file_colour, "%s", files[i].c_str());
+        }
+    }
+
+    if (host_.can_upload())
         if (const ui::Host::Grid g = host_.grid(); !g.name.empty()) hint(ui::grid_note(g).c_str());  // spec 09 item 56
-    }
-    if (ImGui::Button("Export SL .anim", ImVec2(-1, 0))) export_now(false, false);
-    ImGui::SetItemTooltip("%s", folder.empty() ? "Asks for a folder the first time" : ("Writes to " + folder).c_str());
-    if (ImGui::Button("Export BVH (Animated Bones)...", ImVec2(-1, 0))) export_now(true, false);  // the menu's names
-    ImGui::SetItemTooltip("Animated bones only");
-    if (ImGui::Button("Export BVH (All Bento Bones)...", ImVec2(-1, 0))) export_now(true, true);
-    ImGui::SetItemTooltip("Every Bento bone, keyed or not");
+    // The other ways out: BVH, every clip at once.
+    subheading("Other exports");
+    if (ImGui::Button("Export BVH (Animated Bones)...")) export_now(true, false);  // the menu's names
+    ImGui::SetItemTooltip("Animated bones only. Attachment points and moved bones only survive in .anim.");
+    if (ImGui::Button("Export BVH (All Bento Bones)...")) export_now(true, true);
+    ImGui::SetItemTooltip("Every Bento bone, keyed or not. Attachment points and moved bones only survive in .anim.");
     if (const int n = clip_count(doc_.project); n > 1) {  // 08 CL-4
-        ImGui::SeparatorText("Every clip");
-        if (ImGui::Button(("Export All " + std::to_string(n) + " Clips (.anim)").c_str(), ImVec2(-1, 0))) export_now(false, false, true);
+        if (ImGui::Button(("Export All " + std::to_string(n) + " Clips (.anim)").c_str())) export_now(false, false, true);
         ImGui::SetItemTooltip("Each clip with its own export settings, named with [CLIP], into the folder above");
-        if (host_.can_upload() && ImGui::Button(("Upload All " + std::to_string(n) + " Clips...").c_str(), ImVec2(-1, 0)))
-            upload_now(true);
+        if (host_.can_upload() && ImGui::Button(("Upload All " + std::to_string(n) + " Clips...").c_str())) upload_now(true);
     }
-    hint("Attachment points and moved bones only survive in .anim.");
+    if (body_h != 0) ImGui::EndChild();
+
+    // The footer: what is written, then the action. Inline in Properties, pinned under the settings elsewhere.
+    if (body_h != 0) ImGui::Separator();
+    else ImGui::Spacing();
+    const char* go = "Export .anim";
+    const char* up = "Upload Animation...";
+    const float right = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
+    const float go_w = ImGui::CalcTextSize((std::string(icon::kExport) + " " + go).c_str()).x + 2 * st.FramePadding.x;
+    const float up_w = host_.can_upload() ? ImGui::CalcTextSize(up).x + 2 * st.FramePadding.x + st.ItemSpacing.x : 0;
+    const float text_w = std::max(right - ImGui::GetCursorPosX() - go_w - up_w - st.ItemSpacing.x, 0.f);
+    std::string what = files.empty() ? std::string() : "Saves as " + files[0];
+    if (files.size() > 1) what += "  +" + std::to_string(files.size() - 1);
+    if (const std::string size = export_size_text(); !size.empty()) what += "  \xC2\xB7  " + size;
+    ImGui::AlignTextToFramePadding();
+    const ImVec2 at = ImGui::GetCursorScreenPos();
+    ImGui::PushClipRect(at, ImVec2(at.x + text_w, at.y + ImGui::GetFrameHeight()), true);
+    ImGui::TextColored(file_colour, "%s", what.c_str());
+    ImGui::PopClipRect();
+    if (ImGui::BeginItemTooltip()) {
+        ImGui::TextUnformatted(folder.empty() ? "Saves as (asks for a folder the first time):" : ("Saves in " + folder + " as:").c_str());
+        for (const std::string& f : files) ImGui::TextUnformatted(f.c_str());
+        ImGui::EndTooltip();
+    }
+    ImGui::SameLine();
+    ImGui::SetCursorPosX(right - go_w - up_w);
+    if (host_.can_upload()) {
+        if (ImGui::Button(up)) upload_now();
+        ImGui::SetItemTooltip("Uploads the animation to the grid you are on under the name above; the viewer asks to confirm the price");
+        ImGui::SameLine();
+    }
+    if (primary_button(go, folder.empty() ? "Writes the .anim; asks for a folder the first time" : "Writes the .anim to " + folder,
+                       0, icon::kExport))
+        export_now(false, false);
 }
 
 // The viewer (spec 09 section 4): every file Export would write (each actor, and the mirrored copy when "both"
@@ -790,9 +959,11 @@ namespace vats {
 void App::draw_export_dialog() {
     if (!show_export_dialog_) return;
     if (!ImGui::IsPopupOpen("Export SL .anim")) ImGui::OpenPopup("Export SL .anim");
-    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(ImGui::GetFontSize() * 30, 0), ImGuiCond_Appearing);
-    if (!ImGui::BeginPopupModal("Export SL .anim", &show_export_dialog_)) return;
+    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));  // centred as it grows
+    // As wide as its rows, as tall as what is open (the settings scroll past 65% of the screen), the footer always there.
+    ImGui::SetNextWindowSize(ImVec2(ImGui::GetFontSize() * 30, 0));
+    if (!ImGui::BeginPopupModal("Export SL .anim", &show_export_dialog_, ImGuiWindowFlags_NoResize)) return;
+    help_button("export-to-second-life");
     const Clip& c = doc_.clip();
     if (clip_count(doc_.project) > 1)  // 08 CL: the settings below are this clip's
         ImGui::TextDisabled("Clip %s (switch in Tools > Clips)", clip_name(doc_.project, doc_.project.active_clip).c_str());
@@ -801,7 +972,7 @@ void App::draw_export_dialog() {
                         c.loop ? ", looping" : "", c.ease_in, c.ease_out);
     if (seconds > 60) ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "Over SL's 60 s limit: SL will refuse it.");
     if (multi_actor()) {  // GR-3: one file per actor, each baked with its own settings
-        ImGui::SeparatorText("Actors");
+        subheading("Actors");
         const Project& pr = doc_.project;
         for (int k = 0; k < int(pr.actors.size()); ++k) {
             const Json& ek = actor_clip(pr, k).export_settings;
@@ -812,7 +983,7 @@ void App::draw_export_dialog() {
              "and the mirrored copy come from the actor you export from.");
     }
     ImGui::Separator();
-    draw_export_section();
+    draw_export_section(0.65f * ImGui::GetMainViewport()->WorkSize.y);
     draw_message_popup(true);
     if (ImGui::IsKeyPressed(ImGuiKey_Escape) && message_title_.empty()) show_export_dialog_ = false;
     if (!show_export_dialog_) ImGui::CloseCurrentPopup();
@@ -864,8 +1035,10 @@ void App::draw_follow_dialog() {
     } else {
         int target = selection_[0], follower = selection_[1];
         ImGui::Text("%s follows %s", skel_[follower].name.c_str(), skel_[target].name.c_str());
-        ImGui::InputInt("From frame", &follow_f0_);
-        ImGui::InputInt("To frame", &follow_f1_);
+        labelled_row("From frame", kLabelEm, 8);
+        ImGui::InputInt("##from", &follow_f0_);
+        labelled_row("To frame", kLabelEm, 8);
+        ImGui::InputInt("##to", &follow_f1_);
         follow_f0_ = std::clamp(follow_f0_, 0, doc_.clip().end_frame);
         follow_f1_ = std::clamp(follow_f1_, follow_f0_, doc_.clip().end_frame);
         ImGui::Checkbox("Keep the current offset", &follow_keep_offset_);
@@ -972,16 +1145,22 @@ bool App::show_window(const std::string& name) {
         {"face-cam", &App::face_cam_},      {"keys", &App::show_shortcuts_},
 
         {"check", &App::show_check_},      {"idle", &App::show_idle_},           {"overlap", &App::show_overlap_},
+        {"rig-export", &App::show_rig_export_}, {"joint-inspector", &App::show_joint_inspector_}, {"map-rig", &App::show_rig_map_},
+        {"rig-scratch", &App::show_rig_scratch_}, {"paint-weights", &App::show_paint_}, {"undo-history", &App::show_undo_history_},
+        {"suggest-limits", &App::show_suggest_limits_},
         {"face", &App::show_face_},        {"loop-assist", &App::show_loop_assist_}, {"sl-preview", &App::sl_preview_},
         {"treadmill", &App::treadmill_on_}};
     static const std::map<std::string, const char*> panels = {
         {"graph", "Graph"}, {"properties", "Properties"}, {"timeline", "Timeline"}, {"bones", "Bones"}, {"inventory", "Inventory"},
         {"picker", "Picker"}};
     bool known = false;
+    reveal_panel(name);  // a panel the workspace leaves out joins it (workspace_ui.cpp)
     if (auto w = windows.find(name); w != windows.end()) this->*(w->second) = true, known = true;
     if (auto p = panels.find(name); p != panels.end()) pending_tab_ = p->second, known = true;  // docked: to the front
     if (name == "help") open_help(), known = true;
+    if (name == "find") run_action("find_tool"), tool_search_ = "limit", known = true;  // Find a Tool, for screenshots
     if (name == "simplify") open_simplify(), known = true;
+    if (name == "suggest-limits") open_suggest_limits(), known = true;
     if (name == "dope-sheet") show_dope_ = true, pending_tab_ = "Dope Sheet", known = true;  // 08 DS
     if (name == "motion-path") motion_path_.on = true, known = true;                        // 08 MP
     if (name == "transition") show_transition_ = true, transition_.to = int(std::round(frame_)), known = true;  // 08 PM-3
@@ -990,6 +1169,12 @@ bool App::show_window(const std::string& name) {
     if (name == "loop-assist") loop_find_now_ = true;  // with Find pressed, so the candidates show
     if (name == "sit") show_actors_ = sit_scroll_ = true, known = true;  // Actors, scrolled to Sit systems
     if (name == "insert-frames" || name == "stretch-range") time_prompt_ = name == "insert-frames" ? 1 : 2, known = true;
+    // Rig's tools share a tab strip: the one asked for to the front, even when its workspace opened it already.
+    static const std::map<std::string, const char*> rig_tabs = {{"map-rig", "###map-rig"}, {"rig-scratch", "###rig-scratch"},
+                                                                {"paint-weights", "###paint-weights"},
+                                                                {"suggest-limits", "###suggest-limits"},
+                                                                {"joint-inspector", "Joint Offset Inspector"}};
+    if (auto t = rig_tabs.find(name); t != rig_tabs.end()) pending_tab_ = t->second;
     return known;
 }
 

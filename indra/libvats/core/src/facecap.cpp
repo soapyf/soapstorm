@@ -12,6 +12,7 @@
 #include "vats/edit.h"
 #include "vats/json.h"
 #include "vats/mocap.h"
+#include "vats/skeleton.h"
 
 namespace vats {
 
@@ -146,6 +147,104 @@ bool parse_face_table(std::string_view text, FaceTable& out, std::string& err) {
     return true;
 }
 
+std::string write_face_table(const FaceTable& table) {
+    Json doc = Json::object();
+    doc.set("format", "vats-face-table");
+    doc.set("version", 1);
+    if (!table.name.empty()) doc.set("name", table.name);
+    Json shapes = Json::object();
+    for (auto& [shape, motions] : table.shapes) {
+        Json bones = Json::object();
+        for (auto& m : motions) {
+            Json motion = Json::object();
+            if (m.has_rot) {
+                Json r = Json::array();
+                r.push(m.rot.x);
+                r.push(m.rot.y);
+                r.push(m.rot.z);
+                motion.set("rot", std::move(r));
+            }
+            if (m.has_pos) {
+                Json p = Json::array();
+                p.push(m.pos.x);
+                p.push(m.pos.y);
+                p.push(m.pos.z);
+                motion.set("pos", std::move(p));
+            }
+            bones.set(m.bone, std::move(motion));
+        }
+        shapes.set(shape, std::move(bones));
+    }
+    doc.set("shapes", std::move(shapes));
+
+    bool has_gaze = !table.gaze[0].eyes.empty() || !table.gaze[0].lids.empty() ||
+                    !table.gaze[1].eyes.empty() || !table.gaze[1].lids.empty();
+    if (has_gaze) {
+        Json gaze = Json::object();
+        for (int side = 0; side < 2; ++side) {
+            Json s = Json::object();
+            if (!table.gaze[side].eyes.empty()) {
+                Json e = Json::array();
+                for (auto& b : table.gaze[side].eyes) e.push(b);
+                s.set("eyes", std::move(e));
+            }
+            if (!table.gaze[side].lids.empty()) {
+                Json l = Json::object();
+                for (auto& [lid, k] : table.gaze[side].lids) l.set(lid, k);
+                s.set("lids", std::move(l));
+            }
+            gaze.set(side ? "right" : "left", std::move(s));
+        }
+        doc.set("gaze", std::move(gaze));
+    }
+
+    if (!table.aliases.empty()) {
+        Json aliases = Json::object();
+        for (auto& [name, w] : table.aliases) {
+            Json m = Json::object();
+            for (auto& [k, v] : w) m.set(k, v);
+            aliases.set(name, std::move(m));
+        }
+        doc.set("aliases", std::move(aliases));
+    }
+
+    if (!table.presets.empty()) {
+        Json presets = Json::object();
+        for (auto& [name, g] : table.presets) {
+            Json m = Json::object();
+            for (auto& [k, v] : g) m.set(k, v);
+            presets.set(name, std::move(m));
+        }
+        doc.set("presets", std::move(presets));
+    }
+    return write_json(doc);
+}
+
+double face_scale(const Skeleton& skel, const Shape* shape) {
+    if (!shape) return 1.0;
+    const std::vector<Xform> rest = skel.global_pose(Pose(skel.size()));
+    const std::vector<Xform> head = skel.global_pose(Pose(skel.size()), shape);
+    // The median of every measure, moved or not: a measure that moves a fraction of a millimetre then moves the
+    // result by as little, and which parts happen to be loaded does not pick the measure.
+    std::vector<double> r;
+    for (auto [a, b] : {std::pair{"mEyeLeft", "mEyeRight"}, std::pair{"mFaceEyeAltLeft", "mFaceEyeAltRight"},
+                        std::pair{"mFaceLipCornerRight", "mFaceLipCornerLeft"}}) {
+        const int i = skel.find(a), j = skel.find(b);
+        if (i < 0 || j < 0) continue;
+        if (const double d0 = (rest[i].pos - rest[j].pos).length(); d0 > 1e-4)
+            r.push_back(std::clamp((head[i].pos - head[j].pos).length() / d0, 0.1, 10.0));
+    }
+    std::sort(r.begin(), r.end());
+    const double m = r.empty() ? 1.0 : r.size() % 2 ? r[r.size() / 2] : (r[r.size() / 2 - 1] + r[r.size() / 2]) / 2;
+    if (std::fabs(m - 1.0) > 1e-4) return m;
+    // No face measure moved: the head's own scale, if a shape sets one.
+    if (const int h = skel.find("mHead"); h >= 0 && size_t(h) < shape->scale.size()) {
+        const Vec3& s = shape->scale[h];
+        if (s.x > 0 && s.y > 0 && s.z > 0) return std::clamp((s.x + s.y + s.z) / 3.0, 0.1, 10.0);
+    }
+    return 1.0;
+}
+
 std::string arkit_name(std::string_view name) {
     std::string s(name);
     auto ends = [&](const char* suf) { return s.size() > 2 && s.compare(s.size() - 2, 2, suf) == 0; };
@@ -181,18 +280,20 @@ std::map<std::string, double> face_weights(const FaceTable& table, const std::ma
 }
 
 void key_face(Clip& clip, const FaceTable& table, const VmcState& s, const FaceSettings& settings, double frame) {
+    const double scale = settings.scale;
+
     struct Sum {
         Vec3 rot, pos;
         bool pos_used = false;
     };
     std::map<std::string, Sum> bones;
-    for (auto& [shape, motions] : table.shapes)
+    for (auto& [shape_name, motions] : table.shapes)
         for (auto& m : motions) bones[m.bone].pos_used |= m.has_pos;  // every table bone is keyed, even at rest
-    for (auto& [shape, w] : face_weights(table, s.blend, settings))
-        for (auto& m : table.shapes.at(shape)) {
+    for (auto& [shape_name, w] : face_weights(table, s.blend, settings))
+        for (auto& m : table.shapes.at(shape_name)) {
             Sum& b = bones[m.bone];
             if (m.has_rot) b.rot += m.rot * w;  // ponytail: summed Euler; fine for the small face angles
-            if (m.has_pos) b.pos += m.pos * w;
+            if (m.has_pos) b.pos += m.pos * (w * scale);
         }
     // Gaze (Euler degrees: y pitch, positive looks down; z yaw, positive looks to the avatar's left).
     for (int side = 0; side < 2; ++side) {

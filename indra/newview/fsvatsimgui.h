@@ -52,6 +52,8 @@
 // floater); the viewer's Alt camera keys (Alt with the arrows, Page Up/Down, A, D, W, S, E, C) stay the
 // viewer's; every other key is the editor's. Without the editor (the "VATsImGuiTest" demo) ImGui gets only
 // what its windows take.
+struct ImVec2;  // toImGuiScaled: imgui.h stays out of the viewer files that include this
+
 namespace FSVATsImGui
 {
     // Clients: each draws its ImGui windows inside the frame (between NewFrame and Render).
@@ -90,6 +92,8 @@ namespace FSVATsImGui
     bool capturesMouse();
     // True while the viewer's hover reached the world this frame (no LLUI view under the pointer).
     bool pointerOnWorld();
+    // A point in the viewer's scaled UI coordinates (a tool's x, y) as ImGui's display coordinates.
+    ImVec2 toImGuiScaled(S32 x, S32 y);
 }
 
 #endif // FS_VATSIMGUI_H

@@ -58,7 +58,7 @@ void App::draw_onion_settings() {
     changed |= ImGui::Checkbox("Keyed Frames Only", &v.s.keyed_only);
     ImGui::BeginDisabled(v.s.keyed_only);
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
-    changed |= slider_int("Every", &v.s.step, 1, 10, v.s.step == 1 ? "frame" : "%d frames");
+    changed |= slider_int("Every", &v.s.step, 1, 10, v.s.step == 1 ? "%d frame" : "%d frames");
     ImGui::EndDisabled();
     changed |= ImGui::Checkbox("Bones Only", &v.bones_only);
     ImGui::SetItemTooltip("Draw the ghosts as bones instead of the body");
@@ -107,7 +107,7 @@ void App::draw_loop_tools_menu() {
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
     ImGui::DragFloat("##travel", &loop_travel_, 0.01f, -5.f, 5.f, "%.2f m/s");
     ImGui::SameLine();
-    if (icon_label_small_button(icon::kAdd, "Add Travel Forward")) {
+    if (ImGui::Button("Add Travel Forward")) {
         const float v = loop_travel_;
         graph_.snapshot_curves(doc_.clip());  // PT-4
         edit("Add Hip Travel", [&](Clip& c) { add_travel(c, {v, 0}); });

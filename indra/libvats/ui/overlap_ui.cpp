@@ -15,14 +15,11 @@ namespace vats {
 
 void App::draw_overlap_panel() {
     if (!show_overlap_) return;
-    place_tool_window(24, 26);
+    place_tool_window("Overlap", 24, 26);
     if (!ImGui::Begin("Overlap", &show_overlap_)) return ImGui::End();
     help_button("overlap");
     const Clip& clip = doc_.clip();
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped("Select the first bone of a keyed chain (upper arm, tail, spine, finger). Each bone after "
-                       "it plays its keys a little later than the one before.");
-    ImGui::PopStyleColor();
+    hint("Each bone down a keyed chain plays its keys a little later.");
 
     // The chain runs down the first-child path, like a dynamics chain.
     const int p = primary();
@@ -37,13 +34,7 @@ void App::draw_overlap_panel() {
         chain = dyn_nodes(skel_, d, false);
     }
 
-    const float label_w = ImGui::GetFontSize() * 5.5f;
-    auto label = [&](const char* text) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(text);
-        ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(-1);
-    };
+    auto label = [&](const char* text) { labelled_row(text); };
     label("Chain");
     std::string names;
     for (int n : chain) names += (names.empty() ? "" : ", ") + skel_[n].name;
@@ -67,11 +58,12 @@ void App::draw_overlap_panel() {
 
     const std::string why = chain.empty() ? "Select a bone with a child" : overlap_refusal(clip, *rig_, chain);
     ImGui::BeginDisabled(!why.empty());
-    if (icon_label_button(icon::kApply, "Apply Overlap")) {
+    if (primary_button("Apply Overlap", "", 0, icon::kApply)) {
         edit("Overlap", [&](Clip& c) { apply_overlap(c, skel_, chain, overlap_); });
         status("Overlap applied down " + count_noun(chain.size(), "bone"));
     }
     ImGui::EndDisabled();
+    if (!why.empty()) ImGui::SetItemTooltip("%s", why.c_str());
     if (!why.empty()) {
         ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));

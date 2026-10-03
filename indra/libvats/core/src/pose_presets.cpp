@@ -99,10 +99,10 @@ const BodyPose kBodies[] = {
       {"mShoulderLeft", {-78, -26, -23}}, {"mElbowLeft", {0, 0, -20}}}},
     // Weight on the right leg: hips drop to the left, shoulders tilt back the other way.
     {"body-contrapposto", "Contrapposto", false,
-     {{"mPelvis", {-4, 0, 5}}, {"mHipRight", {4, 0, -5}}, {"mHipLeft", {1, -10, -5}}, {"mKneeLeft", {0, 20, 0}},
+     {{"mPelvis", {-4, 0, 5}}, {"mHipRight", {4, 0, -5}}, {"mHipLeft", {4, -10, -5}}, {"mKneeLeft", {0, 20, 0}},
       {"mAnkleLeft", {0, -10, 0}}, {"mTorso", {4, 0, -3}}, {"mChest", {3, 0, -2}}, {"mHead", {-4, 2, 4}},
-      {"mCollarLeft", {-5, 0, 0}}, {"mShoulderLeft", {-80, 0, 0}}, {"mElbowLeft", {0, 0, -12}},
-      {"mCollarRight", {5, 0, 0}}, {"mShoulderRight", {76, 0, 0}}, {"mElbowRight", {0, 0, 15}}}},
+      {"mCollarLeft", {-5, 0, 0}}, {"mShoulderLeft", {-77, 0, 0}}, {"mElbowLeft", {0, 0, -12}},
+      {"mCollarRight", {5, 0, 0}}, {"mShoulderRight", {73, 0, 0}}, {"mElbowRight", {0, 0, 15}}}},
 };
 // clang-format on
 
@@ -180,7 +180,7 @@ LibraryItem body_item(const Skeleton& skel, const BodyPose& b) {
     it.kind = "pose";
     for (auto& [bone, e] : b.bones) {
         it.bones[bone] = e;
-        int src = skel.find(bone), dst = skel.find(Skeleton::mirror_name(bone));
+        int src = skel.find(bone), dst = skel.find(skel.mirror_of(bone));
         if (b.symmetric && src >= 0 && dst >= 0 && dst != src)
             it.bones[skel[dst].name] = quat_to_euler(mirror_rotation(skel, src, dst, euler_to_quat(e)));
     }

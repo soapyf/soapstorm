@@ -59,7 +59,7 @@ std::vector<std::vector<Xform>> App::pinned_ghost_poses() {
 // The Onion Skin menu's part: pin, the other actors, and the pinned list with a remove button each.
 void App::draw_pinned_ghost_menu() {
     const Project& p = doc_.project;
-    ImGui::SeparatorText("Pinned Ghosts");
+    subheading("Pinned Ghosts");
     if (menu_item_icon(icon::kPin, "Pin Ghost at This Frame")) pin_ghost(p.active, frame_);
     ImGui::SetItemTooltip("Keep a violet ghost of this frame's pose in the view while you work elsewhere");
     if (p.actors.size() > 1 && ImGui::BeginMenu("Ghost Other Actor at Frame")) {

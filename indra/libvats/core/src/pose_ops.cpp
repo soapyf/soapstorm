@@ -435,10 +435,16 @@ Quat mirror_rotation(const Skeleton& skel, int src, int dst, const Quat& rot) {
     return (skel[dst].rest.conj() * mirror_q(skel[src].rest * rot)).normalized();
 }
 
+// A track on a mesh body's reused bone (Skeleton::reused): the mirror tools leave it as it is.
+static bool reused_track(const Skeleton& skel, std::string_view track) {
+    if (track.substr(0, 4) == "pin:") track.remove_prefix(4);
+    return skel.reused(skel.find(track));
+}
+
 bool mirror_flips(std::string_view ch) { return ch == "rot_x" || ch == "rot_z" || ch == "pos_y" || ch == "pole_y"; }
 
 std::string mirror_track(const Skeleton& skel, const std::string& track) {
-    std::string m = Skeleton::mirror_name(track);
+    std::string m = skel.mirror_of(track);
     if (m == track || is_ik(track)) return m;
     std::string_view bone = m;
     if (starts_with(bone, "pin:")) bone.remove_prefix(4);
@@ -451,7 +457,7 @@ void mirror_pose(Clip& clip, const Skeleton& skel, double frame, const Pose& cur
     for (int d = 0; d < skel.size(); ++d) {
         int s = skel.mirror(d);
         if (mode != MirrorMode::Flip && (s == d || side_of(skel[s].name) != from)) continue;
-        if (!animated(before, skel[s].name) && !animated(before, skel[d].name)) continue;
+        if (skel.reused(d) || (!animated(before, skel[s].name) && !animated(before, skel[d].name))) continue;
         key_mirrored(clip, before, skel, frame, current, s, d);
     }
     for (auto& [src, track] : before.curves) {
@@ -464,7 +470,8 @@ void mirror_pose(Clip& clip, const Skeleton& skel, double frame, const Pose& cur
 
 void mirror_bones(Clip& clip, const Skeleton& skel, double frame, const Pose& current, const std::vector<int>& nodes) {
     const Clip before = clip;
-    for (int s : nodes) key_mirrored(clip, before, skel, frame, current, s, skel.mirror(s));
+    for (int s : nodes)
+        if (!skel.reused(s)) key_mirrored(clip, before, skel, frame, current, s, skel.mirror(s));
 }
 
 Clip mirrored_clip(const Skeleton& skel, const Clip& clip) {
@@ -473,6 +480,10 @@ Clip mirrored_clip(const Skeleton& skel, const Clip& clip) {
     out.joint_priority.clear();
     for (auto& [name, track] : clip.curves) {
         std::string m = mirror_track(skel, name);
+        if (reused_track(skel, name)) {  // a reused bone (a scarf on a wing) keeps its own motion, on its own side
+            out.curves[name] = track;
+            continue;
+        }
         out.curves[m] = mirror_curves(skel, name, m, track);
     }
     for (auto& [joint, pr] : clip.joint_priority) out.joint_priority[mirror_track(skel, joint)] = pr;
@@ -482,6 +493,10 @@ Clip mirrored_clip(const Skeleton& skel, const Clip& clip) {
         p.pos = mirror_v(p.pos);
         p.rot = mirror_q(p.rot);
     }
+    // Reset joint positions' picked joints follow their bones to the other side.
+    if (Json* picked = out.export_settings.find("reset_positions_joints"); picked && picked->is_array())
+        for (Json& v : picked->arr)
+            if (v.is_string()) v.str = mirror_track(skel, v.str);
     return out;
 }
 
@@ -566,16 +581,16 @@ LibraryItem make_pose(const Skeleton& skel, const Pose& displayed, const std::ve
 void apply_pose(Clip& clip, const Skeleton& skel, const LibraryItem& pose, double frame, bool mirrored) {
     for (auto& [name, e] : pose.bones) {
         int src = skel.find(name);
-        int dst = mirrored ? skel.find(Skeleton::mirror_name(name)) : src;
+        int dst = mirrored ? skel.find(skel.mirror_of(name)) : src;
         if (dst < 0) continue;
         Quat q = euler_to_quat(e);
-        if (mirrored) q = src >= 0 ? mirror_rotation(skel, src, dst, q) : mirror_q(q);
+        if (mirrored && !reused_track(skel, name)) q = src >= 0 ? mirror_rotation(skel, src, dst, q) : mirror_q(q);
         key_rotation(clip, skel[dst].name, frame, q);
     }
     if (pose.hip) key_offset(clip, "mPelvis", frame, mirrored ? mirror_v(*pose.hip) : *pose.hip);
     for (auto& [name, v] : pose.offsets) {
-        const int dst = skel.find(mirrored ? Skeleton::mirror_name(name) : name);
-        if (dst >= 0) key_offset(clip, skel[dst].name, frame, mirrored ? mirror_v(v) : v);
+        const int dst = skel.find(mirrored ? skel.mirror_of(name) : name);
+        if (dst >= 0) key_offset(clip, skel[dst].name, frame, mirrored && !reused_track(skel, name) ? mirror_v(v) : v);
     }
 }
 
@@ -619,15 +634,16 @@ void paste_clip(Clip& clip, const Skeleton& skel, const LibraryItem& item, doubl
                 std::vector<std::string>* warnings) {
     const double lo = at - 0.001, hi = at + item.length + 0.001;
     for (auto& [name, channels] : item.curves) {
-        std::string dst = mirrored ? Skeleton::mirror_name(name) : name;
+        std::string dst = mirrored ? skel.mirror_of(name) : name;
         if (!is_ik(dst)) {
             std::string_view bone = dst;
             if (starts_with(bone, "pin:")) bone.remove_prefix(4);
             if (skel.find(bone) < 0) continue;
         }
         bool rel = std::find(item.relative.begin(), item.relative.end(), name) != item.relative.end();
-        const Track mirror = mirrored ? mirror_curves(skel, name, dst, channels) : Track();
-        for (auto& [ch, src] : mirrored ? mirror : channels) {
+        const bool flip = mirrored && !reused_track(skel, name);  // a reused bone keeps its own motion
+        const Track mirror = flip ? mirror_curves(skel, name, dst, channels) : Track();
+        for (auto& [ch, src] : flip ? mirror : channels) {
             if (src.empty()) continue;
             FCurve& d = clip.curves[dst][ch];
             double pre = d.evaluate(at - 1), base = rel ? d.evaluate(at) : 0;

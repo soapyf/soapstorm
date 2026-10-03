@@ -2,7 +2,7 @@
 
 A control preset sets how the mouse moves the camera and which keys run which commands, so VATs
 feels like a program you already know. There are four: **Industry (Maya-style)**, **Blender**,
-**QAvimator** and **Second Life**. Industry is the default.
+**QAvimator** and **Second Life**. Second Life is the default.
 
 > Related articles: [[Keyboard shortcuts]], [[Preferences]], [[Interface]]
 
@@ -31,7 +31,7 @@ In the viewer the editor has no preset picker: **Second Life** is the only prese
    `Middle drag: orbit   Shift+middle: pan   Ctrl+middle: zoom   Wheel: zoom`.
 2. Press **Up**: in Blender, **Up** is **Next Key**, so the frame box reads **Frame 10**. (In
    Industry, **Up** selects the parent bone and **.** is **Next Key**.)
-3. Press **I**, Blender's **Set Key**. The status bar says `Keyed 1 item(s) at frame 10`.
+3. Press **I**, Blender's **Set Key**. The status bar says `Keyed 1 item at frame 10`.
 4. Press **Ctrl+Z** to take the key back, then pick **Industry (Maya-style)** again in Preferences.
    The status bar reads `Controls: Industry (Maya-style)` and its right end shows
    `Alt + drag: left orbit, middle pan, right zoom    Wheel: zoom`.
@@ -126,7 +126,7 @@ and **R** pick the Select, Move, Rotate and Scale tools as in Industry, and **A*
 
 - Hold **Ctrl** to switch the gizmo to rotation, **Ctrl+Shift** to scale (static props only).
 - **G** toggles snapping; the step is **Rotation snap (G)** in [[Preferences]].
-- **Esc** resets the camera instead of clearing the selection.
+- **Esc** clears the selection, as in the other presets; with nothing selected it resets the camera, as in world.
 - **Reset Hip Position** is **Alt+H** only: **Alt+W** belongs to the camera.
 
 #### The camera, as in world
@@ -177,6 +177,10 @@ The wheel zooms the graph in every preset. See [[Graph editor]].
 The preset is stored as `preset` in `settings.json` (`industry`, `blender`, `qavimator` or
 `secondlife`); see [[Preferences#Settings file]].
 
+**Tab** is the [[Interface#The Tab pie|Tab pie]] in every preset: no preset uses **Tab** for anything else, so
+holding it over the viewport always opens the ring of tools, and in a text field it still moves to the next
+field.
+
 Keys can be changed one by one in **Edit → Keyboard Shortcuts...**, with a search that finds every
 number pad key; see [[Keyboard shortcuts#Changing shortcuts]]. Your keys stay over whichever preset is
 active; the mouse controls always follow the preset.
@@ -188,7 +192,8 @@ active; the mouse controls always follow the preset.
 The key belongs to another preset, or a text field has the keyboard. Open **Help → Controls** to see the keys of
 the active preset. While a text field is being edited, only **Ctrl** shortcuts for **New**,
 **Open...**, **Save**, **Save As...**, **Export SL .anim...**, **Quit**, **Undo**, **Redo**,
-**Preferences...** and **Graph Editor** reach VATs; click the viewport to give the keys back.
+**Preferences...** and **Graph Editor** reach VATs (never **Ctrl+A**, **C**, **V** or **X**, which select, copy,
+paste and cut the text); click the viewport to give the keys back.
 
 ### Alt + drag moves the whole window
 

@@ -48,10 +48,12 @@ void App::end_modal(bool confirm) {
         if (doc_.history.commit(label, doc_.clip())) mark_dirty();
     } else {
         doc_.clip() = doc_.history.cancel();  // back to the start value
+        follow_through_.reset();
         status("Cancelled");
     }
     modal_ = Modal::None;
     auto_ik_.on = false;
+    body_drag_on_ = false;
     skip_shortcuts_ = true;
 }
 

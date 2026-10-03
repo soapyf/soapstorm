@@ -12,6 +12,7 @@
 #include <fstream>
 
 #include "app.h"
+#include "widgets.h"
 #include "imgui.h"
 #include "vats/gif.h"
 #include "vats/loop_tools.h"
@@ -119,14 +120,10 @@ void App::draw_listing_window() {
     if (!listing_ui_) listing_ui_ = std::make_shared<ListingUi>();
     ListingUi& o = *listing_ui_;
     const float em = ImGui::GetFontSize();
-    ImGui::SetNextWindowSize(ImVec2(em * 27, em * 18), ImGuiCond_FirstUseEver);
+    place_tool_window("Export Listing Media", 27, 18);
     if (!ImGui::Begin("Export Listing Media", &show_listing_)) return ImGui::End();
-    const float label_w = em * 6.5f;
-    auto label = [&](const char* text) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(text);
-        ImGui::SameLine(label_w);
-    };
+    help_button("listing-media");
+    auto label = [&](const char* text) { labelled_row(text); };
     label("Format");
     int format = listing_png_ ? 1 : 0;
     ImGui::RadioButton("Animated GIF", &format, 0);
@@ -144,11 +141,10 @@ void App::draw_listing_window() {
     }
     label("Frame rate");
     ImGui::SetNextItemWidth(em * 8);
-    ImGui::InputInt("##listing_fps", &o.fps);
-    o.fps = std::clamp(o.fps, 0, 120);
-    ImGui::SameLine();
-    ImGui::TextDisabled(o.fps ? "fps" : "the animation's");
-    ImGui::SetItemTooltip("0 = the animation's own; a GIF plays at most 50");
+    // 0 is the animation's own rate, said as such rather than as a bare 0.
+    const std::string own = "Animation's (" + std::to_string(doc_.clip().fps) + ")";
+    slider_int("##listing_fps", &o.fps, 0, 120, o.fps ? "%d frames/s" : own.c_str());
+    ImGui::SetItemTooltip("Drag to 0 for the animation's own rate; a GIF plays at most 50");
     ImGui::Checkbox("Turntable", &o.turntable);
     ImGui::SetItemTooltip("The camera goes once round the avatar over the whole animation");
     if (!listing_png_) {

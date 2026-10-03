@@ -6,6 +6,7 @@
 #include <optional>
 
 #include "app.h"
+#include "widgets.h"
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui.h"
@@ -58,20 +59,16 @@ void App::draw_batch_retarget() {
     if (!ImGui::Begin("Batch Retarget", &show_batch_retarget_, ImGuiWindowFlags_NoDocking)) return ImGui::End();
     help_button("retargeting");
 
-    const float label_w = ImGui::GetFontSize() * 5;
-    auto label = [&](const char* text) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(text);
-        ImGui::SameLine(label_w);
-    };
+    auto label = [&](const char* text) { labelled_row(text); };
     label("Folder");
-    if (icon_label_button(icon::kOpen, "Choose...")) host_.open_folder_dialog(ui.folder, [p = batch_ui_](std::vector<std::string> files) {
+    if (ImGui::Button("Choose...")) host_.open_folder_dialog(ui.folder, [p = batch_ui_](std::vector<std::string> files) {
         if (files.empty()) return;
         std::lock_guard<std::mutex> lock(p->mutex);
         p->chosen = files[0];
     });
     ImGui::SameLine();
-    ImGui::TextWrapped("%s", ui.folder.empty() ? "(none)" : ui.folder.c_str());
+    if (ui.folder.empty()) warn_text("Choose the folder of files to retarget");
+    else ImGui::TextWrapped("%s", ui.folder.c_str());
 
     // RT-3 families and the user's saved mappings (RT-12).
     label("Rig");
@@ -93,7 +90,7 @@ void App::draw_batch_retarget() {
     retarget_settings_ui(ui.opt.retarget, ui.opt.fit, ui.opt.lock_feet);
 
     ImGui::BeginDisabled(ui.folder.empty());
-    if (icon_label_button(icon::kBatch, "Retarget All") || std::exchange(ui.run, false)) guarded(ui.folder, [&] {
+    if (primary_button("Retarget All", "", 0, icon::kBatch) || std::exchange(ui.run, false)) guarded(ui.folder, [&] {
         ui.opt.retarget.shape = ui.opt.fit.shape = export_shape();
         // ponytail: runs on the UI thread, one file after another; a worker and a progress bar when folders get big.
         ui.report = batch_retarget(skel_, *rig_, ui.folder, ui.opt, [](const std::string& path, const std::string& data, std::string& why) {
@@ -107,10 +104,12 @@ void App::draw_batch_retarget() {
                " files written to " + ui.report->out_dir);
     });
     ImGui::EndDisabled();
-    ImGui::SetItemTooltip("Every .bvh, .fbx, .gltf and .glb in the folder, each into the folder's retargeted/ folder");
+    ImGui::SetItemTooltip("%s", ui.folder.empty() ? "Choose a folder first (Folder, above)"
+                                                  : "Every .bvh, .fbx, .gltf and .glb in the folder, each into the folder's "
+                                                    "retargeted/ folder");
     if (ui.report) {
         ImGui::SameLine();
-        if (icon_label_button(icon::kOpen, "Open Output Folder")) host_.open_url(folder_url(ui.report->out_dir));
+        if (ImGui::Button("Open Output Folder")) host_.open_url(folder_url(ui.report->out_dir));
     }
 
     if (ui.mixamo_notice) {  // RT-14: once, never in the way

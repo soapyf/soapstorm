@@ -13,8 +13,13 @@
 #include <map>
 #include <set>
 #include <tuple>
+#include <utility>
 
 #include "guard.h"
+#include "mesh_parts.h"
+#include "source_bones.h"
+#include "vats/gltf_mesh.h"
+#include "vats/rig_map.h"
 
 #ifdef VATS_FBX
 #include "ufbx.h"
@@ -22,7 +27,8 @@
 
 namespace vats {
 
-bool load_mesh_file(const std::string& path, const Skeleton& skel, DaeModel& out, DaeReport& report, std::string& err) {
+bool load_mesh_file_as_is(const std::string& path, const Skeleton& skel, DaeModel& out, DaeReport& report, std::string& err,
+                          const SkinRemap* remap) {
     return guarded(err, [&] {
     std::ifstream f(path, std::ios::binary);
     if (!f) return err = "cannot read " + path, false;
@@ -30,10 +36,58 @@ bool load_mesh_file(const std::string& path, const Skeleton& skel, DaeModel& out
     std::string dir = path.substr(0, path.find_last_of("/\\") == std::string::npos ? 0 : path.find_last_of("/\\"));
     std::string ext = path.substr(path.find_last_of('.') + 1);
     for (char& c : ext) c = char(std::tolower(static_cast<unsigned char>(c)));
-    if (ext == "fbx") return load_fbx_mesh(bytes, dir, skel, out, report, err);
+    if (ext == "fbx") return load_fbx_mesh(bytes, dir, skel, out, report, err, remap);
+    if (ext == "gltf" || ext == "glb") return load_gltf_mesh(bytes, dir, skel, out, report, err, remap);
     return load_dae(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()), dir, skel, out, report,
-                    err);
+                    err, remap);
     });
+}
+
+namespace {
+// Weights painted on a body VATs did not rig itself (spec 08 RG-15): kept in its mapping file, laid over the weights the
+// file (and its mapping) gives, while the model still has the vertices they were painted on.
+void apply_painted_weights(const Skeleton& skel, const RigMap& map, const std::string& path, DaeModel& out, DaeReport& report) {
+    if (map.scratch.wjoints.empty() || !out.rigged) return;
+    ScratchRig r = map.scratch;
+    if (!settle_scratch_weights(skel, r, out.vertex_count())) {
+        const std::string file = rig_map_path(path);
+        report.warnings.push_back(file.substr(file.find_last_of("/\\") + 1) + ": its painted weights are for another version of the model (" +
+                                  std::to_string(r.wjoints.size() / 4) + " vertices, the model has " +
+                                  std::to_string(out.vertex_count()) + "); the file's own weights are used");
+        return;
+    }
+    out.joints = std::move(r.wjoints), out.weights = std::move(r.weights);
+    report.painted = true;
+}
+}  // namespace
+
+bool load_mesh_file(const std::string& path, const Skeleton& skel, DaeModel& out, DaeReport& report, std::string& err) {
+    RigMap map;
+    std::string why;
+    if (!read_rig_map_file(rig_map_path(path), map, why)) {
+        if (!load_mesh_file_as_is(path, skel, out, report, err)) return false;
+        if (!why.empty()) report.warnings.push_back(why + "; the file was loaded without it");  // a broken mapping
+        return true;
+    }
+    if (map.scratch.active()) return load_scratch_rigged(path, skel, map, out, report, err);  // RG-14
+    if (map.bones.empty()) {  // only the model's look (SK-3) and painted weights: rigged to SL's own names
+        if (!load_mesh_file_as_is(path, skel, out, report, err)) return false;
+        report.look = map.look;
+        apply_painted_weights(skel, map, path, out, report);
+        return true;
+    }
+    if (load_rig_mapped(path, skel, map, out, report, err)) {
+        report.look = map.look;
+        apply_painted_weights(skel, map, path, out, report);
+        return true;
+    }
+    // A mapping that maps nothing (every bone set to none, or bones renamed since): the file as it is, with a warning.
+    const std::string failed = err;
+    if (!load_mesh_file_as_is(path, skel, out, report, err)) return false;
+    report.look = map.look;
+    report.warnings.push_back(rig_map_path(path).substr(rig_map_path(path).find_last_of("/\\") + 1) + ": " + failed +
+                              "; the file was loaded without it");
+    return true;
 }
 
 #ifndef VATS_FBX
@@ -42,7 +96,7 @@ bool read_fbx_source(const std::vector<std::uint8_t>&, SourceAnim&, std::string&
     return err = "this build has no FBX support (VATS_FBX=OFF)", false;
 }
 bool load_fbx_mesh(const std::vector<std::uint8_t>&, const std::string&, const Skeleton&, DaeModel&, DaeReport&,
-                   std::string& err) {
+                   std::string& err, const SkinRemap*) {
     return err = "this build has no FBX support (VATS_FBX=OFF)", false;
 }
 
@@ -181,24 +235,78 @@ static bool read_fbx(const std::vector<std::uint8_t>& bytes, SourceAnim& out, st
     return true;
 }
 
+// The file's armature (SourceBone): bone nodes and the nodes skins bind to, with their ancestors below the scene root,
+// in the file's order. up and unit as for the vertices.
+static void read_bones(const ufbx_scene* s, const ufbx_matrix& up, double unit, std::vector<SourceBone>& bones) {
+    std::set<const ufbx_node*> keep;
+    auto keep_up = [&](const ufbx_node* n) {
+        for (; n && !n->is_root && !keep.count(n); n = n->parent) keep.insert(n);
+    };
+    for (size_t i = 0; i < s->nodes.count; ++i)
+        if (s->nodes.data[i]->bone) keep_up(s->nodes.data[i]);
+    for (size_t i = 0; i < s->skin_clusters.count; ++i) keep_up(s->skin_clusters.data[i]->bone_node);
+    std::map<const ufbx_node*, int> index;
+    std::vector<Xform> scene;
+    auto in_bone_space = [&](const ufbx_matrix& m) {
+        const ufbx_matrix b = ufbx_matrix_mul(&up, &m);
+        return Xform{quat(ufbx_matrix_to_transform(&b).rotation), vec(b.cols[3]) * unit};
+    };
+    std::function<void(const ufbx_node*)> walk = [&](const ufbx_node* n) {  // parents first, children in file order
+        if (keep.count(n)) {
+            index[n] = int(bones.size());
+            bones.push_back({str(n->name), n->parent && index.count(n->parent) ? index[n->parent] : -1, {}, false, 0});
+            scene.push_back(in_bone_space(n->node_to_world));
+        }
+        for (size_t i = 0; i < n->children.count; ++i) walk(n->children.data[i]);
+    };
+    walk(s->root_node);
+    for (size_t i = 0; i < s->skin_clusters.count; ++i) {
+        const ufbx_skin_cluster* c = s->skin_clusters.data[i];
+        auto it = index.find(c->bone_node);
+        if (it == index.end()) continue;
+        SourceBone& b = bones[it->second];
+        for (size_t k = 0; k < c->weights.count; ++k) b.weight += std::max(0.0, double(c->weights.data[k]));
+        if (!b.skinned) b.bind = in_bone_space(c->bind_to_world), b.skinned = true;
+    }
+    place_unskinned_bones(bones, scene);
+}
+
 static bool load_fbx(const std::vector<std::uint8_t>& bytes, const std::string& dir, const Skeleton& skel, DaeModel& model,
-                   DaeReport& rep, std::string& err) {
+                   DaeReport& rep, std::string& err, const SkinRemap* remap) {
     model = DaeModel();
     rep = DaeReport();
     Scene scene;
     if (!load(bytes, scene, err)) return false;
     const ufbx_scene* s = scene.s;
-    const ufbx_matrix up = up_turn(s, rep.up_axis);
+    const ufbx_matrix up_axis = up_turn(s, rep.up_axis);
     const int root = dae_root(skel), count = dae_index_count(skel);
     const double unit = s->settings.unit_meters > 0 ? s->settings.unit_meters : 0.01;
+    read_bones(s, up_axis, unit, rep.bones);
+    rep.remapped = remap != nullptr;
+    // A remap's quarter turns go on the vertices with the up axis (remap_binds turns its binds).
+    ufbx_matrix up = up_axis;
+    if (remap) {
+        const Quat q = Quat::axis_angle({0, 0, 1}, remap->turn * kPi / 2);
+        const ufbx_transform t{{0, 0, 0}, {q.x, q.y, q.z, q.w}, {1, 1, 1}};
+        const ufbx_matrix m = ufbx_transform_to_matrix(&t);
+        up = ufbx_matrix_mul(&m, &up_axis);
+    }
 
-    // Clusters that bind to SL joints make the model rigged (IO-37).
+    // Clusters that bind to SL joints make the model rigged (IO-37). A remap names the joints instead, and the bones
+    // it leaves out are dropped rather than unknown.
     std::map<const ufbx_skin_cluster*, int> target;
     for (size_t i = 0; i < s->skin_clusters.count; ++i) {
         const ufbx_skin_cluster* c = s->skin_clusters.data[i];
         std::string name = c->bone_node ? str(c->bone_node->name) : str(c->name);
-        int n = map_skin_joint(skel, name);
-        if (n < 0) add_unique(rep.unmapped_joints, name);
+        int n = -1;
+        if (remap) {
+            if (auto it = remap->joints.find(name); it != remap->joints.end()) n = it->second;
+        } else {
+            bool loose = false;
+            n = map_skin_joint(skel, name, &loose);
+            if (n < 0) add_unique(rep.unmapped_joints, name);
+            if (loose) add_unique(rep.warnings, loose_joint_warning(name));
+        }
         target[c] = n;
         model.rigged |= n >= 0 && n != root;
     }
@@ -207,7 +315,10 @@ static bool load_fbx(const std::vector<std::uint8_t>& bytes, const std::string& 
 
     double rig_scale = unit;
     std::vector<bool> bound;
-    if (model.rigged) {
+    if (model.rigged && remap) {
+        rig_scale = unit;
+        remap_binds(skel, *remap, model, bound);
+    } else if (model.rigged) {
         std::vector<Xform> rest = skel.global_pose(Pose(skel.size()));
         rest.push_back({});  // mRoot
         for (auto& v : skel.volumes()) rest.push_back(rest[v.joint] * Xform{v.rot, v.pos});
@@ -267,13 +378,34 @@ static bool load_fbx(const std::vector<std::uint8_t>& bytes, const std::string& 
         // A corner is shared when it has the same position, UV and normal (by value: generated normals get
         // one index per corner).
         std::map<std::tuple<const void*, std::uint32_t, std::uint32_t, double, double, double>, std::uint32_t> seen;
+        std::map<std::string, KeyBuild> keys;
     };
-    std::map<int, Build> builds;
+    // Each mesh node is a part (SK-1), its builds one per material.
+    std::map<std::pair<size_t, int>, Build> builds;
     std::vector<std::uint32_t> tri;
     for (size_t ni = 0; ni < s->nodes.count; ++ni) {
         const ufbx_node* node = s->nodes.data[ni];
         const ufbx_mesh* mesh = node->mesh;
         if (!mesh) continue;
+        // SK-2: blend shape channels, each at its final shape (in-between shapes are not read), with each shape's offset
+        // entry per mesh vertex.
+        struct Channel {
+            std::string name;
+            double initial;
+            const ufbx_blend_shape* shape;
+            std::vector<int> entry;  // per mesh vertex: its offset in shape, -1 for none
+        };
+        std::vector<Channel> channels;
+        for (size_t d = 0; d < mesh->blend_deformers.count; ++d)
+            for (size_t c = 0; c < mesh->blend_deformers.data[d]->channels.count; ++c) {
+                const ufbx_blend_channel* ch = mesh->blend_deformers.data[d]->channels.data[c];
+                if (!ch->target_shape) continue;
+                Channel k{str(ch->name), ch->weight, ch->target_shape, std::vector<int>(mesh->num_vertices, -1)};
+                if (k.name.empty()) k.name = str(ch->target_shape->name);
+                for (size_t o = 0; o < k.shape->num_offsets && o < k.shape->offset_vertices.count; ++o)
+                    if (const std::uint32_t v = k.shape->offset_vertices.data[o]; v < mesh->num_vertices) k.entry[v] = int(o);
+                channels.push_back(std::move(k));
+            }
         const ufbx_skin_deformer* skin = mesh->skin_deformers.count ? mesh->skin_deformers.data[0] : nullptr;
         const ufbx_skin_cluster* first = nullptr;
         for (size_t i = 0; skin && i < skin->clusters.count && !first; ++i)
@@ -292,7 +424,7 @@ static bool load_fbx(const std::vector<std::uint8_t>& bytes, const std::string& 
             if (face.num_indices < 3) continue;
             std::uint32_t mi = mesh->face_material.count ? mesh->face_material.data[fi] : 0;
             const ufbx_material* m = mi < mesh->materials.count ? mesh->materials.data[mi] : nullptr;
-            Build& b = builds[material(m)];
+            Build& b = builds[{ni, material(m)}];
             std::uint32_t nt = ufbx_triangulate_face(tri.data(), tri.size(), mesh, face);
             for (std::uint32_t k = 0; k < nt * 3; ++k) {
                 std::uint32_t c = tri[flip ? k / 3 * 3 + 2 - k % 3 : k];
@@ -309,6 +441,21 @@ static bool load_fbx(const std::vector<std::uint8_t>& bytes, const std::string& 
                 Vec3 n = mesh->vertex_normal.exists ? vec(ufbx_transform_direction(&nx, nv)).normalized() : Vec3{};
                 b.smooth.push_back(!mesh->vertex_normal.exists);
                 for (int i = 0; i < 3; ++i) b.pos.push_back(float(p[i])), b.nrm.push_back(float(n[i]));
+                for (const Channel& ch : channels) {
+                    KeyBuild& kb = b.keys[ch.name];
+                    kb.initial = ch.initial;
+                    const int o = vi < ch.entry.size() ? ch.entry[vi] : -1;
+                    if (o < 0) continue;
+                    const Vec3 dp = vec(ufbx_transform_direction(&x, ch.shape->position_offsets.data[o]));
+                    if (!mesh->vertex_normal.exists || size_t(o) >= ch.shape->normal_offsets.count) {
+                        kb.add(it->second, dp, nullptr);
+                        continue;
+                    }
+                    // In the unit normal's scale, as the normal is normalised after the offsets are added (shown_model).
+                    const double len = vec(ufbx_transform_direction(&nx, nv)).length();
+                    const Vec3 dn = vec(ufbx_transform_direction(&nx, ch.shape->normal_offsets.data[o])) * (len > 1e-12 ? 1 / len : 0.0);
+                    kb.add(it->second, dp, &dn);
+                }
                 ufbx_vec2 uv = mesh->vertex_uv.exists ? mesh->vertex_uv.values.data[ui] : ufbx_vec2{};
                 b.uv.push_back(float(uv.x)), b.uv.push_back(float(1 - uv.y));
                 // Weights: summed per SL joint, four largest renormalised; nothing -> 100 % root.
@@ -325,7 +472,7 @@ static bool load_fbx(const std::vector<std::uint8_t>& bytes, const std::string& 
                         if (at != sum.end()) at->second += sw.weight;
                         else sum.emplace_back(node_i, sw.weight);
                     }
-                    std::stable_sort(sum.begin(), sum.end(), [](auto& a, auto& c) { return a.second > c.second; });
+                    std::stable_sort(sum.begin(), sum.end(), [](auto& a, auto& rhs) { return a.second > rhs.second; });
                     if (sum.size() > 4) sum.resize(4);
                     double total = 0;
                     for (auto& e : sum) total += e.second;
@@ -340,7 +487,9 @@ static bool load_fbx(const std::vector<std::uint8_t>& bytes, const std::string& 
         }
     }
 
-    for (auto& [mat, b] : builds) {
+    size_t open = SIZE_MAX;
+    for (auto& [key, b] : builds) {
+        const auto [ni, mat] = key;
         if (b.idx.empty()) continue;
         // Area-weighted smooth normals where the file gave none (corners of one position share a vertex).
         auto at = [&](std::uint32_t v) { return Vec3{b.pos[v * 3], b.pos[v * 3 + 1], b.pos[v * 3 + 2]}; };
@@ -354,17 +503,10 @@ static bool load_fbx(const std::vector<std::uint8_t>& bytes, const std::string& 
                 Vec3 n = acc[v].length() > 1e-20 ? acc[v].normalized() : Vec3{0, 0, 1};
                 for (int i = 0; i < 3; ++i) b.nrm[v * 3 + i] = float(n[i]);
             }
-        DaeGroup g{mat, std::uint32_t(model.vertex_count()), std::uint32_t(b.pos.size() / 3),
-                   std::uint32_t(model.indices.size()), std::uint32_t(b.idx.size())};
-        for (std::uint32_t i : b.idx) model.indices.push_back(g.first_vertex + i);
-        model.positions.insert(model.positions.end(), b.pos.begin(), b.pos.end());
-        model.normals.insert(model.normals.end(), b.nrm.begin(), b.nrm.end());
-        model.uvs.insert(model.uvs.end(), b.uv.begin(), b.uv.end());
-        model.joints.insert(model.joints.end(), b.joints.begin(), b.joints.end());
-        model.weights.insert(model.weights.end(), b.weights.begin(), b.weights.end());
-        model.groups.push_back(g);
+        if (std::exchange(open, ni) != ni) begin_part(model, str(s->nodes.data[ni]->name));
+        append_group(model, mat, b, b.keys);
     }
-    settle_rig(model, skel, bound, rep);
+    settle_rig(model, skel, bound, rep, remap != nullptr);
     rep.triangles = model.triangle_count();
     if (!rep.triangles) return err = "no triangles in the FBX file", false;
     double inf = std::numeric_limits<double>::infinity();
@@ -383,8 +525,8 @@ bool read_fbx_source(const std::vector<std::uint8_t>& bytes, SourceAnim& out, st
 }
 
 bool load_fbx_mesh(const std::vector<std::uint8_t>& bytes, const std::string& dir, const Skeleton& skel, DaeModel& model,
-                   DaeReport& rep, std::string& err) {
-    return guarded(err, [&] { return load_fbx(bytes, dir, skel, model, rep, err); });
+                   DaeReport& rep, std::string& err, const SkinRemap* remap) {
+    return guarded(err, [&] { return load_fbx(bytes, dir, skel, model, rep, err, remap); });
 }
 
 #endif

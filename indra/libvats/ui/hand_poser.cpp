@@ -5,9 +5,11 @@
 #include <cmath>
 
 #include "app.h"
+#include "widgets.h"
 #include "theme.h"
 #include "imgui_internal.h"
 #include "vats/edit.h"
+#include "vats/pose_tools.h"
 
 namespace vats {
 namespace {
@@ -22,15 +24,29 @@ constexpr double kDegPerPx = 0.6;
 
 void App::draw_hand_poser() {
     if (!show_hands_) return;
-    const float s = ImGui::GetStyle().FontScaleDpi;
-    // Placed at the viewport's bottom-right corner; on the first frame the viewport has not been docked to size yet
-    // (--window hands), so wait until that corner leaves room for the window.
-    if (viewport_max_.x < 360 * s || viewport_max_.y < 190 * s) return;
+    const float dpi = ImGui::GetStyle().FontScaleDpi;
+    // On the first frame the viewport has not been docked to size yet (--window hands): wait until it has.
+    if (viewport_max_.x - viewport_min_.x < 200 * dpi || viewport_max_.y - viewport_min_.y < 150 * dpi) return;
+    // Beside the view where a panel leaves room, its bottom at the view's, so it covers none of the avatar (in the
+    // view's middle it covered the hands it poses); else in the view's bottom-right corner. Shrunk to fit either way.
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    const Box work{vp->WorkPos.x, vp->WorkPos.y, vp->WorkPos.x + vp->WorkSize.x, vp->WorkPos.y + vp->WorkSize.y};
+    const Box view{viewport_min_.x, viewport_min_.y, viewport_max_.x, viewport_max_.y};
+    const float margin = 10 * dpi;
+    const BesidePlace place = beside_view(work, view, 340 * dpi + 2 * ImGui::GetStyle().WindowPadding.x, margin);
+    const float s = dpi * place.scale;
     ImGui::SetNextWindowSize(ImVec2(0, 0));
-    ImGui::SetNextWindowPos(ImVec2(viewport_max_.x - 360 * s, viewport_max_.y - 190 * s), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Hands", &show_hands_, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoResize |
+    // It never resizes, so a place left off the screen (a smaller window since) comes back inside it.
+    const float x = place.side > 0 ? view.x1 + margin : place.side < 0 ? view.x0 - margin : view.x1 - margin;
+    ImGui::SetNextWindowPos(ImVec2(x, view.y1 - margin), ImGuiCond_FirstUseEver, ImVec2(place.side > 0 ? 0.f : 1.f, 1));
+    if (const ImGuiWindow* w = ImGui::FindWindowByName("Hand Poser"); w && !w->Appearing) {
+        const Box in = clamp_window(work, {w->Pos.x, w->Pos.y, w->Pos.x + w->Size.x, w->Pos.y + w->Size.y});
+        if (in.x0 != w->Pos.x || in.y0 != w->Pos.y) ImGui::SetNextWindowPos(ImVec2(in.x0, in.y0));
+    }
+    if (!ImGui::Begin("Hand Poser", &show_hands_, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoResize |
                                                  ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse))
         return ImGui::End();
+    help_button("hand-poser");
 
     ImVec2 size(340 * s, 108 * s), o = ImGui::GetCursorScreenPos();
     ImGui::InvisibleButton("##pad", size);
@@ -74,6 +90,7 @@ void App::draw_hand_poser() {
         hand_drag_dot_ = hover_dot;
         hand_press_ = m;
         hand_start_clip_ = doc_.clip();
+        if (settings_.respect_joint_limits) hand_limits_ = template_limits(skel_, shape());
         if (ImGui::IsMouseDoubleClicked(0)) {  // reset these fingers
             std::vector<std::pair<std::string, double>> fingers;
             bones_of(hover_side, hover_dot, fingers);
@@ -108,31 +125,43 @@ void App::draw_hand_poser() {
         Clip& clip = doc_.clip();
         clip = hand_start_clip_;  // absolute from the press, so the drag never drifts
         if (dx == 0 && dy == 0) fingers.clear();  // a click that has not moved yet keys nothing
-        const Vec3 side_axis = hand_drag_side_ == 0 ? Vec3{1, 0, 0} : Vec3{-1, 0, 0};
         std::vector<std::string> keyed;  // PT-1
-        for (auto& [pattern, swing_weight] : fingers) {
-            bool thumb = pattern.find("Thumb") != std::string::npos;
-            Vec3 palm = thumb ? Vec3{-0.7, 0, -1}.normalized() : Vec3{0, 0, -1};
+        const RigConstraints* rc = constraints();  // null with Respect Joint Limits off
+        for (auto& [pattern, swing_weight] : fingers)
             for (int n = 1; n <= 3; ++n) {
                 std::string bone = segment(pattern, n);
                 int node = skel_.find(bone);
                 if (node < 0) continue;
-                Vec3 dir = skel_[node].end.normalized();
-                Quat start = euler_to_quat(curve_euler(hand_start_clip_, bone, frame_));
-                Quat curl = Quat::axis_angle(dir.cross(palm), dy * kDegPerPx * kDegToRad);
-                Quat q = start * curl;  // curl in the segment's own frame
-                if (n == 1 && dx != 0)
-                    q = Quat::axis_angle(dir.cross(side_axis), dx * kDegPerPx * swing_weight * kDegToRad) * q;
-                key_rotation(clip, bone, frame_, q);
+                // The body's limit, else (Respect Joint Limits on) the anatomical one: a long drag bent it back through
+                // the hand.
+                const JointLimit* lim = rc ? rc->find(bone) : nullptr;
+                if (!lim && settings_.respect_joint_limits) lim = hand_limits_.find(bone);
+                const Quat start = euler_to_quat(curve_euler(hand_start_clip_, bone, frame_));
+                key_rotation(clip, bone, frame_,
+                             finger_segment_rotation(skel_, node, start, dy * kDegPerPx, dx * kDegPerPx * swing_weight,
+                                                     n == 1, lim, shape()));
                 keyed.push_back(bone);
             }
-        }
         mirror_edit(keyed);
         ImVec2 p = dot_pos(hand_drag_side_, hand_drag_dot_);
         dl->AddLine(p, ImVec2(p.x + float(dx), p.y + float(dy)), IM_COL32(255, 222, 70, 200), 2);
     }
+    // How far a dot's fingers are curled now (the "All fingers" dot: their average), for the rings and the readout.
+    auto curl_of = [&](int side, int d) {
+        std::vector<std::pair<std::string, double>> fingers;
+        bones_of(side, d, fingers);
+        double sum = 0;
+        for (auto& f : fingers)
+            sum += finger_curl_degrees(skel_, doc_.clip(), {segment(f.first, 1), segment(f.first, 2), segment(f.first, 3)}, frame_);
+        return fingers.empty() ? 0.0 : sum / double(fingers.size());
+    };
+    auto dot_name = [&](int side, int d) { return std::string(side == 0 ? "Left " : "Right ") + (d == 5 ? "fingers" : kFingers[d]); };
+    auto degrees = [](double v) { return std::to_string(int(std::lround(v))) + "\xc2\xb0"; };
     if (hand_drag_dot_ >= 0 && ImGui::IsItemDeactivated()) {
-        if (doc_.history.commit("Pose Fingers", doc_.clip())) mark_dirty();
+        if (doc_.history.commit("Pose Fingers", doc_.clip())) {
+            mark_dirty();
+            status("Posed " + dot_name(hand_drag_side_, hand_drag_dot_) + ": curled " + degrees(curl_of(hand_drag_side_, hand_drag_dot_)));
+        }
         hand_drag_dot_ = -1;
     }
 
@@ -144,11 +173,23 @@ void App::draw_hand_poser() {
             ImU32 c = dragged ? IM_COL32(255, 222, 70, 255) : hot ? IM_COL32(255, 240, 170, 255) : IM_COL32(200, 202, 208, 255);
             dl->AddCircleFilled(p, radius(d), c);
             dl->AddCircle(p, radius(d), IM_COL32(10, 11, 13, 255), 0, 1.5f);
+            // The curl, kept after the dot springs back: a ring round it, full at 270 degrees (a fist); blue bent back.
+            const double curl = curl_of(side, d);
+            if (std::fabs(curl) >= 1) {
+                const float a0 = -0.5f * float(kPi), sweep = float(std::clamp(curl / 270.0, -1.0, 1.0) * 2 * kPi);
+                dl->PathArcTo(p, radius(d) + 3 * s, std::min(a0, a0 + sweep), std::max(a0, a0 + sweep), 24);
+                dl->PathStroke(curl > 0 ? accent_colour() : IM_COL32(110, 170, 255, 255), 0, 2.f * s);
+            }
         }
-    const char* name = hover_dot < 0 ? "" : hover_dot == 5 ? "All fingers" : kFingers[hover_dot];
-    dl->AddText(ImVec2(o.x + (size.x - ImGui::CalcTextSize(name).x) / 2, o.y + size.y - 18 * s),
-                IM_COL32(255, 240, 170, 255), name);
+    // The dot under the pointer, or the one dragged: its name and its curl.
+    const int show_side = hand_drag_dot_ >= 0 ? hand_drag_side_ : hover_side;
+    const int show_dot = hand_drag_dot_ >= 0 ? hand_drag_dot_ : hover_dot;
+    const std::string name = show_dot < 0 ? "" : dot_name(show_side, show_dot) + "  " + degrees(curl_of(show_side, show_dot)) + " curl";
+    dl->AddText(ImVec2(o.x + (size.x - ImGui::CalcTextSize(name.c_str()).x) / 2, o.y + size.y - 18 * s),
+                IM_COL32(255, 240, 170, 255), name.c_str());
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + size.x);
     ImGui::TextDisabled("Drag down to curl, sideways to spread. Double-click resets.");
+    ImGui::PopTextWrapPos();
     ImGui::End();
 }
 

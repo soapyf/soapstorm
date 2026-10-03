@@ -4,6 +4,7 @@
 #include "vats/clips.h"
 #include "vats/curve_ops.h"
 #include "vats/prop.h"
+#include "vats/rig_map.h"
 #include "vats/selection_sets.h"
 #include "guard.h"
 #ifdef VATS_LEGACY_IMPORT
@@ -29,7 +30,7 @@ constexpr const char* kBaseFields[] = {"format", "version", "fps", "end_frame", 
 constexpr const char* kVATsFields[] = {"euler_order", "joint_priority", "constraints", "orphans", "ik_solve",
                                         "meta", "dynamics", "ragdoll", "actors", "active", "audio", "loop_tangents",
                                         "idle", "face_layer", "ik_pull", "clips", "active_clip", "key_tags",
-                                        "selection_sets", "lip_sync", "reference"};
+                                        "selection_sets", "lip_sync", "reference", "joint_limits", "mesh_looks"};
 
 Json list(std::initializer_list<Json> items) {
     Json r = Json::array();
@@ -221,13 +222,13 @@ struct Loader {
         }
         return true;
     }
-
-    // Spec 08 DY-1: [{root, length, stiffness, damping, drag, gravity, radius, bend, baked, source}]; bend is
-    // optional (0); source is a curves object; unknown fields are kept.
+    // Spec 08 DY-1: [{root, length, stiffness, damping, drag, gravity, radius, bend, fans, physics, baked, source}]; bend
+    // (0), fans (true) and physics (RM-10: {mass, gravity, drag, updown, inout, leftright}, each direction {max_effect,
+    // spring, gain, damping}) are optional; source is a curves object; unknown fields are kept.
     bool dynamics(const Json& v, Clip& clip) {
         if (!expect(v, Json::Type::Array, "dynamics")) return false;
-        static constexpr const char* known_keys[] = {"root", "length", "stiffness", "damping", "drag",
-                                                     "gravity", "radius", "bend", "baked", "source"};
+        static constexpr const char* known_keys[] = {"root", "length", "stiffness", "damping", "drag", "physics",
+                                                     "gravity", "radius", "bend", "fans", "baked", "source"};
         for (size_t n = 0; n < v.arr.size(); ++n) {
             std::string w = "dynamics[" + std::to_string(n) + "]";
             const Json& e = v.arr[n];
@@ -238,6 +239,20 @@ struct Loader {
                 !get(e, "radius", d.radius) || !get(e, "baked", d.baked))
                 return fail(w + "." + err);
             if (e.find("bend") && !get(e, "bend", d.bend)) return fail(w + "." + err);
+            if (e.find("fans") && !get(e, "fans", d.fans)) return fail(w + "." + err);
+            if (const Json* ph = e.find("physics")) {  // RM-10: SL's avatar physics on a soft-body volume
+                if (!expect(*ph, Json::Type::Object, w + ".physics")) return false;
+                PhysicsPart p;
+                if (!get(*ph, "mass", p.mass) || !get(*ph, "gravity", p.gravity) || !get(*ph, "drag", p.drag))
+                    return fail(w + ".physics." + err);
+                for (auto [name, a] : {std::pair{"updown", &p.updown}, {"inout", &p.inout}, {"leftright", &p.leftright}})
+                    if (const Json* x = ph->find(name)) {
+                        if (!expect(*x, Json::Type::Object, w + ".physics." + name) || !get(*x, "max_effect", a->max_effect) ||
+                            !get(*x, "spring", a->spring) || !get(*x, "gain", a->gain) || !get(*x, "damping", a->damping))
+                            return fail(w + ".physics." + name + "." + err);
+                    }
+                d.physics = p;
+            }
             if (const Json* s = e.find("source")) {
                 Clip tmp;
                 if (!curves(*s, tmp)) return fail(w + ".source." + err);
@@ -350,13 +365,15 @@ struct Loader {
         return true;
     }
 
-    // Spec 08 LS: {from, to, positions, cues: [{frame, shape}], level: [0..1 per frame]}; unknown fields kept.
+    // Spec 08 LS: {from, to, positions, scale, cues: [{frame, shape}], level: [0..1 per frame]}; unknown fields kept.
     bool lip_sync(const Json& e, Clip& clip) {
         if (!expect(e, Json::Type::Object, "lip_sync")) return false;
-        static constexpr const char* known_keys[] = {"from", "to", "positions", "cues", "level"};
+        static constexpr const char* known_keys[] = {"from", "to", "positions", "scale", "cues", "level"};
         LipSync ls;
-        if (!get(e, "from", ls.from, 0, 1000000) || !get(e, "to", ls.to, 0, 1000000) || !get(e, "positions", ls.positions))
+        if (!get(e, "from", ls.from, 0, 1000000) || !get(e, "to", ls.to, 0, 1000000) || !get(e, "positions", ls.positions) ||
+            !get(e, "scale", ls.scale))
             return fail("lip_sync." + err);
+        ls.scale = std::isfinite(ls.scale) ? std::clamp(ls.scale, 0.1, 10.0) : 1.0;  // face_scale's range
         if (const Json* c = e.find("cues")) {
             if (!expect(*c, Json::Type::Array, "lip_sync.cues") || !records(*c, "lip_sync.cues")) return false;
             for (const Json& x : c->arr) {
@@ -612,12 +629,25 @@ static bool load_project_text(std::string_view text, Project& out, std::string& 
             ok = L.clip_slots(*v, p, vats) && L.get(doc, "active_clip", p.active_clip, 0, 100000);
         // Every actor gets a clip per take: a hostile file could ask for millions of them.
         if (ok && p.clips.size() * std::max<size_t>(1, p.actors.size()) > 20000)
-            ok = L.fail("clips: too many clips for " + std::to_string(std::max<size_t>(1, p.actors.size())) + " actor(s)");
+            ok = L.fail("clips: too many clips for " + std::to_string(std::max<size_t>(1, p.actors.size())) + (p.actors.size() > 1 ? " actors" : " actor"));
         if (ok) {
             p.active_clip = p.clips.empty() ? 0 : std::min(p.active_clip, int(p.clips.size()) - 1);
             if (!p.clips.empty()) p.clips[p.active_clip].clip = {};
             sync_actor_timing(p);  // also fits each actor's clips to the takes
         }
+        if (const Json* v = doc.find("joint_limits"); ok && v) {
+            if (v->is_object()) {
+                for (const auto& [bname, cj] : v->obj) {
+                    RigConstraints rc;
+                    if (constraints_from_json(cj, rc) && !rc.empty()) {
+                        p.joint_limits[bname] = std::move(rc);
+                    }
+                }
+            }
+        }
+        if (const Json* v = doc.find("mesh_looks"); ok && v && v->is_object())
+            for (const auto& [body, lj] : v->obj)
+                if (lj.is_object()) read_mesh_look(lj, p.mesh_looks[body]);
     }
     if (!ok) return done(false);
 
@@ -749,6 +779,20 @@ static void write_clip(Json& j, const Clip& c) {
             e.set("gravity", d.gravity);
             e.set("radius", d.radius);
             if (d.bend > 0) e.set("bend", d.bend);
+            if (!d.fans) e.set("fans", false);
+            if (d.physics) {  // RM-10
+                Json& ph = e.set("physics", Json::object());
+                ph.set("mass", d.physics->mass);
+                ph.set("gravity", d.physics->gravity);
+                ph.set("drag", d.physics->drag);
+                for (auto [name, a] : {std::pair{"updown", &d.physics->updown}, {"inout", &d.physics->inout}, {"leftright", &d.physics->leftright}}) {
+                    Json& x = ph.set(name, Json::object());
+                    x.set("max_effect", a->max_effect);
+                    x.set("spring", a->spring);
+                    x.set("gain", a->gain);
+                    x.set("damping", a->damping);
+                }
+            }
             e.set("baked", d.baked);
             if (d.baked) e.set("source", curves_to_json(d.source));
             for (auto& [k, x] : d.extra.obj)
@@ -839,6 +883,7 @@ static void write_clip(Json& j, const Clip& c) {
         e.set("from", ls.from);
         e.set("to", ls.to);
         e.set("positions", ls.positions);
+        if (ls.scale != 1) e.set("scale", ls.scale);
         Json& cues = e.set("cues", Json::array());
         for (const LipSync::Cue& cue : ls.cues) {
             Json x = Json::object();
@@ -915,6 +960,28 @@ std::string save_project(const Project& p) {
         j.set("active_clip", p.active_clip);
     }
     j.set("meta", p.meta);
+    bool any_limits = false;
+    for (const auto& [bname, rc] : p.joint_limits) {
+        if (!rc.empty()) { any_limits = true; break; }
+    }
+    if (any_limits) {
+        Json jlim = Json::object();
+        for (const auto& [bname, rc] : p.joint_limits) {
+            if (!rc.empty()) {
+                jlim.set(bname, constraints_to_json(rc));
+            }
+        }
+        j.set("joint_limits", std::move(jlim));
+    }
+    if (!p.mesh_looks.empty()) {
+        Json looks = Json::object();
+        for (const auto& [body, look] : p.mesh_looks) {
+            Json l = Json::object();
+            write_mesh_look(look, l);
+            looks.set(body, std::move(l));
+        }
+        j.set("mesh_looks", std::move(looks));
+    }
     for (auto& [k, v] : p.extra.obj)
         if (!j.find(k)) j.obj.emplace_back(k, v);
     if (!p.actors.empty())  // the active actor's clip is the top level, so its unknown fields are too

@@ -53,7 +53,7 @@ the same point. See [[Props]].
    ![Close up from the front: the right hand's fingers curled through the mug's handle, the mug beyond them](images/tutorial-sip-mug/grip-close.png)
    *The grip from the front (**1**): four fingers through the handle, the thumb over it.*
 
-2. Press **H** (**Tools → Hand Poser**). The **Hands** window opens at the bottom right of the view.
+2. Press **H** (**Tools → Hand Poser**). The **Hand Poser** window opens at the bottom right of the view.
 3. Optional, for a lighter touch: in the **Right** half, drag the **Pinky** dot (the outermost small dot)
    up and to the right. The pinky straightens and lifts away from the handle.
 
@@ -169,7 +169,7 @@ the head frame by frame, bind the wrist to the head.
 
 ### 8. Export
 
-Press **Ctrl+E**, type `Sip` in **Name** and press **Export SL .anim**. The top line reads
+Press **Ctrl+E**, type `Sip` in **Name** and press **Export .anim**. The top line reads
 `Length 2.40 s, priority 4, ease 0.30 / 0.30 s`. In Second Life, wear a mug on your right hand and play the
 animation; the mug is not part of the file.
 

@@ -9,6 +9,7 @@
 #include <optional>
 
 #include "app.h"
+#include "widgets.h"
 #include "icon_button.h"
 #include "icons.h"
 #include "theme.h"
@@ -105,8 +106,9 @@ void App::activate_actor(int i) {
     // host's, which follows the change itself (Host::set_view_frame).
     if (!host_.world_view()) {
         Xform m = p.actors[i].placement().inverse() * p.actors[p.active].placement();
-        camera_.target = m.apply(camera_.target);
-        camera_.yaw += (p.actors[p.active].rot_z - p.actors[i].rot_z) * kDegToRad;
+        const double turn = (p.actors[p.active].rot_z - p.actors[i].rot_z) * kDegToRad;
+        for (Camera* c : {&camera_, &cam_glide_.target_cam})  // a glide in flight moves into the new space too
+            c->target = m.apply(c->target), c->yaw += turn;
     }
     set_active_actor(p, i);
     clear_selection();
@@ -169,7 +171,7 @@ void App::put_clip_in_actor(const std::string& actor, const std::string& path, C
             t += "; the scene now lasts " + std::to_string(r.scene_now) + " frames (was " + std::to_string(r.scene_was) + ")";
         else if (r.clip_frames < r.scene_now)
             t += "; it ends at frame " + std::to_string(r.clip_frames) + " of " + std::to_string(r.scene_now);
-        if (r.dropped_binds) t += "; " + std::to_string(r.dropped_binds) + " bind(s) to other actors left out";
+        if (r.dropped_binds) t += "; " + count_noun(size_t(r.dropped_binds), "bind") + " to other actors left out";
         status(t);
     };
     if (i >= 0 && !actor_clip(doc_.project, i).curves.empty())
@@ -196,11 +198,12 @@ void App::scene_edit(const std::string& label, const std::function<void(Project&
     scratch_end(false);  // PT-2: scene steps go in the document's own history
     Project& p = doc_.project;
     Clip clip_before = p.clip;
-    SceneState before{p.actors, p.active, p.clips, p.active_clip};
+    SceneState before{p.actors, p.active, p.clips, p.active_clip, p.joint_limits, p.mesh_looks};
     change(p);
     if (p.actors.size() == 1) p.actors.clear(), p.active = 0;  // one actor left: a plain project again
     sync_actor_timing(p);
-    doc_.history.record_scene(label, std::move(clip_before), std::move(before), p.clip, {p.actors, p.active, p.clips, p.active_clip});
+    doc_.history.record_scene(label, std::move(clip_before), std::move(before), p.clip,
+                              {p.actors, p.active, p.clips, p.active_clip, p.joint_limits, p.mesh_looks});
     clip_replaced();
     mark_dirty();
 }
@@ -212,6 +215,11 @@ void App::apply_restore(History::Restore r) {
         p.active = r.scene->active;
         p.clips = std::move(r.scene->clips);  // 08 CL: the clip list and which clip was active
         p.active_clip = r.scene->active_clip;
+        p.joint_limits = std::move(r.scene->joint_limits);
+        if (p.mesh_looks != r.scene->mesh_looks) {  // SK-3: back to the look, in the mapping files too
+            p.mesh_looks = std::move(r.scene->mesh_looks);
+            save_looks_to_mappings();
+        }
     } else if (r.actor != p.active && r.actor < int(p.actors.size())) {
         set_active_actor(p, r.actor);  // the step belongs to another actor: go back to it
         clear_selection();
@@ -313,14 +321,12 @@ int App::pick_actor(ImVec2 m) const {
     double best = 1e30;
     if (host_.world_view()) {  // the world view: Skeleton Only actors and your worn avatar by their bones; a bone near the pointer
         for (const OtherSkeleton& s : other_skeletons_)
-            for (int b = 0; b < skel_.joint_count(); ++b) {
+            for (const StickSegment& k : other_sticks(s)) {
                 double hx, hy, tx, ty;
-                const auto& g = s.globals;
-                if (!node_visible(b) || !projector_.to_screen(g[b].pos, hx, hy) || !projector_.to_screen(g[b].apply(skel_[b].end), tx, ty))
-                    continue;
+                if (!projector_.to_screen(k.a, hx, hy) || !projector_.to_screen(k.b, tx, ty)) continue;
                 const double abx = tx - hx, aby = ty - hy, apx = m.x - hx, apy = m.y - hy;
                 const double t = std::clamp((apx * abx + apy * aby) / std::max(abx * abx + aby * aby, 1e-9), 0.0, 1.0);
-                if (double d = std::hypot(apx - abx * t, apy - aby * t); d < 10 && d < best) best = d, hit = s.actor;
+                if (double dist = std::hypot(apx - abx * t, apy - aby * t); dist < 10 && dist < best) best = dist, hit = s.actor;
             }
         if (hit >= 0) return hit;
         best = 1e30;  // then the bodies, as in the app
@@ -465,15 +471,11 @@ void App::draw_actors_panel() {
     if (scene_busy() && !actor_dragging_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::GetIO().WantTextInput)
         finish_scene_drags();
     if (!show_actors_) return;
-    place_tool_window(22, 45);  // tall enough for every section, capped to the screen
+    place_tool_window("Actors", 22, 45);  // tall enough for every section, capped to the screen
     if (!ImGui::Begin("Actors", &show_actors_)) return ImGui::End();
     help_button("couples-and-groups");
     Project& p = doc_.project;
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped("Several avatars in one scene, each with its own animation on one timeline. The first is you (your "
-                       "avatar). Click an actor's body in the view, or its name here, to edit it. Placement is from the "
-                       "shared sit target.");
-    ImGui::PopStyleColor();
+    hint("Several avatars on one timeline; the first is you. Click one to edit it.");
 
     auto add = [&](const char* kind) {
         scene_edit(std::string("Add Actor"), [&](Project& pr) {
@@ -596,7 +598,7 @@ void App::draw_actors_panel() {
     }
 
     // The active actor's settings.
-    ImGui::SeparatorText(p.actors[p.active].name.c_str());
+    subheading(p.actors[p.active].name.c_str());
     if (ImGui::Button("Load Animation...")) file_actor_ = p.actors[p.active].name, show_dialog(Dialog::LoadActor);
     ImGui::SetItemTooltip("A .anim, a BVH or an actor of another project replaces this actor's animation; or drag a .anim "
                           "from the Inventory onto the actor's name or body");
@@ -609,7 +611,8 @@ void App::draw_actors_panel() {
     Actor& cur = p.actors[p.active];
     char name[64];
     std::snprintf(name, sizeof name, "%s", cur.name.c_str());
-    if (ImGui::InputText("Name", name, sizeof name, ImGuiInputTextFlags_EnterReturnsTrue) && name[0] &&
+    labelled_row("Name");
+    if (ImGui::InputText("##name", name, sizeof name, ImGuiInputTextFlags_EnterReturnsTrue) && name[0] &&
         cur.name != name) {
         std::string from = cur.name, to = unique_name(p, name);
         scene_edit("Rename Actor", [from, to](Project& pr) {
@@ -621,7 +624,8 @@ void App::draw_actors_panel() {
     }
     // Live while picking; one undo step when the mouse is released.
     float colour[3] = {cur.colour[0], cur.colour[1], cur.colour[2]};
-    if (ImGui::ColorEdit3("Colour", colour, ImGuiColorEditFlags_NoInputs)) {
+    labelled_row("Colour");
+    if (ImGui::ColorEdit3("##colour", colour, ImGuiColorEditFlags_NoInputs)) {
         if (colour_actor_ < 0) colour_actor_ = p.active, colour_start_ = cur.colour;
         if (colour_actor_ == p.active)
             for (int k = 0; k < 3; ++k) cur.colour[k] = colour[k];
@@ -633,7 +637,8 @@ void App::draw_actors_panel() {
     for (int k = 0; k < kBodyCount; ++k)
         if (cur.body == kBodyIds[k]) current = Body(k) == Body::SLDefault ? "Ruth" : kBodyNames[k];
     if (const MeshBody* mb = cur.body.rfind("mesh:", 0) == 0 ? find_mesh_body(cur.body.substr(5)) : nullptr) current = mb->name.c_str();
-    if (ImGui::BeginCombo("Body", current)) {
+    labelled_row("Body");
+    if (ImGui::BeginCombo("##body", current)) {
         auto pick = [&](const std::string& id, const char* label) {
             if (ImGui::Selectable(label, cur.body == id)) scene_edit("Actor Body", [id](Project& pr) { pr.actors[pr.active].body = id; });
         };
@@ -651,14 +656,16 @@ void App::draw_actors_panel() {
         hint("Here your actor is your avatar, whatever this says; View > Body shows a mesh body in its place.");
 
     // Placement: drag the fields; one undo step per drag.
-    ImGui::SeparatorText("Placement from the sit target");
+    subheading("Placement from the sit target");
     // The start state is taken before the widgets change anything, so a click that jumps the value still
     // records it; the whole drag is one undo step, applied to the actor it started on.
     const Actor before_fields = cur;
     float pos[3] = {float(cur.pos.x), float(cur.pos.y), float(cur.pos.z)}, rz = float(cur.rot_z);
-    bool changed = ImGui::DragFloat3("Position (m)", pos, 0.005f, -20, 20, "%.3f");
+    labelled_row("Position");
+    bool changed = ImGui::DragFloat3("##pos", pos, 0.005f, -20, 20, "%.3f m");
     bool started = ImGui::IsItemActivated(), done = ImGui::IsItemDeactivated();
-    changed |= ImGui::DragFloat("Turn (deg)", &rz, 0.5f, -360, 360, "%.1f");
+    labelled_row("Turn");
+    changed |= ImGui::DragFloat("##turn", &rz, 0.5f, -360, 360, "%.1f deg");
     started |= ImGui::IsItemActivated(), done |= ImGui::IsItemDeactivated();
     if (started && field_drag_actor_ < 0) field_drag_actor_ = p.active, field_drag_start_ = before_fields;
     if (changed && field_drag_actor_ == p.active) {
@@ -670,37 +677,39 @@ void App::draw_actors_panel() {
     draw_sit_export();
 
     // GR-4: bind a point of this actor to a bone of another.
-    ImGui::SeparatorText("Contact with another actor");
+    subheading("Contact with another actor");
     std::vector<int> others;
     for (int k = 0; k < int(p.actors.size()); ++k)
         if (k != p.active) others.push_back(k);
     if (pin_actor_ < 0 || pin_actor_ >= int(p.actors.size()) || pin_actor_ == p.active) pin_actor_ = others[0];
-    if (ImGui::BeginCombo("Other actor", p.actors[pin_actor_].name.c_str())) {
+    labelled_row("Other actor");
+    if (ImGui::BeginCombo("##other", p.actors[pin_actor_].name.c_str())) {
         for (int k : others)
             if (ImGui::Selectable(p.actors[k].name.c_str(), k == pin_actor_)) pin_actor_ = k;
         ImGui::EndCombo();
     }
     // Their chest by default: a hug or a hand on the partner starts there more often than anywhere else.
     if (pin_bone_ < 0 || pin_bone_ >= skel_.size()) pin_bone_ = std::max(skel_.find("mChest"), 0);
-    if (ImGui::BeginCombo("Their bone", skel_[pin_bone_].name.c_str(), ImGuiComboFlags_HeightLarge)) {
+    labelled_row("Their bone");
+    if (ImGui::BeginCombo("##their_bone", skel_[pin_bone_].name.c_str(), ImGuiComboFlags_HeightLarge)) {
         if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
         ImGui::SetNextItemWidth(-1);
         char buf[64];
         std::snprintf(buf, sizeof buf, "%s", pin_bone_filter_.c_str());
-        if (ImGui::InputTextWithHint("##bonefilter", "Filter bones...", buf, sizeof buf)) pin_bone_filter_ = buf;
-        auto matches = [&](const std::string& name) {
+        if (filter_input("##bonefilter", "Filter bones...", buf, sizeof buf)) pin_bone_filter_ = buf;
+        auto matches = [&](const std::string& bone_name) {
             auto low = [](char c) { return char(std::tolower(static_cast<unsigned char>(c))); };
-            return std::search(name.begin(), name.end(), pin_bone_filter_.begin(), pin_bone_filter_.end(),
-                               [&](char a, char b) { return low(a) == low(b); }) != name.end();
+            return std::search(bone_name.begin(), bone_name.end(), pin_bone_filter_.begin(), pin_bone_filter_.end(),
+                               [&](char a, char b) { return low(a) == low(b); }) != bone_name.end();
         };
         // Grouped as the Bones list's Show groups: body first, then hands, face and the rest.
-        static const char* const groups[] = {"Body", "Hands", "Face", "Wings", "Tail", "Hind limbs", "Groin", "Attachment points"};
+        static const char* const groups[] = {"Body", "Hands", "Face", "Wings", "Tail", "Hind Limbs", "Groin", "Attachment Points"};
         for (int g = 0; g < 8; ++g) {
             bool header = false;
             for (int k = 0; k < skel_.size(); ++k) {
                 const Node& n = skel_[k];
                 if (n.volume || int(n.category) != g || !matches(n.name)) continue;
-                if (!std::exchange(header, true)) ImGui::SeparatorText(groups[g]);
+                if (!std::exchange(header, true)) subheading(groups[g]);
                 if (ImGui::Selectable(n.name.c_str(), k == pin_bone_)) pin_bone_ = k;
                 if (k == pin_bone_ && ImGui::IsWindowAppearing()) ImGui::SetScrollHereY();
             }

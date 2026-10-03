@@ -38,6 +38,7 @@ struct ExpressionPackOptions {
     double ease_in = 0.3, ease_out = 0.3;
     bool loop = true;             // held expressions loop (hold until stopped); blink and breathing always loop
     bool positions = false;       // Move face bones
+    double scale = 1;             // FaceSettings::scale: the face moves sized for the bake shape's face
     int fps = 30;
 };
 

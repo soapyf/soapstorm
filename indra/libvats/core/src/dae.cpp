@@ -2,8 +2,11 @@
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 #include "vats/dae.h"
 #include "guard.h"
+#include "mesh_parts.h"
+#include "source_bones.h"
 
 #include <algorithm>
+#include <thread>
 #include <cctype>
 #include <charconv>
 #include "from_chars_compat.h"
@@ -11,6 +14,7 @@
 #include <filesystem>
 #include <limits>
 #include <map>
+#include <set>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
@@ -200,7 +204,9 @@ struct Influences {
 
 struct Skin {
     Mat bind_shape;
-    std::vector<int> node;  // SK-40 index per joint; mRoot when unmapped
+    std::vector<int> node;  // SK-40 index per joint; mRoot when unmapped (-1 when a remap drops it)
+    std::vector<std::string> names;  // per joint, as the skin names it
+    std::vector<double> weight;      // per joint, the sum of its weights
     std::vector<bool> has_ibm;
     std::vector<Mat> ibm;
     std::vector<Influences> vertex;  // by position index
@@ -211,6 +217,8 @@ struct Instance {
     const XmlNode* skin;  // null for a static instance_geometry
     Mat world;
     std::vector<std::pair<std::string, std::string>> materials;  // symbol -> material id
+    std::string name;             // the part's (SK-1): its node's name, else the geometry's
+    const XmlNode* morph = nullptr;  // SK-2: the <morph> the geometry is the base of, if any
 };
 
 struct Build {
@@ -218,11 +226,13 @@ struct Build {
     std::vector<std::uint32_t> idx;
     std::vector<int> joints;
     std::vector<float> weights;
+    std::map<std::string, KeyBuild> keys;
 };
 
 class Loader {
 public:
-    Loader(const Skeleton& s, const std::string& d, DaeModel& m, DaeReport& r) : skel(s), dir(d), model(m), rep(r) {}
+    Loader(const Skeleton& s, const std::string& d, DaeModel& m, DaeReport& r, const SkinRemap* x)
+        : skel(s), dir(d), model(m), rep(r), remap(x) {}
 
     bool run(std::string_view text, std::string& err);
 
@@ -231,14 +241,17 @@ private:
     const std::string& dir;
     DaeModel& model;
     DaeReport& rep;
+    const SkinRemap* remap;
 
     std::unordered_map<std::string_view, const XmlNode*> ids, node_sids;
+    std::vector<Xform> bone_scene;                    // per rep.bones entry: its node's world (SL axes, metres)
+    std::unordered_map<const XmlNode*, int> bone_of;  // a JOINT node -> its rep.bones index
     std::unordered_map<const XmlNode*, Source> sources;
     std::unordered_map<const XmlNode*, Skin> skins;
     std::unordered_map<std::string, int> material_index;
-    std::vector<Build> builds;  // one per material
+    std::map<std::pair<size_t, int>, Build> builds;  // per instance (a part) and material
     std::vector<Instance> instances;
-    Mat up;
+    Mat up, turn;  // turn: a remap's quarter turns, for the rigged vertices (remap_binds turns the binds)
     double unit = 1, rig_scale = 1;
     int visits = 0;
     long long bad_triangles = 0;
@@ -324,13 +337,18 @@ private:
         return k;
     }
 
-    void add_instance(const XmlNode& inst, const XmlNode* geometry, const XmlNode* skin, const Mat& world) {
+    void add_instance(const XmlNode& inst, const XmlNode* geometry, const XmlNode* skin, const Mat& world, const XmlNode& node,
+                      const XmlNode* morph = nullptr) {
         if (!geometry) return;
-        if (geometry->name != "geometry") {
-            add_unique(rep.unsupported, geometry->name == "controller" ? "morph" : geometry->name);
+        // A skin over a morph (Blender's shape keys): the morph's base geometry, with the morph's targets.
+        if (const XmlNode* m = geometry->name == "controller" ? geometry->child("morph") : nullptr; m && !morph)
+            morph = m, geometry = resolve(m->attr_or("source"));
+        if (!geometry || geometry->name != "geometry") {
+            add_unique(rep.unsupported, geometry ? geometry->name : "controller without a geometry");
             return;
         }
-        Instance in{geometry, skin, world, {}};
+        Instance in{geometry, skin, world, {}, node.attr_or("name", node.attr_or("id")), morph};
+        if (in.name.empty()) in.name = geometry->attr_or("name", geometry->attr_or("id"));
         if (auto* bm = inst.child("bind_material"))
             if (auto* tc = bm->child("technique_common"))
                 for (auto& im : tc->children)
@@ -349,6 +367,7 @@ private:
         }
         if (n.attr_or("type") == "JOINT") {
             rep.skipped_joint_nodes += count_joints(n);
+            add_bones(n, parent, -1, depth);
             return;
         }
         Mat world = parent * local_transform(n);
@@ -358,28 +377,62 @@ private:
             } else if (c.name == "instance_node") {
                 if (auto* t = resolve(c.attr_or("url"))) visit(*t, world, depth + 1);
             } else if (c.name == "instance_geometry") {
-                add_instance(c, resolve(c.attr_or("url")), nullptr, world);
+                add_instance(c, resolve(c.attr_or("url")), nullptr, world, n);
             } else if (c.name == "instance_controller") {
                 const XmlNode* ctl = resolve(c.attr_or("url"));
                 if (!ctl) continue;
-                const XmlNode* skin = ctl->child("skin");
-                if (!skin) {
-                    add_unique(rep.unsupported, ctl->child("morph") ? "morph" : "controller without skin");
-                    continue;
-                }
-                add_instance(c, resolve(skin->attr_or("source")), skin, world);
+                if (const XmlNode* skin = ctl->child("skin"))
+                    add_instance(c, resolve(skin->attr_or("source")), skin, world, n);
+                else if (const XmlNode* morph = ctl->child("morph"))  // shape keys on a static mesh
+                    add_instance(c, resolve(morph->attr_or("source")), nullptr, world, n, morph);
+                else
+                    add_unique(rep.unsupported, "controller without skin");
             } else if (c.name == "instance_camera" || c.name == "instance_light") {
                 add_unique(rep.unsupported, c.name);
             }
         }
     }
 
+    // The file's armature (SourceBone): every JOINT node, named as skins name joints (name, else sid, else id).
+    void add_bones(const XmlNode& n, const Mat& parent, int parent_bone, int depth) {
+        if (depth > 64 || ++visits > 100000) return;
+        const Mat world = parent * local_transform(n);
+        SourceBone b;
+        b.name = n.attr_or("name", n.attr_or("sid", n.attr_or("id")));
+        b.parent = parent_bone;
+        const int me = int(rep.bones.size());
+        bone_of[&n] = me;
+        rep.bones.push_back(b);
+        bone_scene.push_back({orthonormal_rotation(world), world.origin()});
+        for (auto& c : n.children)
+            if (c.name == "node" && c.attr_or("type") == "JOINT") add_bones(c, world, me, depth + 1);
+    }
+
+    // The bone a skin's joint name means: a JOINT node of that name, sid or id (the bone takes the skin's name, which
+    // a mapping uses); a new root bone when there is none.
+    int bone_named(const std::string& name) {
+        for (size_t i = 0; i < rep.bones.size(); ++i)
+            if (rep.bones[i].name == name) return int(i);
+        for (auto* table : {&node_sids, &ids})
+            if (auto it = table->find(name); it != table->end())
+                if (auto b = bone_of.find(it->second); b != bone_of.end()) return rep.bones[size_t(b->second)].name = name, b->second;
+        rep.bones.push_back({name, -1, {}, false, 0});
+        bone_scene.push_back({});
+        return int(rep.bones.size()) - 1;
+    }
+
     int map_name(const std::string& name) {
-        int i = map_skin_joint(skel, name);
+        if (remap) {  // the mapping decides; a bone it leaves out is dropped, not an unknown joint
+            auto it = remap->joints.find(name);
+            return it == remap->joints.end() ? -1 : it->second;
+        }
+        bool loose = false;
+        int i = map_skin_joint(skel, name, &loose);
         if (i < 0) {  // step 5: a node whose sid is the name
             auto it = node_sids.find(name);
-            if (it != node_sids.end()) i = map_skin_joint(skel, it->second->attr_or("name"));
+            if (it != node_sids.end()) i = map_skin_joint(skel, it->second->attr_or("name"), &loose);
         }
+        if (loose) add_unique(rep.warnings, loose_joint_warning(name));
         if (i < 0) add_unique(rep.unmapped_joints, name);
         return i < 0 ? dae_root(skel) : i;
     }
@@ -411,9 +464,11 @@ private:
                         if (auto it = ids.find(t); it != ids.end())
                             name = it->second->attr_or("name", it->second->attr_or("sid", t));
                     k.node.push_back(map_name(name));
+                    k.names.push_back(name);
                 }
             }
         size_t nj = k.node.size();
+        k.weight.assign(nj, 0.0);
         k.has_ibm.assign(nj, false);
         k.ibm.resize(nj);
         double buf[16];
@@ -454,7 +509,8 @@ private:
                 long long j = v[at + jo];
                 double w = 0;
                 if (!wsrc->get(v[at + wo], 1, &w) || !(w > 0) || !std::isfinite(w)) continue;
-                int node = j == -1 ? root : j >= 0 && static_cast<size_t>(j) < nj ? k.node[j] : -1;
+                if (j >= 0 && static_cast<size_t>(j) < nj) k.weight[j] += w;
+                int node = j == -1 ? (remap ? -1 : root) : j >= 0 && static_cast<size_t>(j) < nj ? k.node[j] : -1;
                 if (node < 0) continue;
                 auto it = std::find_if(sum.begin(), sum.end(), [&](auto& p) { return p.first == node; });
                 if (it != sum.end())
@@ -588,17 +644,14 @@ private:
 
     int material_for(const std::string& id) {
         auto [it, fresh] = material_index.try_emplace(id, static_cast<int>(model.materials.size()));
-        if (fresh) {
-            model.materials.push_back(read_material(id));
-            builds.emplace_back();
-        }
+        if (fresh) model.materials.push_back(read_material(id));
         return it->second;
     }
 
-    void build(const Instance& in);
+    void build(size_t part, const Instance& in);
 };
 
-void Loader::build(const Instance& in) {
+void Loader::build(size_t part, const Instance& in) {
     const XmlNode* mesh = in.geometry->child("mesh");
     if (!mesh) {
         for (auto& c : in.geometry->children)
@@ -607,11 +660,55 @@ void Loader::build(const Instance& in) {
     }
     const Skin* skin = in.skin ? &skins[in.skin] : nullptr;
     bool rigged_skin = skin && model.rigged;
-    Mat x = rigged_skin ? scaling({rig_scale, rig_scale, rig_scale}) * up * skin->bind_shape
-                        : skin ? in.world * skin->bind_shape : in.world;
+    Mat x = rigged_skin ? scaling({rig_scale, rig_scale, rig_scale}) * turn * up * skin->bind_shape
+                        : skin ? turn * in.world * skin->bind_shape : turn * in.world;  // static parts turn with a remap too
     Mat nm = x.normal_matrix();
     bool flip = x.det() < 0;
     int root = dae_root(skel);
+
+    // SK-2: the morph's targets, whole geometries laid out as the base is (indexed by the same position and normal
+    // indices). NORMALIZED (Blender's) gives each the shape itself; RELATIVE gives its offset from the base.
+    struct Target {
+        std::string name;
+        double initial = 0;
+        const Source *pos = nullptr, *nrm = nullptr;
+    };
+    std::vector<Target> targets;
+    const bool relative = in.morph && in.morph->attr_or("method") == "RELATIVE";
+    if (const XmlNode* tg = in.morph ? in.morph->child("targets") : nullptr) {
+        const XmlNode* list = nullptr;
+        const Source* weights = nullptr;
+        for (auto& input : tg->children) {
+            if (input.attr_or("semantic") == "MORPH_TARGET")
+                if (const XmlNode* src = resolve(input.attr_or("source"))) list = src->child("IDREF_array");
+            if (input.attr_or("semantic") == "MORPH_WEIGHT") weights = source(input.attr_or("source"));
+        }
+        const std::vector<std::string> names = list ? tokens(list->text) : std::vector<std::string>{};
+        for (size_t k = 0; k < names.size(); ++k) {
+            auto it = ids.find(names[k]);
+            const XmlNode* g = it != ids.end() && it->second->name == "geometry" ? it->second : nullptr;
+            const XmlNode* tm = g ? g->child("mesh") : nullptr;
+            if (!tm) {
+                add_unique(rep.warnings, "shape key " + names[k] + " of " + in.name + " is not a mesh: skipped");
+                continue;
+            }
+            Target t;
+            t.name = g->attr_or("name", names[k]);
+            double w = 0;
+            if (weights && weights->get(static_cast<long long>(k), 1, &w) && std::isfinite(w)) t.initial = w;
+            for (auto& c : tm->children) {
+                if (c.name == "vertices")
+                    for (auto& vi : c.children) {
+                        if (vi.name == "input" && vi.attr_or("semantic") == "POSITION") t.pos = source(vi.attr_or("source"));
+                        if (vi.name == "input" && vi.attr_or("semantic") == "NORMAL" && !t.nrm) t.nrm = source(vi.attr_or("source"));
+                    }
+                if (!t.nrm && c.name != "vertices" && c.name != "source")  // the first primitive's normals
+                    for (auto& input : c.children)
+                        if (input.name == "input" && input.attr_or("semantic") == "NORMAL") t.nrm = source(input.attr_or("source"));
+            }
+            if (t.pos) targets.push_back(t);
+        }
+    }
 
     std::map<std::tuple<int, long long, long long, long long>, std::uint32_t> vmap;
     std::map<std::pair<int, long long>, Vec3> smooth;
@@ -671,7 +768,7 @@ void Loader::build(const Instance& in) {
             if (s == symbol) mat_id = t;
         if (auto it = ids.find(symbol); mat_id.empty() && it != ids.end() && it->second->name == "material") mat_id = symbol;
         int g = material_for(mat_id);
-        Build& b = builds[g];
+        Build& b = builds[{part, g}];
 
         struct Corner {
             long long vi, ni, ti;
@@ -706,6 +803,20 @@ void Loader::build(const Instance& in) {
                 b.weights.insert(b.weights.end(), f.weight.begin(), f.weight.end());
             }
             if (!nrm) generated.emplace_back(g, it->second, c.vi);
+            for (const Target& t : targets) {
+                double tp[3], tn[3];
+                if (!t.pos->get(c.vi, 3, tp)) continue;
+                const Vec3 dp = x.dir(relative ? Vec3{tp[0], tp[1], tp[2]} : Vec3{tp[0], tp[1], tp[2]} - c.p);
+                KeyBuild& kb = b.keys[t.name];
+                kb.initial = t.initial;
+                if (!nrm || !t.nrm || !t.nrm->get(c.ni, 3, tn)) {
+                    kb.add(it->second, dp, nullptr);
+                    continue;
+                }
+                const Vec3 n = relative ? c.n + Vec3{tn[0], tn[1], tn[2]} : Vec3{tn[0], tn[1], tn[2]};
+                const Vec3 dn = nm.dir(n).normalized() - wn;  // the shape's own normal at full strength
+                kb.add(it->second, dp, &dn);
+            }
             return it->second;
         };
         auto tri = [&](size_t c0, size_t c1, size_t c2) {
@@ -769,7 +880,7 @@ void Loader::build(const Instance& in) {
     for (auto& [g, vert, vi] : generated) {
         Vec3 n = smooth[{g, vi}].normalized();
         if (n.length() == 0) n = {0, 0, 1};
-        float* o = &builds[g].nrm[vert * 3];
+        float* o = &builds[{part, g}].nrm[vert * 3];
         o[0] = float(n.x), o[1] = float(n.y), o[2] = float(n.z);
     }
 }
@@ -819,13 +930,35 @@ bool Loader::run(std::string_view text, std::string& err) {
     for (auto& in : instances)
         if (in.skin && !skins.count(in.skin)) read_skin(*in.skin, skins[in.skin]);
     for (auto& [node, k] : skins)
-        for (int i : k.node) model.rigged |= i != dae_root(skel);
+        for (int i : k.node) model.rigged |= i >= 0 && i != dae_root(skel);
     rep.rigged = model.rigged;
     rep.skins_as_static = !skins.empty() && !model.rigged;
     rep.scale = unit;
+    rep.remapped = remap != nullptr;
+
+    // The armature: every skin joint is a bone, bound where its inverse bind says; the rest follow their parents.
+    std::set<const XmlNode*> counted;  // a skin instanced twice carries its weights once
+    for (auto& in : instances) {
+        if (!in.skin || !counted.insert(in.skin).second) continue;
+        const Skin& k = skins[in.skin];
+        for (size_t j = 0; j < k.names.size(); ++j) {
+            SourceBone& b = rep.bones[bone_named(k.names[j])];
+            b.weight += k.weight[j];
+            if (b.skinned || !k.has_ibm[j]) continue;
+            const Mat m = up * k.ibm[j].inverse();
+            b.bind = {orthonormal_rotation(m), m.origin() * unit};
+            b.skinned = true;
+        }
+    }
+    place_unskinned_bones(rep.bones, bone_scene);
 
     std::vector<bool> bound;
-    if (model.rigged) {
+    if (model.rigged && remap) {
+        rig_scale = unit;
+        rep.scale = rig_scale;
+        turn = from_xform({Quat::axis_angle({0, 0, 1}, remap->turn * kPi / 2), {}});
+        remap_binds(skel, *remap, model, bound);
+    } else if (model.rigged) {
         std::vector<Xform> rest = skel.global_pose(Pose(skel.size()));
         rest.push_back({});  // mRoot
         for (auto& v : skel.volumes()) rest.push_back(rest[v.joint] * Xform{v.rot, v.pos});
@@ -847,25 +980,18 @@ bool Loader::run(std::string_view text, std::string& err) {
         }
     }
 
-    for (auto& in : instances) build(in);
+    for (size_t i = 0; i < instances.size(); ++i) build(i, instances[i]);
     if (bad_triangles)
         add_unique(rep.warnings, std::to_string(bad_triangles) + " polygons with out-of-range indices skipped");
 
-    for (size_t g = 0; g < builds.size(); ++g) {
-        Build& b = builds[g];
+    size_t open = SIZE_MAX;
+    for (auto& [key, b] : builds) {
+        const auto [part, g] = key;
         if (b.idx.empty()) continue;
-        DaeGroup grp{static_cast<int>(g), static_cast<std::uint32_t>(model.vertex_count()),
-                     static_cast<std::uint32_t>(b.pos.size() / 3), static_cast<std::uint32_t>(model.indices.size()),
-                     static_cast<std::uint32_t>(b.idx.size())};
-        for (std::uint32_t i : b.idx) model.indices.push_back(grp.first_vertex + i);
-        model.positions.insert(model.positions.end(), b.pos.begin(), b.pos.end());
-        model.normals.insert(model.normals.end(), b.nrm.begin(), b.nrm.end());
-        model.uvs.insert(model.uvs.end(), b.uv.begin(), b.uv.end());
-        model.joints.insert(model.joints.end(), b.joints.begin(), b.joints.end());
-        model.weights.insert(model.weights.end(), b.weights.begin(), b.weights.end());
-        model.groups.push_back(grp);
+        if (std::exchange(open, part) != part) begin_part(model, instances[part].name);
+        append_group(model, g, b, b.keys);
     }
-    settle_rig(model, skel, bound, rep);
+    settle_rig(model, skel, bound, rep, remap != nullptr);
     rep.triangles = model.triangle_count();
     if (!rep.triangles) {
         err = "no triangles in the scene";
@@ -908,29 +1034,50 @@ double rig_scale_of(std::vector<double> ratios, double& measured, double declare
     return measured;
 }
 
-int map_skin_joint(const Skeleton& skel, std::string_view name) {
-    int root = dae_root(skel);
-    size_t cut = name.find_last_of(":|");
-    std::string_view suffix = cut == std::string_view::npos ? name : name.substr(cut + 1);
-    for (std::string_view n : {name, suffix})  // 1: collision volume
-        for (const std::string& q : {std::string(n), upper(n)})
-            if (int v = skel.find_volume(q); v >= 0) return dae_volume(skel, v);
-    if (name == "mRoot") return root;  // 2
-    if (int i = skel.find(name); i >= 0) return i;  // 3: SK-7 with aliases
-    cut = name.find_last_of(":|_");  // 4: the part after the last prefix separator
-    if (cut != std::string_view::npos) {
-        std::string_view tail = name.substr(cut + 1);
-        if (tail == "mRoot") return root;
-        if (int i = skel.find(tail); i >= 0 && !tail.empty()) return i;
-    }
+int viewer_skin_joint(const Skeleton& skel, std::string_view name) {
+    auto exact = [&](std::string_view n) {
+        if (n == "mRoot") return dae_root(skel);
+        const int i = skel.find_viewer(n);  // joint names, LL's aliases, volume and attachment names, all exact
+        return i >= skel.volume_start() ? dae_volume(skel, i - skel.volume_start()) : i;
+    };
+    if (const int i = exact(name); i >= 0) return i;
+    // After a namespace or armature prefix ("rig:mNeck", "a|b|mHead", "Armature_mChest"), as exporters write them.
+    for (const char* seps : {":|", ":|_"})
+        if (const size_t cut = name.find_last_of(seps); cut != std::string_view::npos && cut + 1 < name.size())
+            if (const int i = exact(name.substr(cut + 1)); i >= 0) return i;
     return -1;
 }
 
+std::string loose_joint_warning(std::string_view name) {
+    return "joint " + std::string(name) + " is read as SL's, but SL's uploader matches joint names exactly and will not "
+           "read it: rename it, or use Map Rig to Second Life";
+}
+
+int map_skin_joint(const Skeleton& skel, std::string_view name, bool* loose) {
+    if (loose) *loose = false;
+    if (const int i = viewer_skin_joint(skel, name); i >= 0) return i;
+    // The viewer stops there. Any case is read too, with a warning (load_dae and the other readers): volumes first,
+    // then joints and aliases ("belly", "l_upper_arm", "MPELVIS").
+    const size_t cut = name.find_last_of(":|");
+    const std::string_view suffix = cut == std::string_view::npos ? name : name.substr(cut + 1);
+    int found = -1;
+    for (std::string_view n : {name, suffix})
+        if (const int v = skel.find_volume(upper(n)); v >= 0 && found < 0) found = dae_volume(skel, v);
+    if (found < 0)
+        if (const int i = skel.find(suffix); i >= 0) found = i;
+    if (found < 0)
+        if (const size_t c = name.find_last_of(":|_"); c != std::string_view::npos && c + 1 < name.size())
+            if (const int i = skel.find(name.substr(c + 1)); i >= 0) found = i;
+    if (found >= skel.volume_start() && found < skel.size()) found = dae_volume(skel, found - skel.volume_start());
+    if (found >= 0 && loose) *loose = true;
+    return found;
+}
+
 static bool load_dae_text(std::string_view xml_text, const std::string& dae_dir, const Skeleton& skel, DaeModel& out,
-                          DaeReport& report, std::string& err) {
+                          DaeReport& report, std::string& err, const SkinRemap* remap) {
     out = DaeModel();
     report = DaeReport();
-    return Loader(skel, dae_dir, out, report).run(xml_text, err);
+    return Loader(skel, dae_dir, out, report, remap).run(xml_text, err);
 }
 
 void skin_prop(const DaeModel& model, const Skeleton& skel, const std::vector<Xform>& globals, const Shape* shape,
@@ -965,7 +1112,10 @@ void skin_prop(const DaeModel& model, const Skeleton& skel, const std::vector<Xf
         }
         mats[i] = g * from_xform(model.binds[i].inverse());
     }
-    for (size_t v = 0; v < nv; ++v) {
+    // Each vertex on its own: a big body (a 179k-vertex creature took ~12 ms a frame on one core) is split across
+    // threads, a small one stays on this thread.
+    auto skin_range = [&](size_t v0, size_t v1) {
+    for (size_t v = v0; v < v1; ++v) {
         Mat m;
         for (auto& row : m.m)
             for (double& e : row) e = 0;
@@ -1000,6 +1150,146 @@ void skin_prop(const DaeModel& model, const Skeleton& skel, const std::vector<Xf
             normals[v * 3 + i] = static_cast<float>(no[i]);
         }
     }
+    };
+    const size_t threads = nv < 20000 ? 1 : std::min<size_t>(8, std::max(1u, std::thread::hardware_concurrency()));
+    if (threads <= 1) return skin_range(0, nv);
+    std::vector<std::thread> pool;
+    const size_t chunk = (nv + threads - 1) / threads;
+    for (size_t t = 1; t < threads; ++t) pool.emplace_back(skin_range, std::min(nv, t * chunk), std::min(nv, (t + 1) * chunk));
+    skin_range(0, std::min(nv, chunk));
+    for (std::thread& th : pool) th.join();
+}
+
+DaeModel shown_model(const DaeModel& m, const MeshLook& look) {
+    DaeModel out;
+    out.materials = m.materials;
+    out.rigged = m.rigged;
+    out.binds = m.binds, out.bound = m.bound, out.rig_axes = m.rig_axes;
+    out.turn_binds = m.turn_binds, out.turn_vertices = m.turn_vertices, out.turn_decided = m.turn_decided;
+    out.labels = m.labels;
+    const size_t nv = m.positions.size() / 3;
+    const bool rigged_arrays = m.joints.size() == nv * 4 && m.weights.size() == nv * 4;
+    bool hiding = false;
+    for (const DaePart& p : m.parts) hiding = hiding || look.hidden.count(p.name);
+    // Where each vertex goes; none for a hidden part's.
+    constexpr std::uint32_t kGone = std::numeric_limits<std::uint32_t>::max();
+    std::vector<std::uint32_t> to;
+    if (!hiding) {
+        out.positions = m.positions, out.normals = m.normals, out.uvs = m.uvs, out.indices = m.indices;
+        out.groups = m.groups, out.parts = m.parts;
+        if (rigged_arrays) out.joints = m.joints, out.weights = m.weights;
+    } else {
+        to.assign(nv, kGone);
+        auto copy = [](const std::vector<float>& from, std::vector<float>& into, size_t first, size_t count, size_t width) {
+            if (from.size() >= (first + count) * width)
+                into.insert(into.end(), from.begin() + first * width, from.begin() + (first + count) * width);
+        };
+        for (const DaePart& p : m.parts) {
+            if (look.hidden.count(p.name) || p.first_vertex + p.vertex_count > nv || p.first_index + p.index_count > m.indices.size()) continue;
+            const std::uint32_t v0 = std::uint32_t(out.vertex_count()), i0 = std::uint32_t(out.indices.size());
+            copy(m.positions, out.positions, p.first_vertex, p.vertex_count, 3);
+            copy(m.normals, out.normals, p.first_vertex, p.vertex_count, 3);
+            copy(m.uvs, out.uvs, p.first_vertex, p.vertex_count, 2);
+            if (rigged_arrays) {
+                out.joints.insert(out.joints.end(), m.joints.begin() + p.first_vertex * 4, m.joints.begin() + (p.first_vertex + p.vertex_count) * 4);
+                copy(m.weights, out.weights, p.first_vertex, p.vertex_count, 4);
+            }
+            for (std::uint32_t v = 0; v < p.vertex_count; ++v) to[p.first_vertex + v] = v0 + v;
+            for (std::uint32_t i = p.first_index; i < p.first_index + p.index_count; ++i) out.indices.push_back(m.indices[i] - p.first_vertex + v0);
+            for (const DaeGroup& g : m.groups)
+                if (g.first_index >= p.first_index && g.first_index < p.first_index + p.index_count)
+                    out.groups.push_back({g.material, g.first_vertex - p.first_vertex + v0, g.vertex_count, g.first_index - p.first_index + i0, g.index_count});
+            out.parts.push_back({p.name, v0, p.vertex_count, i0, p.index_count});
+        }
+    }
+    // Shape keys at their values: offsets added, then the normals they turned normalised again.
+    const size_t on = out.positions.size() / 3;
+    std::vector<char> turned(on, 0);
+    for (const DaeShapeKey& k : m.shape_keys) {
+        const auto it = look.keys.find(k.name);
+        const double w = it != look.keys.end() ? it->second : k.initial;
+        if (w == 0 || !std::isfinite(w)) continue;
+        const bool normals = k.dnrm.size() == k.dpos.size() && out.normals.size() == on * 3;
+        for (size_t i = 0; i < k.vertices.size() && i * 3 + 2 < k.dpos.size(); ++i) {
+            const std::uint32_t v = hiding ? (k.vertices[i] < nv ? to[k.vertices[i]] : kGone) : k.vertices[i];
+            if (v >= on) continue;
+            for (int c = 0; c < 3; ++c) out.positions[v * 3 + c] += float(w * k.dpos[i * 3 + c]);
+            if (!normals) continue;
+            for (int c = 0; c < 3; ++c) out.normals[v * 3 + c] += float(w * k.dnrm[i * 3 + c]);
+            turned[v] = 1;
+        }
+    }
+    for (size_t v = 0; v < on; ++v)
+        if (turned[v]) {
+            float* n = &out.normals[v * 3];
+            const Vec3 u = Vec3{n[0], n[1], n[2]}.normalized();
+            const Vec3 safe = u.length() > 0.5 ? u : Vec3{0, 0, 1};  // offsets that cancel the normal out
+            n[0] = float(safe.x), n[1] = float(safe.y), n[2] = float(safe.z);
+        }
+    const double inf = std::numeric_limits<double>::infinity();
+    Vec3 lo{inf, inf, inf}, hi = -lo;
+    for (size_t i = 0; i < out.positions.size(); ++i) {
+        lo[i % 3] = std::min(lo[i % 3], double(out.positions[i]));
+        hi[i % 3] = std::max(hi[i % 3], double(out.positions[i]));
+    }
+    // Nothing shown: the source's box, so a static prop's placement (re-centred on its box) does not jump.
+    out.bounds_min = out.positions.empty() ? m.bounds_min : lo;
+    out.bounds_max = out.positions.empty() ? m.bounds_max : hi;
+    return out;
+}
+
+std::vector<std::uint32_t> shown_vertex_sources(const DaeModel& m, const MeshLook& look) {
+    const size_t nv = m.positions.size() / 3;
+    bool hiding = false;
+    for (const DaePart& p : m.parts) hiding = hiding || look.hidden.count(p.name);
+    std::vector<std::uint32_t> out;
+    if (!hiding) {
+        for (std::uint32_t v = 0; v < nv; ++v) out.push_back(v);
+        return out;
+    }
+    for (const DaePart& p : m.parts)  // as shown_model keeps them
+        if (!look.hidden.count(p.name) && p.first_vertex + p.vertex_count <= nv && p.first_index + p.index_count <= m.indices.size())
+            for (std::uint32_t v = 0; v < p.vertex_count; ++v) out.push_back(p.first_vertex + v);
+    return out;
+}
+
+std::vector<std::string> shape_key_names(const DaeModel& model) {
+    std::vector<std::string> out;
+    for (const DaeShapeKey& k : model.shape_keys)
+        if (std::find(out.begin(), out.end(), k.name) == out.end()) out.push_back(k.name);
+    return out;
+}
+
+MeshLook own_look(const DaeModel& model, const MeshLook& look) {
+    MeshLook own;
+    for (const DaePart& p : model.parts)
+        if (look.hidden.count(p.name)) own.hidden.insert(p.name);
+    for (const DaeShapeKey& k : model.shape_keys)
+        if (const auto it = look.keys.find(k.name); it != look.keys.end()) own.keys[k.name] = it->second;
+    return own;
+}
+
+std::string shape_key_group(const std::string& name, size_t* rest) {
+    size_t cut = name.find(" - "), skip = 3;
+    // A dot, but not Blender's ".001" on a copy's name.
+    if (const size_t dot = name.find('.'); dot != std::string::npos && dot < cut &&
+                                           name.find_first_not_of("0123456789", dot + 1) != std::string::npos)
+        cut = dot, skip = 1;
+    if (cut == std::string::npos || cut == 0 || cut + skip >= name.size()) {
+        if (rest) *rest = 0;
+        return "";
+    }
+    size_t r = cut + skip;
+    while (r < name.size() - 1 && name[r] == ' ') ++r;  // "mouth -  tongueout"
+    if (rest) *rest = r;
+    return std::string(trim(std::string_view(name).substr(0, cut)));
+}
+
+double shape_key_value(const DaeModel& model, const MeshLook& look, const std::string& name) {
+    if (const auto it = look.keys.find(name); it != look.keys.end()) return it->second;
+    for (const DaeShapeKey& k : model.shape_keys)
+        if (k.name == name) return k.initial;
+    return 0;
 }
 
 namespace {
@@ -1025,6 +1315,12 @@ void turn_vertices(DaeModel& model, int k) {
         Vec3 a = q.rotate({p[0], p[1], p[2]}), b = q.rotate({m[0], m[1], m[2]});
         for (int i = 0; i < 3; ++i) p[i] = float(a[i]), m[i] = float(b[i]);
     }
+    for (DaeShapeKey& sk : model.shape_keys)  // the offsets turn with the vertices
+        for (std::vector<float>* d : {&sk.dpos, &sk.dnrm})
+            for (size_t i = 0; i + 2 < d->size(); i += 3) {
+                const Vec3 a = q.rotate({(*d)[i], (*d)[i + 1], (*d)[i + 2]});
+                for (int c = 0; c < 3; ++c) (*d)[i + c] = float(a[c]);
+            }
     model.turn_vertices = (model.turn_vertices + k) % 4;
     // Keep the box in step with the vertices (it places static props).
     if (nv) {
@@ -1044,7 +1340,21 @@ void apply_rig_turn(DaeModel& model, int turn_b, int turn_v) {
     if (int k = ((turn_v - model.turn_vertices) % 4 + 4) % 4) turn_vertices(model, k);
 }
 
-void settle_rig(DaeModel& model, const Skeleton& skel, const std::vector<bool>& bound, DaeReport& rep) {
+void remap_binds(const Skeleton& skel, const SkinRemap& remap, DaeModel& model, std::vector<bool>& bound) {
+    std::vector<Xform> rest = skel.global_pose(Pose(skel.size()));
+    rest.push_back({});  // mRoot
+    for (auto& v : skel.volumes()) rest.push_back(rest[v.joint] * Xform{v.rot, v.pos});
+    model.binds = rest;
+    bound.assign(rest.size(), false);
+    const Quat turn = Quat::axis_angle({0, 0, 1}, remap.turn * kPi / 2);
+    for (const auto& [n, b] : remap.binds)
+        if (n >= 0 && n < int(rest.size()) && n != dae_root(skel)) {
+            model.binds[n] = {(turn * b.rot).normalized(), turn.rotate(b.pos)};
+            bound[n] = true;
+        }
+}
+
+void settle_rig(DaeModel& model, const Skeleton& skel, const std::vector<bool>& bound, DaeReport& rep, bool foreign) {
     const int root = dae_root(skel), count = dae_index_count(skel);
     if (!model.rigged || model.binds.size() != static_cast<size_t>(count) || bound.size() != static_cast<size_t>(count))
         return;
@@ -1065,7 +1375,7 @@ void settle_rig(DaeModel& model, const Skeleton& skel, const std::vector<bool>& 
         return best;
     };
     auto off_axis = [](const Vec3& p) { return std::hypot(p.x, p.y); };
-    // 1a. Binds: bound joints against the SL rest joints.
+    // 1a. Binds: bound joints against the SL rest joints. (A foreign rig takes no turn: its mapping turned it.)
     double bind_spread = 0;
     for (int j = 0; j < root; ++j)
         if (bound[j] && !skel[j].attachment) bind_spread = std::max(bind_spread, off_axis(rest[j].pos));
@@ -1074,8 +1384,8 @@ void settle_rig(DaeModel& model, const Skeleton& skel, const std::vector<bool>& 
         for (int j = 0; j < root; ++j)
             if (bound[j] && !skel[j].attachment) c += sq(turn(k).rotate(model.binds[j].pos) - rest[j].pos);
         return c;
-    }, bind_spread);
-    model.turn_decided = bind_spread >= 0.2;
+    }, foreign ? 0 : bind_spread);
+    model.turn_decided = foreign || bind_spread >= 0.2;
     if (kb) {
         turn_binds(model, kb);
         add_unique(rep.warnings, "the rig was turned " + std::to_string(kb * 90) + " degrees about Z to face SL's +X");
@@ -1086,7 +1396,7 @@ void settle_rig(DaeModel& model, const Skeleton& skel, const std::vector<bool>& 
     // quarter off SL's, and a half turn only flips a joint near the centre line front to back, which is how a
     // body that moved its CHEST volume a few centimetres back used to get its chest turned inside out.
     int mixed = 0;
-    for (int j = 0; j < count; ++j) {
+    for (int j = 0; j < count && !foreign; ++j) {
         if (!bound[j] || j == root) continue;
         // Only the horizontal part: a turn about Z cannot change height, and a devkit's head may sit
         // well above or below SL's.
@@ -1094,6 +1404,9 @@ void settle_rig(DaeModel& model, const Skeleton& skel, const std::vector<bool>& 
         const Vec3 b = model.binds[j].pos;
         const double here = flat(b);
         if (here < 0.01 * 0.01) continue;  // already within a centimetre
+        // Bound at SL's own rest rotation, it is in SL's axes: a joint placed elsewhere on purpose (a spare chain's,
+        // rig_map.h RM-8, sits along a scarf) is not one turned by an exporter.
+        if (std::fabs((rest[j].rot.conj() * model.binds[j].rot).w) > std::cos(2.5 * kDegToRad)) continue;
         int best = 0;
         double lo = here;
         for (int k = 1; k < 4; k += 2)
@@ -1123,8 +1436,8 @@ void settle_rig(DaeModel& model, const Skeleton& skel, const std::vector<bool>& 
         for (int j = 0; j < count; ++j)
             if (n[j]) c += n[j] * sq(turn(k).rotate(sum[j] * (1.0 / n[j])) - model.binds[j].pos);
         return c;
-    }, vert_spread);
-    model.turn_decided = model.turn_decided && vert_spread >= 0.2;
+    }, foreign ? 0 : vert_spread);
+    model.turn_decided = foreign || (model.turn_decided && vert_spread >= 0.2);
     if (kv) {
         turn_vertices(model, kv);
         add_unique(rep.warnings, "the mesh was turned " + std::to_string(kv * 90) +
@@ -1135,7 +1448,17 @@ void settle_rig(DaeModel& model, const Skeleton& skel, const std::vector<bool>& 
     // bone axes (Blender's Y along the bone: meaningless in SL). In SL's own frames a joint sits in its nearest
     // bound ancestor's frame in the direction of its SL rest offset, whatever the pose; in bone axes it mostly
     // does not. With no bound pair to judge by, any bind far (> 5 degrees) from its rest counts.
-    int pairs = 0, agree = 0;
+    // Body and Bento face bones can be exported under different conventions in the same file (e.g. Blender models
+    // with SL-rest body bones but Blender-bone-axis face bones). We evaluate each hierarchy separately.
+    // The head's leaf joints (the classic eyes, mSkull) are rigged with the face, so they go with its convention.
+    auto is_face = [&](int j) {
+        if (j < 0 || j >= int(skel.size())) return false;
+        const std::string& name = skel[j].name;
+        return skel[j].category == Category::Face || name.rfind("mFace", 0) == 0 || name == "mEyeLeft" ||
+               name == "mEyeRight" || name == "mSkull";
+    };
+    int body_pairs = 0, body_agree = 0;
+    int face_pairs = 0, face_agree = 0;
     for (int j = 0; j < root; ++j) {
         int a = skel[j].parent;
         while (a >= 0 && !bound[a]) a = skel[a].parent;
@@ -1143,17 +1466,39 @@ void settle_rig(DaeModel& model, const Skeleton& skel, const std::vector<bool>& 
         const Vec3 want = rest[a].rot.conj().rotate(rest[j].pos - rest[a].pos);
         const Vec3 d = model.binds[a].rot.conj().rotate(model.binds[j].pos - model.binds[a].pos);
         if (want.length() < 0.01 || d.length() < 0.005) continue;
-        ++pairs;
-        agree += d.normalized().dot(want.normalized()) > std::cos(15 * kDegToRad);
+        const bool ag = d.normalized().dot(want.normalized()) > std::cos(15 * kDegToRad);
+        if (is_face(j)) {
+            ++face_pairs;
+            face_agree += ag;
+        } else {
+            ++body_pairs;
+            body_agree += ag;
+        }
     }
-    bool oriented = pairs && agree * 2 < pairs;
-    for (int j = 0; j < count && !oriented && !pairs; ++j)
-        if (bound[j] && j != root) oriented = std::fabs((rest[j].rot.conj() * model.binds[j].rot).w) < std::cos(2.5 * kDegToRad);
-    if (oriented) {
+    bool body_oriented = body_pairs && body_agree * 2 < body_pairs;
+    for (int j = 0; j < count && !body_oriented && !body_pairs; ++j)
+        if (bound[j] && j != root && !is_face(j))
+            body_oriented = std::fabs((rest[j].rot.conj() * model.binds[j].rot).w) < std::cos(2.5 * kDegToRad);
+
+    bool face_oriented = face_pairs && face_agree * 2 < face_pairs;
+    for (int j = 0; j < count && !face_oriented && !face_pairs; ++j)
+        if (bound[j] && j != root && is_face(j))
+            face_oriented = std::fabs((rest[j].rot.conj() * model.binds[j].rot).w) < std::cos(2.5 * kDegToRad);
+
+    if (body_oriented || face_oriented) {
         model.rig_axes.assign(count, Quat{});  // the file's own axes stay for posing (rig_axes_from_parts)
-        for (int j = 0; j < count; ++j)
-            if (bound[j]) model.rig_axes[j] = model.binds[j].rot, model.binds[j].rot = rest[j].rot;
+        for (int j = 0; j < count; ++j) {
+            if (!bound[j]) continue;
+            const bool oriented = is_face(j) ? face_oriented : body_oriented;
+            if (oriented) {
+                model.rig_axes[j] = model.binds[j].rot;
+                model.binds[j].rot = rest[j].rot;
+            }
+        }
     }
+    if (foreign)  // its rest is its own bind pose: the mesh stands as modelled on SL's unrotated joints
+        for (int j = 0; j < count; ++j)
+            if (bound[j]) model.binds[j].rot = rest[j].rot;
 }
 
 bool shape_from_binds(const Skeleton& skel, const std::vector<const DaeModel*>& parts, const Shape* base, Shape& out,
@@ -1279,8 +1624,8 @@ bool rig_axes_from_parts(const Skeleton& skel, const std::vector<const DaeModel*
 }
 
 bool load_dae(std::string_view xml_text, const std::string& dae_dir, const Skeleton& skel, DaeModel& out,
-              DaeReport& report, std::string& err) {
-    return guarded(err, [&] { return load_dae_text(xml_text, dae_dir, skel, out, report, err); });
+              DaeReport& report, std::string& err, const SkinRemap* remap) {
+    return guarded(err, [&] { return load_dae_text(xml_text, dae_dir, skel, out, report, err, remap); });
 }
 
 }  // namespace vats

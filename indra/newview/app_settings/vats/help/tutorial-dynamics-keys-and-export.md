@@ -167,7 +167,7 @@ shows no **Check** badge. Things it catches on baked dynamics:
   first (a wag keyed by hand at 30 instead of pasted). Re-bake, or paste the first frame's pose again.
 - `The file is ... bytes; SL refuses 250000 bytes or more`: see step 5.
 
-Then press **Export SL .anim** in the export window. See [[Export to Second Life]].
+Then press **Export .anim** in the export window. See [[Export to Second Life]].
 
 ## Check your result
 

@@ -3,6 +3,7 @@
 #include "vats/balance.h"
 
 #include <algorithm>
+#include <map>
 #include <cmath>
 #include <cstdio>
 
@@ -93,32 +94,194 @@ Vec3 nearest_inside(const std::vector<Vec3>& poly, const Vec3& p, double margin)
 
 struct Foot {
     int ankle = -1, foot = -1, toe = -1;
+    bool is_hind = false;
 };
 
-Foot foot(const Skeleton& skel, const char* side) {
-    return {skel.find(std::string("mAnkle") + side), skel.find(std::string("mFoot") + side), skel.find(std::string("mToe") + side)};
+std::vector<Foot> avatar_feet(const Skeleton& skel, const Shape* shape,
+                             const std::function<bool(int)>* is_weighted) {
+    const Foot candidates[4] = {
+        {skel.find("mAnkleLeft"), skel.find("mFootLeft"), skel.find("mToeLeft"), false},
+        {skel.find("mAnkleRight"), skel.find("mFootRight"), skel.find("mToeRight"), false},
+        {skel.find("mHindLimb3Left"), skel.find("mHindLimb4Left"), -1, true},
+        {skel.find("mHindLimb3Right"), skel.find("mHindLimb4Right"), -1, true}
+    };
+    std::vector<Foot> result;
+    if (is_weighted && *is_weighted) {
+        for (const Foot& f : candidates) {
+            if (f.is_hind) {
+                if ((f.foot >= 0 && (*is_weighted)(f.foot)) || (f.ankle >= 0 && (*is_weighted)(f.ankle)))
+                    result.push_back(f);
+            } else {
+                if ((f.ankle >= 0 && (*is_weighted)(f.ankle)) ||
+                    (f.foot >= 0 && (*is_weighted)(f.foot)) ||
+                    (f.toe >= 0 && (*is_weighted)(f.toe)))
+                    result.push_back(f);
+            }
+        }
+    } else {
+        // Fallback when no weighting predicate is provided:
+        for (size_t i = 0; i < 2; ++i) {
+            if (candidates[i].ankle >= 0) result.push_back(candidates[i]);
+        }
+        if (shape) {
+            for (size_t i = 2; i < 4; ++i) {
+                const Foot& f = candidates[i];
+                const int n = f.foot >= 0 ? f.foot : f.ankle;
+                if (n >= 0 && (has_rig_axes(shape, n) ||
+                               (n < static_cast<int>(shape->offset.size()) && shape->offset[n].length() > 1e-4) ||
+                               (n < static_cast<int>(shape->tails.size()) && shape->tails[n].length() > 1e-4))) {
+                    result.push_back(f);
+                }
+            }
+        }
+    }
+    if (result.empty()) {
+        if (candidates[0].ankle >= 0) result.push_back(candidates[0]);
+        if (candidates[1].ankle >= 0) result.push_back(candidates[1]);
+    }
+    return result;
 }
 
-double lowest(const Foot& f, const std::vector<Xform>& g) {
+Vec3 foot_tip(const Foot& f, const Skeleton& skel, const std::vector<Xform>& g, const Shape* shape) {
+    if (f.is_hind) {
+        const int n = f.foot >= 0 ? f.foot : f.ankle;
+        Vec3 tail = (shape && n < static_cast<int>(shape->tails.size()) && shape->tails[n].length() > 1e-4)
+                        ? shape->tails[n]
+                        : skel[n].end;
+        if (tail.length() < 1e-4) tail = Vec3{0.12, 0, 0};
+        return g[n].apply(tail);
+    }
+    const int tip_node = f.toe >= 0 ? f.toe : f.foot >= 0 ? f.foot : f.ankle;
+    return g[tip_node].pos;
+}
+
+Vec3 foot_heel(const Foot& f, const std::vector<Xform>& g) {
+    const int heel_node = f.is_hind ? (f.foot >= 0 ? f.foot : f.ankle) : f.ankle;
+    return g[heel_node].pos;
+}
+
+double lowest(const Foot& f, const Skeleton& skel, const std::vector<Xform>& g, const Shape* shape) {
     double z = 1e9;
-    for (int n : {f.ankle, f.foot, f.toe})
-        if (n >= 0) z = std::min(z, g[n].pos.z);
+    if (f.is_hind) {
+        const int n = f.foot >= 0 ? f.foot : f.ankle;
+        if (n >= 0 && n < static_cast<int>(g.size())) {
+            z = std::min(z, g[n].pos.z);
+            z = std::min(z, foot_tip(f, skel, g, shape).z);
+        }
+    } else {
+        for (int n : {f.ankle, f.foot, f.toe})
+            if (n >= 0 && n < static_cast<int>(g.size())) z = std::min(z, g[n].pos.z);
+    }
     return z;
 }
 
 }  // namespace
 
-Balance balance_of(const Skeleton& skel, const std::vector<Xform>& g, const Shape* shape) {
+MeshContactFloor compute_mesh_contact_floor(const std::vector<std::span<const float>>& mesh_parts,
+                                            double threshold) {
+    MeshContactFloor out;
+    double lowest_z = 1e30;
+    bool has_mesh = false;
+    for (const auto& part : mesh_parts) {
+        const float* p = part.data();
+        const size_t n = part.size();
+        if (n >= 3) has_mesh = true;
+        for (size_t i = 2; i < n; i += 3) {
+            if (p[i] < lowest_z) lowest_z = p[i];
+        }
+    }
+    if (!has_mesh || lowest_z >= 1e29) return out;
+
+    out.has_mesh = true;
+    out.lowest_z = lowest_z;
+    // Feet, not a single lowest point: a body stands on several feet whose soles are rarely level (a creature's
+    // front feet a few cm above its hind ones). Vertices near the bottom are grouped by where they are on the ground
+    // (5 cm cells, joined to their neighbours); a group whose own lowest point is within `planted` of the lowest
+    // overall is a planted foot, and its sole (the vertices within threshold of the group's own lowest) is contact.
+    // ponytail: grid clustering by position, not by skin weights; a foot touching another merges with it, fine here.
+    constexpr double band = 0.15, cell = 0.05, planted = 0.06;
+    struct Low { double x, y, z; };
+    std::vector<Low> lows;
+    for (const auto& part : mesh_parts) {
+        const float* p = part.data();
+        for (size_t i = 0; i + 2 < part.size(); i += 3)
+            if (p[i + 2] <= lowest_z + band) lows.push_back({p[i], p[i + 1], p[i + 2]});
+    }
+    auto key = [&](double v) { return static_cast<long long>(std::floor(v / cell)); };
+    std::map<std::pair<long long, long long>, int> cells;  // cell -> group
+    std::vector<int> parent;
+    auto find = [&](int g) { while (parent[g] != g) g = parent[g] = parent[parent[g]]; return g; };
+    for (const Low& l : lows) {
+        const auto c = std::make_pair(key(l.x), key(l.y));
+        if (cells.count(c)) continue;
+        const int g = static_cast<int>(parent.size());
+        parent.push_back(g);
+        cells[c] = g;
+        for (int dx = -1; dx <= 1; ++dx)
+            for (int dy = -1; dy <= 1; ++dy)
+                if (auto it = cells.find({c.first + dx, c.second + dy}); it != cells.end()) parent[find(it->second)] = g;
+    }
+    std::vector<int> group(lows.size());
+    std::map<int, double> group_low;
+    for (size_t i = 0; i < lows.size(); ++i) {
+        group[i] = find(cells[{key(lows[i].x), key(lows[i].y)}]);
+        auto [it, fresh] = group_low.emplace(group[i], lows[i].z);
+        if (!fresh) it->second = std::min(it->second, lows[i].z);
+    }
+    for (size_t i = 0; i < lows.size(); ++i) {
+        const double sole = group_low[group[i]];
+        if (sole <= lowest_z + planted && lows[i].z <= sole + threshold)
+            out.contact_points.push_back({lows[i].x, lows[i].y, lowest_z});
+    }
+    return out;
+}
+
+Balance balance_of(const Skeleton& skel, const std::vector<Xform>& g, const Shape* shape,
+                   const std::function<bool(int)>* is_weighted,
+                   const std::vector<std::span<const float>>& mesh_parts,
+                   const MeshContactFloor* cached_floor) {
     Balance out;
-    const Foot feet[2] = {foot(skel, "Left"), foot(skel, "Right")};
+    if (g.empty() || skel.size() == 0) return out;
+
+    RagdollSolver body(skel, Ragdoll{}, {});
+    body.reset(g, g, 1.0);
+    out.com = body.centre_of_mass();
+
+    const MeshContactFloor local_floor = cached_floor ? MeshContactFloor{} : compute_mesh_contact_floor(mesh_parts);
+    const MeshContactFloor& floor = cached_floor ? *cached_floor : local_floor;
+
+    if (floor.has_mesh) {
+        const std::vector<Foot> feet = avatar_feet(skel, shape, is_weighted);
+        const std::vector<Xform> rest = skel.global_pose(Pose(skel.size()), shape);
+        double bone_rest_ground = 1e9;
+        for (const Foot& f : feet) bone_rest_ground = std::min(bone_rest_ground, lowest(f, skel, rest, shape));
+
+        double bone_current_ground = 1e9;
+        for (const Foot& f : feet) bone_current_ground = std::min(bone_current_ground, lowest(f, skel, g, shape));
+
+        if (bone_rest_ground < 1e8 && bone_current_ground > bone_rest_ground + kPlanted) {
+            return out;
+        }
+
+        if (!floor.contact_points.empty()) {
+            out.contact = true;
+            out.ground = {out.com.x, out.com.y, floor.lowest_z};
+            out.support = hull(floor.contact_points);
+            out.margin = inside_by(out.support, out.ground);
+            return out;
+        }
+    }
+
+    const std::vector<Foot> feet = avatar_feet(skel, shape, is_weighted);
     const std::vector<Xform> rest = skel.global_pose(Pose(skel.size()), shape);
     double ground = 1e9;
-    for (const Foot& f : feet) ground = std::min(ground, lowest(f, rest));
+    for (const Foot& f : feet) ground = std::min(ground, lowest(f, skel, rest, shape));
+
     std::vector<Vec3> prints;
     for (const Foot& f : feet) {
-        if (f.ankle < 0 || lowest(f, g) > ground + kPlanted) continue;
+        if (lowest(f, skel, g, shape) > ground + kPlanted) continue;
         // The footprint: a rectangle from behind the ankle to the toe, along the foot as seen from above.
-        const Vec3 heel = g[f.ankle].pos, tip = g[f.toe >= 0 ? f.toe : f.foot >= 0 ? f.foot : f.ankle].pos;
+        const Vec3 heel = foot_heel(f, g), tip = foot_tip(f, skel, g, shape);
         Vec3 along = Vec3{tip.x - heel.x, tip.y - heel.y, 0};
         along = along.length() > 1e-6 ? along.normalized() : Vec3{1, 0, 0};
         const Vec3 side{-along.y, along.x, 0}, back{heel.x, heel.y, ground}, front{tip.x, tip.y, ground};
@@ -126,10 +289,7 @@ Balance balance_of(const Skeleton& skel, const std::vector<Xform>& g, const Shap
             prints.push_back(e + side * kHalfWidth), prints.push_back(e - side * kHalfWidth);
     }
     if (prints.empty()) return out;
-    RagdollSolver body(skel, Ragdoll{}, {});
-    body.reset(g, g, 1.0);
     out.contact = true;
-    out.com = body.centre_of_mass();
     out.ground = {out.com.x, out.com.y, ground};
     out.support = hull(prints);
     out.margin = inside_by(out.support, out.ground);
@@ -187,7 +347,10 @@ std::string auto_balance(Clip& clip, const Rig& rig, const AutoBalanceOptions& o
     for (int pass = 0; pass <= kPasses; ++pass) {
         outside = contact = 0;
         for (int i = 0; i < n; ++i) {
-            Balance bal = balance_of(skel, evaluate(rig, clip, a + i, opt.shape).globals, opt.shape);
+            const std::vector<Xform> g = evaluate(rig, clip, a + i, opt.shape).globals;
+            const MeshContactFloor floor = opt.mesh_floor ? opt.mesh_floor(g) : MeshContactFloor{};
+            Balance bal = balance_of(skel, g, opt.shape, opt.is_weighted ? &opt.is_weighted : nullptr,
+                                     std::vector<std::span<const float>>{}, &floor);
             need[i] = {};
             if (!bal.contact) continue;
             ++contact;
@@ -215,7 +378,7 @@ std::string auto_balance(Clip& clip, const Rig& rig, const AutoBalanceOptions& o
         std::snprintf(buf, sizeof buf, "No foot is on the ground in frames %d-%d", a, b);
     else
         std::snprintf(buf, sizeof buf, "Balanced frames %d-%d: the hips moved up to %.1f cm%s", a, b, most * 100,
-                      outside ? (", " + std::to_string(outside) + " frame(s) still off balance").c_str() : "");
+                      outside ? (", " + std::to_string(outside) + (outside == 1 ? " frame" : " frames") + " still off balance").c_str() : "");
     return buf;
 }
 

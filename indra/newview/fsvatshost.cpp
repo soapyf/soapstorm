@@ -23,6 +23,12 @@
 
 #include "llviewerprecompiledheaders.h"
 
+#include <sstream>
+
+#include <iomanip>
+
+#include <chrono>
+
 #include "fsvatshost.h"
 
 // VATs' editor UI: its enums have a member named None, which the precompiled header's X11 defines as a macro.
@@ -30,6 +36,7 @@
 #undef None
 #include "app.h"
 #include "theme.h"
+#include "profile.h"
 #pragma pop_macro("None")
 
 #include "fsvatsclipmotion.h"
@@ -362,6 +369,8 @@ namespace
             "script_floater",            // script dialogs shown as a floater
             "notification_well_window",  // Notifications (Viewer > Notifications)
             "im_well_window",            // the IM well
+            "inventory",                 // Inventory (Viewer > Inventory): wear and take off while animating
+            "secondary_inventory",       // a second inventory window opened from it
         };
         return names.count(floater->getInstanceName()) > 0;
     }
@@ -550,6 +559,9 @@ namespace
         void place_view(ImVec2 min, ImVec2 max) override;
         int unread_notices() const override;
         void toggle_notices() override { LLFloaterReg::toggleInstanceOrBringToFront("notification_well_window"); }
+        // Viewer > Inventory: the viewer's own inventory window over the editor, to wear and take off (spec 09).
+        const char* inventory_label() const override { return "Inventory"; }
+        void toggle_inventory() override { LLFloaterReg::toggleInstanceOrBringToFront("inventory"); }
         const char* reveal_label() const override { return "Show SoapStorm UI"; }
         const char* reveal_shortcut() const override { return "Alt+Shift+U"; }
         bool revealed() const override { return mRevealed; }
@@ -577,6 +589,7 @@ namespace
         void hideOthers(bool hide);  // every other avatar hidden on this screen, or back as before
         bool regionKeepsStanding() const { return mRegionKeepsStanding; }
 
+        LLVector3 agentOf(const Vec3& p) const { return toAgent(p); }  // a point in the UI's space, agent coordinates
     private:
         // Build 20: what the editor does with your avatar. Hold (U4): sat, every other motion stopped, the editor's pose on
         // every joint. InWorld (item 47): the other motions run, the pose only on the joints the upload keys, at their
@@ -628,8 +641,20 @@ namespace
         {
             if (!mSkel || !mSkel->size())
                 return Vec3{ 0, 0, 1.067 };
-            return mHideYours && mFrameFoot > 0.f ? mSkel->worn_pelvis_rest(mFrameFoot) : (*mSkel)[0].pos;
+            if (!(mHideYours && mFrameFoot > 0.f))
+                return (*mSkel)[0].pos;
+            // worn_pelvis_rest measures the skeleton's body size by name: once per skeleton and foot height.
+            if (mRestCacheSkel != mSkel || mRestCacheFoot != mFrameFoot)
+            {
+                mRestCacheSkel = mSkel;
+                mRestCacheFoot = mFrameFoot;
+                mRestCache = mSkel->worn_pelvis_rest(mFrameFoot);
+            }
+            return mRestCache;
         }
+        mutable const vats::Skeleton* mRestCacheSkel = nullptr;
+        mutable F32 mRestCacheFoot = -1.f;
+        mutable Vec3 mRestCache;
         // Ortho: how far the telephoto's eye stands from the focus for the UI's logical distance (same framing there).
         double pullBack(double logical) const { return logical * std::tan(mLensFov / 2) / std::tan(ORTHO_FOV / 2); }
         void drawImages(const glm::mat4& mvp, U32 world_depth, const LLRect& world);  // drawScene: the scene_image quads
@@ -2032,9 +2057,12 @@ namespace
         SceneBatch& b = (depth_test ? mScene : mOver)[translucent ? 1 : 0];
         const U32 base = U32(b.verts.size() / 11);
         b.verts.reserve(b.verts.size() + verts.size() * 11);
+        // toAgent per vertex, its pelvis rest worked out once: with a body swapped in it measures the skeleton's body
+        // size by name, and per vertex that cost 50 ms a frame on a 179k-vertex body.
+        const Vec3 rest = pelvisRest();
         for (const vats::Vertex& v : verts)
         {
-            const LLVector3 p = toAgent(Vec3{ v.p[0], v.p[1], v.p[2] });
+            const LLVector3 p = toLL(mView.apply(Vec3{ v.p[0], v.p[1], v.p[2] }) - rest) * mRot + mPos;
             const LLVector3 n = toLL(mView.rot.rotate(Vec3{ v.n[0], v.n[1], v.n[2] })) * mRot;
             b.verts.insert(b.verts.end(), { p.mV[VX], p.mV[VY], p.mV[VZ], n.mV[VX], n.mV[VY], n.mV[VZ], v.c[0], v.c[1], v.c[2], v.c[3], gloss });
         }
@@ -3010,6 +3038,7 @@ namespace
         restoreSky();
         VATsClipMotion::sEditor = VATsClipMotion::Playback();
         mSkel = nullptr;
+        mRestCacheSkel = nullptr;  // a later skeleton at the same address must not reuse it
         mCacheFor = nullptr;
         mHaveShape = false;
         mView = {};
@@ -3031,8 +3060,43 @@ namespace
     S32 sFramesSinceClose = -1;          // build 27: the first frames after closing are logged (a hang after close)
     U32 sLastLoggedFrame = 0;
 
+    // VATS_PROFILE=1 in the environment: the editor's frame sections (the same scopes as the app's --bench) and the
+    // viewer's own share, averaged into the log every 200 frames. Off: nothing is timed.
+    void profileFrame()
+    {
+        static const bool on = getenv("VATS_PROFILE") != nullptr;
+        if (!on)
+            return;
+        vats::Profile::on = true;
+        static auto last = std::chrono::steady_clock::now();
+        const auto now = std::chrono::steady_clock::now();
+        vats::Profile::add("viewer whole frame", std::chrono::duration<double, std::milli>(now - last).count());
+        last = now;
+        static int frames = 0;
+        if (++frames < 200)
+            return;
+        frames = 0;
+        std::vector<std::pair<double, std::string>> rows;
+        for (const auto& [name, v] : vats::Profile::ms)
+        {
+            double sum = 0;
+            for (double x : v)
+                sum += x;
+            if (!v.empty())
+                rows.push_back({ sum / (double)v.size(), name });
+        }
+        std::sort(rows.rbegin(), rows.rend());
+        std::ostringstream out;
+        out << "VATs profile (mean ms over 200 frames):";
+        for (const auto& [ms, name] : rows)
+            out << "\n  " << std::fixed << std::setprecision(3) << std::setw(9) << ms << "  " << name;
+        LL_INFOS("VATsEditor") << out.str() << LL_ENDL;
+        vats::Profile::ms.clear();
+    }
+
     void editorBefore()
     {
+        profileFrame();
         if (!sApp && !sFailed)
         {
             // The first frame: VATs' fonts and theme into the context, then the editor itself.
@@ -3054,7 +3118,10 @@ namespace
         }
         if (sApp)
         {
-            sHost->beforeFrame(sApp->viewer_reset_joints(), sApp->viewer_show_others());
+            {
+                VATS_PROFILE("viewer beforeFrame");
+                sHost->beforeFrame(sApp->viewer_reset_joints(), sApp->viewer_show_others());
+            }
             static LLCachedControl<bool> face_check(gSavedSettings, "VATsFaceCheck", false);
             if (face_check)
             {
@@ -3074,7 +3141,11 @@ namespace
     {
         if (!sApp || sQuit)
             return;
-        sQuit = !sApp->frame();
+        {
+            VATS_PROFILE("viewer app frame");
+            sQuit = !sApp->frame();
+        }
+        VATS_PROFILE("viewer afterFrame");
         sHost->afterFrame();
     }
 
@@ -3176,6 +3247,17 @@ bool FSVATsEditor::hidesOtherAvatars()
 bool FSVATsEditor::hidesYourAvatar()
 {
     return sHost && sApp && sHost->hidesYours();
+}
+
+bool FSVATsEditor::bodyUnderPointer(S32 x, S32 y, LLVector3d& out)
+{
+    if (!sApp || !sHost || !sHost->hidesYours())  // only while a mesh body is drawn in your avatar's place
+        return false;
+    vats::Vec3 at;
+    if (!sApp->body_point_under(FSVATsImGui::toImGuiScaled(x, y), at))
+        return false;
+    out = gAgent.getPosGlobalFromAgent(sHost->agentOf(at));
+    return true;
 }
 
 bool FSVATsEditor::holdsAvatar()

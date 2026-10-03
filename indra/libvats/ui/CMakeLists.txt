@@ -36,6 +36,7 @@ add_library(vats_ui STATIC
     bodies.cpp
     context_menu.cpp
     dynamics_ui.cpp
+    soft_body_ui.cpp
     idle_ui.cpp
     overlap_ui.cpp
     balance_ui.cpp
@@ -55,6 +56,10 @@ add_library(vats_ui STATIC
     light_ui.cpp
     listing_media_ui.cpp
     lint_ui.cpp
+    rig_export_ui.cpp
+    rig_map_ui.cpp
+    rig_scratch_ui.cpp
+    weight_paint_ui.cpp
     loop_ui.cpp
     loop_assist_ui.cpp
     footlock_ui.cpp
@@ -74,6 +79,10 @@ add_library(vats_ui STATIC
     tween_ui.cpp
     key_tags_ui.cpp
     dock_layout.cpp
+    workspaces.cpp
+    workspace_ui.cpp
+    pie.cpp
+    pie_menu_ui.cpp
     keymap.cpp
     shortcuts_ui.cpp
     picker_ui.cpp
@@ -89,6 +98,10 @@ add_library(vats_ui STATIC
     udp.cpp
     view_cube.cpp
     viewport.cpp
+    suggest_limits_ui.cpp
+    tool_search.cpp
+    undo_history_ui.cpp
+    joint_limits_ui.cpp
     windows.cpp)
 add_library(vats::ui ALIAS vats_ui)
 if(VATS_LEGACY_IMPORT)

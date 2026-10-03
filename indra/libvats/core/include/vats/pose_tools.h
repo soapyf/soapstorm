@@ -10,6 +10,8 @@
 #include <vector>
 
 #include "vats/clip.h"
+#include "vats/rig.h"
+#include "vats/rig_constraints.h"
 
 namespace vats {
 
@@ -21,6 +23,24 @@ namespace vats {
 // tracks the skeleton does not know are left alone.
 void mirror_live(Clip& clip, const Skeleton& skel, double frame, const std::vector<std::string>& tracks,
                  bool centre_in_place);
+
+// The Hand Poser (spec 06 4.6). A finger segment's rotation for a dot dragged curl_deg down and spread_deg sideways,
+// from start (its rotation at the press): curled about the bone's curl axis (across the palm; the thumb's slants), and
+// the first segment (first) swung sideways too. limit, when given: the result kept inside it, as a gizmo drag is.
+Quat finger_segment_rotation(const Skeleton& skel, int node, const Quat& start, double curl_deg, double spread_deg,
+                             bool first, const JointLimit* limit, const Shape* shape);
+// How far a finger is curled: its segments' turns about their curl axes at frame, added, in degrees (toward the palm
+// positive). Segments the skeleton does not know count 0.
+double finger_curl_degrees(const Skeleton& skel, const Clip& clip, const std::vector<std::string>& segments, double frame);
+
+// Sit on This (a seat prop): a sit at frame done as the sit tutorial does it by hand. The hips drop until the feet
+// reach the floor, both ankles are held in the world there (Hold in World), then the hips go to where the bottom of the
+// thighs (their capsules) rests on the seat at seat_z (world height), the held feet bending the knees. The pelvis is
+// keyed at frame only. False, with why, when an ankle cannot be held; else report says what moved.
+bool sit_on_seat(Clip& clip, const Rig& rig, double frame, double seat_z, const Shape* shape, std::string& report);
+// Where the thighs are at frame, hip to knee, both sides (at 0, 1/4, 1/2 and 3/4 of the way): the points to look under
+// for the seat.
+std::vector<Vec3> thigh_points(const Rig& rig, const Clip& clip, double frame, const Shape* shape);
 
 // Scratch pose (PT-2). The tracks whose curves differ between base and working, sorted.
 std::vector<std::string> scratch_tracks(const Clip& base, const Clip& working);

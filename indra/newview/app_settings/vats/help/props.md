@@ -13,7 +13,7 @@ will play on. Props are saved in the project but are not part of the exported an
 
 ### Import a mesh
 
-Choose **File → Import Prop / Mesh (.dae, .fbx)...** (**Ctrl+I**; **Ctrl+Alt+I** in the Blender preset),
+Choose **File → Import Prop / Mesh (.dae, .fbx, .gltf, .glb)...** (**Ctrl+I**; **Ctrl+Alt+I** in the Blender preset),
 or press **Import .dae / .fbx...** under **Inventory → Meshes**. VATs reads COLLADA (`.dae`) and FBX
 files, adds the mesh to the scene, and adds it to the Inventory so you can use it in other projects.
 
@@ -100,6 +100,22 @@ Click a prop in the view to select it. **Properties → Prop** shows its name an
 
 A prop is positioned by the centre of its bounding box, not by the mesh's own origin. Each change is one
 undo step. **Remove Prop** takes it out of the scene; the Inventory item stays.
+
+### Sit on a seat
+
+A prop in the world (a starter **Chair**, **Sofa** or **Bench**, or a seat of your own) can be sat on in one step:
+press **Sit on This** in **Properties → Prop**, right-click the view and choose **Sit on** *Chair*, or choose
+**Tools → Sit on Seat**. At the current frame VATs:
+
+1. applies the **Sitting** starter pose when the avatar is not sitting yet (its thighs point down);
+2. drops the hips until the feet reach the floor, and holds both ankles there (**Hold in World from Here**, see
+   [[Hold and bind]]);
+3. moves the hips until the thighs rest on the seat: the highest surface of the prop straight under them.
+
+The status bar says what moved, for example `Sat on Chair in the Sitting pose: the hips down 45 cm onto the seat at
+46 cm, the feet held on the floor`. It is one undo step. The seat must be under the avatar, as a sit target puts it:
+a chair beside the avatar is not walked to. Lean the back, rest the hands ([[Hold and bind]]) and set the priority as
+in [[A sit pose for furniture]].
 
 ### Copy values to and from Second Life
 

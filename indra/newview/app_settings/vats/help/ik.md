@@ -2,7 +2,7 @@
 
 IK (inverse kinematics) poses a limb by its end: place the hand or foot and the arm or leg bends to reach it. VATs has IK for the arms, legs, fingers, spine, hind legs and wings, and you can switch each limb between IK and FK (bone-by-bone rotation) at any frame without the limb jumping. **Auto IK** does the same for a single drag on any joint, and keys ordinary rotations.
 
-> Related articles: [[Posing]], [[Hold and bind]], [[Balance]], [[Graph editor]], [[Keys and timeline]]
+> Related articles: [[Posing]], [[Joint limits]], [[Hold and bind]], [[Balance]], [[Graph editor]], [[Keys and timeline]]
 
 ## Usage
 
@@ -71,16 +71,27 @@ tool's gizmo; see [[Posing#Dragging a joint in the air (Auto IK)]].
 - **What it never takes.** The pelvis; a bone a pin holds (the chain stops below it, so the pinned joint stays
   exactly where it is); a limb in IK at this frame, whose bones its target drives. Bento's `mSpine1`–`4` are passed
   through but never turned or keyed.
-- **Hinges.** Elbows, knees, the hind legs' second and third joints, the wings' second joint and the finger joints
+- **Hinges and limits.** Elbows, knees, the hind legs' second and third joints, the wings' second joint and the finger joints
   bend only about their hinge, and never through straight to the other side. On a [[Mesh bodies|mesh body]] with rig
   axes the hinge is the body's own axis; on a body rigged with a limb already bent 20° or more, the hinge is the
-  axis of that bend; otherwise it is Second Life's.
+  axis of that bend; otherwise it is Second Life's. When **Tools → Respect Joint Limits** is on, Auto IK and
+  two-bone IK clamp joint motion to configured limits. See [[Joint limits]].
 - **Pins and IK.** A pinned joint moves its pin offset instead, as with any Move drag ([[Hold and bind]]). A limb in
   IK is posed by dragging its target. Mirror, when on, keys the other side too.
 
 Auto IK or IK / FK? Auto IK is for posing: fast, any chain, and the result is ordinary keys you can tweak bone by
 bone. Switch a limb to IK (**K**) when its hand or foot must stay on a spot over many frames, or when you want to key
 the end's path and let the elbow or knee work itself out.
+
+### Pose by dragging the body
+
+Click and drag directly on the avatar's body in the view to pose it without gizmos (the **Select** and **Move**
+tools; with **Rotate** a pressed bone turns instead):
+
+- **Mesh dragging.** Click and drag any limb or body part: the point you pressed follows the pointer, and Auto IK turns the bones above it. The hovered bone is picked from skin weights. The wheel and **[ ]** change how many bones above the pressed one turn, as in any Auto IK drag.
+- **Whole-body drag.** Dragging the pelvis or torso moves the hips; dragging the chest leans `mTorso` halfway and the hips take the rest. Feet the shown body stands on (within 5 cm of its floor, measured by the mesh's skin on a mesh body) stay where they are: each leg is solved by Auto IK and keyed as plain rotations, with no IK controller. Pins and limbs in IK hold their feet as always. Small markers appear under planted feet during the drag. Hold **Alt** during the drag to let the feet move with the body, the legs as they were at the press; in the Second Life and Industry presets **Alt** with the click is the camera, so press first.
+- **Follow-through.** Tail, wing and ear chains lag behind and settle, using the Dynamics solver (**Tools → Follow-Through While Posing**, default on). Only the dragged bones are keyed when you release the mouse.
+- **Switching IK / FK keeps the pose.** On a limb the shown body bends off SL's hinge (hind legs, knees rigged bent, bones with their own axes), **K** solves with Auto IK's solver in the plane the limb bends in, so switching doesn't move it. Those limbs bake against the bend planes of the bake shape's body, so export with the body you posed on.
 
 ### Full-body reach
 
@@ -148,6 +159,7 @@ The target is further away than the limb can reach. The limb straightens and poi
 - [[Hold and bind]]
 - [[Balance]]
 - [[Posing]]
+- [[Joint limits]]
 - [[VATs Editor (viewer)]]
 
 Category: Animating

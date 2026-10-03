@@ -146,8 +146,7 @@ void App::select_nodes(const std::vector<int>& nodes, int mode) {
             continue;
         }
         if (it == selection_.end()) selection_.push_back(n);
-        if (skel_[n].volume) show_volumes_ = true;  // a hidden group is shown before its bones are selected
-        else show_category_[static_cast<int>(skel_[n].category)] = true;
+        reveal_node(n);
     }
 }
 
@@ -501,7 +500,7 @@ void App::draw_picker_panel() {
         const std::vector<int> nodes = group_nodes(g);
         select_nodes(nodes, mode);
         const char* how = mode == 2 ? " removed" : mode == 1 ? " added" : "";
-        status(groups[size_t(g)].name + how + ": " + std::to_string(selection_.size()) + " bone(s) selected");
+        status(groups[size_t(g)].name + how + ": " + count_noun(selection_.size(), "bone") + " selected");
     };
     auto swap_sides = [&] {
         ImGui::BeginDisabled(selection_.empty());
@@ -511,7 +510,7 @@ void App::draw_picker_panel() {
                 if (int k = skel_.mirror(n); k >= 0 && std::find(other.begin(), other.end(), k) == other.end())
                     other.push_back(k);
             select_nodes(other, 0);
-            status("Swapped sides: " + std::to_string(selection_.size()) + " bone(s) selected");
+            status("Swapped sides: " + count_noun(selection_.size(), "bone") + " selected");
         }
         ImGui::EndDisabled();
     };
@@ -671,6 +670,20 @@ void App::draw_picker_panel() {
             dl->AddCircleFilled(p, 3 * u, special ? c : kPlainDot);
             dl->AddCircle(p, 3 * u, canvas_bg, 0, 1.2f * u);
         }
+        const RigConstraints* applied = doc_.project.body_constraints(current_body_id());
+        const JointLimit* app_lim = applied ? applied->find(skel_[n].name) : nullptr;
+        const JointLimit* pend_lim = show_suggest_limits_ ? pending_limits_.limits.find(skel_[n].name) : nullptr;
+        const bool has_applied = (app_lim && app_lim->is_limited());
+        const bool has_pending_only = (!has_applied && pend_lim && pend_lim->is_limited());
+        if (has_applied) {
+            const bool is_clamped = last_clamp_report_.contains(skel_[n].name) && (clamp_flash_time_ > 0 && ImGui::GetTime() - clamp_flash_time_ < 0.6);
+            ImU32 lim_col = is_clamped ? IM_COL32(255, 140, 20, 255)
+                                       : (settings_.respect_joint_limits ? IM_COL32(70, 210, 240, 220) : IM_COL32(140, 150, 160, 70));
+            dl->AddCircle(p, 5.2f * u, lim_col, 0, 1.5f * u);
+        } else if (has_pending_only) {
+            ImU32 lim_col = settings_.respect_joint_limits ? IM_COL32(180, 225, 255, 180) : IM_COL32(140, 150, 160, 60);
+            dl->AddCircle(p, 5.2f * u, lim_col, 0, 1.0f * u);
+        }
         if (partner(n)) dashed_circle(dl, p, 5.5f * u, accent, 1.5f * u);
     }
     for (const PickerCap& c : scr.caps) {
@@ -705,7 +718,7 @@ void App::draw_picker_panel() {
             tip(g.name, "Click: all " + count_noun(count, "joint"), kModes);
         else
             tip(g.name + ": " + count_noun(count, "bone"), kModes,
-                group_hidden(hover_group) ? "Hidden in Bones > Show: a click shows it" : "");
+                group_hidden(hover_group) ? hidden_hint(group_nodes(hover_group).front()) : "");
     } else if (canvas_hovered && hover_bone >= 0) {
         const std::string& name = skel_[hover_bone].name;
         std::string more;
@@ -714,10 +727,10 @@ void App::draw_picker_panel() {
             const bool same = (m - ui.cycle.at).length() <= 4 * u && it != ui.cycle.ranked.end();
             const int next = same ? ui.cycle.ranked[size_t((it - ui.cycle.ranked.begin() + 1) % ui.cycle.ranked.size())]
                                   : ranked[1];
-            more = "Click again: " + picker_bone_label(skel_[next].name);
+            more = "Click again: " + picker_label(next);
         }
-        if (!node_visible(hover_bone)) more += std::string(more.empty() ? "" : "\n") + "Hidden in Bones > Show: a click shows it";
-        tip(picker_bone_label(name), skel_[hover_bone].attachment ? name + (skel_[hover_bone].volume ? ", collision volume"
+        if (!node_visible(hover_bone)) more += std::string(more.empty() ? "" : "\n") + hidden_hint(hover_bone);
+        tip(picker_label(hover_bone), skel_[hover_bone].attachment ? name + (skel_[hover_bone].volume ? ", collision volume"
                                                                                                      : ", attachment point")
                                                                   : name,
             more);
@@ -728,8 +741,10 @@ void App::draw_picker_panel() {
             ui.cycle = {};
         } else if (!ranked.empty()) {
             const int n = ui.cycle.click(m, ranked, 4 * u);
+            const std::string reveal_msg = mode == 2 ? "" : reveal_node(n);
             select_nodes({n}, mode);
-            status(picker_bone_label(skel_[n].name) + (ranked.size() > 1 ? "  (click again for the one underneath)" : ""));
+            status(bone_label(n) + (ranked.size() > 1 ? "  (click again for the one underneath)" : "") +
+                   (reveal_msg.empty() ? "" : "  (" + reveal_msg + ")"));
         } else if (mode == 0) {
             clear_selection();
             ui.cycle = {};
@@ -748,9 +763,10 @@ void App::draw_picker_panel() {
         }
         if (what.empty() && prim >= 0) {
             if (selection_.size() > 1)  // several bones: how many, and the last picked (the one the gizmo turns)
-                what = std::to_string(selection_.size()) + " bones", dim = "last " + picker_bone_label(skel_[prim].name);
+                what = std::to_string(selection_.size()) + " bones", dim = "last " + picker_label(prim);
             else
-                what = picker_bone_label(skel_[prim].name);
+                what = picker_label(prim),  // and SL's name beside the plain one
+                    dim = what.rfind(skel_[prim].name, 0) == 0 ? "" : skel_[prim].name;
         }
         if (mirror_live_ && !selection_.empty()) dim += dim.empty() ? "· Mirror on" : " · Mirror on";
         if (what.empty()) {
@@ -791,7 +807,7 @@ void App::draw_selection_sets() {
             for (int& n : nodes) n = skel_.mirror(n) >= 0 ? skel_.mirror(n) : n;
         if (nodes.empty()) return status("None of " + s.name + "'s bones are in this skeleton");
         select_nodes(nodes, io.KeyShift ? 1 : 0);
-        status(s.name + (mirrored ? " mirrored: " : ": ") + std::to_string(selection_.size()) + " bone(s) selected");
+        status(s.name + (mirrored ? " mirrored: " : ": ") + count_noun(selection_.size(), "bone") + " selected");
     };
     auto bone_list = [](const SelectionSet& s) {
         std::string t;
@@ -808,7 +824,7 @@ void App::draw_selection_sets() {
     if (ImGui::Button("Save Set")) {
         edit("Save Selection Set", [&](Clip& c) { store_selection_set(c.selection_sets, set_name_, names); });
         if (set_to_library_) store_selection_set(library_sets_, set_name_, names), save_library_sets();
-        status("Saved " + set_name_ + ": " + std::to_string(names.size()) + " bone(s)");
+        status("Saved " + set_name_ + ": " + count_noun(names.size(), "bone"));
     }
     ImGui::EndDisabled();
     ImGui::SetItemTooltip("%s", names.empty() ? "Select bones first" : "Save the selected bones under this name; "
@@ -842,7 +858,7 @@ void App::draw_selection_sets() {
     if (remove >= 0) edit("Delete Selection Set", [&](Clip& c) { c.selection_sets.erase(c.selection_sets.begin() + remove); });
 
     if (!library_sets_.empty()) {
-        ImGui::SeparatorText("Library");
+        subheading("Library");
         int drop = -1;
         for (int i = 0; i < int(library_sets_.size()); ++i) {
             ImGui::PushID(1000 + i);

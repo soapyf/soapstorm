@@ -26,7 +26,7 @@ camera are as they were.
 |---|---|
 | **Format** | **Animated GIF**, or **PNG Pictures**: `name_0001.png`, `name_0002.png`, ... beside the name you save as, on a clear (transparent) background |
 | **Size** | Width and height in pixels, 16 to 2048; **256**, **512** and **1024** set a square. 512 x 512 at first |
-| **Frame rate** | Pictures a second; 0 (the first setting) uses the animation's own. A GIF plays at most 50, and each frame's delay is rounded to hundredths of a second so the total stays on time |
+| **Frame rate** | Pictures a second; at 0 (the first setting) it reads **Animation's (30)** and uses the animation's own. A GIF plays at most 50, and each frame's delay is rounded to hundredths of a second so the total stays on time |
 | **Turntable** | The camera goes once round the view's target over the whole export, so a looping GIF turns without a jump. On at first |
 | **Background** | The GIF's background colour (a GIF has no soft transparency) |
 

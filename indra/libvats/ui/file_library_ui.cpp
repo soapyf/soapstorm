@@ -211,7 +211,10 @@ void App::draw_file_library() {
         const LibKind kind = LibKind(k);
         const bool anim = kind == LibKind::Anim;
         ImGui::PushID(k);
-        if (!inventory_section(anim ? "Animations" : "Projects")) {
+        bool matches = false;
+        for (const FileLibUi::Group& g : L.groups[k])
+            for (const LibFile& f : g.items) matches = matches || inv_match(f.name);
+        if (!inventory_section(anim ? "Animations" : "Projects", matches)) {
             ImGui::PopID();
             continue;
         }
@@ -233,7 +236,7 @@ void App::draw_file_library() {
         const std::string projects = ".vat";
 #endif
         ImGui::SetItemTooltip("List the %s files of another folder here too", anim ? ".anim" : projects.c_str());
-        if (!anim && icon_label_button(icon::kCommunity, "Add Community Folder...")) {  // 08 CF: a clone of a community content repo
+        if (!anim && ImGui::Button("Add Community Folder...")) {  // 08 CF: a clone of a community content repo
             host_.open_folder_dialog("", [lib = file_lib_](std::vector<std::string> files) {
                 if (files.empty()) return;
                 std::lock_guard<std::mutex> lock(lib->mutex);
@@ -258,9 +261,10 @@ void App::draw_file_library() {
             }
             if (open) {
                 if (g.items.empty())
-                    hint(g.folder >= 0 ? "No files here."
-                         : anim  ? "Empty. Tick \"Also save to Animations library\" in Export, or copy .anim files into this folder."
-                                 : "Empty. File > Save to Library... puts the open project here.");
+                    empty_state(g.folder >= 0 ? "No files here."
+                                : anim  ? "Empty. Tick \"Also save to Animations library\" in Export, or copy .anim files into this folder."
+                                        : "Empty. File > Save to Library... puts the open project here.",
+                                nullptr, ImGui::GetTextLineHeightWithSpacing() * 2.5f);
                 for (const LibFile& f : g.items) {
                     if (!inv_match(f.name)) continue;
                     ImGui::PushID(f.path.c_str());

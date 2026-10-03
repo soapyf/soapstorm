@@ -1,0 +1,99 @@
+{
+	"name": "MPFB / MakeHuman",
+	"hint": "upperarm01",
+	"mirror": [
+		[
+			".L",
+			".R"
+		]
+	],
+	"bones": {
+		"mPelvis": [
+			"root"
+		],
+		"mTorso": [
+			"spine04"
+		],
+		"mNeck": [
+			"neck01"
+		],
+		"mHead": [
+			"head"
+		],
+		"mFaceJaw": [
+			"jaw"
+		],
+		"mEyeLeft": [
+			"eye.L"
+		],
+		"mCollarLeft": [
+			"shoulder01.L"
+		],
+		"mShoulderLeft": [
+			"upperarm01.L"
+		],
+		"mElbowLeft": [
+			"lowerarm01.L"
+		],
+		"mWristLeft": [
+			"wrist.L"
+		],
+		"mHipLeft": [
+			"upperleg01.L"
+		],
+		"mKneeLeft": [
+			"lowerleg01.L"
+		],
+		"mAnkleLeft": [
+			"foot.L"
+		],
+		"mFootLeft": [
+			"toe1-1.L"
+		],
+		"mHandThumb1Left": [
+			"finger1-1.L"
+		],
+		"mHandThumb2Left": [
+			"finger1-2.L"
+		],
+		"mHandThumb3Left": [
+			"finger1-3.L"
+		],
+		"mHandIndex1Left": [
+			"finger2-1.L"
+		],
+		"mHandIndex2Left": [
+			"finger2-2.L"
+		],
+		"mHandIndex3Left": [
+			"finger2-3.L"
+		],
+		"mHandMiddle1Left": [
+			"finger3-1.L"
+		],
+		"mHandMiddle2Left": [
+			"finger3-2.L"
+		],
+		"mHandMiddle3Left": [
+			"finger3-3.L"
+		],
+		"mHandRing1Left": [
+			"finger4-1.L"
+		],
+		"mHandRing2Left": [
+			"finger4-2.L"
+		],
+		"mHandRing3Left": [
+			"finger4-3.L"
+		],
+		"mHandPinky1Left": [
+			"finger5-1.L"
+		],
+		"mHandPinky2Left": [
+			"finger5-2.L"
+		],
+		"mHandPinky3Left": [
+			"finger5-3.L"
+		]
+	}
+}

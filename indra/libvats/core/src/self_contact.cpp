@@ -16,6 +16,8 @@ constexpr double kMargin = 0.005;  // m: Push Out clears the overlap by this muc
 constexpr int kPasses = 4;         // Push Out: keying moves the curve around the key, so repeat
 constexpr double kThighRadius = 0.06;  // m: the SL default body's thigh reaches this far out from the hip-knee line
 
+}  // namespace
+
 // The ragdoll's capsules are padded for falling (RD-2) and much wider than the body at the hips: the pelvis capsule
 // (radius 0.12 m, run out to each hip joint) reaches 0.25 m to the side and the thighs (0.09 m) 0.21 m, where the SL
 // default body (Ruth, measured from its mesh) is 0.175 m. An arm hanging at the side sat 5 to 7 cm inside them, so
@@ -42,11 +44,6 @@ std::vector<RagdollCapsule> contact_hull(const Skeleton& skel, const std::vector
     }
     return caps;
 }
-
-struct Hit {
-    double depth = -1e9;
-    Vec3 push;  // moves the capsule out of the other
-};
 
 Hit capsule_hit(const RagdollCapsule& A, const RagdollCapsule& B) {
     Hit h;
@@ -82,8 +79,6 @@ Hit volume_hit(const RagdollCapsule& A, const Xform& g, const Vec3& s) {
     }
     return h;
 }
-
-}  // namespace
 
 bool push_out_moves(const std::string& n) {
     return n.rfind("mShoulder", 0) == 0 || n.rfind("mElbow", 0) == 0 || n.rfind("mWrist", 0) == 0;

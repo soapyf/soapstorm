@@ -11,6 +11,7 @@
 #include "vats/clip.h"
 #include "vats/pose_ops.h"
 #include "vats/pose_presets.h"
+#include "vats/soft_body.h"
 
 namespace vats {
 namespace {
@@ -681,6 +682,7 @@ std::string picker_bone_label(const std::string& bone) {
         {"mPelvis", "Pelvis"},     {"mCollar", "Collar"}, {"mShoulder", "Upper Arm"}, {"mElbow", "Forearm"},
         {"mWrist", "Hand"},        {"mHip", "Thigh"},     {"mKnee", "Shin"},        {"mAnkle", "Ankle"},
         {"mFoot", "Foot"},         {"mToe", "Toes"},      {"mEye", "Eye"},          {"mGroin", "Groin"}};
+    if (const char* soft = soft_body_name(bone)) return soft;  // "Butt" for BUTT
     if (bone.size() < 2 || bone[0] != 'm' || !std::isupper(static_cast<unsigned char>(bone[1]))) return bone;
     std::string side, core = bone;
     for (const char* s : kSides)
@@ -700,6 +702,52 @@ std::string picker_bone_label(const std::string& bone) {
         out += c;
     }
     return side + out;
+}
+
+namespace {
+
+std::string lower(std::string s) {
+    for (char& c : s) c = char(std::tolower(static_cast<unsigned char>(c)));
+    return s;
+}
+
+}  // namespace
+
+std::string plain_bone_name(const std::string& bone) {
+    const std::string plain = picker_bone_label(bone);
+    auto letters = [](const std::string& s) {
+        std::string out;
+        for (char c : s)
+            if (c != ' ' && c != '_') out += char(std::tolower(static_cast<unsigned char>(c)));
+        return out;
+    };
+    const std::string name = bone.size() > 1 && bone[0] == 'm' ? bone.substr(1) : bone;
+    return letters(plain) == letters(name) ? "" : plain;
+}
+
+int best_filter_match(const std::vector<std::string>& labels, const std::string& text) {
+    if (text.empty()) return -1;
+    const std::string q = lower(text);
+    int best = -1, best_rank = 3;
+    const std::string sep = " \xc2\xb7 ";  // " · "
+    for (int i = 0; i < int(labels.size()); ++i) {
+        const std::string l = lower(labels[size_t(i)]);
+        if (l.find(q) == std::string::npos) continue;
+        int rank = 3;  // somewhere inside
+        // Each part of the label ("mhipleft", "left thigh") whole, then each word of it, against the text.
+        for (size_t at = 0; at < l.size();) {
+            const size_t end = std::min(l.find(sep, at), l.size());
+            const std::string part = l.substr(at, end - at);
+            if (part == "m" + q) rank = 0;
+            else if (part == q) rank = std::min(rank, 1);
+            for (size_t w = 0; w < part.size(); w = std::min(part.find(' ', w), part.size() - 1) + 1)
+                if (part.compare(w, q.size(), q) == 0 || part.compare(w, q.size() + 1, "m" + q) == 0) rank = std::min(rank, 2);
+            at = end + sep.size();
+        }
+        if (best < 0 || rank < best_rank || (rank == best_rank && l.size() < labels[size_t(best)].size()))
+            best = i, best_rank = rank;
+    }
+    return best;
 }
 
 }  // namespace vats

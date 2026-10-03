@@ -9,6 +9,7 @@
 // .anim lookup finds them by name (e.g. BELLY), which fitted mesh follows.
 #pragma once
 
+#include <functional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -55,7 +56,9 @@ struct CollisionVolume {
 
 // Body-shape distortion per node: joint positions are offset, then scaled by the parent's scale.
 struct Shape {
-    std::vector<Vec3> scale;   // 1,1,1 = none
+    // 1,1,1 = none. A collision volume's: its size against avatar_skeleton.xml's (the shape's volume morphs), never its
+    // joint's scale.
+    std::vector<Vec3> scale;
     std::vector<Vec3> offset;  // 0,0,0 = none
     // A mesh body's rig axes (dae.h, rig_axes_from_parts): per node, the bone axes its file authored, as a rotation
     // from the node's SL rest frame, and the display tail they give the bone in that frame. Empty where the body has
@@ -127,6 +130,13 @@ public:
     // Left/Right partner of a name; a name without a side maps to itself.
     static std::string mirror_name(std::string_view name);
     int mirror(int node) const { return mirror_[node]; }
+    // A bone name's partner as mirror() pairs it ("pin:" kept); a name that is no bone, by mirror_name.
+    std::string mirror_of(std::string_view name) const;
+    // A mesh body's reused joints (rig_map.h RM-8: a scarf on a wing) are not the parts SL named them for: they and
+    // their partners stop pairing left with right, so the mirror tools leave them alone, and the joint-limit templates
+    // skip them. Per body: the app sets them for the body shown (none by default, and after an empty call).
+    void set_reused(const std::vector<int>& nodes);
+    bool reused(int node) const { return node >= 0 && node < static_cast<int>(reused_.size()) && reused_[node]; }
 
     // The viewer's "male" skeleton parameter at full weight, feet planted on the ground.
     const Shape& male_shape() const { return male_; }
@@ -151,9 +161,50 @@ private:
     std::vector<Node> nodes_;
     std::vector<CollisionVolume> volumes_;
     std::vector<int> mirror_;
+    std::vector<char> reused_;
     int joint_count_ = 0, volume_start_ = 0;
     std::unordered_map<std::string, int> exact_, lower_, viewer_alias_, volume_index_;
     Shape male_;
 };
+
+// Stick bones (spec 08 FP-1): a line from each joint to each of its child joints, whatever SL's own bone lengths
+// are, so a body with moved joints reads as one skeleton. node is the joint a segment belongs to (the
+// one it starts at). A joint with no shown child joint has one stub instead: its rig tail where shape fits one
+// (Shape::tails), else 5 cm at most along SL's bone; none when the bone has no length. shown: per node, the joints
+// drawn (empty: all of them); attachment points and collision volumes have no sticks.
+struct StickSegment {
+    int node = -1;
+    Vec3 a, b;
+    bool stub = false;
+};
+std::vector<StickSegment> stick_segments(const Skeleton& skel, const std::vector<Xform>& globals, const Shape* shape,
+                                         const std::vector<bool>& shown = {});
+
+// Picking stick bones (spec 04 VP-21): the nodes under the pointer (mx, my), best first. to_screen projects a world
+// point to pixels (false: behind the camera). shown: per node, what is drawn; sticks: false while the bones are hidden,
+// so only attachment points and collision volumes count. Inside a joint's drawn dot (or on the ring of a joint stacked
+// on another) that joint beats every stick, the ones running into the dot too, so a short finger's dot is not lost to its
+// parent's line. Elsewhere the nearest stick (within 10 px) or dot (within 9 px) wins, the shorter stick on a tie.
+std::vector<int> pick_sticks(const Skeleton& skel, const std::vector<Xform>& globals, const Shape* shape,
+                             const std::vector<bool>& shown, bool sticks,
+                             const std::function<bool(const Vec3&, double&, double&)>& to_screen, double mx, double my);
+
+// VP-23: clicking the same spot again steps from current to the node ranked after it (pick_sticks); else pick.
+int next_stacked(const std::vector<int>& ranked, int current, int pick);
+
+// A collision volume's ellipsoid as SL holds it (LLAvatarJointCollisionVolume's world matrix): the volume node's global
+// (its joint's pose, its own pose offset and the shape's volume morphs, its position scaled by the joint's scale) and its
+// semi-axes, the volume's scale with the shape's volume morphs. SL never scales a volume with its joint.
+struct VolumeShell {
+    Xform frame;
+    Vec3 axes;
+};
+VolumeShell volume_shell(const std::vector<Xform>& globals, const Shape* shape, const CollisionVolume& volume);
+// Where the ray o + t d (d need not be unit length) first meets the shell from outside, t >= 0; 0 when o is inside;
+// 1e30 for a miss.
+double ray_shell(const Vec3& o, const Vec3& d, const VolumeShell& shell);
+
+// The world tail of node i: its display end, shape-scaled, through globals; a mesh body's rig tail when shape has one.
+Vec3 bone_tail(const Skeleton& skel, const std::vector<Xform>& globals, const Shape* shape, int i);
 
 }  // namespace vats

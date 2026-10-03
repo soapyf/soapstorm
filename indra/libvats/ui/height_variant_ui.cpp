@@ -87,7 +87,7 @@ void App::draw_height_variants(float label_w) {
     if (remove >= 0) hs.erase(hs.begin() + remove), changed = true;
     ImGui::SetCursorPosX(label_w);
     ImGui::BeginDisabled(int(hs.size()) >= kMaxHeights);
-    if (icon_label_small_button(icon::kHeights, "Add Height")) {
+    if (ImGui::Button("Add Height")) {
         double h = kHeightPresets[0];
         for (double p : kHeightPresets)
             if (std::none_of(hs.begin(), hs.end(), [&](double x) { return std::fabs(x - p) < 1e-6; })) {

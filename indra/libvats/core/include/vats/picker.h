@@ -165,5 +165,12 @@ struct PickerCycle {
 
 // "Right Shin" for mKneeRight, "Left Index 2" for mHandIndex2Left, "Right Lip Corner" for mFaceLipCornerRight.
 std::string picker_bone_label(const std::string& bone);
+// The plain name shown beside an SL name ("Left Thigh" for mHipLeft), or "" where it would only respell it
+// (mTail1, PELVIS).
+std::string plain_bone_name(const std::string& bone);
+// A bone filter's best hit among labels (a name, optionally " · " and its plain name): a name equal to the text
+// (mHead for "head" before HEAD), then a name or word starting with it, then one containing it; the shorter label,
+// then the first, on a tie. -1 when none matches or the text is empty. Case is ignored.
+int best_filter_match(const std::vector<std::string>& labels, const std::string& text);
 
 }  // namespace vats

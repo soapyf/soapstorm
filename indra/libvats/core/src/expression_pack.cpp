@@ -86,7 +86,7 @@ Clip expression_clip(const FaceTable& table, const Expression& e, const Expressi
     } else {
         Clip c;
         static const std::map<std::string, double> none;
-        key_face_weights(c, table, e.weights, opt.positions, 0, &none);  // keys only the bones the weights move
+        key_face_weights(c, table, e.weights, opt.positions, 0, &none, opt.scale);  // only the bones the weights move
         for (auto& [b, track] : c.curves) {
             if (c.has_channels(b, kRotChannels)) rot[b] = curve_euler(c, b, 0);
             if (c.has_channels(b, kPosChannels)) pos[b] = curve_offset(c, b, 0);

@@ -33,7 +33,7 @@ The **Tween** slider on the timeline bar, right of **Set Key**, keys the selecte
 - A limb in IK is keyed through its IK control: with a bone of that limb selected, or its IK control, the control's target and pole are tweened instead of the bones. The IK/FK switch itself is not changed.
 - A bone with no key before or after the playhead is left alone, and the status bar says so.
 
-Tick **Relax** next to the slider to work on existing keys instead: the slider then pulls the selected bones' keys at the playhead toward the curve their neighbouring keys would make without them. **0%** leaves the key as it is and **100%** puts it on that curve. It needs a key at the playhead and another key on the same bone.
+Press **Relax** next to the slider (it stays lit while on) to work on existing keys instead: the slider then pulls the selected bones' keys at the playhead toward the curve their neighbouring keys would make without them. **0%** leaves the key as it is and **100%** puts it on that curve. It needs a key at the playhead and another key on the same bone.
 
 Instead of the slider, press **Shift+E** and move the mouse left or right; the bottom left of the viewport shows the amount. Hold **Ctrl** for 10% steps. A left click, **Enter** or **Space** keys it; a right-click, **Esc** or **Ctrl+Z** cancels. The drag starts from the slider's last value.
 

@@ -24,14 +24,15 @@ namespace vats {
 // only with positions (Move face bones). Without from, every table bone gets the weights' value, as key_face keys
 // a recorded face. With from (the sliders before a change), only the bones whose value differs between the two are
 // keyed, each moved by that difference from its current value: bones the change does not touch keep their keys,
-// and a bone no slider combination explains moves with the slider instead of jumping.
+// and a bone no slider combination explains moves with the slider instead of jumping. scale: FaceSettings::scale.
 void key_face_weights(Clip& clip, const FaceTable& table, const std::map<std::string, double>& weights,
-                      bool positions, double frame, const std::map<std::string, double>* from = nullptr);
+                      bool positions, double frame, const std::map<std::string, double>* from = nullptr,
+                      double scale = 1);
 
 // Whether weights keyed now would give the face bones' current curve values at frame (within 0.01 degrees and
 // 0.01 mm): the panel keeps its own slider values while this holds.
 bool face_weights_match(const Clip& clip, const FaceTable& table, const std::map<std::string, double>& weights,
-                        bool positions, double frame);
+                        bool positions, double frame, double scale = 1);
 
 // The table bones' curve values at frame, in table.bones() order: Euler degrees, then with positions the offsets
 // in millimetres. Cheap: the panel compares it frame to frame to know when to read the sliders back.
@@ -39,9 +40,10 @@ std::vector<double> face_bone_values(const Clip& clip, const FaceTable& table, d
 
 // Slider read-back: the ARKit weights (0..1) whose keys come closest to the face bones' curves at frame (a
 // bounded least-squares fit). Shapes that move the same bones the same way cannot be told apart; presets read
-// back as their shapes; with positions off, shapes that only move bones read back as 0.
+// back as their shapes; with positions off, shapes that only move bones read back as 0. scale must be the one the
+// keys were made with.
 std::map<std::string, double> read_face_weights(const Clip& clip, const FaceTable& table, double frame,
-                                                bool positions);
+                                                bool positions, double scale = 1);
 
 // Whether a shape keys anything: some bone turns, or positions is on and some bone moves.
 bool face_shape_keys(const FaceTable& table, const std::string& shape, bool positions);
@@ -77,9 +79,10 @@ Vec3 saccade_offset(const FaceEvents& ev, double t);
 
 // Bakes clip.face_layer onto the eyes, the eyelids and, with a look-at and head_share > 0, mHead, keeping the
 // pre-bake tracks in FaceLayer::source; re-baking starts from those. look may be empty (no target). With
-// positions (Move face bones), blink shapes that move lids move them. One undo step for the caller.
+// positions (Move face bones), blink shapes that move lids move them, times scale (FaceSettings::scale). One undo
+// step for the caller.
 void bake_face_layer(Clip& clip, const Rig& rig, const Shape* shape, const FaceTable& table, bool positions,
-                     const LookTarget& look);
+                     const LookTarget& look, double scale = 1);
 // Puts the pre-bake tracks back.
 void unbake_face_layer(Clip& clip, const Skeleton& skel, const FaceTable& table);
 

@@ -27,7 +27,8 @@ says so in a note. See [[VATs Editor (viewer)]] for what differs in the viewer.
 ## Getting started
 
 - [[Installation]]: download, unpack and run; file associations.
-- [[First steps]]: make, preview and export a first animation.
+- [[First steps]]: make, preview and export a first animation, about 15 minutes, all by dragging.
+- [[Tutorials]]: lessons that teach animation and VATs together, from [[Your first pose]] on.
 - [[Projects and files]]: `.vat` projects, autosave, recovery and the data folders.
 
 ## Interface
@@ -70,6 +71,8 @@ says so in a note. See [[VATs Editor (viewer)]] for what differs in the viewer.
 - [[Retargeting]]: bringing motion from other skeletons.
 - [[Props]]: `.dae` and `.fbx` objects held or worn.
 - [[Mesh bodies]]: previewing on a rigged mesh body.
+- [[Rig any model]]: a model rigged to bones of its own, mapped onto SL's skeleton.
+- [[Rig a model from scratch]]: a model with no skeleton, rigged by markers you drag and weighted by bone heat; and the weight brush.
 - [[Couples and groups]]: animating two or more avatars together.
 
 ## Second Life

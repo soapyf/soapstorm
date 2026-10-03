@@ -14,12 +14,14 @@ your own; see [[#Changing shortcuts]].
 - **Num** keys are on the number pad.
 - Keys are for the viewport and panels. While a text field is being edited, it keeps every key except
   the **Ctrl** shortcuts for **New**, **Open...**, **Save**, **Save As...**, **Export SL .anim...**,
-  **Quit**, **Undo**, **Redo**, **Preferences...** and **Graph Editor**.
+  **Quit**, **Undo**, **Redo**, **Preferences...** and **Graph Editor**. **Ctrl+A**, **Ctrl+C**, **Ctrl+V** and
+  **Ctrl+X** always stay with the field (in QAvimator, **Ctrl+A** is **Save As...** elsewhere). Double-clicking a
+  number selects all of it.
 - Mouse controls differ more than keys between presets; see [[Control presets#Mouse, per preset]].
 
 ![The Controls window: the mouse controls of the Industry preset, then each command with its keys](images/keyboard-shortcuts/controls-window.png)
-*The same list inside the app: **Help → Controls** shows only the commands that have a key in the
-active preset.*
+*The same list inside the app: **Help → Controls** shows the **Keyboard Shortcuts** table, read-only, with only the
+commands that have a key in the active preset, grouped by menu.*
 
 ### Worked example: step through keys in two presets
 
@@ -42,7 +44,7 @@ active preset.*
 | Open... | Ctrl+O | Ctrl+O | Ctrl+O | Ctrl+O |
 | Save | Ctrl+S | Ctrl+S | Ctrl+S | Ctrl+S |
 | Save As... | Ctrl+Shift+S | Ctrl+Shift+S | Ctrl+A | Ctrl+Shift+S |
-| Import Prop / Mesh (.dae, .fbx)... | Ctrl+I | Ctrl+Alt+I | Ctrl+I | Ctrl+I |
+| Import Prop / Mesh (.dae, .fbx, .gltf, .glb)... | Ctrl+I | Ctrl+Alt+I | Ctrl+I | Ctrl+I |
 | Export SL .anim... | Ctrl+E | Ctrl+E | Ctrl+E | Ctrl+E |
 | Quit | Ctrl+Q | Ctrl+Q | Ctrl+Q | Ctrl+Q |
 
@@ -68,7 +70,7 @@ active preset.*
 | Copy Pose | Ctrl+C | Ctrl+C | Ctrl+C | Ctrl+C |
 | Paste Pose | Ctrl+V | Ctrl+V | Ctrl+V | Ctrl+V |
 | Mirror Bone to Other Side | M | M | M | M |
-| Flip Pose | – | Ctrl+Shift+V | – | – |
+| Flip Pose | Ctrl+Shift+V | Ctrl+Shift+V | Ctrl+Shift+V | Ctrl+Shift+V |
 | Mark a Beat Here | B | B | B | B |
 
 > **Note:** In the Second Life preset, and in the [[VATs Editor (viewer)|viewer]], **Alt+W** moves the
@@ -90,6 +92,7 @@ active preset.*
 
 | Action | Industry (Maya-style) | Blender | QAvimator | Second Life |
 |---|---|---|---|---|
+| Tool Pie (hold over the viewport; see [[Interface#The Tab pie]]) | Tab | Tab | Tab | Tab |
 | Select Tool | Q | W | Q | Q |
 | Move Tool | W | G | W | W |
 | Rotate Tool | E | R | E | E |
@@ -114,8 +117,9 @@ active preset.*
 | Frame All | A | Home | Ctrl+0, A | A |
 | Zoom In | – | – | Page Up | – |
 | Zoom Out | – | – | Page Down | – |
-| Reset Camera | – | – | – | Esc |
+| Reset Camera | – | – | – | Esc (with nothing selected) |
 | Graph Editor | Ctrl+G | Ctrl+G | Ctrl+G | Ctrl+G |
+| Maximise Panel (the one under the pointer; again to put it back) | Ctrl+Space | Ctrl+Space | Ctrl+Space | Ctrl+Space |
 
 ### Camera views
 
@@ -141,7 +145,7 @@ slots are in **View → Camera → Camera Views** only. An empty slot says `Came
 |---|---|---|---|---|
 | Select All | Ctrl+A | A | Shift+A | Ctrl+A |
 | Select Keyed on Frame | Ctrl+Shift+A | Ctrl+Shift+A | Ctrl+Shift+A | Ctrl+Shift+A |
-| Select None | Esc | Esc | Esc | – |
+| Select None | Esc | Esc | Esc | Esc |
 | Select Parent | Up, [ | [ | Up, [ | Up, [ |
 | Select Child | Down, ] | ] | Down, ] | Down, ] |
 | Next Sibling | Shift+] | Shift+] | Shift+] | Shift+] |

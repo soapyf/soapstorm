@@ -258,10 +258,21 @@ int apply_rig_table(const RigTable& table, const SourceAnim& src, BoneMap& out) 
     out.clear();
     std::map<std::string, int> by_name;
     for (int j = int(src.joints.size()) - 1; j >= 0; --j) by_name[key_name(src.joints[j].name)] = j;  // first wins
+    // A leading '*' takes any prefix ("* L Thigh": Bip01's, Bip001's, a character's own name).
+    auto find = [&](const std::string& n) -> int {
+        if (n.empty() || n[0] != '*') {
+            auto it = by_name.find(key_name(n));
+            return it == by_name.end() ? -1 : it->second;
+        }
+        const std::string tail = lower(n.substr(1));
+        for (int j = 0; j < int(src.joints.size()); ++j)
+            if (const std::string k = key_name(src.joints[j].name); k.size() > tail.size() && k.ends_with(tail)) return j;
+        return -1;
+    };
     for (auto& [sl, names] : table.bones)
         for (auto& n : names)
-            if (auto it = by_name.find(key_name(n)); it != by_name.end()) {
-                out[sl] = it->second;
+            if (const int j = find(n); j >= 0) {
+                out[sl] = j;
                 break;
             }
     return int(out.size());

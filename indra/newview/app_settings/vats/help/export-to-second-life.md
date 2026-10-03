@@ -14,20 +14,30 @@ with the [[VATs Editor (viewer)]].
 1. Set the clip's length, loop, priority and ease in **Properties → Animation** (see
    [[Animation priority]]).
 2. Choose **File → Export SL .anim...** (**Ctrl+E**). The **Export SL .anim** dialog opens. The same
-   settings are also in **Properties → Export**.
-3. Check the **Saves as** line, then press **Export SL .anim**.
+   settings are also in the **Export** workspace's **Export** panel and, in the **All** workspace, in
+   **Properties → Export**. The dialog and the **Export** panel start with the clip's **Priority**, to change
+   it without going back to **Properties**.
+3. Check the **Saves as** line at the foot of the dialog, then press **Export .anim** beside it.
 
 The first export asks for a folder when none is set (**Folder** shows `(asks the first time)`): a save
 dialog offers the **Saves as** name. Its folder becomes the export **Folder**. Keep the name offered, or type
 another: a typed name becomes the **Name**, with **Pattern** `[NAME]` and no **Side**, so that exact file is
 written (a mirrored export still ends in `_mirrored`, and several actors or clips still add theirs). After
-that, **Export SL .anim** writes straight to the folder; **Choose...** changes it. The status bar reports
+that, **Export .anim** writes straight to the folder; **Choose...** changes it. The status bar reports
 the files written, how many were replaced, and a summary of bones, length, priority, bytes, any
 attachment points that move or rotate, how many unmoving position channels were left out (see
 [[Export to Second Life#Positions that do not move]]), and, with **Leave out bones that don't move** on, how
 many bones were left out.
 
 The export settings are saved with the project, and each change to them is an undo step.
+
+The dialog and the **Export** workspace's panel keep **Name**, **Number**, **Side**, **Pattern**, **Folder** and
+**Bake shape** at the top and fold the other options into two groups, each header counting the options that are
+on: **Also Write** (the mirrored copy, other heights, **Export mirrored**, counting up, the Animations library,
+the undeformer, BVH positions) and **Clean Up** (**Leave out bones that don't move**, **Reset joint positions**,
+the deformer options and **Reduce keys**). The foot shows **Saves as** with the first file's name and its size,
+and **Export .anim**; when the settings write more than one file, a **Saves as** row above lists them all.
+**Other exports** holds the BVH exports and, with several clips, **Export All Clips**.
 
 ![The Export SL .anim dialog for the arm-wave example](images/export-to-second-life/export-dialog.png)
 *The top line sums up the clip; **Saves as** shows the file name the settings produce.*
@@ -41,7 +51,7 @@ The export settings are saved with the project, and each change to them is an un
    is an untitled copy, so **Saves as** shows `Animation_01.anim`.
 2. Type `Wave` in **Name**: **Saves as** becomes `Wave_01.anim`. Set **Side** to **Right**:
    `Wave_01_Right.anim`.
-3. Press **Export SL .anim** and pick a folder when asked. The status bar says "Exported Wave_01_Right.anim
+3. Press **Export .anim** and pick a folder when asked. The status bar says "Exported Wave_01_Right.anim
    to <folder>: 4 bones, 2.40 s, priority 3, 1337 bytes": the four keyed bones of the right arm, and
    nothing else, are in the file. [[Anim format#Worked example: the size of a file|Anim format]] shows
    where the 1337 bytes come from.
@@ -108,7 +118,7 @@ and pins are solved again on it and the contacts hold.
 - The file names end in the height in centimetres, after everything else: `Wave_01_Right_H175.anim`, and with
   **Also export the other side (mirrored)** each height gets its mirrored copy, `Wave_01_Left_H175.anim`.
   **Saves as** lists every file.
-- **Export SL .anim** and **Upload Animation...** write every height; BVH export and **Export This Actor as
+- **Export .anim** and **Upload Animation...** write every height; BVH export and **Export This Actor as
   .anim...** write none. An imported `.anim` you have not edited still goes out as it came in; its height files
   are baked anew.
 - **Upload size** and [[Preview as SL plays it]] measure the file without a height.
@@ -167,6 +177,44 @@ animation's position after it stops. The **Deformer** options, shown once a bone
 keys, deal with both: **End at rest**, **Hold without sinking** and **Also export an undeformer**
 (`<name>_undeform.anim`, uploaded after the animation in the viewer). See [[Deformers]].
 
+### Animations that leave a pose behind
+
+In Second Life, animated joint rotations revert to the rest pose or to lower-priority animations as soon as a
+motion stops. Animated joint **positions** behave differently: under Second Life's avatar pose code (`llpose.cpp`),
+a position applied to any bone stays on the skeleton until another playing animation overrides that bone's
+position or the avatar teleports or changes outfit.
+
+When an animation moves bones by position and a subsequent animation only keys rotations, the displaced
+positions leak through:
+
+1. A walk cycle for a mech or non-human creature moves the legs with translation keys (`mHipRight`, `mKneeRight`,
+   `mAnkleRight`). At the end of a step or stride, a foot may be lifted or shifted.
+2. When the avatar stops walking, the animation overhaul (AO) stops the walk and starts a stand animation.
+3. The stand only keys joint rotations. Because the stand writes no position keys for the legs, Second Life leaves
+   the foot lifted in the walk's last position.
+
+To prevent leaks, tick **Reset joint positions** under **Clean Up** in the export settings on the following animation (such as the
+stand). This writes rest position keys at the first and last frames (frames 0 and 65535 in the `.anim` format) for the
+selected joints. The rest positions match the **Bake shape**: a mesh body's own joint positions, or with **Your
+avatar** the worn avatar's, so custom avatar proportions are preserved without distortion.
+
+Choose which joints receive reset keys in the dropdown list:
+
+- **Joints this clip rotates** (the default): adds rest positions to every joint keyed for rotation in this clip.
+  Any previous animation that moved these bones by position is cleared as soon as this clip begins playing.
+- **Joints moved by position in other clips**: inspects the other clips in the project and resets every joint that
+  any other clip moves with position keys.
+- **Pick joints**: lets you select specific joints manually. Click **Pick Joints...** to choose joints from a list
+  grouped by body part (Body, Hands, Face, Wings, Tail, Hind Limbs, Groin), with a search box, **Select All**, and
+  **Clear**. **Select All** leaves the face out: face position keys pull a mesh head towards the bake shape's face.
+
+The **Reset joint positions** label shows how many joints get rest keys (for example, `Reset joint positions (resets 6 joints)`),
+whether or not they already have a record in the file. Bones whose positions the clip moves itself are not reset:
+their own keys are written. Position keys that never leave rest are left out of the file, so those bones are reset
+like bones with no position keys. Unrotated joints added solely for position reset do not write rotation keys, so they
+do not freeze rotations from other animations. With **Export mirrored**, the joints are worked out on the mirrored
+animation, and picked joints swap sides with it.
+
 ### Reduce keys
 
 VATs samples every bone at every whole frame, then removes keys that the viewer's interpolation
@@ -208,7 +256,7 @@ Under **Reduce keys**, **Upload size** measures the file the export would write,
 VATs measures again when something that goes into the file changes, at most four times a second, and not
 while the left mouse button is held down.
 
-**Fit to 250 KB** is available while the file is over the size limit or longer than 60 seconds. It raises
+**Fit to 250 KB** shows, under the size table, only while the file is over the size limit or longer than 60 seconds. It raises
 both **Reduce keys** tolerances by half again, step by step, starting from the current values (at least
 `0.050 deg` and `0.50 mm`) and going no further than `5 deg` and `50 mm`, until the file is under 250,000
 bytes. With **Anywhere on the body** it raises that distance instead, the same way, from at least `0.50 mm` up to
@@ -256,6 +304,7 @@ confirmation. **Upload All Clips...** does the same for every clip of a project 
 | Also export for heights | off; ticked: `1.75`, `1.95`, `2.15` m | **Properties → Export** |
 | BVH: include bone positions | off | **Properties → Export** |
 | Deformer: End at rest, Hold without sinking, Also export an undeformer | off; shown once a bone other than the hip has position keys | **Properties → Export** |
+| Reset joint positions | off; mode: **Joints this clip rotates** | **Properties → Export** |
 
 All of these are stored in the project, not in the preferences.
 

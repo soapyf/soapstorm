@@ -5,6 +5,7 @@
 #include <cmath>
 
 #include "app.h"
+#include "widgets.h"
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui.h"
@@ -70,7 +71,7 @@ void App::draw_scratch_prompt() {
     ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     if (!ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
     ImGui::TextUnformatted("Keep scratch pose as keys?");
-    ImGui::TextDisabled("%zu track(s) changed at frame %d", scratch_marks_.size(), int(std::lround(frame_)));
+    ImGui::TextDisabled("%s changed at frame %d", count_noun(scratch_marks_.size(), "track").c_str(), int(std::lround(frame_)));
     ImGui::Spacing();
     ImGui::Checkbox("Don't ask again", &scratch_dont_ask_);
     ImGui::SetItemTooltip("Remember this answer; Preferences > Posing asks again");
@@ -109,7 +110,7 @@ void App::draw_pose_tool_menu_items() {
             scratch_end(true);  // a scratch pose is the pose to propagate: its keys first, then the propagation
             int n = 0;
             edit("Propagate Pose", [&](Clip& c) { n = propagate_pose(c, tracks, frame_, to, a, b); });
-            status(n ? "Propagated the pose to " + std::to_string(n) + " key(s)" : "No later keys to change");
+            status(n ? "Propagated the pose to " + count_noun(size_t(n), "key") : "No later keys to change");
         };
         item("To Next Key", PropagateTo::NextKey, true);
         item("To Selected Range", PropagateTo::Range, range);

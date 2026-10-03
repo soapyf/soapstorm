@@ -238,7 +238,7 @@ bool GraphEditor::delete_selected(GraphContext& ctx) {
     }
     auto sel = selection_;
     edit(ctx, "Delete Keys", [&](Clip& c) { delete_keys(c, sel); });
-    ctx.status("Deleted " + std::to_string(sel.size()) + " key(s)");
+    ctx.status("Deleted " + count_noun(sel.size(), "key"));
     selection_.clear();
     return true;
 }
@@ -246,7 +246,7 @@ bool GraphEditor::delete_selected(GraphContext& ctx) {
 void GraphEditor::copy_keys(GraphContext& ctx) {
     if (selection_.empty()) return ctx.status("Select keys in the graph to copy");
     clipboard_ = vats::copy_keys(ctx.clip, selection_);
-    ctx.status("Copied " + std::to_string(clipboard_.keys.size()) + " key(s)");
+    ctx.status("Copied " + count_noun(clipboard_.keys.size(), "key"));
 }
 
 void GraphEditor::paste_keys(GraphContext& ctx) {
@@ -254,7 +254,7 @@ void GraphEditor::paste_keys(GraphContext& ctx) {
     std::vector<KeyRef> pasted;
     edit(ctx, "Paste Keys", [&](Clip& c) { pasted = vats::paste_keys(c, clipboard_, ctx.frame); });
     selection_ = pasted;
-    ctx.status("Pasted " + std::to_string(pasted.size()) + " key(s) at frame " + std::to_string(int(ctx.frame)));
+    ctx.status("Pasted " + count_noun(pasted.size(), "key") + " at frame " + std::to_string(int(ctx.frame)));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -289,10 +289,16 @@ void GraphEditor::draw_toolbar(GraphContext& ctx) {
     // Buttons wrap onto another line when the editor is narrow.
     float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
     bool first = true;
+    // The toolbar's width on one row (measured when it is one, else the sum of what it places), to know whether the
+    // tangent buttons have room for their names.
+    const float avail = ImGui::GetContentRegionAvail().x, start_x = ImGui::GetCursorScreenPos().x;
+    float row_w = 0;
+    bool wrapped = false;
     auto place = [&](float width) {
+        row_w += width + ImGui::GetStyle().ItemSpacing.x;
         if (!first) {
             ImGui::SameLine();
-            if (ImGui::GetCursorScreenPos().x + width > right) ImGui::NewLine();
+            if (ImGui::GetCursorScreenPos().x + width > right) ImGui::NewLine(), wrapped = true;
         }
         first = false;
     };
@@ -342,9 +348,14 @@ void GraphEditor::draw_toolbar(GraphContext& ctx) {
         {"Break", Tangent::Break, CurveIcon::Break, "Break: move each handle on its own"},
         {"Unify", Tangent::Unify, CurveIcon::Unify, "Unify: line both handles up again"},
     };
+    // Their names after the drawings when the toolbar still fits one row with them (as it did without them last frame);
+    // icons alone otherwise, named on hover (user test: a second's hover to find Flat among 14 icons).
+    float names_w = 0;
+    for (auto& t : tangents) names_w += ImGui::CalcTextSize(t.label).x + ImGui::GetStyle().FramePadding.x;
+    const bool named = toolbar_w_ > 0 && toolbar_w_ + names_w <= avail;
     for (auto& t : tangents) {
-        place(icon_button_width());
-        if (curve_icon_button(t.label, t.icon, t.tip) && need_keys()) {
+        place(icon_button_width() + (named ? ImGui::CalcTextSize(t.label).x + ImGui::GetStyle().FramePadding.x : 0));
+        if (curve_icon_button(t.label, t.icon, t.tip, named ? t.label : nullptr) && need_keys()) {
             auto sel = selection_;
             edit(ctx, t.label, [&](Clip& c) { apply_tangent(c, sel, t.t); });
         }
@@ -372,7 +383,7 @@ void GraphEditor::draw_toolbar(GraphContext& ctx) {
                     int n = 0;
                     snapshot_curves(ctx.clip);  // PT-4
                     edit(ctx, "Euler Filter", [&](Clip& c) { n = euler_filter(c, tracks); });
-                    ctx.status(n ? "Euler filter fixed " + std::to_string(n) + " bone(s)" : "Rotation curves are already clean");
+                    ctx.status(n ? "Euler filter fixed " + count_noun(size_t(n), "bone") : "Rotation curves are already clean");
                 }
             }
             ImGui::SetItemTooltip("Euler Filter: remove 360-degree jumps from rotation curves");
@@ -391,9 +402,9 @@ void GraphEditor::draw_toolbar(GraphContext& ctx) {
                 selection_ = sel;
             }
             ImGui::SetItemTooltip("Flip Values: mirror the selected keys across zero");
-            ImGui::SeparatorText("Tag keys");  // 08 KT-1
+            subheading("Tag keys");  // 08 KT-1
             draw_tag_menu_items(ctx);
-            ImGui::SeparatorText("Snapshot curves");  // PT-4
+            subheading("Snapshot curves");  // PT-4
             if (menu_item_icon(icon::kSnapshot, "Snapshot")) {
                 snapshot_curves(ctx.clip);
                 ctx.status("Snapshot taken: the grey curves stay until cleared");
@@ -431,8 +442,8 @@ void GraphEditor::draw_toolbar(GraphContext& ctx) {
         const Key& k = ctx.clip.curves.at(r.track).at(r.channel).keys[r.index];
         rf = k.frame, rv = k.value;
     }
-    auto box = [&](const char* label, const char* id, double& v, const char* fmt) {
-        place(ImGui::GetFontSize() * 8);
+    auto box = [&](const char* label, const char* id, double& v, const char* fmt, float room) {
+        place(room);
         ImGui::TextUnformatted(label);
         ImGui::SameLine();
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
@@ -443,7 +454,9 @@ void GraphEditor::draw_toolbar(GraphContext& ctx) {
         return ImGui::IsItemDeactivatedAfterEdit() && v != before;
     };
     double nf = rf, nv = rv;
-    bool moved_f = box("Frame", "##kf", nf, "%.2f"), moved_v = box("Value", "##kv", nv, "%.3f");
+    // The two wrap together: Frame never ends a row with its Value alone on the next.
+    const float em = ImGui::GetFontSize();
+    bool moved_f = box("Frame", "##kf", nf, "%.2f", em * 16.5f), moved_v = box("Value", "##kv", nv, "%.3f", em * 8);
     if (ref >= 0 && (moved_f || moved_v)) {
         double df = moved_f ? nf - rf : 0, dv = moved_v ? nv - rv : 0;
         if (snap_) df = std::round(df);
@@ -457,6 +470,7 @@ void GraphEditor::draw_toolbar(GraphContext& ctx) {
         selection_ = sel;
     }
     ImGui::EndDisabled();
+    toolbar_w_ = (wrapped ? row_w : ImGui::GetItemRectMax().x - start_x) - (named ? names_w : 0);
 }
 
 void GraphEditor::draw_channel_list(GraphContext& ctx) {
@@ -523,7 +537,7 @@ void GraphEditor::draw_canvas(GraphContext& ctx) {
     dl->AddRectFilled(ImVec2(canvas_min_.x, plot_top), ImVec2(x_of(0), cmax.y), IM_COL32(0, 0, 0, 40));
     dl->AddRectFilled(ImVec2(x_of(end), plot_top), ImVec2(cmax.x, cmax.y), IM_COL32(0, 0, 0, 40));
     if (clip.loop)
-        dl->AddRectFilled(ImVec2(x_of(clip.loop_in), plot_top), ImVec2(x_of(clip.loop_out), cmax.y), ui::kLoop);
+        dl->AddRectFilled(ImVec2(x_of(clip.loop_in), plot_top), ImVec2(x_of(clip.loop_out), cmax.y), loop_band());
     // Pin bands (TG-100) for pins on displayed bones.
     auto pin_shown = [&](const Pin& pin) {
         for (auto& n : item_names_)
@@ -565,7 +579,7 @@ void GraphEditor::draw_canvas(GraphContext& ctx) {
     dl->AddRectFilled(canvas_min_, ImVec2(cmax.x, plot_top), tc.ruler);
     for (double f = std::ceil(view_.t0 / tstep) * tstep; f <= view_.t1; f += tstep) {
         char b[16];
-        std::snprintf(b, sizeof b, "%.0f", f);
+        std::snprintf(b, sizeof b, "%.0f", f == 0 ? 0.0 : f);  // not "-0" just left of frame 0
         dl->AddLine(ImVec2(x_of(f), plot_top - 5), ImVec2(x_of(f), plot_top), tc.text_dim);
         dl->AddText(ImVec2(x_of(f) + 3, canvas_min_.y + 3), tc.text_dim, b);
     }

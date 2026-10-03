@@ -9,6 +9,7 @@
 #include "vats/curve_ops.h"
 #include "vats/dynamics.h"
 #include "vats/edit.h"
+#include "vats/position_reset.h"
 
 namespace vats {
 namespace {
@@ -24,14 +25,14 @@ bool counts_for_sl_height(const std::string& bone) {
 std::vector<std::string> end_at_rest(Clip& clip, const Skeleton& skel) {
     std::vector<std::string> keyed;
     const int end = std::max(clip.end_frame, 1);
-    for (auto& [name, track] : clip.curves) {
-        const int n = skel.find(name);
-        if (n <= 0 || skel[n].name != name) continue;  // the hip (pelvis_fix takes it back), or an ik. or pin: track
-        if (curve_offset(clip, name, end).length() < 1e-6) continue;  // already at rest, or no position keys
+    const std::vector<std::string> moved = joints_ending_moved_by_position(skel, clip);
+    for (const std::string& name : moved) {
+        auto it = clip.curves.find(name);
+        if (it == clip.curves.end()) continue;
         for (const char* ch : kPosChannels) {
-            auto it = track.find(ch);
-            if (it == track.end() || it->second.empty()) continue;
-            FCurve& c = it->second;
+            auto cit = it->second.find(ch);
+            if (cit == it->second.end() || cit->second.empty()) continue;
+            FCurve& c = cit->second;
             // A key on the last frame that keeps the curve's shape up to it, then a straight line to rest.
             Key& k = c.keys[size_t(insert_on_curve(c, end))];
             k.left = Handle::Free;
@@ -124,15 +125,7 @@ AnimFile make_undeformer(const Skeleton& skel, const AnimFile& d, const Shape* p
         if (j.pos.empty() && j.pos_legacy.empty()) continue;
         const int n = skel.find_viewer(j.name);
         if (n <= 0) continue;  // the hip (pelvis_fix takes it back), or a joint this skeleton does not know
-        Vec3 rest = skel[n].pos;
-        if (positions && size_t(n) < positions->offset.size()) rest += positions->offset[size_t(n)];
-        for (int a = 0; a < 3; ++a) rest[a] = std::clamp(rest[a], -double(kAnimMaxOffset), double(kAnimMaxOffset));
-        const auto c = encode_position(rest);
-        AnimJoint r;
-        r.name = j.name;
-        r.priority = j.priority;
-        r.pos = {{0, c[0], c[1], c[2]}, {65535, c[0], c[1], c[2]}};
-        u.joints.push_back(std::move(r));
+        u.joints.push_back(make_rest_joint(skel, j.name, j.priority, positions));
     }
     return u;
 }
