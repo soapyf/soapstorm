@@ -4,6 +4,8 @@
 #include <cmath>
 
 #include "app.h"
+#include "icons.h"
+#include "icon_button.h"
 #include "theme.h"
 #include "imgui.h"
 #include "widgets.h"
@@ -31,17 +33,14 @@ void App::apply_ragdoll_preview(Evaluation& e) {
 
 void App::draw_ragdoll_panel() {
     if (!show_ragdoll_) return;
-    place_tool_window(24, 30);
+    place_tool_window("Ragdoll", 24, 30);
     if (!ImGui::Begin("Ragdoll", &show_ragdoll_)) return ImGui::End();
     help_button("ragdoll");
     Clip& clip = doc_.clip();
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped("Let the whole body, or the selected limbs, fall limp from a frame. Simulate to scrub the "
-                       "result, then bake it to keys.");
-    ImGui::PopStyleColor();
+    hint("Let the body, or the selected limbs, fall limp from a frame.");
 
     if (!clip.ragdoll) {
-        if (ImGui::Button("Set Up Ragdoll")) {
+        if (primary_button("Set Up Ragdoll", "", 0, icon::kRagdoll)) {
             Ragdoll r;
             r.start = std::clamp(int(std::lround(frame_)), 0, clip.end_frame);
             r.frames = std::max(1, std::min(60, clip.end_frame - r.start));
@@ -84,14 +83,11 @@ void App::draw_ragdoll_panel() {
     }
 
     // Label on the left, like the rest of the app (spec 06 section 1.1).
-    const float label_w = ImGui::GetFontSize() * 6.5f;
     auto label = [&](const char* text, float w = -1) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(text);
-        ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(w);
+        labelled_row(text);
+        if (w > 0) ImGui::SetNextItemWidth(w);
     };
-    ImGui::SeparatorText("Frames");
+    subheading("Frames");
     auto int_field = [&](const char* name, int& v, int lo, int hi, const char* tip, float w = -1) {
         const int x0 = v;
         int x = v;
@@ -103,14 +99,14 @@ void App::draw_ragdoll_panel() {
     int_field("Start", rd.start, 0, clip.end_frame, "The frame the ragdoll takes over from the animation",
               ImGui::GetFontSize() * 6);
     ImGui::SameLine();
-    if (ImGui::SmallButton("Current")) edit("Ragdoll Settings", [&](Clip& c) {
+    if (ImGui::Button("Current")) edit("Ragdoll Settings", [&](Clip& c) {
         c.ragdoll->start = std::clamp(int(std::lround(frame_)), 0, c.end_frame);
     });
     int_field("Length", rd.frames, 1, std::max(1, clip.end_frame), "How many frames it falls for");
     int_field("Blend in", rd.blend_in, 0, 60, "Frames to ease from the animation into the fall");
     int_field("Blend out", rd.blend_out, 0, 60, "Frames to ease back to the animation at the end (0 = stay down)");
 
-    ImGui::SeparatorText("Body");
+    subheading("Body");
     auto slider = [&](const char* name, double& v, float lo, float hi, const char* fmt, const char* tip) {
         const double v0 = v;
         float f = float(v);
@@ -167,7 +163,7 @@ void App::draw_ragdoll_panel() {
     for (const Prop& p : clip.props)
         if (const DaeModel* m = !p.rigged && p.visible ? prop_model(p.path) : nullptr)
             boxes.push_back({prop_frame(p), (m->bounds_max - m->bounds_min).mul(p.scale) * 0.5});  // drawn box-centred (VP-81)
-    if (ImGui::Button("Simulate")) {
+    if (primary_button("Simulate", "", 0, icon::kRagdoll)) {
         rd_frames_ = simulate_ragdoll(*rig_, clip, export_shape(), boxes);
         rd_for_ = clip.ragdoll;
         rd_curves_for_ = clip.curves;

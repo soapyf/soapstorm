@@ -72,12 +72,12 @@ void App::draw_context_menu() {
             any = true;
         }
         // Starter poses of this kind (hands are authored for the left side).
-        bool header = false, group = false;  // group: a category's submenu is open
+        bool opened = false, group = false;  // group: a category's submenu is open
         std::string category;
         for (const LibraryItem& it : builtin_poses(skel_)) {
             if (it.kind != kind) continue;
-            if (!header && ImGui::BeginMenu("Starter poses")) header = true;
-            else if (!header) break;
+            if (!opened && ImGui::BeginMenu("Starter poses")) opened = true;
+            else if (!opened) break;
             any = true;
             if (it.category != category) {  // a category's poses come together, in a submenu of its own
                 if (group) ImGui::EndMenu();
@@ -89,7 +89,7 @@ void App::draw_context_menu() {
             if (ImGui::MenuItem(it.name.c_str())) apply_library_item(it, mirrored);
         }
         if (group) ImGui::EndMenu();
-        if (header) ImGui::EndMenu();
+        if (opened) ImGui::EndMenu();
         if (!any) ImGui::TextDisabled("  (none saved yet)");
     };
     auto clips_of_kind = [&](const std::string& kind, const std::string& side) {
@@ -132,6 +132,11 @@ void App::draw_context_menu() {
         if (ImGui::BeginMenu("Poses")) {
             poses_of_kind("pose", "");
             ImGui::EndMenu();
+        }
+        for (int k : seat_props()) {  // a chair in the scene: one click to sit on it
+            if (ImGui::MenuItem(("Sit on " + clip.props[size_t(k)].name).c_str())) sit_on(k);
+            ImGui::SetItemTooltip("At this frame: the Sitting pose if not sitting yet, the thighs on its seat, the feet "
+                                  "held on the floor");
         }
         ImGui::Separator();
         menu_item("select_all");
@@ -183,12 +188,11 @@ void App::draw_context_menu() {
             int target = *other;
             selection_ = {target, node};
             run_action("pin_bone");
-        } else if (!two) {
-            ImGui::BeginDisabled();
-            ImGui::MenuItem("Bind to a Bone...");
-            ImGui::EndDisabled();
-            ImGui::SetItemTooltip("Select the bone to ride, then Shift-click this point");
+        } else if (!two && ImGui::MenuItem("Bind to...")) {
+            select(node, false);
+            run_action("bind_to");
         }
+        if (!two) ImGui::SetItemTooltip("Then click the bone it should ride, in the view");
         if (pin >= 0) {
             const int parent = skel_[node].parent;
             std::string follow = parent >= 0 ? skel_[parent].name : "the avatar";
@@ -227,6 +231,17 @@ void App::draw_context_menu() {
                 }
             }
         }
+        // A hand on a thigh, a foot on a step: this bone rides another from this frame on, picked with a click. An arm
+        // or a leg binds by its end (the wrist, the ankle), as a hand or a foot is what touches.
+        int bind_node = node;
+        const bool arm = part.kind == PartKind::Arm || part.kind == PartKind::Hand, leg = part.kind == PartKind::Leg;
+        if (const int end = part.side.empty() ? -1 : skel_.find((arm ? "mWrist" : "mAnkle") + part.side); end >= 0 && (arm || leg))
+            bind_node = end;
+        if (ImGui::MenuItem(("Bind " + bone_label(bind_node) + " to...").c_str())) {
+            select(bind_node, false);
+            run_action("bind_to");
+        }
+        ImGui::SetItemTooltip("Then click the bone it should ride, in the view: it follows that bone from this frame on");
         if (ImGui::MenuItem(("Select " + P).c_str())) select_part(part);
         if (part.kind == PartKind::Arm) ImGui::SetItemTooltip("Includes the hand and the IK handles");
         if (ImGui::MenuItem(("Key " + P).c_str()))

@@ -172,7 +172,7 @@ XANIM|2|Hug_01_Partner|<0.3, 0, 0>|<0, 0, 180>
 
 ### 6. Export both sides
 
-1. Choose **File → Export SL .anim...** again, press **Export SL .anim** and choose a folder when asked.
+1. Choose **File → Export SL .anim...** again, press **Export .anim** and choose a folder when asked.
 2. VATs writes three files: `Hug_01_Lead.anim`, `Hug_01_Partner.anim` and `Hug_01_placement.txt`. The placement
    note lists each actor's offset and rotation, an `llSitTarget` line for each, and the same AVsitter2 and nPose
    V4 lines as step 5.

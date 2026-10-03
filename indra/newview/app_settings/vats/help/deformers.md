@@ -41,8 +41,9 @@ the right leg, and moving a bone sideways changes nothing.
 **Hold without sinking** with an undeformer is the usual pair for a deformer that stays on. **End at rest** with
 **Hold without sinking** keeps the feet on the ground while it plays and leaves nothing behind.
 
-The three options are in **Properties → Export** and the **Export SL .anim** dialog, under **Deformer**, shown once
-a bone other than the hip has position keys. They change the exported file only, not the project, and are saved
+The three options are in the export settings (the **Export SL .anim** dialog, the **Export** panel and
+**Properties → Export**), shown once a bone other than the hip has position keys: **End at rest** and **Hold without
+sinking** under **Clean Up → Deformer**, **Also export an undeformer** under **Also Write**. They change the exported file only, not the project, and are saved
 with the project. The upload size meter and the [[Animation check]] count them.
 
 ![The Deformer rows of the Export SL .anim dialog: End at rest off, Hold without sinking on with "Counters for a head scale of 0.925 (the bake shape's)" under it, Also export an undeformer on](images/deformers/export-deformer.png)
@@ -148,9 +149,10 @@ taller, and the message says how far every viewer would stand the wearer into th
 
 ### 4. Export it without the sink
 
-1. Choose **File → Export SL .anim...**. Under **Deformer**, tick **Hold without sinking** and **Also export an
+1. Choose **File → Export SL .anim...**. Under **Clean Up → Deformer**, tick **Hold without sinking**, and under
+   **Also Write** tick **Also export an
    undeformer**. The finding clears: the check counts the export as it will be written.
-2. Type a **Name**, such as `long_neck`, and press **Export SL .anim**. It writes `long_neck_01.anim` and
+2. Type a **Name**, such as `long_neck`, and press **Export .anim**. It writes `long_neck_01.anim` and
    `long_neck_01_undeform.anim`.
 
 [Open the finished example](example:deformer-held.vat)

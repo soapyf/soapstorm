@@ -125,12 +125,12 @@ void App::draw_split_dance_window() {
         const std::string written = save_parts(split_dance(c, cuts), doc_.path, overwrite, split_dance_confirm_);
         if (!written.empty()) status("Saved " + std::to_string(cuts.size() + 1) + " parts beside the project");
     };
-    if (icon_label_button(icon::kSave, "Save Parts as Projects")) guarded(doc_.path, [&] { save(false); });
+    if (ImGui::Button("Save Parts as Projects")) guarded(doc_.path, [&] { save(false); });
     ImGui::EndDisabled();
     ImGui::SetItemTooltip("%s", can_save ? "<project>_part1.vat, _part2.vat... beside the project file"
                                          : "Save the project first: the parts are saved beside it");
     ImGui::SameLine();
-    if (icon_label_button(icon::kExport, "Export All as .anim")) export_dance_parts(split_dance(c, cuts));
+    if (primary_button("Export All as .anim", "", 0, icon::kExport)) export_dance_parts(split_dance(c, cuts));
     ImGui::SetItemTooltip("Every part to the export folder under the export pattern, numbered from Export's Number%s",
                           [&] {
                               const Json* v = c.export_settings.find("save_to_library");

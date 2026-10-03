@@ -8,6 +8,7 @@
 #include <iterator>
 
 #include "app.h"
+#include "theme.h"
 #include "imgui.h"
 #include "widgets.h"
 #include "vats/reference.h"
@@ -123,9 +124,9 @@ void App::draw_reference_overlay(ImDrawList* dl, ImVec2 origin, ImVec2 size) {
 
 void App::draw_reference_window() {
     if (!show_reference_) return;
-    const float em = ImGui::GetFontSize();
-    ImGui::SetNextWindowSize(ImVec2(em * 24, em * 25), ImGuiCond_FirstUseEver);
+    place_tool_window("Reference", 24, 25);
     if (!ImGui::Begin("Reference", &show_reference_)) return ImGui::End();
+    help_button("reference-images");
     auto pick = [&](bool sequence) {
         reference_pick_sequence_ = sequence;
         show_dialog(Dialog::LoadReference);
@@ -158,13 +159,7 @@ void App::draw_reference_window() {
         ImGui::TextDisabled("Picture %d of %d, %d x %d", reference_ui_->index + 1, int(reference_ui_->files.size()), pw, ph);
     else ImGui::TextDisabled("%d x %d", pw, ph);
 
-    const float label_w = em * 7;
-    auto label = [&](const char* text) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(text);
-        ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(-1);
-    };
+    auto label = [&](const char* text) { labelled_row(text); };
     // A drag or a slider is one undo step, from its value when it started.
     auto track = [&](const char* step) {
         if (ImGui::IsItemActivated()) {
@@ -180,7 +175,7 @@ void App::draw_reference_window() {
         if (ImGui::Checkbox(name, &v)) edit(step, [&](Clip& c) { (*c.reference).*field = v; });
     };
 
-    ImGui::SeparatorText("Placement");
+    subheading("Placement");
     bool shown = !r.hidden;
     if (ImGui::Checkbox("Show", &shown)) edit(shown ? "Show Reference" : "Hide Reference", [&](Clip& c) { c.reference->hidden = !shown; });
     int where = r.in_scene ? 1 : 0;
@@ -198,7 +193,7 @@ void App::draw_reference_window() {
     ImGui::SetItemTooltip("Locked to a view, the picture shows only while the camera looks from within 15 degrees of it "
                           "(View > Camera > Front, Back, Right, Left, Top)");
 
-    ImGui::SeparatorText("Look");
+    subheading("Look");
     float opacity = float(r.opacity);
     label("Opacity");
     if (slider_float("##ref_opacity", &opacity, 0, 1, "%.2f")) r.opacity = opacity;
@@ -218,7 +213,7 @@ void App::draw_reference_window() {
     toggle("Flip Vertically", &Reference::flip_y, "Flip Reference");
 
     if (r.sequence) {
-        ImGui::SeparatorText("Sequence");
+        subheading("Sequence");
         float fps = float(r.fps);
         label("Frame rate");
         if (ImGui::DragFloat("##ref_fps", &fps, 0.1f, 0.1f, 240, "%.2f fps", ImGuiSliderFlags_AlwaysClamp)) r.fps = fps;

@@ -7,6 +7,8 @@
 // planted feet held by leg IK as Clean Up Foot Sliding holds them (footlock.h).
 #pragma once
 
+#include <functional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -23,9 +25,45 @@ struct Balance {
     bool inside() const { return contact && margin >= 0; }
 };
 
-// CM-1: the balance of a posed body. A foot is planted when its lowest joint (ankle, foot or toe) is within
-// 5 cm of the ground, the lowest of those joints in the rest pose.
-Balance balance_of(const Skeleton& skel, const std::vector<Xform>& globals, const Shape* shape);
+struct MeshContactFloor {
+    bool has_mesh = false;
+    double lowest_z = 0.0;
+    std::vector<Vec3> contact_points;
+};
+
+// Computes the lowest vertex and contact points (within threshold of lowest vertex) from skinned mesh parts.
+MeshContactFloor compute_mesh_contact_floor(const std::vector<std::span<const float>>& mesh_parts,
+                                            double threshold = 0.02);
+
+inline MeshContactFloor compute_mesh_contact_floor(const std::vector<float>& mesh_positions,
+                                                   double threshold = 0.02) {
+    if (mesh_positions.empty()) return MeshContactFloor{};
+    return compute_mesh_contact_floor(std::vector<std::span<const float>>{mesh_positions}, threshold);
+}
+
+// CM-1: the balance of a posed body. When mesh parts/positions are provided, contact is taken
+// from the skinned mesh vertices (within ~2 cm of the lowest vertex). When omitted or empty,
+// falls back to the rest-pose bone heights.
+Balance balance_of(const Skeleton& skel, const std::vector<Xform>& globals, const Shape* shape = nullptr,
+                   const std::function<bool(int)>* is_weighted = nullptr,
+                   const std::vector<std::span<const float>>& mesh_parts = {},
+                   const MeshContactFloor* cached_floor = nullptr);
+
+inline Balance balance_of(const Skeleton& skel, const std::vector<Xform>& globals, const Shape* shape,
+                          const std::vector<std::span<const float>>& mesh_parts,
+                          const MeshContactFloor* cached_floor = nullptr) {
+    return balance_of(skel, globals, shape, nullptr, mesh_parts, cached_floor);
+}
+
+inline Balance balance_of(const Skeleton& skel, const std::vector<Xform>& globals, const Shape* shape,
+                          const std::function<bool(int)>* is_weighted,
+                          const std::vector<float>& mesh_positions,
+                          const MeshContactFloor* cached_floor = nullptr) {
+    if (mesh_positions.empty() && !cached_floor) return balance_of(skel, globals, shape, is_weighted);
+    return balance_of(skel, globals, shape, is_weighted,
+                      mesh_positions.empty() ? std::vector<std::span<const float>>{} : std::vector<std::span<const float>>{mesh_positions},
+                      cached_floor);
+}
 
 struct AutoBalanceOptions {
     int from = 0, to = -1;      // frame range (to = -1: the clip's end)
@@ -33,6 +71,9 @@ struct AutoBalanceOptions {
     int smooth = 2;             // frames each side of the moving average the hip offsets are smoothed with
     bool counter_lean = false;  // mTorso also tilts towards the support, so the hips move less
     const Shape* shape = nullptr;
+    // The floor the view's balance uses (CM-1): the shown body's mesh posed by these globals; empty = the bones'.
+    std::function<MeshContactFloor(const std::vector<Xform>&)> mesh_floor;
+    std::function<bool(int)> is_weighted;  // the shown body's weighted joints (balance_of's); empty = none given
 };
 
 // CM-2: keys mPelvis position (and mTorso with counter_lean) on every frame of the range, and the frames on

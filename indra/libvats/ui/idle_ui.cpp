@@ -30,17 +30,14 @@ void App::apply_idle_preview(Evaluation& e) {
 
 void App::draw_idle_panel() {
     if (!show_idle_) return;
-    place_tool_window(24, 36);
+    place_tool_window("Idle Layer", 24, 36);
     if (!ImGui::Begin("Idle Layer", &show_idle_)) return ImGui::End();
     help_button("idle-layer");
     Clip& clip = doc_.clip();
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped("A slow breath and a faint sway on top of the animation, made to loop. Add a layer, "
-                       "preview it while playing, then bake it to keys.");
-    ImGui::PopStyleColor();
+    hint("A slow breath and a faint sway on top of the animation, made to loop.");
 
     auto add = [&](const char* label, const char* kind) {
-        if (icon_label_button(icon::kAdd, label)) {
+        if (ImGui::Button(label)) {
             IdleLayer l = idle_preset(kind);
             edit("Add Idle Layer", [&](Clip& c) { c.idle.push_back(l); });
             idle_selected_ = int(clip.idle.size()) - 1;
@@ -53,6 +50,7 @@ void App::draw_idle_panel() {
     ImGui::SetItemTooltip("Play layers that are not baked yet on top of the animation");
 
     if (ImGui::BeginListBox("##idle_layers", ImVec2(-1, ImGui::GetTextLineHeightWithSpacing() * 4))) {
+        if (clip.idle.empty()) empty_state("No layers yet: add a breath or a sway.");
         for (int i = 0; i < int(clip.idle.size()); ++i) {
             const IdleLayer& l = clip.idle[i];
             std::string label = std::string(l.kind == "breath" ? "Breath" : "Sway") + ", " +
@@ -68,14 +66,8 @@ void App::draw_idle_panel() {
         const int i = idle_selected_;
         IdleLayer& l = clip.idle[i];
         const bool breath = l.kind == "breath";
-        ImGui::SeparatorText(breath ? "Breath" : "Sway");
-        const float label_w = ImGui::GetFontSize() * 5.5f;
-        auto label = [&](const char* text) {
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(text);
-            ImGui::SameLine(label_w);
-            ImGui::SetNextItemWidth(-1);
-        };
+        subheading(breath ? "Breath" : "Sway");
+        auto label = [&](const char* text) { labelled_row(text); };
         // One undo step per drag, as in the Dynamics window.
         auto track = [&](const char* step, auto& value, auto before) {
             if (ImGui::IsItemActivated()) {
@@ -137,11 +129,11 @@ void App::draw_idle_panel() {
         ImGui::SetItemTooltip("Write the layer onto its bones' keys (one undo step)");
         ImGui::SameLine();
         ImGui::BeginDisabled(!l.baked);
-        if (icon_label_button(icon::kUnbake, "Unbake")) edit("Unbake Idle Layer", [&](Clip& c) { unbake_idle(c, skel_, i); });
+        if (ImGui::Button("Unbake")) edit("Unbake Idle Layer", [&](Clip& c) { unbake_idle(c, skel_, i); });
         ImGui::SetItemTooltip("Put back the keys the bones had before baking");
         ImGui::EndDisabled();
         ImGui::SameLine();
-        if (icon_label_button(icon::kDelete, "Remove")) {
+        if (ImGui::Button("Remove")) {
             edit("Remove Idle Layer", [&](Clip& c) {
                 unbake_idle(c, skel_, i);
                 c.idle.erase(c.idle.begin() + i);

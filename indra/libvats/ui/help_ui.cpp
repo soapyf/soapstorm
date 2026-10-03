@@ -1,6 +1,8 @@
 // Viewport Avatar Toolset - the help browser: the shipped wiki (docs/wiki, vats/wiki.h) drawn with ImGui.
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
+#include <algorithm>
 #include <cfloat>
+#include <cstring>
 #include <fstream>
 #include <functional>
 #include <iterator>
@@ -11,6 +13,7 @@
 #include "vats/gif.h"
 #include "vats/wiki.h"
 #include "theme.h"
+#include "widgets.h"
 
 namespace vats {
 
@@ -456,7 +459,7 @@ void draw_help(HelpUi& ui) {
     };
     auto contents = [&] {
         ImGui::SetNextItemWidth(-1);
-        ImGui::InputTextWithHint("##search", "Search help", ui.query, sizeof ui.query);
+        filter_input("##search", "Search help", ui.query, sizeof ui.query);
         if (ui.searched != ui.query) ui.searched = ui.query, ui.hits = ui.lib.search(ui.query);
         ImGui::BeginChild("list");
         if (ui.query[0]) {
@@ -471,7 +474,7 @@ void draw_help(HelpUi& ui) {
             }
         } else {
             for (auto& [category, pages] : ui.lib.contents()) {
-                ImGui::SeparatorText(category.empty() ? "Other" : category.c_str());
+                subheading(category.empty() ? "Other" : category.c_str());
                 for (const wiki::Page* p : pages)
                     if (ImGui::Selectable(p->title.c_str(), page == p)) ui.go(p->file, "");
             }
@@ -542,6 +545,10 @@ void App::draw_help_browser() {
     ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
     if (ui.focus) ImGui::SetNextWindowFocus(), ui.focus = false;
     if (ImGui::Begin("Help", &ui.open)) draw_help(ui);
+    // Esc closes it while it has the keyboard, and only that (not Select None too); in its search box Esc leaves the box.
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::GetIO().WantTextInput &&
+        ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+        ui.open = false, skip_shortcuts_ = true;
     ImGui::End();
     if (!ui.open) ui.free_images();
 }
@@ -549,34 +556,61 @@ void App::draw_help_browser() {
 void App::help_button(const char* page) {
     ImGuiWindow* w = ImGui::GetCurrentWindow();
     bool pressed = false;
-    if (!(w->Flags & ImGuiWindowFlags_NoTitleBar) && !w->DockIsActive) {
-        // Beside the close button, drawn the same way (imgui.cpp RenderWindowTitleBarContents).
-        const ImGuiStyle& st = ImGui::GetStyle();
+    // A "?" in a bar of the window's, drawn as ImGui draws the close button (imgui.cpp RenderWindowTitleBarContents),
+    // right_x from its right end. Called with that bar's window current.
+    auto question = [&](const ImRect& bar, float right_x) {
+        ImGuiWindow* host = ImGui::GetCurrentWindow();
         const float sz = ImGui::GetFontSize();
-        const ImRect bar = w->TitleBarRect();
-        const float x = bar.Max.x - st.FramePadding.x - sz - (w->HasCloseButton ? sz + st.ItemInnerSpacing.x : 0);
-        const ImVec2 pos(x, bar.Min.y + st.FramePadding.y);
+        const ImVec2 pos(bar.Max.x - right_x - sz, (bar.Min.y + bar.Max.y - sz) * 0.5f);
         const ImRect bb(pos, ImVec2(pos.x + sz, pos.y + sz));
-        const ImGuiID id = w->GetID("#help");
+        const ImGuiID id = host->GetID(int(w->ID));
         ImGui::PushClipRect(bar.Min, bar.Max, false);
         ImGui::ItemAdd(bb, id);
         bool hov = false, held = false;
         pressed = ImGui::ButtonBehavior(bb, id, &hov, &held);
         if (hov)
-            w->DrawList->AddCircleFilled(bb.GetCenter(), sz * 0.5f + 1,
-                                         ImGui::GetColorU32(held ? ImGuiCol_ButtonActive : ImGuiCol_ButtonHovered));
+            host->DrawList->AddCircleFilled(bb.GetCenter(), sz * 0.5f + 1,
+                                            ImGui::GetColorU32(held ? ImGuiCol_ButtonActive : ImGuiCol_ButtonHovered));
         const float tw = ImGui::CalcTextSize("?").x;
-        w->DrawList->AddText(ImVec2(bb.GetCenter().x - tw * 0.5f, bb.Min.y), ImGui::GetColorU32(ImGuiCol_Text), "?");
+        host->DrawList->AddText(ImVec2(bb.GetCenter().x - tw * 0.5f, bb.Min.y), ImGui::GetColorU32(hov ? ImGuiCol_Text : ImGuiCol_TextDisabled), "?");
         ImGui::PopClipRect();
         if (hov) ImGui::SetTooltip("Help for this window");
-    } else {  // docked: the tab bar has no room, so a small button on a row of its own, on the right
-        ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - ImGui::CalcTextSize("?").x - ImGui::GetStyle().FramePadding.x * 2);
+    };
+    const ImGuiStyle& st = ImGui::GetStyle();
+    if (!(w->Flags & ImGuiWindowFlags_NoTitleBar) && !w->DockIsActive) {
+        // Beside the close button.
+        question(w->TitleBarRect(), st.FramePadding.x + (w->HasCloseButton ? ImGui::GetFontSize() + st.ItemInnerSpacing.x : 0));
+    } else if (ImGuiDockNode* node = w->DockNode; w->DockIsActive && node && node->VisibleWindow == w && node->HostWindow &&
+                                                   node->TabBar && !node->IsHiddenTabBar()) {
+        // Docked: at the right end of its tab strip, where the node's own close box would be (the dockspace has none),
+        // while its tab is the one in front.
+        const ImGuiTabBar& tabs = *node->TabBar;
+        float tabs_right = tabs.BarRect.Min.x;
+        for (const ImGuiTabItem& t : tabs.Tabs)  // the windows' tabs (not a "?" tab added below)
+            if (!(t.Flags & ImGuiTabItemFlags_Button)) tabs_right = std::max(tabs_right, tabs.BarRect.Min.x + t.Offset + t.Width);
+        const ImRect strip(tabs.BarRect.Min.x, node->Pos.y, node->Pos.x + node->Size.x, node->Pos.y + ImGui::GetFrameHeight());
+        // A node that has its own close box (a floating group of tabs, a host's dockspace): the "?" goes before it.
+        const float right = st.FramePadding.x + (node->HasCloseButton ? ImGui::GetFontSize() + st.ItemInnerSpacing.x : 0);
+        if (tabs_right + 2 * ImGui::GetFontSize() < strip.Max.x - right) {
+            ImGui::Begin(node->HostWindow->Name);  // the strip is the host's (as DockNodeBeginAmendTabBar does)
+            question(strip, right);
+            ImGui::End();
+        } else if (ImGui::DockNodeBeginAmendTabBar(node)) {  // tabs fill the strip: a "?" tab after them, given room
+            ImGui::PushID(int(w->ID));
+            pressed = ImGui::TabItemButton("?", ImGuiTabItemFlags_Trailing | ImGuiTabItemFlags_NoTooltip);
+            ImGui::SetItemTooltip("Help for this window");
+            ImGui::PopID();
+            ImGui::DockNodeEndAmendTabBar();
+        }
+    } else if (w->DockIsActive) {  // a docked window with no tab bar: a small button on a row of its own
+        ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - ImGui::CalcTextSize("?").x - st.FramePadding.x * 2);
         pressed = ImGui::SmallButton("?");
         ImGui::SetItemTooltip("Help for this window");
     }
     const bool in_modal = (w->Flags & ImGuiWindowFlags_Modal) != 0;
     if (pressed) {
-        open_help(page);
+        const char* hash = std::strchr(page, '#');  // "page#heading"
+        open_help(hash ? std::string(page, hash) : std::string(page), hash ? hash + 1 : "");
         if (in_modal) help_ui_->modal = true, ImGui::OpenPopup("Help##modal");
     }
     if (!in_modal || !help_ui_ || !help_ui_->modal) return;

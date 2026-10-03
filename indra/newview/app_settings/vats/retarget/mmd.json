@@ -1,0 +1,98 @@
+{
+	"name": "MMD",
+	"mirror": [
+		[
+			"左",
+			"右"
+		]
+	],
+	"bones": {
+		"mPelvis": [
+			"センター"
+		],
+		"mTorso": [
+			"上半身"
+		],
+		"mChest": [
+			"上半身2"
+		],
+		"mNeck": [
+			"首"
+		],
+		"mHead": [
+			"頭"
+		],
+		"mEyeLeft": [
+			"左目"
+		],
+		"mCollarLeft": [
+			"左肩"
+		],
+		"mShoulderLeft": [
+			"左腕"
+		],
+		"mElbowLeft": [
+			"左ひじ"
+		],
+		"mWristLeft": [
+			"左手首"
+		],
+		"mHipLeft": [
+			"左足"
+		],
+		"mKneeLeft": [
+			"左ひざ"
+		],
+		"mAnkleLeft": [
+			"左足首"
+		],
+		"mFootLeft": [
+			"左つま先"
+		],
+		"mHandThumb1Left": [
+			"左親指０"
+		],
+		"mHandThumb2Left": [
+			"左親指１"
+		],
+		"mHandThumb3Left": [
+			"左親指２"
+		],
+		"mHandIndex1Left": [
+			"左人指１"
+		],
+		"mHandIndex2Left": [
+			"左人指２"
+		],
+		"mHandIndex3Left": [
+			"左人指３"
+		],
+		"mHandMiddle1Left": [
+			"左中指１"
+		],
+		"mHandMiddle2Left": [
+			"左中指２"
+		],
+		"mHandMiddle3Left": [
+			"左中指３"
+		],
+		"mHandRing1Left": [
+			"左薬指１"
+		],
+		"mHandRing2Left": [
+			"左薬指２"
+		],
+		"mHandRing3Left": [
+			"左薬指３"
+		],
+		"mHandPinky1Left": [
+			"左小指１"
+		],
+		"mHandPinky2Left": [
+			"左小指２"
+		],
+		"mHandPinky3Left": [
+			"左小指３"
+		]
+	}
+}

@@ -17,7 +17,9 @@
 #include <vector>
 
 #include "vats/clip.h"
+#include "vats/dae.h"
 #include "vats/json.h"
+#include "vats/rig_constraints.h"
 
 namespace vats {
 
@@ -63,6 +65,22 @@ struct Project {
     int active_clip = 0;
     Json meta = Json::object();
     Json extra = Json::object();  // unknown top-level fields, written back in their order (IO-43)
+    std::unordered_map<std::string, RigConstraints> joint_limits;  // body id ("sl-default", or mesh body id) -> constraints
+    // Spec 08 SK-3: mesh body id -> its parts hidden and shape key values. A body not listed shows what its models'
+    // mapping files say.
+    std::map<std::string, MeshLook> mesh_looks;
+
+    const RigConstraints* body_constraints(std::string_view body_id) const {
+        std::string key = body_id.empty() ? "sl-default" : std::string(body_id);
+        auto it = joint_limits.find(key);
+        if (it == joint_limits.end() && key == "sl-default") it = joint_limits.find("");
+        if (it != joint_limits.end() && !it->second.empty()) return &it->second;
+        return nullptr;
+    }
+    RigConstraints& get_or_create_constraints(std::string_view body_id) {
+        std::string key = body_id.empty() ? "sl-default" : std::string(body_id);
+        return joint_limits[key];
+    }
 
     // Set by load_project, never saved.
     bool read_only = false;  // the file has a newer version than this build knows (IO-43)

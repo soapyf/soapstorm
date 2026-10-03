@@ -70,7 +70,7 @@ public:
     // and transparent; the View starts with the backdrop.
     virtual bool scene_begin(SceneTarget target, int width, int height, const Camera& cam, const SceneColours& colours,
                              const Mat4* projection = nullptr) = 0;
-    virtual void scene_ground(const Vec3& focus) = 0;  // grid and contact shadow; focus = the pelvis
+    virtual void scene_ground(const Vec3& focus) = 0;  // grid and contact shadow at height focus.z, under focus's x, y
     // translucent: back faces culled and no depth writes, for see-through overlays.
     virtual void scene_triangles(const std::vector<Vertex>& verts, const std::vector<std::uint32_t>& indices,
                                  bool depth_test, float gloss = 0.f, bool translucent = false) = 0;
@@ -246,6 +246,10 @@ public:
         virtual void place_view(ImVec2 min, ImVec2 max) { (void)min, (void)max; }
         virtual int unread_notices() const = 0;  // the host's notifications not yet seen
         virtual void toggle_notices() = 0;       // shows or hides the host's notification window
+        // The host's own inventory window, to wear and take off what the avatar has (no editing from the editor):
+        // its menu label, or nullptr when the host has none.
+        virtual const char* inventory_label() const { return nullptr; }
+        virtual void toggle_inventory() {}
         // The host's full UI, shown over the editor until turned off again (the viewer).
         virtual const char* reveal_label() const = 0;
         virtual const char* reveal_shortcut() const { return nullptr; }  // shown beside it in the menu
@@ -264,6 +268,17 @@ public:
                              std::function<void(const std::string&)> done) {
         (void)bytes, (void)name;
         done("This program cannot upload");
+    }
+
+    // --- Local Mesh preview (the viewer; spec 08 RG-3, RG-5) ---------------------------------------------
+    // Shows a rigged .dae the editor just wrote on the host's own avatar through Firestorm's Local Mesh, on this screen
+    // only: nothing is uploaded, the file stays on disk and reloads when it changes. False with why when this host cannot
+    // (the app). The viewer adds the file to LLLocalMeshSystem (addFile) and opens its Local Mesh floater, where the
+    // wearer picks the attached object to apply it to (applyVObject), as the floater does by hand.
+    virtual bool local_mesh_preview(const std::string& dae_path, std::string& why) {
+        (void)dae_path;
+        why = "This program has no Local Mesh. Export the file and preview it in the viewer's Local Mesh window.";
+        return false;
     }
 
     // --- Files and dialogs ----------------------------------------------------------------------

@@ -54,7 +54,7 @@ parabola, fast leaving the ground, slowest at the top, fast coming down.
 
 1. Choose **Tools → Jump Arc...**.
 2. Set **Takeoff** to `14` and **Landing** to `26` (type them, or go to the frame and press **Current
-   Frame**). Leave **Gravity** at `9.81 m/s²`, and **Forward Travel** and **Keep Lateral Motion** ticked.
+   Frame**). Leave **Gravity** at `9.81 m/s²`, and **Forward travel** and **Keep lateral motion** ticked.
 3. The window reads `0.40 s in the air, the hips rise 18.6 cm`.
 4. Press **Apply Jump Arc**. The status bar says `Jump Arc: 0.40 s in the air, the hips rise 18.6 cm`.
 
@@ -125,7 +125,7 @@ its arc but without the follow-through: [Open the example](example:jump-arc.vat)
 ## Tips and tricks
 
 - A lower **Gravity** makes a moon jump; the window shows how high the hips go before you apply it.
-- To jump forwards, key the hips further forward at the landing than at the takeoff: **Forward Travel** moves
+- To jump forwards, key the hips further forward at the landing than at the takeoff: **Forward travel** moves
   them at an even speed in between, as a body in the air does.
 - An AO plays a jump in pieces: **Pre Jumping** (the crouch), **Jumping** (in the air) and **Landing**. Make
   each a clip in [[Clips]] from the frames of this one.

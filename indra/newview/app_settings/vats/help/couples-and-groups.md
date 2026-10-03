@@ -113,7 +113,7 @@ Below the list, under the actor's name:
 | **Colour** | The tint when the actor is not being edited. |
 | **Body** | How the actor looks: **None** (the default: nothing but its [[Props|props]], and its bones while you edit it), **Ruth** (the Second Life default body), or one of your [[Mesh bodies]]. Saved in the project. In the app the actor you edit shows **Ruth**, or the body chosen under **View** when it has **None** or a mesh body; in the viewer your avatar's actor is the avatar you wear. Projects made before may show another Linden body by name. |
 
-Under **Placement from the sit target**, **Position (m)** and **Turn (deg)** set where the actor stands
+Under **Placement from the sit target**, **Position** and **Turn** set where the actor stands
 relative to the shared point, which stands for the pose ball or the furniture's sit target in Second Life.
 
 ### Share the timeline
@@ -257,7 +257,7 @@ chosen under **View**.
    choose **mWristRight**, then press **Bind Selected Point to This Bone from Here**. The status bar says
    "mWristRight now follows Partner's mWristRight", and **Properties → Bone** reads **Pinned to mWristRight
    from frame 15**.
-4. Click **Partner** in the **Actors** window and drag its **Turn (deg)**: as Partner turns, Lead's hand
+4. Click **Partner** in the **Actors** window and drag its **Turn**: as Partner turns, Lead's hand
    stays on Partner's wrist. Press **Ctrl+Z** to put Partner back (**Place Actor** is one undo step).
 5. **File → Export SL .anim...** writes one `.anim` per actor and `<name>_placement.txt`, whose
    **Partner** entry ends with the sit-target line shown above.

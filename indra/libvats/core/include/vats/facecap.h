@@ -19,6 +19,8 @@
 namespace vats {
 
 struct VmcState;
+class Skeleton;
+struct Shape;
 
 struct FaceTable {
     struct Motion {
@@ -26,6 +28,7 @@ struct FaceTable {
         Vec3 rot;  // degrees at weight 1 (VATs Euler, as key_euler takes)
         Vec3 pos;  // metres at weight 1 (as key_offset takes)
         bool has_rot = false, has_pos = false;
+        bool operator==(const Motion&) const = default;
     };
     std::string name;
     std::map<std::string, std::vector<Motion>> shapes;           // ARKit shape -> bone motion at weight 1
@@ -36,15 +39,26 @@ struct FaceTable {
     struct Gaze {
         std::vector<std::string> eyes;
         std::map<std::string, double> lids;
+        bool operator==(const Gaze&) const = default;
     };
     Gaze gaze[2];
 
     // Every bone the table moves, sorted (what a "face parts only" take writes).
     std::vector<std::string> bones() const;
+    bool operator==(const FaceTable& o) const = default;
 };
 
 // Reads a "vats-face-table" JSON. False with err on a bad table.
 bool parse_face_table(std::string_view json, FaceTable& out, std::string& err);
+
+// Serializes a FaceTable to "vats-face-table" JSON.
+std::string write_face_table(const FaceTable& table);
+
+// How much bigger shape's face is than SL's default: the median of the eye distance (mEye and the Bento eyes) and
+// the mouth-corner width over SL's, or the mHead scale when none of those moved. 1 for the default head or a null
+// shape. The face moves (FaceSettings::scale) take it from the bake shape, so preview, takes, the Face panel,
+// expression packs and lip sync all move a face by the same amount.
+double face_scale(const Skeleton& skel, const Shape* shape);
 
 // A sender's shape name in the table's ARKit spelling: "eyeBlink_L" (iFacialMocap) and "EyeBlinkLeft"
 // (VRM perfect sync) both become "eyeBlinkLeft".
@@ -60,6 +74,7 @@ struct FaceSettings {
     bool head = true;  // iFacialMocap: key mHead from its head rotation (VMC senders send the head as a bone)
     double eye_gain = 1;                         // on the gaze, whatever it comes from
     double eye_yaw_max = 25, eye_pitch_max = 20;  // degrees either way
+    double scale = 1;                            // the table's bone position offsets times this: face_scale of the bake shape
 };
 
 // Raw sender weights (0..1) -> ARKit weights: aliases expanded, the neutral face taken out
@@ -70,7 +85,7 @@ std::map<std::string, double> face_weights(const FaceTable& table, const std::ma
 // Keys every table bone at frame from weights (bones at rest where nothing moves them), and mHead from
 // s.face_head when settings.head and the sender gave one. The eyes use the sender's eye rotations when it
 // sends them (s.has_eyes, or VMC LeftEye/RightEye bones), else the eyeLook shapes; then eye_gain, the
-// limits, and the lids following the pitch.
+// limits, and the lids following the pitch. Offsets are times settings.scale.
 void key_face(Clip& clip, const FaceTable& table, const VmcState& s, const FaceSettings& settings, double frame);
 
 // The Linden head's own expression morphs (avatar_head.llm) from ARKit weights, for a face drawn on the system head

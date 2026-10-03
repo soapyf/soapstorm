@@ -21,8 +21,10 @@ Both dots are green while the ground dot is inside the outline and red when it i
 
 How it is worked out:
 
-- A foot is **planted** when its lowest joint (`mAnkle`, `mFoot` or `mToe`) is within 5 cm of the ground. The ground is the height of the lowest of those joints in the rest pose.
-- Each planted foot's **footprint** runs from 5 cm behind the ankle to the toe joint, 9 cm wide, along the foot as seen from above. The support polygon is the outline around the footprints; with both feet down it spans the gap between them.
+- Contact height comes from the body mesh shown (a mesh body, or the standard avatar mesh), posed at this frame: the ground plane is at its lowest vertex. Each foot whose own lowest point is within 6 cm of that plane is planted, and its vertices within 2 cm of its own lowest point are its sole. With **Skeleton Only**, or in the viewer's world view without a swapped body, the ankles, feet and toes of the bones stand in for the mesh.
+- The **support polygon** is drawn directly at that contact plane: it is the 2D convex hull of the planted soles. On a biped avatar it spans the soles of planted feet; on a quadruped or creature mesh it spans all supporting feet.
+- The **centre-of-mass drop line** extends all the way down to this contact plane. The planted-feet markers of a body drag sit on it too.
+- The ground grid is drawn at the shown body's lowest point in its rest pose, not this frame's, so it stays put while the body jumps or crouches. A mesh body whose soles rest below or above Second Life's ground (longer legs, a creature) stands on its own soles. In the viewer, a body swapped in by **View → Body** is raised or lowered by the same difference, so its soles stand on the world's ground where your avatar's would.
 - The **centre of mass** weights each part of the body by its share of a body's mass, from de Leva's segment table (1996): the hips 11 %, the torso and chest 32 %, each thigh 14 %, the head 6 %, and so on. These are the [[Ragdoll]]'s bodies and masses.
 
 The standing rest pose puts the centre of mass within a centimetre of the point between the ankles.
@@ -39,7 +41,7 @@ The standing rest pose puts the centre of mass within a centimetre of the point 
 What it does:
 
 1. The planted feet are held where they are with leg [[IK]], exactly as **Tools → Clean Up Foot Sliding** holds them over the range. A leg that already uses IK in the range is left as it is: its target already holds the foot.
-2. On every frame of the range where the centre of mass is outside the support polygon shrunk by **Margin**, `mPelvis` moves sideways and forward or back (never up or down) by the smallest distance that brings it inside. The legs bend to keep the feet on their spots.
+2. Balance is judged on the same floor and soles the view draws (see above). On every frame of the range where the centre of mass is outside the support polygon shrunk by **Margin**, `mPelvis` moves sideways and forward or back (never up or down) by the smallest distance that brings it inside. The legs bend to keep the feet on their spots.
 3. The corrections are averaged over **Smoothing** frames each side, so the hips glide instead of jumping; up to 12 passes run, the last four unsmoothed, until every frame is inside.
 
 `mPelvis` is keyed on every frame of the range. The frames just before and after the range are keyed where the curves already were, and the curves outside the range keep their shape. A frame with no foot on the ground needs no correction of its own (smoothing may still carry a neighbour's to it). The status bar reports, for example, "Balanced frames 0-30: the hips moved up to 41.8 cm"; frames that could not be brought inside are counted: "..., 2 frame(s) still off balance".
@@ -56,8 +58,8 @@ What it does:
 
 `mPelvis`'s height is keyed on every frame between on the path a thrown body takes: it leaves the takeoff height fast enough to reach the landing height after the time between the two frames, slowing under **Gravity** (9.81 m/s², Earth's; 0.5–50). Over 0.6 s with the two ends level, the hips rise 44.1 cm, gravity × time² / 8. The window shows the time in the air and the rise before you apply it, and the status bar repeats it: "Jump Arc: 0.60 s in the air, the hips rise 44.1 cm".
 
-- **Forward Travel** (on): X runs at an even speed from the takeoff position to the landing position, as it does in the air. Off: X keeps its keys.
-- **Keep Lateral Motion** (on): Y, side to side, keeps its keys. Off: Y runs at an even speed like X.
+- **Forward travel** (on): X runs at an even speed from the takeoff position to the landing position, as it does in the air. Off: X keeps its keys.
+- **Keep lateral motion** (on): Y, side to side, keeps its keys. Off: Y runs at an even speed like X.
 
 The takeoff and landing keys keep their values, and the curves before the takeoff and after the landing keep their shape. Only the hips move; pose the legs, arms and spine for the jump yourself.
 
@@ -72,7 +74,7 @@ The takeoff and landing keys keep their values, and the curves before the takeof
 
 ## Tips and tricks
 
-- Tick **Counter-Lean the Torso** to let `mTorso` lean back towards the feet as well, by half the angle the hips' correction makes over the length of the spine. The hips then move less, which suits a character leaning over something.
+- Tick **Counter-lean the torso** to let `mTorso` lean back towards the feet as well, by half the angle the hips' correction makes over the length of the spine. The hips then move less, which suits a character leaning over something.
 - For a reach that should pull the whole body, give the hand's IK target a **Pull**: see [[IK#Full-body reach]].
 - The support polygon counts the feet only. A hand on a wall or a knee on the floor is not a support; a crawl or a sit reads as off balance.
 
@@ -81,6 +83,10 @@ The takeoff and landing keys keep their values, and the curves before the takeof
 ### Nothing is drawn
 
 No foot is within 5 cm of the ground at this frame, or **View → Centre of Mass** is off. A pose raised on a prop (standing on a box) has its feet above the rest pose's ground and counts as airborne.
+
+### A foot that stands is not in the outline
+
+Only feet within 6 cm of the lowest sole count as planted. A creature whose feet rest at different heights stands on the lowest ones: the test mech (`vats_make_test_body --mech`) has hind feet 12 cm above its front soles, so its outline is its front feet only, and since those boxes touch the ground at their toes, the rest pose reads as off balance. Lower the higher feet onto the floor (key the hind legs down), and the outline spans all four.
 
 ### "N frame(s) still off balance"
 

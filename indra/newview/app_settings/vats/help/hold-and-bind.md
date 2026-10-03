@@ -23,11 +23,15 @@ From that frame on, the point stays where it is. The status bar says, for exampl
 ### Binding a point to another bone
 
 1. Go to the frame where the binding should start.
-2. Select the bone the point should follow.
-3. **Shift+click** the point itself, so it is selected second.
-4. Choose **Tools → Bind to Selected Bone from Here**. An attachment point's right-click menu offers **Bind to** *bone* **from Here** when two items are selected.
+2. Right-click the point (a hand, say) in the view and choose **Bind** *bone* **to...**, or select it and choose
+   **Tools → Bind to...**. A badge at the top of the view says "Click the bone mWristLeft rides".
+3. Click the bone it should follow (the thigh) in the view. **Esc** or a right-click cancels.
 
-The status bar confirms, for example "Right Hand now rides mWristLeft".
+The status bar confirms, for example "mWristLeft · Left Hand now rides mHipLeft · Left Thigh from frame 0".
+
+With both already selected, the bone to follow first and the point second (**Shift+click**), **Tools → Bind to
+Selected Bone from Here** does the same in one step; an attachment point's right-click menu then offers **Bind to**
+*bone* **from Here**.
 
 ### Releasing and deleting
 
@@ -93,7 +97,7 @@ To make the same thing yourself, pose the hand on the table at the first frame, 
 
 ### Bind to Selected Bone from Here is greyed out
 
-It needs exactly two items selected: the bone to ride first, then the point to pin. The hint reads "Select the bone to ride, then Shift-click the point to pin".
+It needs exactly two items selected: the bone to ride first, then the point to pin. The hint reads "Select the bone to ride, then Shift-click the point to pin". **Tools → Bind to...** needs only the point: you click the bone after.
 
 ### A pinned hand drifts away from its target
 

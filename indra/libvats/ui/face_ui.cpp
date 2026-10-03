@@ -48,6 +48,14 @@ constexpr std::pair<const char*, const char*> kGroups[] = {{"Eyes", "eye"},  {"B
 
 }  // namespace
 
+// The face moves are sized for the head the export plays on: Your avatar's own joints when the export bakes on Your
+// avatar, else the bake shape. The preview, takes, the sliders, expression packs and lip sync all use this one
+// scale, so keys made by one read back in another.
+double App::face_move_scale() const {
+    const Shape* worn = export_positions();
+    return vats::face_scale(skel_, worn ? worn : export_shape());
+}
+
 std::string App::face_heads_dir() const {
     const std::string& user = host_.paths().user;
     return user.empty() ? "" : user + "faces/";
@@ -112,7 +120,7 @@ void App::draw_face_panel() {
     if (!show_face_) return;
     if (!face_ui_) face_ui_ = std::make_shared<FaceUi>();
     FaceUi& ui = *face_ui_;
-    place_tool_window(24, 40);
+    place_tool_window("Face", 24, 40);
     if (!ImGui::Begin("Face", &show_face_)) return ImGui::End();
     help_button("face-animation");
     Clip& clip = doc_.clip();
@@ -135,12 +143,9 @@ void App::draw_face_panel() {
         load_face_table(head, ui.table, ui.error);
         ui.head = head;
     }
-    const float label_w = ImGui::GetFontSize() * 6.5f;
     auto label = [&](const char* text, float w = -1) {  // label on the left (spec 06 section 1.1)
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(text);
-        ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(w);
+        labelled_row(text);
+        if (w > 0) ImGui::SetNextItemWidth(w);
     };
     label("Head");
     if (ImGui::BeginCombo("##head", head.empty() ? "SL default head" : head.c_str())) {
@@ -152,7 +157,7 @@ void App::draw_face_panel() {
     ImGui::SetItemTooltip("The mapping from face shapes to bones. Your own heads are JSON files in the heads folder;\n"
                           "Motion Capture uses the same head.");
     ImGui::BeginDisabled(face_heads_dir().empty());
-    if (icon_label_button(icon::kAdd, "New Head")) {
+    if (ImGui::Button("New Head")) {
         std::error_code ec;
         std::filesystem::create_directories(u8path(face_heads_dir()), ec);
         std::string name = "my head";
@@ -186,7 +191,7 @@ void App::draw_face_panel() {
     if (ImGui::Checkbox("Move face bones", &move)) set_face_positions(move), ui.seen.clear();
     ImGui::SetItemTooltip("Moves face bones as well as turning them: smiles, brows, cheeks and lip shapes. The moves are made "
                           "for the\nSecond Life default head. Off by default: leave it off for a mesh head with its own face "
-                          "joint positions.\nThe same setting as in Motion Capture.");
+                          "joint positions.\nFace tracking in Motion Capture follows it too.");
     // "Your avatar" (03 IO-11a): position keys on a worn mesh head's face bones pull it towards the default face unless
     // the export bakes on Your avatar.
     if (pos && host_.world_view()) {
@@ -195,7 +200,7 @@ void App::draw_face_panel() {
             if (int n = skel_.find(j); n >= 0 && skel_[n].category == Category::Face) face_worn = true;
         if (face_worn && bake_shape_key(clip.export_settings, exporting_yours()) != "avatar")
             ImGui::TextColored(ImVec4(1, 0.75f, 0.35f, 1), "Your mesh head has its own face joint positions. Set Bake shape to "
-                                                          "Your avatar (Properties > Export), or these moves will pull it "
+                                                          "Your avatar (File > Export SL .anim...), or these moves will pull it "
                                                           "towards the default face.");
     }
     if (!ui.error.empty()) {
@@ -217,23 +222,23 @@ void App::draw_face_panel() {
     };
 
     // --- Expression (FA-1..FA-4) ---
-    if (ImGui::CollapsingHeader("Expression", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (section_header("Expression")) {
         // The sliders follow the keys: while they still give the keys at this frame they stay as set; otherwise they
         // are read back from the keys (an undo, another frame, an edit elsewhere).
         if (!doc_.history.is_open()) {
             std::vector<double> now = face_bone_values(clip, ui.table, frame, pos);
             if (now != ui.seen) {
                 ui.seen = std::move(now);
-                if (!face_weights_match(clip, ui.table, ui.weights, pos, frame))
-                    ui.weights = read_face_weights(clip, ui.table, frame, pos);
+                if (!face_weights_match(clip, ui.table, ui.weights, pos, frame, face_move_scale()))
+                    ui.weights = read_face_weights(clip, ui.table, frame, pos, face_move_scale());
             }
         }
-        hint("Each slider keys the face bones at this frame. Poses and shapes read back from the keys.");
+        hint("Each slider keys the face bones at this frame.");
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10);
-        ImGui::InputTextWithHint("##facefilter", "Filter shapes...", ui.filter, sizeof ui.filter);
+        filter_input("##facefilter", "Filter shapes...", ui.filter, sizeof ui.filter);
         ImGui::SameLine();
         if (ImGui::Button("Reset Face")) {
-            edit("Reset Face", [&](Clip& c) { key_face_weights(c, ui.table, {}, pos, frame); });
+            edit("Reset Face", [&](Clip& c) { key_face_weights(c, ui.table, {}, pos, frame, nullptr, face_move_scale()); });
             ui.weights.clear();
         }
         ImGui::SetItemTooltip("Key every face bone at rest at this frame");
@@ -257,7 +262,7 @@ void App::draw_face_panel() {
             if (changed) {
                 const std::map<std::string, double> before = ui.weights;
                 w = std::clamp(double(v), 0.0, 1.0);
-                key_face_weights(clip, ui.table, ui.weights, pos, frame, &before);
+                key_face_weights(clip, ui.table, ui.weights, pos, frame, &before, face_move_scale());
                 ui.seen = face_bone_values(clip, ui.table, frame, pos);
             }
             if (ImGui::IsItemDeactivated() && doc_.history.is_open() && doc_.history.commit("Face Shape", clip)) mark_dirty();
@@ -271,30 +276,31 @@ void App::draw_face_panel() {
                 if (shape.rfind(prefix, 0) == 0 && matches(shape)) names.push_back(shape);
             if (names.empty()) continue;
             if (!filter.empty()) ImGui::SetNextItemOpen(true);
-            if (ImGui::TreeNode(group)) {
+            ImGui::Indent();
+            if (section_header(group, false))
                 for (auto& n : names) slider(n, face_shape_keys(ui.table, n, pos));
-                ImGui::TreePop();
-            }
+            ImGui::Unindent();
         }
         std::vector<std::string> presets;
         for (auto& [name, shapes] : ui.table.aliases)
             if (matches(name)) presets.push_back(name);
         if (!presets.empty()) {
             if (!filter.empty()) ImGui::SetNextItemOpen(true);
-            if (ImGui::TreeNode("VRM presets")) {
+            ImGui::Indent();
+            if (section_header("VRM Presets", false)) {
                 for (auto& n : presets) {
                     bool keys = false;
                     for (auto& [shape, k] : ui.table.aliases.at(n)) keys |= face_shape_keys(ui.table, shape, pos);
                     slider(n, keys);
                 }
-                ImGui::TreePop();
             }
+            ImGui::Unindent();
         }
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10);
         ImGui::InputTextWithHint("##facepose", "Pose name", ui.pose_name, sizeof ui.pose_name);
         ImGui::SameLine();
         ImGui::BeginDisabled(!ui.pose_name[0]);
-        if (icon_label_button(icon::kAddToLibrary, "Save Face Pose")) {
+        if (ImGui::Button("Save Face Pose")) {
             LibraryItem it = make_face_pose(clip, ui.table, frame, pos);
             it.name = ui.pose_name;
             store_library_item(std::move(it));
@@ -303,13 +309,13 @@ void App::draw_face_panel() {
         }
         ImGui::EndDisabled();
         ImGui::SetItemTooltip("Keep this frame's face in the pose library; apply it like any pose");
-        if (icon_label_button(icon::kExpressionPack, "Export Expression Pack...")) ImGui::OpenPopup("Export Expression Pack");
+        if (ImGui::Button("Export Expression Pack...")) ImGui::OpenPopup("Export Expression Pack");
         ImGui::SetItemTooltip("One short face-only .anim per expression, for an expression HUD");
         draw_expression_pack(ui.table, pos);  // expression_pack_ui.cpp
     }
 
     // --- Lip sync (LS, lip_sync_ui.cpp) ---
-    if (ImGui::CollapsingHeader("Lip Sync")) draw_lip_sync(pos);
+    if (section_header("Lip Sync", false)) draw_lip_sync(pos);
 
     // The target picker the layer and the look-at tool share. set() makes a discrete change; drags edit t in place and
     // report through dragged().
@@ -335,7 +341,7 @@ void App::draw_face_panel() {
             dragged(before);
             const int sel = primary();
             ImGui::BeginDisabled(sel < 0);
-            if (ImGui::SmallButton("Use the Selected Bone's Position"))
+            if (ImGui::Button("Use the Selected Bone's Position"))
                 set([pt = globals_[std::max(sel, 0)].pos](FaceLayer& x) { x.point = pt; });
             ImGui::EndDisabled();
         } else if (t.look == "prop") {
@@ -370,7 +376,7 @@ void App::draw_face_panel() {
     };
 
     // --- Blink, eye-dart and look-at layer (FA-5..FA-7) ---
-    if (ImGui::CollapsingHeader("Blinks, Eye Darts and Look-At")) {
+    if (section_header("Blinks, Eye Darts and Look-At", false)) {
         hint("A layer that blinks, darts the eyes and looks at a target, baked onto the eyes, the eyelids and the head.");
         if (!clip.face_layer) {
             if (icon_label_button(icon::kAddLayer, "Add Layer")) edit("Face Layer", [](Clip& c) { c.face_layer = FaceLayer{}; });
@@ -432,7 +438,7 @@ void App::draw_face_panel() {
             }
             ImGui::EndDisabled();
 
-            ImGui::SeparatorText("Look at");
+            subheading("Look at");
             target_ui(L, true, set, [&](const Vec3& before) { track("Face Layer", L.point, before); });
             ImGui::BeginDisabled(L.look.empty());
             {
@@ -452,7 +458,7 @@ void App::draw_face_panel() {
             ImGui::Separator();
             if (icon_label_button(icon::kBake, L.baked ? "Re-bake" : "Bake")) {
                 const LookTarget look = look_target(L);
-                edit("Bake Face Layer", [&](Clip& c) { bake_face_layer(c, *rig_, export_shape(), ui.table, pos, look); });
+                edit("Bake Face Layer", [&](Clip& c) { bake_face_layer(c, *rig_, export_shape(), ui.table, pos, look, face_move_scale()); });
                 status(!L.look.empty() && !look ? "Baked the face layer; the look-at target was not found, so it looks ahead"
                                                 : "Baked the face layer to keys");
             }
@@ -468,7 +474,7 @@ void App::draw_face_panel() {
     }
 
     // --- Look-at tool (FA-8) ---
-    if (ImGui::CollapsingHeader("Look At")) {
+    if (section_header("Look At", false)) {
         hint("Turns the selected head or eyes towards a target on every frame of the range, like Follow Target.");
         FaceLayer& t = ui.tool;
         if (t.look.empty()) t.look = "point", t.point = {2, 0, 1.7};

@@ -8,7 +8,9 @@
 #include <cstdio>
 
 #include "app.h"
+#include "widgets.h"
 #include "imgui.h"
+#include "theme.h"
 
 namespace vats {
 namespace {
@@ -26,7 +28,7 @@ bool quality_tool(const std::string& label) {
 // the window is open and has no clean-up step to show; measure on demand if long clips make edits stutter.
 void App::draw_quality_panel() {
     if (!show_quality_) return;
-    place_tool_window(26, 17);
+    place_tool_window("Motion Quality", 26, 17);
     if (!ImGui::Begin("Motion Quality", &show_quality_)) return ImGui::End();
     help_button("motion-quality");
     const History& h = doc_.history;
@@ -48,8 +50,7 @@ void App::draw_quality_panel() {
     const bool compare = !quality_label_.empty();
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
     if (compare) ImGui::TextWrapped("Before and after the last clean-up: %s.", quality_label_.c_str());
-    else ImGui::TextWrapped("The animation now. Clean Up Foot Sliding, a Bake, Filter Curves, Simplify Curves, a Fit or "
-                            "a loop tool adds its before and after here.");
+    else ImGui::TextWrapped("The animation now; a clean-up adds its before and after here.");
     ImGui::PopStyleColor();
 
     const MotionQuality &b = quality_[0], &a = quality_[1];
@@ -73,8 +74,9 @@ void App::draw_quality_panel() {
         };
         row("Keys", "Keys in the animation's curves", b.keys, a.keys, "%.0f");
         row("Size", "Bytes of the .anim export writes", double(b.bytes), double(a.bytes), "%.0f bytes");
-        row("Shake", "RMS over the bones of their jerk (the third difference of the rotation curves)", b.jerk, a.jerk,
-            "%.0f deg/s3");
+        row("Jitter", "How shaky the rotation curves are: the bones' average jerk (how fast their acceleration changes), "
+            "in degrees per second cubed. Lower is smoother; filtering or simplifying lowers it", b.jerk, a.jerk,
+            "%.0f deg/s\xC2\xB3");
         row("Foot slide", "How far planted feet move along the ground, summed over every foot contact", b.foot_slide * 1000,
             a.foot_slide * 1000, "%.1f mm");
         row("Hip drift", "How far the hips travel along the ground per loop, or over the whole animation when it does not loop (what Remove Hip Travel takes away)",
@@ -86,9 +88,9 @@ void App::draw_quality_panel() {
         }
         ImGui::EndTable();
     }
-    ImGui::TextDisabled("%d foot contact(s)%s", a.contacts, a.loops ? "" : "; the animation does not loop");
+    ImGui::TextDisabled("%s%s", count_noun(size_t(std::max(a.contacts, 0)), "foot contact").c_str(), a.loops ? "" : "; the animation does not loop");
 
-    if (ImGui::TreeNode("Shake per bone")) {
+    if (section_header("Jitter per Bone", false)) {
         if (ImGui::BeginTable("##shake_bones", compare ? 3 : 2,
                               ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit,
                               ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * 9))) {
@@ -110,7 +112,6 @@ void App::draw_quality_panel() {
             }
             ImGui::EndTable();
         }
-        ImGui::TreePop();
     }
     ImGui::End();
 }

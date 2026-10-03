@@ -1,0 +1,177 @@
+{
+	"name": "Daz Genesis 8",
+	"hint": "ShldrBend",
+	"bones": {
+		"mPelvis": [
+			"hip"
+		],
+		"mTorso": [
+			"abdomenLower",
+			"abdomen"
+		],
+		"mChest": [
+			"chestUpper",
+			"chest"
+		],
+		"mNeck": [
+			"neckLower",
+			"neck"
+		],
+		"mHead": [
+			"head"
+		],
+		"mFaceJaw": [
+			"lowerJaw"
+		],
+		"mEyeLeft": [
+			"lEye"
+		],
+		"mCollarLeft": [
+			"lCollar"
+		],
+		"mShoulderLeft": [
+			"lShldrBend",
+			"lShldr"
+		],
+		"mElbowLeft": [
+			"lForearmBend",
+			"lForeArm"
+		],
+		"mWristLeft": [
+			"lHand"
+		],
+		"mHipLeft": [
+			"lThighBend",
+			"lThigh"
+		],
+		"mKneeLeft": [
+			"lShin"
+		],
+		"mAnkleLeft": [
+			"lFoot"
+		],
+		"mFootLeft": [
+			"lToe"
+		],
+		"mHandThumb1Left": [
+			"lThumb1"
+		],
+		"mHandThumb2Left": [
+			"lThumb2"
+		],
+		"mHandThumb3Left": [
+			"lThumb3"
+		],
+		"mHandIndex1Left": [
+			"lIndex1"
+		],
+		"mHandIndex2Left": [
+			"lIndex2"
+		],
+		"mHandIndex3Left": [
+			"lIndex3"
+		],
+		"mHandMiddle1Left": [
+			"lMid1"
+		],
+		"mHandMiddle2Left": [
+			"lMid2"
+		],
+		"mHandMiddle3Left": [
+			"lMid3"
+		],
+		"mHandRing1Left": [
+			"lRing1"
+		],
+		"mHandRing2Left": [
+			"lRing2"
+		],
+		"mHandRing3Left": [
+			"lRing3"
+		],
+		"mHandPinky1Left": [
+			"lPinky1"
+		],
+		"mHandPinky2Left": [
+			"lPinky2"
+		],
+		"mHandPinky3Left": [
+			"lPinky3"
+		],
+		"mEyeRight": [
+			"rEye"
+		],
+		"mCollarRight": [
+			"rCollar"
+		],
+		"mShoulderRight": [
+			"rShldrBend",
+			"rShldr"
+		],
+		"mElbowRight": [
+			"rForearmBend",
+			"rForeArm"
+		],
+		"mWristRight": [
+			"rHand"
+		],
+		"mHipRight": [
+			"rThighBend",
+			"rThigh"
+		],
+		"mKneeRight": [
+			"rShin"
+		],
+		"mAnkleRight": [
+			"rFoot"
+		],
+		"mFootRight": [
+			"rToe"
+		],
+		"mHandThumb1Right": [
+			"rThumb1"
+		],
+		"mHandThumb2Right": [
+			"rThumb2"
+		],
+		"mHandThumb3Right": [
+			"rThumb3"
+		],
+		"mHandIndex1Right": [
+			"rIndex1"
+		],
+		"mHandIndex2Right": [
+			"rIndex2"
+		],
+		"mHandIndex3Right": [
+			"rIndex3"
+		],
+		"mHandMiddle1Right": [
+			"rMid1"
+		],
+		"mHandMiddle2Right": [
+			"rMid2"
+		],
+		"mHandMiddle3Right": [
+			"rMid3"
+		],
+		"mHandRing1Right": [
+			"rRing1"
+		],
+		"mHandRing2Right": [
+			"rRing2"
+		],
+		"mHandRing3Right": [
+			"rRing3"
+		],
+		"mHandPinky1Right": [
+			"rPinky1"
+		],
+		"mHandPinky2Right": [
+			"rPinky2"
+		],
+		"mHandPinky3Right": [
+			"rPinky3"
+		]
+	}
+}

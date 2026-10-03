@@ -39,7 +39,7 @@ script beside it makes the file. Any Mixamo BVH gives the same kind of result.
    21 SL bones get a source bone. `mixamorig:Spine1` goes unused, because `mChest` takes `Spine2` when
    the file has it, and `mToeLeft` and `mToeRight` read **(none)**, because the file has no
    `LeftToe_End` or `RightToe_End`.
-2. Leave **Clean Up Foot Sliding** and the five trades ticked and press **Import**. The report begins
+2. Leave **Clean up foot sliding** and the five trades ticked and press **Import**. The report begins
    "Fits SL's limits: 61 frames at 30 fps, 5939 bytes (was 11251)." No trade was needed, so no step is
    listed before the notes: `source up axis: Y`, `hip movement scaled by 0.01124` (centimetres to
    metres, times SL's longer legs), the two toes keeping their rest pose, `Left Leg: 0 heel and 2 toe
@@ -110,18 +110,18 @@ This lets an A-pose source drive SL's T-pose arms without twisting. Y-up sources
 and hip travel is scaled by the ratio of SL's leg length to the source's, so the feet cover the right
 distance.
 
-The rest pose comes from the file's bind pose. Tick **Rest Pose from Frame 0** when that is wrong or
+The rest pose comes from the file's bind pose. Tick **Rest pose from frame 0** when that is wrong or
 missing; frame 0 must then be a T-pose or an A-pose.
 
 ### Clean up foot sliding
 
-**Clean Up Foot Sliding** (on by default) holds planted feet still with leg IK where the source had them
+**Clean up foot sliding** (on by default) holds planted feet still with leg IK where the source had them
 on the ground. Beside it:
 
-- **Heel and Toe** (on by default): the heel (the ankle) and the toe (`mToeLeft`, `mToeRight`) land and
+- **Heel and toe** (on by default): the heel (the ankle) and the toe (`mToeLeft`, `mToeRight`) land and
   leave separately, so a heel-toe roll is held first at the heel, then at the toe. Off, or on a skeleton
   without toe bones, the ankle alone is held.
-- **Put Feet on the Ground** (off by default): first moves the hips up or down so the lowest foot touches
+- **Put feet on the ground** (off by default): first moves the hips up or down so the lowest foot touches
   the floor. Use it for a take that floats above the floor or sinks into it.
 
 How it works:
@@ -156,12 +156,12 @@ ticks. **Clean Up** runs it and lists the report under **Last clean-up**.
 A retargeted clip often has more keys than an upload allows. Under **To fit SL's limits, VATs may:**,
 each ticked trade is tried in this order until the `.anim` is under 250,000 bytes:
 
-1. **Reduce Keys** raises the key reduction tolerance in steps: 0.25°/1 mm, 0.5°/2 mm, 1°/5 mm and
+1. **Reduce keys** raises the key reduction tolerance in steps: 0.25°/1 mm, 0.5°/2 mm, 1°/5 mm and
    2°/10 mm.
-2. **Lower the Frame Rate** retimes the clip to 24, then 15, then 10 fps.
-3. **Drop Face** removes the face bones.
-4. **Drop Finger Tips** removes the second and third finger segments.
-5. **Drop Toes** removes the toe bones.
+2. **Lower the frame rate** retimes the clip to 24, then 15, then 10 fps.
+3. **Drop face** removes the face bones.
+4. **Drop finger tips** removes the second and third finger segments.
+5. **Drop toes** removes the toe bones.
 
 All five are ticked by default. The tolerance used is stored in the project's export settings. Untick a
 trade and press **Import Again** to try another.
@@ -175,7 +175,7 @@ Choose **File → Batch Retarget Folder...**. The **Batch Retarget** window take
 - **Rig**: **Best match for each file** (the default) picks the rig for each file as the import does; or pick
   one rig or saved mapping for every file.
 - **Save as**: **Projects (.vat)** or **SL animations (.anim)**.
-- The import's own settings: **Rest Pose from Frame 0**, **Clean Up Foot Sliding** and the five trades under
+- The import's own settings: **Rest pose from frame 0**, **Clean up foot sliding** and the five trades under
   **To fit SL's limits, VATs may:** ([[#Fit SL's limits]]).
 
 Press **Retarget All**. Each file goes through the same steps as **Import**, and the result is saved as
@@ -223,7 +223,7 @@ The clip has too many animated bones for any part length. Tick more trades, or t
 
 ### The arms twist or point the wrong way
 
-The file's bind pose does not match its animation. Tick **Rest Pose from Frame 0** if frame 0 is a
+The file's bind pose does not match its animation. Tick **Rest pose from frame 0** if frame 0 is a
 T-pose or an A-pose, and press **Import Again**.
 
 ### Import failed: this build has no FBX support

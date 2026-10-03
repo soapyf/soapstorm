@@ -7,6 +7,7 @@
 #include <string>
 
 #include "app.h"
+#include "theme.h"
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui.h"
@@ -38,7 +39,7 @@ void App::apply_tween() {
     const int n = tween(clip, tween_on_, frame_, tween_pct_ / 100.0, tween_relax_ ? TweenMode::Relax : TweenMode::Breakdown);
     char pct[16];
     std::snprintf(pct, sizeof pct, "%.0f%%", tween_pct_);
-    if (n) status(std::string(tween_relax_ ? "Relax " : "Tween ") + pct + ": keyed " + std::to_string(n) + " item(s) at frame " +
+    if (n) status(std::string(tween_relax_ ? "Relax " : "Tween ") + pct + ": keyed " + count_noun(size_t(n), "item") + " at frame " +
                   std::to_string(int(frame_)));
     else status(tween_relax_ ? "Relax needs a key at this frame and another key on the same item"
                              : "Tween needs a key before and after this frame on the selected items");
@@ -100,8 +101,11 @@ void App::draw_tween_controls(bool compact) {
         tween_on_.clear();
     }
     ImGui::SameLine();
-    ImGui::Checkbox((std::string(icon::kRelax) + (compact ? "" : " Relax") + "###relax").c_str(), &tween_relax_);  // icon only when narrow
-    ImGui::SetItemTooltip("Relax: the slider pulls existing keys toward the curve instead of placing a breakdown");
+    // A toggle like the toolbar's others (a checkbox here read as an empty button); the icon alone when narrow.
+    const char* relax_tip = "Relax: the slider pulls existing keys toward the curve instead of placing a breakdown";
+    if (compact ? icon_button("relax", icon::kRelax, relax_tip, tween_relax_)
+                : icon_label_button(icon::kRelax, "Relax###relax", relax_tip, tween_relax_))
+        tween_relax_ = !tween_relax_;
     ImGui::EndDisabled();
     tween_row_end_ = ImGui::GetItemRectMax().x;  // the timeline bar's width with names, without the passing Blend
 
@@ -151,14 +155,14 @@ void GraphEditor::draw_ease_menu(GraphContext& ctx) {
     for (int d = 0; d < 3; ++d) {
         if (!ImGui::BeginMenu(dirs[d])) continue;
         for (int s = 0; s < 6; ++s) {
-            if (s == 3) ImGui::SeparatorText("Baked: a key per frame");
+            if (s == 3) subheading("Baked: a key per frame");
             if (!ImGui::MenuItem(shapes[s])) continue;
             const std::string label = std::string(dirs[d]) + " " + shapes[s];
             auto sel = selection_;
             int n = 0;
             edit(ctx, label.c_str(), [&](Clip& c) { n = apply_ease(c, sel, EaseShape(s), EaseDir(d)); });
             selection_ = sel;
-            ctx.status(n ? label + ": " + std::to_string(n) + " segment(s)" : "There is no key after the selected keys to ease toward");
+            ctx.status(n ? label + ": " + count_noun(size_t(n), "segment") : "There is no key after the selected keys to ease toward");
         }
         ImGui::EndMenu();
     }

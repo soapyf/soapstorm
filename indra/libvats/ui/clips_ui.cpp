@@ -47,12 +47,11 @@ void App::save_ao_notecard(const std::string& path) {
 
 void App::draw_clips_panel() {
     if (!show_clips_) return;
-    place_tool_window(24, 40);
+    place_tool_window("Clips", 24, 40);
     if (!ImGui::Begin("Clips", &show_clips_)) return ImGui::End();
     help_button("clips");
     Project& p = doc_.project;
-    hint("Several animations in one project, such as the stands, walks and sits of an AO. The timeline, graph and every "
-         "tool work on the clip picked here; each clip keeps its own length, loop, priority and export settings.");
+    hint("Several animations in one project, such as an AO's stands and walks.");
 
     const int n = clip_count(p), active = p.active_clip;
     // The list: click to switch, double-click to rename; the AO state is picked per clip.
@@ -159,7 +158,7 @@ void App::draw_clips_panel() {
     ImGui::EndDisabled();
 
     if (n > 1) {
-        ImGui::SeparatorText("Export All Clips");
+        subheading("Export All Clips");
         std::string names;
         for (int k = 0; k < n; ++k) {
             ExportNaming nm = export_naming(k);
@@ -177,7 +176,7 @@ void App::draw_clips_panel() {
         }
     }
 
-    ImGui::SeparatorText("AO notecard");
+    subheading("AO notecard");
     const char* formats[] = {"Firestorm AO (import notecard)", "ZHAO-II / Oracul"};
     ImGui::SetNextItemWidth(-1);
     ImGui::Combo("##aofmt", &ao_format_, formats, 2);

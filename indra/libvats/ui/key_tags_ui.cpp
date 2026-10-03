@@ -7,6 +7,7 @@
 #include <string>
 
 #include "app.h"
+#include "widgets.h"
 #include "icon_button.h"
 #include "icons.h"
 #include "vats/key_tags.h"
@@ -78,7 +79,7 @@ void App::draw_key_tag_menu_items() {
         int holds = 0;
         edit("Convert Blocking to Spline", [&](Clip& c) { holds = blocking_to_spline(c); });
         blocking_ = false;
-        status("Every key is Auto now; " + std::to_string(holds) + " hold(s) got a 1\xC2\xB0 drift. Blocking is off");
+        status("Every key is Auto now; " + count_noun(size_t(holds), "hold") + " got a 1\xC2\xB0 drift. Blocking is off");
     }
     ImGui::SetItemTooltip("Auto tangents on every key (IK switches stay stepped); each pair of Hold keys becomes a "
                           "moving hold that drifts 1\xC2\xB0 towards the next pose. Turns Blocking off");
@@ -90,7 +91,7 @@ void App::draw_key_tag_menu_items() {
             edit(tag == KeyTag::None ? "Clear Key Tags" : std::string("Tag ") + key_tag_name(tag), [&](Clip& c) {
                 n = tag_keys_at(c, tracks, frame_, tag);
             });
-            status(n ? "Tagged " + std::to_string(n) + " key(s) at frame " + std::to_string(int(frame_))
+            status(n ? "Tagged " + count_noun(size_t(n), "key") + " at frame " + std::to_string(int(frame_))
                      : "No keys of the selected items at this frame to tag");
         };
         for (int t = 0; t < 3; ++t) {
@@ -111,7 +112,7 @@ void GraphEditor::draw_tag_menu_items(GraphContext& ctx) {
         int n = 0;
         edit(ctx, t == KeyTag::None ? "Clear Key Tags" : (std::string("Tag ") + key_tag_name(t)).c_str(),
              [&](Clip& c) { n = tag_keys(c, sel, t); });
-        ctx.status(std::to_string(n) + " key(s) tagged");
+        ctx.status(count_noun(size_t(n), "key") + " tagged");
     };
     for (int t = 0; t < 3; ++t) {
         if (menu_item_icon(nullptr, key_tag_name(kTags[t]))) tag(kTags[t]);

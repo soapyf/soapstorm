@@ -80,6 +80,7 @@ struct Xform {
     Vec3 apply(const Vec3& v) const { return rot.rotate(v) + pos; }
     Xform operator*(const Xform& o) const { return {rot * o.rot, apply(o.pos)}; }
     Xform inverse() const { Quat r = rot.conj(); return {r, -r.rotate(pos)}; }
+    bool operator==(const Xform&) const = default;
 };
 
 // Euler triple in degrees, R = Rz(z) * Ry(y) * Rx(x): X first, then Y, then Z, about parent axes.

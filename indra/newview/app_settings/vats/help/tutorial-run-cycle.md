@@ -211,7 +211,7 @@ pose.
 
 The other finding, `The whole body is animated but the hips and legs play below priority 4; a walking or
 standing AO wins them`, is meant for animations that play beside an AO, such as a dance; this run is the AO's
-own. Tell the check so: choose **Tools → Clips (AO Sets)...** and set the clip's **AO state** to **Running**.
+own, as the finding's second sentence suggests. Tell the check so: choose **Tools → Clips (AO Sets)...** and set the clip's **AO state** to **Running**.
 The finding goes: the AO plays its run instead of its stand or walk, so nothing competes for the legs.
 
 **Upload size.** Choose **File → Export SL .anim...** and scroll to **Upload size**: about `3,920 / 250,000

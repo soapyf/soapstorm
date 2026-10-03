@@ -11,6 +11,7 @@
 #include <map>
 
 #include "app.h"
+#include "widgets.h"
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui_internal.h"  // FindWindowByName: dock beside the graph the first time
@@ -145,7 +146,7 @@ void DopeSheet::draw(GraphContext& ctx, const std::function<void(const std::vect
     dl->AddRectFilled(kmin, kmax, tc.graph_bg);
     dl->AddRectFilled(kmin, ImVec2(x_of(0), bottom), IM_COL32(0, 0, 0, 40));
     dl->AddRectFilled(ImVec2(x_of(end), top), kmax, IM_COL32(0, 0, 0, 40));
-    if (clip.loop) dl->AddRectFilled(ImVec2(x_of(clip.loop_in), top), ImVec2(x_of(clip.loop_out), bottom), ui::kLoop);
+    if (clip.loop) dl->AddRectFilled(ImVec2(x_of(clip.loop_in), top), ImVec2(x_of(clip.loop_out), bottom), loop_band());
     const double tstep = std::max(1.0, nice_step(view.t1 - view.t0, w_, 70));
     for (double f = std::ceil(view.t0 / tstep) * tstep; f <= view.t1; f += tstep) {
         const bool major = std::fmod(std::fabs(f / tstep), 5.0) < 0.5;
@@ -369,8 +370,8 @@ void DopeSheet::draw(GraphContext& ctx, const std::function<void(const std::vect
         if (int li = line_at(m.y); li >= 0) {
             double f = 0;
             if (key_under(li, f))
-                ImGui::SetTooltip("%s \xC2\xB7 frame %.0f \xC2\xB7 %d key(s)", ls[li].label.c_str(), f,
-                                  int(keys_between(clip, ls[li].tracks, f, f).size()));
+                ImGui::SetTooltip("%s \xC2\xB7 frame %.0f \xC2\xB7 %s", ls[li].label.c_str(), f,
+                                  count_noun(keys_between(clip, ls[li].tracks, f, f).size(), "key").c_str());
         }
 
     // The ruler stays at the top while the rows scroll; the playhead runs through everything.
@@ -403,7 +404,7 @@ void DopeSheet::draw(GraphContext& ctx, const std::function<void(const std::vect
         };
         static const T tangents[] = {{"Auto", Tangent::Auto},     {"Spline", Tangent::Spline}, {"Plateau", Tangent::Plateau},
                                      {"Linear", Tangent::Linear}, {"Flat", Tangent::Flat},     {"Stepped", Tangent::Stepped}};
-        ImGui::TextDisabled("%d key(s)", int(sel.size()));
+        ImGui::TextDisabled("%s", count_noun(sel.size(), "key").c_str());
         for (const T& tg : tangents)
             if (ImGui::MenuItem(tg.label)) {
                 const std::vector<KeyRef> keys = sel;

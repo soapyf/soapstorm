@@ -22,6 +22,12 @@ struct LoopCandidate {
 };
 std::vector<LoopCandidate> find_loop_points(const Rig& rig, const Clip& clip, int min_length, int count = 5,
                                             const Shape* shape = nullptr);
+// The clip's own loop (in, out) scored as find_loop_points scores a candidate, so the two compare; distance -1 when
+// Loop is off or the band is empty.
+LoopCandidate current_loop(const Rig& rig, const Clip& clip, const Shape* shape = nullptr);
+// Whether that loop already joins cleanly: within half a degree (too little to see), or as close as the best
+// candidate found.
+bool loop_joins(const LoopCandidate& current, const std::vector<LoopCandidate>& found);
 
 // LP-5's pose distance, shared with pose-matched insertion (08 PM-1). A trace holds frames from..to of a clip
 // (clamped to it) as the distance compares them: every node's local rotation (heading_free: the hips turned to
@@ -91,7 +97,11 @@ struct Gait {
     int contacts = 0;
 };
 Gait measure_gait(const Rig& rig, const Clip& clip, const Shape* shape = nullptr);
-// Makes the cycle's implied speed `target`: stretches the loop's time by speed / target. Returns the new length.
+// Makes the cycle's implied speed `target`: stretches the loop's time by speed / target to a whole number of frames
+// (match_speed_frames, for a preview). Returns the new length. Keys move between whole frames, and stay there: SL
+// samples the curves at whole frames, while rounding the keys would move the foot contacts and miss the speed by up
+// to 18% (the wiki's run, walk and loop-walk examples).
+int match_speed_frames(const Clip& clip, const Gait& g, double target);
 int match_speed_by_time(Clip& clip, const Gait& g, double target);
 // Scales the hips' travel along the ground (loop_tools' remove_travel / add_travel) to `target` m/s; the timing
 // stays, so planted feet slide by the difference. False when the hips do not travel.

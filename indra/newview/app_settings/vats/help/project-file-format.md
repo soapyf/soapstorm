@@ -141,7 +141,9 @@ An array of pins (see [[Hold and bind]]):
 
 An array of [[Dynamics]] chains, each with `root`, `length`, `stiffness`, `damping`, `drag`, `gravity`,
 `radius` and `baked`. A baked chain also has `source`: the chain's tracks from before the bake, in the
-`curves` layout.
+`curves` layout. A chain baked with **Bake Bounce into Keys** also has `physics`: SL's avatar physics settings for its
+part, `mass`, `gravity`, `drag`, and `updown`, `inout` and `leftright`, each with `max_effect`, `spring`, `gain` and
+`damping`.
 
 ### idle
 
@@ -207,6 +209,13 @@ clip is the top level of the file, as for actors. In a project with actors as we
 these; every other actor has a `clips` array with one clip object per entry, and `{}` at `active_clip`, whose
 animation is that actor's `clip`. A project that has never had a second clip, or a named clip, has no `clips` and
 keeps version `1` or `2`; older projects open as one clip called `Clip`.
+
+### mesh_looks
+
+What each mesh body shows ([[Rig any model#Parts and shape keys]]), by the body's id: `"mesh_looks": {"body-123":
+{"hidden": ["Scarf"], "shape_keys": {"Body - Obese": 1}}}`. `hidden` lists the parts hidden and `shape_keys` the
+values set (0–1; a key left out is at its file's value); either is left out when empty. A body with no entry shows
+what its models' mapping files say.
 
 ### View settings
 

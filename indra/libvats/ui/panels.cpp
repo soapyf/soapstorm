@@ -5,12 +5,15 @@
 #include <cstring>
 
 #include "app.h"
+#include "widgets.h"
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui_internal.h"
 #include "key_tags_ui.h"
 #include "vats/anim_file.h"
 #include "vats/edit.h"
+#include "vats/picker.h"
+#include "vats/soft_body.h"
 #include "theme.h"
 
 namespace vats {
@@ -41,6 +44,20 @@ bool contains_nocase(const std::string& hay, const std::string& needle) {
 
 }  // namespace
 
+std::string App::reveal_node(int n) {
+    std::string what;
+    if (!node_shown(n)) {
+        (skel_[n].volume ? show_volumes_ : show_category_[static_cast<int>(skel_[n].category)]) = true;
+        what = std::string("Showing ") + kCategories[skel_[n].volume ? 8 : int(skel_[n].category)];
+    }
+    if (settings_.hide_unused_bones && !bone_used(n)) {
+        settings_.hide_unused_bones = false;
+        save_settings();
+        what += (what.empty() ? "" : "; ") + std::string("Hide Unused Bones off: ") + skel_[n].name + " isn't weighted";
+    }
+    return what;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Bones
 
@@ -49,7 +66,8 @@ void App::draw_bones_panel() {
     ImGui::SetNextItemWidth(-1);
     char buf[128];
     std::snprintf(buf, sizeof buf, "%s", bone_filter_.c_str());
-    if (ImGui::InputTextWithHint("##filter", "Filter bones...", buf, sizeof buf)) bone_filter_ = buf;
+    if (filter_input("##filter", "Filter bones...", buf, sizeof buf)) bone_filter_ = buf;
+    const bool filter_entered = ImGui::IsItemDeactivated() && (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter));
 
     // Select buttons (spec 06 4.1 item 3).
     const struct { const char *label, *id, *tip; } buttons[] = {
@@ -83,7 +101,7 @@ void App::draw_bones_panel() {
         const float bw = icon_button_width(), right = ImGui::GetContentRegionAvail().x;
         for (int c = 0; c < 9; ++c) {
             ImGui::PushID(c);
-            ImGui::Checkbox(kCategories[c], c < 8 ? &show_category_[c] : &show_volumes_);
+            if (ImGui::Checkbox(kCategories[c], c < 8 ? &show_category_[c] : &show_volumes_)) auto_shown_[size_t(c)] = false;
             const int n = category_size(c);
             const std::string count = std::to_string(n);
             ImGui::SameLine(right - bw - ImGui::CalcTextSize(count.c_str()).x - st.ItemSpacing.x);
@@ -125,11 +143,28 @@ void App::draw_bones_panel() {
     // A row is shown when it or any descendant passes the filter and category visibility. While filtering, bones of
     // hidden groups match too (dimmed): typing mTail1 finds it with the tail hidden.
     std::vector<char> shown(skel_.size(), 0);
+    std::vector<std::string> hit_labels;
+    std::vector<int> hits;
     for (int i = skel_.size() - 1; i >= 0; --i) {
-        bool self = (node_visible(i) || !filter.empty()) && contains_nocase(skel_[i].name, filter);
+        const std::string label = bone_label(i);
+        bool self = (node_visible(i) || !filter.empty()) && contains_nocase(label, filter);
+        if (self && !filter.empty()) hit_labels.push_back(label), hits.push_back(i);
         bool kids = false;
         for (int c : skel_[i].children) kids = kids || shown[c];
         shown[i] = self || kids;
+    }
+    // A match shows its whole parent chain, so the hit itself was often below the fold: the best one is outlined and
+    // scrolled to as the text changes, and Enter in the box selects it.
+    if (filter != bone_filter_seen_) {
+        bone_filter_seen_ = filter;
+        std::reverse(hit_labels.begin(), hit_labels.end()), std::reverse(hits.begin(), hits.end());  // skeleton order
+        const int k = best_filter_match(hit_labels, filter);
+        bone_filter_best_ = k >= 0 ? hits[size_t(k)] : -1;
+        bone_filter_scroll_ = k >= 0;
+    }
+    if (filter_entered && bone_filter_best_ >= 0 && bone_filter_best_ < skel_.size()) {
+        select(bone_filter_best_, ImGui::GetIO().KeyShift);
+        status(bone_label(bone_filter_best_));
     }
 
     // A bone selected in the view opens its ancestors and scrolls into sight once (UI-23).
@@ -138,6 +173,8 @@ void App::draw_bones_panel() {
     const bool reveal_now = prim != bones_seen_primary_ && !bones_clicked_ && prim >= 0;
     if (reveal_now)
         for (int a = skel_[prim].parent; a >= 0; a = skel_[a].parent) reveal[a] = 1;
+    if (bone_filter_scroll_ && bone_filter_best_ >= 0 && bone_filter_best_ < skel_.size())
+        for (int a = skel_[bone_filter_best_].parent; a >= 0; a = skel_[a].parent) reveal[a] = 1;
     bones_seen_primary_ = prim;
     bones_clicked_ = false;
 
@@ -234,7 +271,32 @@ void App::draw_bones_panel() {
         ImGui::TreePop();
     }
 
-    // Skeleton.
+    // Soft body (RM-10): the soft-body volumes the body uses, by the names people know them by, SL's beside each.
+    std::vector<int> soft;
+    for (const SoftBodyPart& sp : soft_body_parts())
+        if (const int i = skel_.find(sp.volume); i >= 0 && node_visible(i) && contains_nocase(bone_label(i), filter)) soft.push_back(i);
+    if (!soft.empty() && ImGui::TreeNodeEx("Soft body", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth)) {
+        for (int i : soft) {
+            const char* name = soft_body_name(skel_[i].name);
+            bool pinned = false;
+            const ImU32 colour = row_colour(i, pinned);
+            if (colour) ImGui::PushStyleColor(ImGuiCol_Text, colour);
+            const bool sel = std::find(selection_.begin(), selection_.end(), i) != selection_.end();
+            ImGui::TreeNodeEx(skel_[i].name.c_str(), leaf | (sel ? ImGuiTreeNodeFlags_Selected : 0), "%s", name);
+            if (colour) ImGui::PopStyleColor();
+            if (ImGui::IsItemClicked()) select(i, ImGui::GetIO().KeyShift), bones_clicked_ = true;
+            ImGui::SetItemTooltip("%s: SL's %s collision volume, which fitted mesh and avatar physics move.\n"
+                                  "Keys and the .anim keep SL's name.", name, skel_[i].name.c_str());
+            ImGui::SameLine();
+            ImGui::TextDisabled("%s", skel_[i].name.c_str());
+        }
+        ImGui::TreePop();
+    }
+
+    // Skeleton. A column on the right for the joint-limit dots, when any bone has one.
+    float badge_w = 0;
+    for (int i = 0; i < skel_.size() && !badge_w; ++i)
+        if (has_limit_badge(i)) badge_w = ImGui::GetFontSize() * 1.2f;
     auto row = [&](auto& self_fn, int i) -> void {
         if (!shown[i]) return;
         const Node& n = skel_[i];
@@ -253,22 +315,46 @@ void App::draw_bones_panel() {
         if (hidden) colour = ImGui::GetColorU32(ImGuiCol_TextDisabled);
         if (colour) ImGui::PushStyleColor(ImGuiCol_Text, colour);
         const bool scratch = std::binary_search(scratch_marks_.begin(), scratch_marks_.end(), n.name);  // PT-2
-        bool open = ImGui::TreeNodeEx(reinterpret_cast<void*>(intptr_t(i)), flags, "%s%s%s", n.name.c_str(),
-                                      pinned ? " [pinned]" : "", scratch ? " (scratch)" : "");
+        // Many selected (Select All): a light tint, so the active bone's full one still stands out.
+        const bool faint = selected && i != prim && selection_.size() > 1;
+        if (faint) ImGui::PushStyleColor(ImGuiCol_Header, ImGui::GetColorU32(ImGuiCol_Header, 0.4f));
+        // With limit dots in the list, the rows stop short of a column of their own, so a long name never runs under one.
+        if (badge_w > 0) {
+            const ImVec2 c0 = ImGui::GetWindowDrawList()->GetClipRectMin(), c1 = ImGui::GetWindowDrawList()->GetClipRectMax();
+            ImGui::PushClipRect(c0, ImVec2(c1.x - badge_w, c1.y), true);
+        }
+        const std::string name = bone_label(i, false) + (pinned ? " [pinned]" : "") + (scratch ? " (scratch)" : "");
+        bool open = ImGui::TreeNodeEx(reinterpret_cast<void*>(intptr_t(i)), flags, "%s", name.c_str());
+        {
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+            if (const std::string plain = plain_label(i); !plain.empty())  // dim after the SL name, as Soft body's
+                dl->AddText(ImVec2(a.x + ImGui::GetTreeNodeToLabelSpacing() + ImGui::CalcTextSize(name.c_str()).x +
+                                       ImGui::GetFontSize() * 0.5f,
+                                   (a.y + b.y - ImGui::GetFontSize()) * 0.5f),
+                            ImGui::GetColorU32(ImGuiCol_TextDisabled), plain.c_str());
+            if (i == bone_filter_best_ && !filter.empty()) {
+                dl->AddRect(a, b, ImGui::GetColorU32(ImGuiCol_CheckMark), ImGui::GetStyle().FrameRounding, 0, 2.f);
+                if (std::exchange(bone_filter_scroll_, false)) ImGui::SetScrollHereY(0.5f);
+            }
+        }
+        if (badge_w > 0) ImGui::PopClipRect();
+        if (faint) ImGui::PopStyleColor();
         if (colour) ImGui::PopStyleColor();
         planner_row_mark(i);  // 08 PP-2
+        const ImVec2 b_min = ImGui::GetItemRectMin(), b_max = ImGui::GetItemRectMax();
+        draw_bone_limit_badge(i, ImGui::GetWindowDrawList(), ImVec2(ImGui::GetWindowDrawList()->GetClipRectMax().x - badge_w * 0.5f,
+                                                                     (b_min.y + b_max.y) * 0.5f));
         if (reveal_now && i == prim) ImGui::SetScrollHereY(0.5f);
         if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
-            if (hidden) {  // picking a bone of a hidden group shows the group
-                (n.volume ? show_volumes_ : show_category_[int(n.category)]) = true;
-                status(std::string("Showing ") + kCategories[n.volume ? 8 : int(n.category)] + " in the view");
-            }
+            const std::string reveal_msg = reveal_node(i);  // a bone picked here shows in the view
             select(i, ImGui::GetIO().KeyShift), bones_clicked_ = true;
+            if (!reveal_msg.empty()) status(reveal_msg);
         }
         if (ImGui::IsItemHovered())
-            ImGui::SetItemTooltip("%s\n%s%s%s", n.name.c_str(), kCategories[n.volume ? 8 : int(n.category)],
+            ImGui::SetItemTooltip("%s\n%s%s%s", bone_label(i).c_str(), kCategories[n.volume ? 8 : int(n.category)],
                                   n.attachment ? "" : (n.base ? ", classic" : ", Bento"),
-                                  hidden ? "\nHidden in the view (Show): a click selects it and shows its group" : "");
+                                  hidden ? (std::string("\n") + hidden_hint(i)).c_str() : "");
         drop_target(i);
         if (has_kids && open) {
             prop_rows(i);
@@ -288,17 +374,15 @@ void App::draw_bones_panel() {
 void App::draw_properties_panel() {
     if (!ImGui::Begin("Properties")) return ImGui::End();
     Clip& clip = doc_.clip();
-    const float label_w = ImGui::GetFontSize() * 5.5f;
-    auto label = [&](const char* text) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(text);
-        ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(-1);
-    };
-    // Field edits merge into one undo step: opened when the field activates, committed on release.
+    const float label_w = label_column();
+    auto label = [&](const char* text) { labelled_row(text); };
+    // Field edits merge into one undo step: opened when the field activates, committed on release. True when the
+    // edit changed something.
     auto track_edit = [&](const char* step) {
         if (ImGui::IsItemActivated()) doc_.history.begin(clip);
-        if (ImGui::IsItemDeactivated() && doc_.history.is_open() && doc_.history.commit(step, clip)) mark_dirty();
+        const bool done = ImGui::IsItemDeactivated() && doc_.history.is_open() && doc_.history.commit(step, clip);
+        if (done) mark_dirty();
+        return done;
     };
 
     int p = primary();
@@ -310,9 +394,18 @@ void App::draw_properties_panel() {
             hint("Select a bone in the view or the Bones list.");
         } else {
             const Node& n = skel_[p];
-            ImGui::TextUnformatted(n.name.c_str());
+            ImGui::TextUnformatted(bone_label(p).c_str());
             ImGui::SameLine();
             ImGui::TextDisabled("%s%s", kCategories[int(n.category)], selection_.size() > 1 ? "  (+ more selected)" : "");
+            if (skel_.reused(p) && mesh_body()) {  // RM-8: a spare chain's joint, renamed in place
+                if (holds_for_ != n.name) holds_for_ = n.name, std::snprintf(holds_, sizeof holds_, "%s", bone_labels_[n.name].c_str());
+                label("Holds");
+                ImGui::InputText("##holds", holds_, sizeof holds_);
+                if (ImGui::IsItemDeactivatedAfterEdit()) set_bone_label(n.name, holds_), holds_for_.clear();
+                ImGui::SetItemTooltip("This SL joint carries part of the model (a spare chain): its name, shown beside the joint's.\n"
+                                      "Saved with the body and in its mapping; the .anim keeps SL's name, %s.", n.name.c_str());
+            }
+            if (n.volume) draw_share_slider(p, label_w);  // RM-10
             // A pinned point is edited through its pin offset (AM-86): the pin would override its own keys.
             int pin = pin_at(clip, *rig_, p, frame_);
             const std::string track = pin >= 0 ? "pin:" + n.name : n.name;
@@ -334,23 +427,39 @@ void App::draw_properties_panel() {
                 e = rig_euler_ref_ = nearest_euler(to_rig_axes(sh->axes[p], euler_to_quat(e)), rig_euler_ref_);
             }
             float ev[3] = {float(e.x), float(e.y), float(e.z)};
+            const RigConstraints* rc = constraints();
+            const JointLimit* lim = (rc && pin < 0) ? rc->find(n.name) : nullptr;
+            Quat cur_local = rig ? from_rig_axes(sh->axes[p], euler_to_quat({ev[0], ev[1], ev[2]}))
+                                 : euler_to_quat({ev[0], ev[1], ev[2]});
+            const bool outside_limits = lim && !is_rotation_within_limits(*lim, cur_local, sh, p);
+            if (outside_limits) {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.7f, 0.3f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 0.7f, 0.3f, 1.0f));
+            }
             label("Rotation");
             if (bool changed = ImGui::DragFloat3("##rot", ev, 0.25f, 0, 0, "%.1f°"); changed || item_entered()) {
                 if (rig) key_rotation(clip, track, frame_, from_rig_axes(sh->axes[p], euler_to_quat({ev[0], ev[1], ev[2]})));
                 else key_euler(clip, track, frame_, {ev[0], ev[1], ev[2]});
                 if (rig) rig_euler_ref_ = {ev[0], ev[1], ev[2]};
             }
+            if (outside_limits) {
+                ImGui::PopStyleColor(2);
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "%s Outside joint limits", icon::kWarning);
+            }
             if (rig)
                 ImGui::SetItemTooltip("About the mesh body's own bone axes (its rig axes). The keys and the .anim stay in "
                                       "Second Life's joint frames.");
-            track_edit("Rotate");
+            // A typed or dragged value keys the bone: the status bar says so, as Set Key does (user test).
+            const std::string keyed = "Keyed " + n.name + " at frame " + std::to_string(int(frame_));
+            if (track_edit("Rotate")) status(keyed);
             if (rig) ImGui::TextDisabled("In the body's rig axes");
             if (pin >= 0) {
                 Vec3 o = curve_offset(clip, track, frame_);
                 float ov[3] = {float(o.x), float(o.y), float(o.z)};
                 label("Offset (m)");
                 if (bool changed = ImGui::DragFloat3("##pinpos", ov, 0.001f, 0, 0, "%.3f"); changed || item_entered()) key_offset(clip, track, frame_, {ov[0], ov[1], ov[2]});
-                track_edit("Move");
+                if (track_edit("Move")) status(keyed);
             }
             bool has_pos = pin < 0 && (n.attachment || clip.has_channels(n.name, kPosChannels));
             if (has_pos) {
@@ -358,8 +467,8 @@ void App::draw_properties_panel() {
                 float ov[3] = {float(o.x), float(o.y), float(o.z)};
                 label("Offset (m)");
                 if (bool changed = ImGui::DragFloat3("##pos", ov, 0.001f, 0, 0, "%.3f"); changed || item_entered()) key_offset(clip, n.name, frame_, {ov[0], ov[1], ov[2]});
-                track_edit("Move");
-            } else if (pin < 0 && ImGui::SmallButton("Animate Position")) {
+                if (track_edit("Move")) status(keyed);
+            } else if (pin < 0 && ImGui::Button("Animate Position")) {
                 edit("Add Position Keys", [&](Clip& c) { key_offset(c, n.name, frame_, {}); });
             }
             ImGui::PopID();
@@ -368,7 +477,7 @@ void App::draw_properties_panel() {
             // IO-7: the bone's own priority in the exported file; "Clip" follows the clip's priority.
             auto jp = clip.joint_priority.find(n.name);
             const int own = jp == clip.joint_priority.end() ? -1 : jp->second;
-            label("Priority");
+            label("Bone priority");  // an override of the clip's Priority (Animation, below)
             const std::string shown = own < 0 ? "Clip (" + std::to_string(clip.priority) + ")" : std::to_string(own);
             if (ImGui::BeginCombo("##jprio", shown.c_str())) {
                 const std::string name = n.name;
@@ -379,11 +488,23 @@ void App::draw_properties_panel() {
                         edit("Bone Priority", [&](Clip& c) { c.joint_priority[name] = pr; });
                 ImGui::EndCombo();
             }
-            ImGui::SetItemTooltip("Priority of this bone alone in the exported .anim. Higher wins over other animations.");
+            ImGui::SetItemTooltip("Priority of this bone alone in the exported .anim, over the clip's Priority. Higher wins over "
+                                  "other animations.");
         }
     }
+    const Workspace ws = workspace();
+    if (selected_prop_ < 0 && p >= 0 && properties_shows(ws, PropSection::JointLimits) && section("Joint Limits"))
+        draw_joint_limits_section(p);
 
-    if (section("Animation")) {
+    // The shown mesh body's parts (clothes and the like) and shape keys, in every workspace: in Inventory alone they were
+    // hard to find.
+    draw_body_look_section(true);
+
+    // Nothing selected: Animation is all there is to edit, so it opens (folded in Pose, it was hard to find).
+    const bool nothing = p < 0 && selected_prop_ < 0 && !primary_handle();
+    if (nothing && !props_nothing_) ImGui::SetNextItemOpen(true);
+    props_nothing_ = nothing;
+    if (properties_shows(ws, PropSection::Animation) && section("Animation", properties_open_at_first(ws, PropSection::Animation))) {
         auto int_field = [&](const char* name, const char* id, int& v, int lo, int hi, const char* step) {
             label(name);
             int t = v;
@@ -436,9 +557,24 @@ void App::draw_properties_panel() {
         label("Loop");
         bool loop = clip.loop;
         if (ImGui::Checkbox("##loop", &loop)) edit("Loop", [&](Clip& c) { set_loop(c, loop); });
+        // Loop in and out beside the tick, their names in the fields: rows appearing under it moved Priority from
+        // under the pointer, and a typed priority went into Loop in.
         if (clip.loop) {
-            int_field("Loop in", "##lin", clip.loop_in, 0, clip.loop_out, "Loop In");
-            int_field("Loop out", "##lout", clip.loop_out, clip.loop_in, clip.end_frame, "Loop Out");
+            ImGui::SameLine();
+            const float w = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) / 2;
+            auto loop_field = [&](const char* id, const char* fmt, int& v, int lo, int hi, const char* step, const char* tip,
+                                  float width) {
+                ImGui::SetNextItemWidth(width);
+                int t = v;
+                if (ImGui::DragInt(id, &t, 0.2f, lo, hi, fmt)) v = std::clamp(t, lo, hi);
+                track_edit(step);
+                ImGui::SetItemTooltip("%s", tip);
+            };
+            loop_field("##lin", "in %d", clip.loop_in, 0, clip.loop_out, "Loop In",
+                       "Loop in: the frame the loop starts again from", w);
+            ImGui::SameLine();
+            loop_field("##lout", "out %d", clip.loop_out, clip.loop_in, clip.end_frame, "Loop Out",
+                       "Loop out: the frame the loop wraps round at", -FLT_MIN);
         }
         int_field("Priority", "##prio", clip.priority, 0, 6, "Priority");
         if (clip.priority > 4) {
@@ -464,7 +600,7 @@ void App::draw_properties_panel() {
         if (ImGui::Combo("##emote", &em, kEmotes, 20))
             edit("Expression", [&](Clip& c) { c.emote = em ? kEmotes[em] : ""; });
     }
-    if (section("Export")) draw_export_section();
+    if (properties_shows(ws, PropSection::Export) && section("Export")) draw_export_section();
     ImGui::End();
 }
 
@@ -477,21 +613,28 @@ void App::draw_timeline_panel() {
 
     // Transport row.
     // Tooltips name the shortcut of the active control preset (TG-31, UI-26).
+    // tip() remembers its action, so the button drawn with it can show its key badge (App::key_badge).
+    const char* tip_id = nullptr;
     auto tip = [&](const char* what, const char* id) {
+        tip_id = id;
         std::string k = key_hint(id);
         return k.empty() ? std::string(what) : std::string(what) + " (" + k + ")";
     };
     // Tool buttons: an icon and the name; the name and shortcut in the tooltip (UI-26). Icon only while the panel
     // is narrower than the row last took with names, so the tween controls stay on screen.
     const bool compact = timeline_row_w_ > 0 && ImGui::GetContentRegionAvail().x < timeline_row_w_;
-    auto tool_button = [&](const char* icon, const char* label, bool on, const std::string& tip_text) {
+    // A workspace shows some of the buttons, in the same order (workspaces.h).
+    auto tool_button = [&](const char* icon, const char* label, bool on, const std::string& tip_text, unsigned button) {
+        if (!toolbar_shows(button)) return tip_id = nullptr, false;
         bool pressed = compact ? icon_button(label, icon, tip_text, on) : icon_label_button(icon, label, tip_text, on);
+        key_badge(std::exchange(tip_id, nullptr));
         ImGui::SameLine();
         return pressed;
     };
     // Transport: icon only, the name and shortcut in the tooltip (UI-26).
     auto transport = [&](const char* id, const char* icon, bool on, const std::string& tip_text) {
         bool pressed = icon_button(id, icon, tip_text, on);
+        key_badge(std::exchange(tip_id, nullptr));
         ImGui::SameLine();
         return pressed;
     };
@@ -508,19 +651,19 @@ void App::draw_timeline_panel() {
     ImGui::SameLine();
     ImGui::TextDisabled("/ %d", clip.end_frame);
     ImGui::SameLine(0, 24);
-    if (tool_button(icon::kSelect, "Select", tool_ == Tool::Select, tip("Select tool", "tool_select") + ": click bones without a gizmo"))
+    if (tool_button(icon::kSelect, "Select", tool_ == Tool::Select, tip("Select tool", "tool_select") + ": click bones without a gizmo", kTbSelect))
         tool_ = Tool::Select;
-    if (tool_button(icon::kMove, "Move", tool_ == Tool::Move, tip("Move tool", "tool_move"))) tool_ = Tool::Move;
-    if (tool_button(icon::kRotate, "Rotate", tool_ == Tool::Rotate, tip("Rotate tool", "tool_rotate"))) tool_ = Tool::Rotate;
-    if (tool_button(icon::kScale, "Scale", tool_ == Tool::Scale, tip("Scale tool", "tool_scale") + " (static props only)"))
+    if (tool_button(icon::kMove, "Move", tool_ == Tool::Move, tip("Move tool", "tool_move"), kTbMove)) tool_ = Tool::Move;
+    if (tool_button(icon::kRotate, "Rotate", tool_ == Tool::Rotate, tip("Rotate tool", "tool_rotate"), kTbRotate)) tool_ = Tool::Rotate;
+    if (tool_button(icon::kScale, "Scale", tool_ == Tool::Scale, tip("Scale tool", "tool_scale") + " (static props only)", kTbScale))
         tool_ = Tool::Scale;
     ImGui::SameLine(0, 16);
     const bool local = orientation_ == Orientation::Local, world = orientation_ == Orientation::World;
     if (tool_button(local ? icon::kLocal : world ? icon::kWorld : icon::kGimbal,
                     local ? "Local###orient" : world ? "World###orient" : "Gimbal###orient", false,
-                    tip("Gizmo axes: Local, World or Gimbal", "orientation")))
+                    tip("Gizmo axes: Local, World or Gimbal", "orientation"), kTbAxes))
         run_action("orientation");
-    if (tool_button(icon::kIkFk, "IK / FK", false, tip("IK / FK", "ik_toggle") + ": switch the selected limb between IK and FK, matched"))
+    if (tool_button(icon::kIkFk, "IK / FK", false, tip("IK / FK", "ik_toggle") + ": switch the selected limb between IK and FK, matched", kTbIkFk))
         run_action("ik_toggle");
     // Still too wide with icons only: the rest goes on a row of its own instead of past the panel's edge.
     const float button_w = ImGui::GetItemRectSize().x + ImGui::GetStyle().ItemSpacing.x;
@@ -528,40 +671,64 @@ void App::draw_timeline_panel() {
     auto wrap_for = [&](float need) {
         if (compact && ImGui::GetContentRegionAvail().x < need) ImGui::NewLine(), wrapped = true;
     };
-    wrap_for(3 * button_w);  // Auto IK, Mirror and Retime
+    wrap_for(4 * button_w);  // Auto IK, Limits, Mirror and Retime
     if (tool_button(icon::kPull, "Auto IK", settings_.auto_ik,
                     "Auto IK: drag a joint and the bones above it follow, with the Move tool or by the dot on a joint. "
-                    "Wheel or [ ] while dragging: more or fewer bones"))
+                    "Wheel or [ ] while dragging: more or fewer bones", kTbAutoIk))
         run_action("auto_ik");  // 08 AI-1
-    if (tool_button(icon::kMirror, "Mirror", mirror_live_, "Mirror: posing a bone or IK control also keys its other side"))
+    if (tool_button(icon::kLocked, "Limits", settings_.respect_joint_limits,
+                    "Joint limits: posing stops bones at their limits (Rig > Suggest Joint Limits..., or L to edit "
+                    "the selected bone's)", kTbLimits))
+        run_action("respect_joint_limits");  // 08 JL
+    if (tool_button(icon::kMirror, "Mirror", mirror_live_, "Mirror: posing a bone or IK control also keys its other side", kTbMirror))
         mirror_live_ = !mirror_live_;  // PT-1
     if (tool_button(icon::kRetime, "Retime", retime_on_, "Retime: double-click the ruler to drop a marker; drag a marker to "
-                                                         "stretch the keys since the one before it and move the rest"))
+                                                         "stretch the keys since the one before it and move the rest", kTbRetime))
         set_retime(!retime_on_);  // 08 TE-5
     ImGui::SameLine(0, 16);
     wrap_for(timeline_tail_w_);  // Set Key, Blocking and the tween controls, as wide as last time
     const ImVec2 tail = ImGui::GetCursorScreenPos();
-    if (tool_button(icon::kSetKey, "Set Key", false, tip("Set Key", "key") + ": key the selected bones, pins and IK controls"))
+    // Set Key between arrows to the previous and next key: step, look, key, without leaving the button.
+    const bool set_key = toolbar_shows(kTbSetKey);
+    auto key_step = [&](const char* id, ImGuiDir dir, const char* action, const char* what) {
+        const float h = ImGui::GetFrameHeight();
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(h * 0.18f, ImGui::GetStyle().FramePadding.y));
+        if (ImGui::ArrowButton(id, dir)) run_action(action);
+        ImGui::PopStyleVar();
+        ImGui::SetItemTooltip("%s", tip(what, action).c_str());
+        key_badge(std::exchange(tip_id, nullptr));
+        ImGui::SameLine(0, 2);
+    };
+    if (set_key) key_step("##set_key_prev", ImGuiDir_Left, "prev_key", "Previous key");
+    if (tool_button(icon::kSetKey, "Set Key", false, tip("Set Key", "key") + ": key the selected bones, pins and IK controls", kTbSetKey))
         run_action("key");
-    draw_blocking_button(compact);  // spec 08 KT-2
-    draw_tween_controls(compact);  // spec 08 TW-1, TW-2
+    if (set_key) {
+        ImGui::SameLine(0, 2);
+        key_step("##set_key_next", ImGuiDir_Right, "next_key", "Next key");
+    }
+    if (toolbar_shows(kTbBlocking)) draw_blocking_button(compact);  // spec 08 KT-2
+    if (toolbar_shows(kTbTween)) draw_tween_controls(compact);  // spec 08 TW-1, TW-2
+    else tween_row_end_ = ImGui::GetItemRectMax().x;  // the row ends at the last button shown
     // Room is kept for Blend, which comes and goes, so the row does not change mode when a pose goes on.
     if (!compact)
         timeline_row_w_ = tween_row_end_ + 16 + ImGui::GetFontSize() * 7 - ImGui::GetWindowPos().x - ImGui::GetStyle().WindowPadding.x;
     timeline_tail_w_ = tween_row_end_ - tail.x;
     // A wrapped row (the tail, or Blend alone) takes this spare row's place, so the strip keeps its height.
-    if (!wrapped && ImGui::GetItemRectMin().y < tail.y + 1) ImGui::NewLine();
+    if (!wrapped && ImGui::GetItemRectMin().y < tail.y + ImGui::GetFrameHeight() * 0.5f) ImGui::NewLine();
 
     // Timeline strip.
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 origin = ImGui::GetCursorScreenPos();
-    float width = ImGui::GetContentRegionAvail().x, height = std::max(ImGui::GetContentRegionAvail().y, 48.f);
+    // The strip is as tall as a ruler and a row of keys needs; a taller panel's room goes to the waveform when the clip
+    // has audio, and is otherwise left below it rather than stretching one row of diamonds.
+    const float strip_max = clip.audio ? FLT_MAX : 20 + ImGui::GetFontSize() * 4.5f;
+    float width = ImGui::GetContentRegionAvail().x, height = std::clamp(ImGui::GetContentRegionAvail().y, 48.f, std::max(48.f, strip_max));
     ImGui::InvisibleButton("##timeline", ImVec2(width, height));
     if (ImGui::BeginPopupContextItem("##timeline_menu")) {  // time editing and the audio track (08 TE, AU)
         draw_time_menu_items();
-        ImGui::SeparatorText("Keys");  // 08 KT
+        subheading("Keys");  // 08 KT
         draw_key_tag_menu_items();
-        ImGui::SeparatorText("Audio");
+        subheading("Audio");
         draw_audio_menu_items();
         ImGui::EndPopup();
     }
@@ -581,7 +748,7 @@ void App::draw_timeline_panel() {
                                 ImVec2(x_of(last), origin.y + height), 0, kEase, kEase, 0);
     if (clip.loop)
         dl->AddRectFilled(ImVec2(x_of(clip.loop_in), origin.y + ruler), ImVec2(x_of(clip.loop_out), origin.y + height),
-                          ui::kLoop);
+                          loop_band());
 
     draw_audio_lane(dl, x0, x1, origin.y + ruler, origin.y + height, last);  // waveform and beats (AU-2)
     draw_planner_band(dl, ImVec2(x0, origin.y + height - 5), ImVec2(x1, origin.y + height - 1));  // 08 PP-2
@@ -660,7 +827,7 @@ void App::draw_timeline_panel() {
     ImVec2 m = ImGui::GetIO().MousePos;
     const bool strip_hovered = ImGui::IsItemHovered();
     const float ytop = origin.y + ruler, ybot = origin.y + height;
-    auto near = [&](float x, float ya, float yb) { return strip_hovered && std::fabs(m.x - x) < 7 && m.y >= ya && m.y <= yb; };
+    auto on_handle = [&](float x, float ya, float yb) { return strip_hovered && std::fabs(m.x - x) < 7 && m.y >= ya && m.y <= yb; };
     const bool plain = !ImGui::GetIO().KeyShift && !ImGui::GetIO().KeyCtrl;
     auto flag = [&](int which, int fr) {
         float x = x_of(fr);
@@ -674,14 +841,14 @@ void App::draw_timeline_panel() {
     };
     auto ease_mark = [&](int which, double fr) {
         float x = x_of(fr);
-        bool hot = dragging_handle == which || (plain && near(x, ybot - 12, ybot));
+        bool hot = dragging_handle == which || (plain && on_handle(x, ybot - 12, ybot));
         dl->AddTriangleFilled(ImVec2(x, ybot - 9), ImVec2(x + 5, ybot - 1), ImVec2(x - 5, ybot - 1),
                               hot ? accent_colour() : IM_COL32(232, 168, 72, 190));
         return hot;
     };
     const bool over_in = flag(1, clip.loop_in), over_out = flag(2, clip.loop_out);
     draw_loop_seam_mark(dl, x_of(clip.loop_out), ytop + 12, strip_hovered);  // 08 LP-2
-    draw_contact_marks(dl, x0, x1, ybot, last);                              // 08 SX
+    draw_contact_marks(dl, x0, x1, ybot, last, strip_hovered);               // 08 SX
     const bool over_ein = ease_mark(4, std::min<double>(ein, last)), over_eout = ease_mark(5, std::max<double>(last - eout, 0));
     const bool over_band = clip.loop && strip_hovered && ImGui::GetIO().KeyAlt && m.y > ytop && m.x > x_of(clip.loop_in) &&
                            m.x < x_of(clip.loop_out);
@@ -774,14 +941,14 @@ GraphContext App::graph_context() {
         if (std::find(items.begin(), items.end(), item) == items.end()) items.push_back(item);
     }
     auto label = [this](const std::string& item) {
-        if (item.rfind("pin:", 0) == 0) return item.substr(4) + " (pin)";
+        if (item.rfind("pin:", 0) == 0) return bone_label(item.substr(4)) + " (pin)";
         if (item.rfind("ik.", 0) == 0) {
             const size_t hash = item.find('#');
             const std::string limb = item.substr(3, hash == std::string::npos ? std::string::npos : hash - 3);
             int l = rig_->find_limb(limb);
             return (l >= 0 ? rig_->limbs()[l].label : limb) + (item.ends_with("#pole") ? " Pole" : " IK");
         }
-        return item;
+        return bone_label(item);
     };
     GraphContext g{doc_.clip(), doc_.history, skel_, frame_, std::move(items), label, [this] { mark_dirty(); },
                    [this](const std::string& s) { status(s); }, rig_.get(), shape(), settings_.preset,
@@ -805,7 +972,20 @@ void App::draw_status_bar() {
     float h = ImGui::GetFrameHeight();
     if (ImGui::BeginViewportSideBar("##status", vp, ImGuiDir_Down, h, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_MenuBar)) {
         if (ImGui::BeginMenuBar()) {
-            ImGui::TextUnformatted(status_.c_str());
+            // The message keeps room for the chips after it (as wide as last frame) and is cut with "..." past that,
+            // its whole text on hover; the mouse hints show only in what is left (user test: messages printed over
+            // both).
+            const float right = ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - 16;
+            const float room = std::max(ImGui::GetFontSize() * 8, right - ImGui::GetCursorScreenPos().x - status_tail_w_);
+            if (const ImVec2 ts = ImGui::CalcTextSize(status_.c_str()); ts.x <= room) {
+                ImGui::TextUnformatted(status_.c_str());
+            } else {
+                ImGui::Dummy(ImVec2(room, ts.y));
+                ImGui::RenderTextEllipsis(ImGui::GetWindowDrawList(), ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                                          ImGui::GetItemRectMax().x, status_.c_str(), nullptr, &ts);
+                ImGui::SetItemTooltip("%s", status_.c_str());
+            }
+            const float message_end = ImGui::GetItemRectMax().x;
             if (multi_actor()) {  // GR: whose animation the Bones list, timeline, graph and keys edit
                 const std::string editing = "Editing " + doc_.project.actors[doc_.project.active].name;
                 if (status_ != editing) ImGui::SameLine(0, 24), hint(editing.c_str());
@@ -821,21 +1001,27 @@ void App::draw_status_bar() {
                 ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kMirrorTint), "Mirror on");
             }
             if (scratch_on_) ImGui::SameLine(0, 24), hint("Scratch Pose: nothing is keyed until Set Key");  // PT-2
+            if (const int p = primary(); selection_.size() == 1 && (skel_.reused(p) || soft_body_name(skel_[p].name)))  // RM-8, RM-10
+                ImGui::SameLine(0, 24), hint(bone_label(p).c_str());
             if (size_t n = selection_.size() + handles_.size(); n > 1) {  // TG-112
                 ImGui::SameLine(0, 24);
                 hint((std::to_string(n) + " selected: keys, copy/paste and the graph apply to all of them").c_str());
             }
-            if (ui::Host::HostUi* h = host_.host_ui(); h && h->unread_notices() > 0) {  // spec 09 U4b: the unread badge
+            if (ui::Host::HostUi* hui = host_.host_ui(); hui && hui->unread_notices() > 0) {  // spec 09 U4b: the unread badge
                 ImGui::SameLine(0, 24);
-                if (ImGui::SmallButton(("Notifications (" + std::to_string(h->unread_notices()) + ")").c_str())) h->toggle_notices();
+                if (ImGui::SmallButton(("Notifications (" + std::to_string(hui->unread_notices()) + ")").c_str())) hui->toggle_notices();
             }
             draw_target_status();
             draw_check_badge();
+            status_tail_w_ = ImGui::GetItemRectMax().x - message_end;
             const std::string hint = graph_.hovered() ? graph_nav_hint()
                                      : dope_.hovered() ? "Dope sheet: middle or Alt+drag pans   Wheel: zoom   Shift+Wheel: scroll"
                                                        : nav_hint();
-            ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize(hint.c_str()).x - 16);
-            ImGui::TextDisabled("%s", hint.c_str());
+            const float hint_w = ImGui::CalcTextSize(hint.c_str()).x;
+            if (ImGui::GetItemRectMax().x + 24 <= right - hint_w) {
+                ImGui::SameLine(ImGui::GetWindowWidth() - hint_w - 16);
+                ImGui::TextDisabled("%s", hint.c_str());
+            }
             ImGui::EndMenuBar();
         }
     }

@@ -57,6 +57,19 @@ struct Pin {
 // actor's space, at a frame. False when it cannot be resolved; the pin is then skipped.
 using ExternalTarget = std::function<bool(const Pin& pin, double frame, Xform& out)>;
 
+// SL's avatar physics for one part, as its Physics wearable sets it (avatar_lad.xml ids 10000..10032, with SL's ranges and
+// defaults): mass 0.1..1, gravity 0..30, drag 0..10, and per direction max effect 0..3, spring 0..100, gain 1..100 and
+// damping 0..1. Spec 08 RM-10; the motion is dynamics.h's.
+struct PhysicsAxis {
+    double max_effect = 0, spring = 10, gain = 10, damping = 0.2;
+    bool operator==(const PhysicsAxis&) const = default;
+};
+struct PhysicsPart {
+    double mass = 0.1, gravity = 0, drag = 1;
+    PhysicsAxis updown, inout, leftright;  // a breast's bounce, cleavage and sway; a butt's bounce and sway; a belly's bounce
+    bool operator==(const PhysicsPart&) const = default;
+};
+
 // A dynamic chain (spec 08 DY-1): simulated behind its animated parents and baked to keys. The
 // simulation lives in dynamics.h; the settings live here so they save with the project and undo covers them.
 struct DynChain {
@@ -68,6 +81,9 @@ struct DynChain {
     double gravity = 0.0;     // multiples of 9.81 m/s^2, downwards
     double radius = 0.02;     // metres kept outside the collision volumes (never more than the animation keeps)
     double bend = 0;          // degrees each bone may bend away from its animated pose; 0 = no limit
+    bool fans = true;         // with the joints that start where the first child does (mWing4Fan beside mWing4)
+    // RM-10: on BELLY, BUTT, LEFT_PEC or RIGHT_PEC, SL's avatar physics with these settings instead of the spring above.
+    std::optional<PhysicsPart> physics;
     bool baked = false;       // the chain's tracks hold a bake; source has what they held before
     std::map<std::string, Track> source;  // pre-bake tracks (absent = the track did not exist)
     Json extra = Json::object();          // unknown fields, written back
@@ -165,6 +181,7 @@ struct LipSync {
     };
     int from = 0, to = 0;       // the keyed frames
     bool positions = false;     // Move face bones when keyed: taking the moves back uses the same
+    double scale = 1;           // FaceSettings::scale when keyed, kept for the same reason
     std::vector<Cue> cues;      // by frame; each holds until the next
     std::vector<double> level;  // 0..1 per frame from..to (the loudness, tier 1); empty = 1 everywhere
     Json extra = Json::object();  // unknown fields, written back

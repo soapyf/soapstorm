@@ -7449,6 +7449,16 @@ S32 LLViewerWindow::getChatConsoleBottomPad()
 
 LLRect LLViewerWindow::getChatConsoleRect()
 {
+    if (LLRect vats_area; FSVATsEditor::toastArea(vats_area)) // VATs editor: console stays in its view
+    {
+        if (vats_area.getWidth() > 30)
+        {
+            vats_area.mLeft += 10;
+            vats_area.mRight -= 10;
+        }
+        return vats_area;
+    }
+
     LLRect full_window(0, getWindowHeightScaled(), getWindowWidthScaled(), 0);
     LLRect console_rect = full_window;
 

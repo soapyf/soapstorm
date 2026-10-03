@@ -36,7 +36,7 @@ Scrub to the frame that should begin the loop, for example a contact pose, then 
 
 ### Finding the best loop points
 
-**Tools → Loop Tools → Find Best Loop Points...** opens the **Loop Assist** window. Set **Shortest Loop (frames)** (20 by default) and press **Find**. VATs compares the pose at every frame with the pose at every frame at least that far later: each joint's rotation and how fast it is turning, with the hips and legs counting most and the fingers and face least. The best pairs are listed, up to 8:
+**Tools → Loop Tools → Find Best Loop Points...** opens the **Loop Assist** window. Set **Shortest loop** (20 by default) and press **Find**. VATs compares the pose at every frame with the pose at every frame at least that far later: each joint's rotation and how fast it is turning, with the hips and legs counting most and the fingers and face least. The best pairs are listed, up to 8:
 
 | Column | What it shows |
 |---|---|
@@ -47,6 +47,11 @@ Scrub to the frame that should begin the loop, for example a contact pose, then 
 ![The Loop Assist window for the loop-walk example: Shortest Loop 20 and five candidates, 2 to 30 at distance 26.82, 1 to 25 at 27.75, 5 to 25 at 33.99, 9 to 29 at 35.83 and 0 to 20 at 38.58, each with a Use button](images/loop-tools/loop-assist.png)
 *The loop walk's best loop points. Its own loop, 0 to 30, is not listed: frame 30 is deliberately off (see the
 worked example below), so 2 to 30 matches better.*
+
+With **Loop** on, the window also scores the loop you have. When it already joins as well as any candidate, or
+within half a degree, it says so in green above the list, `This loop (frames 0 to 120) already joins cleanly`, and
+the status bar says `This loop already joins cleanly`: there is nothing to fix, and a candidate is only for looping
+a different part. Otherwise a grey line gives its distance, to compare with the list.
 
 Press **Use** on a row: **Loop** turns on with those loop points, and VATs asks whether to make the loop seamless as well (**Make Seamless** or **Not Now**). Each is one undo step. The list is from the last **Find**; press it again after editing.
 
@@ -98,7 +103,7 @@ Under **The cycle**, the menu measures the walk from its soles, eight times a fr
 
 **Match Cycle to Speed**:
 
-- **Stretch Time** stretches or squashes the loop so its implied speed is the treadmill's. The stride stays; the steps get faster or slower. The loop is a whole number of frames, so it lands on the nearest one: within about 1% of the speed when that length fits, otherwise up to half a frame off (about 3% on a 16-frame loop). The status bar says the speed it landed on.
+- **Stretch Time** stretches or squashes the loop so its implied speed is the treadmill's. The stride stays; the steps get faster or slower. The loop is a whole number of frames, so it lands on the nearest one: within about 1% of the speed when that length fits, otherwise up to half a frame off (about 3% on a 16-frame loop). The status bar says the speed it landed on. The item names the new length before you click it, for example **Stretch Time: 24 to 18 frames**; it is one undo step. Keys land between whole frames, and stay there whatever **Snap frames** says: Second Life plays the curves at whole frames, so the motion is as stretched, while rounding the keys would move the foot contacts and miss the speed by up to 18% on the wiki's walks and run.
 - **Scale Hip Travel** is for a walk whose hips move forward: it makes them travel at the treadmill's speed. The timing stays, so planted feet slide by the difference; **Tools → Clean Up Foot Sliding...** plants them again. It is greyed out when the hips do not travel.
 
 Each is one undo step.

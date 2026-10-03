@@ -1,0 +1,103 @@
+{
+	"name": "Daz Genesis 9",
+	"hint": "l_upperarm",
+	"mirror": [
+		[
+			"l_",
+			"r_"
+		]
+	],
+	"bones": {
+		"mPelvis": [
+			"hip"
+		],
+		"mTorso": [
+			"spine1"
+		],
+		"mChest": [
+			"spine4",
+			"spine3"
+		],
+		"mNeck": [
+			"neck1"
+		],
+		"mHead": [
+			"head"
+		],
+		"mFaceJaw": [
+			"lowerjaw"
+		],
+		"mEyeLeft": [
+			"l_eye"
+		],
+		"mCollarLeft": [
+			"l_shoulder"
+		],
+		"mShoulderLeft": [
+			"l_upperarm"
+		],
+		"mElbowLeft": [
+			"l_forearm"
+		],
+		"mWristLeft": [
+			"l_hand"
+		],
+		"mHipLeft": [
+			"l_thigh"
+		],
+		"mKneeLeft": [
+			"l_shin"
+		],
+		"mAnkleLeft": [
+			"l_foot"
+		],
+		"mFootLeft": [
+			"l_toes"
+		],
+		"mHandThumb1Left": [
+			"l_thumb1"
+		],
+		"mHandThumb2Left": [
+			"l_thumb2"
+		],
+		"mHandThumb3Left": [
+			"l_thumb3"
+		],
+		"mHandIndex1Left": [
+			"l_index1"
+		],
+		"mHandIndex2Left": [
+			"l_index2"
+		],
+		"mHandIndex3Left": [
+			"l_index3"
+		],
+		"mHandMiddle1Left": [
+			"l_mid1"
+		],
+		"mHandMiddle2Left": [
+			"l_mid2"
+		],
+		"mHandMiddle3Left": [
+			"l_mid3"
+		],
+		"mHandRing1Left": [
+			"l_ring1"
+		],
+		"mHandRing2Left": [
+			"l_ring2"
+		],
+		"mHandRing3Left": [
+			"l_ring3"
+		],
+		"mHandPinky1Left": [
+			"l_pinky1"
+		],
+		"mHandPinky2Left": [
+			"l_pinky2"
+		],
+		"mHandPinky3Left": [
+			"l_pinky3"
+		]
+	}
+}

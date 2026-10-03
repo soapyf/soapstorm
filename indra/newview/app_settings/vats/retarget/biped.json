@@ -1,0 +1,98 @@
+{
+	"name": "3ds Max Biped / Rocketbox",
+	"hint": "Bip0",
+	"mirror": [
+		[
+			" L ",
+			" R "
+		]
+	],
+	"bones": {
+		"mPelvis": [
+			"* Pelvis"
+		],
+		"mTorso": [
+			"* Spine"
+		],
+		"mChest": [
+			"* Spine3",
+			"* Spine2",
+			"* Spine1"
+		],
+		"mNeck": [
+			"* Neck"
+		],
+		"mHead": [
+			"* Head"
+		],
+		"mCollarLeft": [
+			"* L Clavicle"
+		],
+		"mShoulderLeft": [
+			"* L UpperArm"
+		],
+		"mElbowLeft": [
+			"* L Forearm"
+		],
+		"mWristLeft": [
+			"* L Hand"
+		],
+		"mHipLeft": [
+			"* L Thigh"
+		],
+		"mKneeLeft": [
+			"* L Calf"
+		],
+		"mAnkleLeft": [
+			"* L Foot"
+		],
+		"mFootLeft": [
+			"* L Toe0"
+		],
+		"mHandThumb1Left": [
+			"* L Finger0"
+		],
+		"mHandThumb2Left": [
+			"* L Finger01"
+		],
+		"mHandThumb3Left": [
+			"* L Finger02"
+		],
+		"mHandIndex1Left": [
+			"* L Finger1"
+		],
+		"mHandIndex2Left": [
+			"* L Finger11"
+		],
+		"mHandIndex3Left": [
+			"* L Finger12"
+		],
+		"mHandMiddle1Left": [
+			"* L Finger2"
+		],
+		"mHandMiddle2Left": [
+			"* L Finger21"
+		],
+		"mHandMiddle3Left": [
+			"* L Finger22"
+		],
+		"mHandRing1Left": [
+			"* L Finger3"
+		],
+		"mHandRing2Left": [
+			"* L Finger31"
+		],
+		"mHandRing3Left": [
+			"* L Finger32"
+		],
+		"mHandPinky1Left": [
+			"* L Finger4"
+		],
+		"mHandPinky2Left": [
+			"* L Finger41"
+		],
+		"mHandPinky3Left": [
+			"* L Finger42"
+		]
+	}
+}

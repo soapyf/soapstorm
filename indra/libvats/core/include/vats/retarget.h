@@ -56,8 +56,8 @@ bool parse_rig_table(std::string_view json, RigTable& out, std::string& err);
 // SL joint -> source joint index.
 using BoneMap = std::map<std::string, int>;
 
-// Names match case-insensitively after dropping any "prefix:" (mixamorig:Hips). Returns how many
-// SL joints were mapped.
+// Names match case-insensitively after dropping any "prefix:" (mixamorig:Hips); a table name starting with "*" matches
+// any prefix ("* L Thigh"). Returns how many SL joints were mapped.
 int apply_rig_table(const RigTable& table, const SourceAnim& src, BoneMap& out);
 // The table that maps the most joints (its hint breaking ties), or -1.
 int best_rig_table(const std::vector<RigTable>& tables, const SourceAnim& src, BoneMap& out);

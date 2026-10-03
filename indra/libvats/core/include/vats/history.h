@@ -20,8 +20,10 @@ namespace vats {
 struct SceneState {
     std::vector<Actor> actors;
     int active = 0;
-    std::vector<ClipSlot> clips;
+    std::vector<ClipSlot> clips = {};
     int active_clip = 0;
+    std::unordered_map<std::string, RigConstraints> joint_limits = {};
+    std::map<std::string, MeshLook> mesh_looks = {};  // spec 08 SK-3
     bool operator==(const SceneState&) const = default;
 };
 
@@ -119,6 +121,7 @@ public:
     // The steps undo would take back, oldest first, for readers of past steps (Motion Quality compares a tool's
     // before and after), and a number that changes whenever that list does.
     const std::vector<Step>& undo_steps() const { return undo_; }
+    const std::vector<Step>& redo_steps() const { return redo_; }  // the steps undone, the next redo last
     unsigned long long serial() const { return serial_; }
 
 private:

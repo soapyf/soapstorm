@@ -62,7 +62,7 @@ All settings are in **View → Onion Skin**:
 | **Every** | 1–10 frames | 1 | Frames between ghosts; greyed out with **Keyed Frames Only** |
 | **Bones Only** | on / off | off | Draws the ghosts as bones instead of the body |
 
-With **Keyed Frames Only**, the ghosts go on the nearest frames that hold a key on any bone. Ghosts stop at frame 0 and at the last frame; they don't wrap round a loop.
+With **Keyed Frames Only**, the ghosts go on the nearest frames that hold a key on any bone. Ghosts stop at frame 0 and at the last frame, except in a looping animation at a frame inside its loop: there they wrap round the loop as it plays, so at the seam you see the frames on both sides of it. Past **Loop out** they go on just after **Loop in**, which has the same pose.
 
 The settings are saved with the project, so each project remembers its own.
 
@@ -78,7 +78,7 @@ The settings are saved with the project, so each project remembers its own.
 
 ### No ghosts appear
 
-Check that **Show Ghosts** is ticked, that playback is stopped, and that **Before** and **After** are not both 0. At frame 0 there are no earlier ghosts, and at the last frame there are no later ones. With **Keyed Frames Only**, an animation with only one key has nothing to show.
+Check that **Show Ghosts** is ticked, that playback is stopped, and that **Before** and **After** are not both 0. At frame 0 there are no earlier ghosts, and at the last frame there are no later ones, unless the animation loops. With **Keyed Frames Only**, an animation with only one key has nothing to show.
 
 ### Ghosts look the same as the body
 

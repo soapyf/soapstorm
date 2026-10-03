@@ -123,7 +123,7 @@ void App::apply_sl_preview(Evaluation& e) {
 
 void App::draw_sl_preview_window() {
     if (!sl_preview_) return;
-    place_tool_window(24, 28);
+    place_tool_window("As SL Plays It", 24, 28);
     if (!ImGui::Begin("As SL Plays It", &sl_preview_)) return ImGui::End();
     help_button("sl-preview");
     SlExport* x = sl_export_.get();
@@ -136,8 +136,7 @@ void App::draw_sl_preview_window() {
         for (const std::string& e : x->r.errors) ImGui::BulletText("%s", e.c_str());
         return ImGui::End();
     }
-    hint("The body plays the exported .anim as Second Life will: keys on whole frames only, reduced and quantised, "
-         "interpolated as the viewer does. The green ghost is your animation.");
+    hint("The exported .anim as Second Life plays it; the green ghost is yours.");
     size_t rot = 0, pos = 0;
     for (const AnimJoint& j : x->played.joints) rot += j.rot.size(), pos += j.pos.size();
     ImGui::Text("%s bytes, %s, %zu rotation and %s", thousands(x->bytes).c_str(), count_noun(x->played.joints.size(), "bone").c_str(),
@@ -149,7 +148,7 @@ void App::draw_sl_preview_window() {
                                 x->positions ? &*x->positions : nullptr);
         x->dev_done = true;
     }
-    ImGui::SeparatorText("Largest difference per bone");
+    subheading("Largest difference per bone");
     const int exact = int(std::count_if(x->dev.begin(), x->dev.end(), [](const BoneDeviation& d) { return d.mm < 0.005 && d.deg < 0.005; }));
     if (exact == 1) ImGui::TextDisabled("1 bone matches exactly and is not listed");
     else if (exact) ImGui::TextDisabled("%d bones match exactly and are not listed", exact);
@@ -192,11 +191,15 @@ void App::draw_sl_preview_window() {
     ImGui::End();
 }
 
+std::string App::export_size_text() const {
+    return sl_export_ && sl_export_->valid && sl_export_->has_file ? thousands(sl_export_->bytes) + " bytes" : "";
+}
+
 void App::draw_upload_meter() {
     if (!sl_export_) sl_export_ = std::make_shared<SlExport>();
     SlExport& x = *sl_export_;
     x.meter_seen = true;
-    ImGui::SeparatorText("Upload size");
+    subheading("Upload size");
     if (!x.valid) {
         host_.wake();
         ImGui::TextDisabled("Measuring...");
@@ -242,9 +245,11 @@ void App::draw_upload_meter() {
         }
     }
 
+    // Fit to 250 KB only while over the limit (or with its result to show).
     const bool over = x.bytes >= kAnimMaxUploadBytes || x.seconds > kAnimMaxDuration;
+    if (!over && !x.fit) return;
     ImGui::BeginDisabled(!over || (!x.has_file && x.seconds <= kAnimMaxDuration));
-    if (ImGui::Button((std::string(icon::kFit) + " Fit to 250 KB").c_str(), ImVec2(-1, 0))) {
+    if (ImGui::Button("Fit to 250 KB")) {
         x.fit = fit_anim_budget(*rig_, anim_export_clip(), anim_export_options());
         x.keep_fit = false;
         const BudgetFit& f = *x.fit;

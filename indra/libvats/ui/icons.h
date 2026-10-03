@@ -102,6 +102,7 @@ inline constexpr char kIdle[] = "\xee\x86\xb0";          // wind U+E1B0
 inline constexpr char kOverlap[] = "\xee\x8a\x83";       // waves U+E283
 inline constexpr char kAdd[] = "\xee\x84\xbd";           // plus U+E13D
 inline constexpr char kAddLayer[] = "\xee\x9b\xa6";      // layers-plus U+E6E6
+inline constexpr char kAllPanels[] = "\xee\x83\xbf";     // layout-grid U+E0FF
 inline constexpr char kBake[] = "\xee\x8e\xbb";          // stamp U+E3BB
 inline constexpr char kUnbake[] = "\xee\x85\x88";        // rotate-ccw U+E148
 inline constexpr char kFace[] = "\xee\x85\xa4";          // smile U+E164
@@ -157,5 +158,19 @@ inline constexpr char kActors[] = "\xee\x86\xa4";       // users U+E1A4
 inline constexpr char kSeamless[] = "\xee\x87\xa7";     // infinity U+E1E7
 inline constexpr char kInPlace[] = "\xee\x91\x8d";      // arrow-down-to-dot U+E44D
 inline constexpr char kCycleStart[] = "\xee\x85\x89";   // rotate-cw U+E149
+
+// Menus (each item its own glyph within a group)
+inline constexpr char kFollowThrough[] = "\xee\x95\x82";  // waypoints U+E542
+inline constexpr char kAvatarPhysics[] = "\xee\x88\xa3";  // vibrate U+E223
+inline constexpr char kPaint[] = "\xee\x8b\xa7";  // paintbrush U+E2E7
+inline constexpr char kEditLimits[] = "\xee\x93\xb1";  // pencil-ruler U+E4F1
+inline constexpr char kRecent[] = "\xee\x87\xb5";  // history U+E1F5
+inline constexpr char kSaveAs[] = "\xee\x8c\x9f";  // file-pen U+E31F
+inline constexpr char kImportBvh[] = "\xee\x83\x85";  // file-input U+E0C5
+inline constexpr char kImportAnim[] = "\xee\x8c\x98";  // file-down U+E318
+inline constexpr char kRetarget[] = "\xee\x90\xbf";  // merge U+E43F
+inline constexpr char kAudio[] = "\xee\x95\x9e";  // file-music U+E55E
+inline constexpr char kFiles[] = "\xee\x83\x8f";  // files U+E0CF
+inline constexpr char kUploadAll[] = "\xee\x82\x91";  // cloud-upload U+E091
 
 }  // namespace vats::icon

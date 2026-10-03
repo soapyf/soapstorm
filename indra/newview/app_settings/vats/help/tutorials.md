@@ -13,20 +13,22 @@ in green once it is close.
 
 ## Beginner
 
-No animation experience needed.
+No animation experience needed, about 15 minutes each. Every step is done with the mouse: you drag the rotate
+gizmo's rings onto a green ghost of the finished result, and numbers appear only as optional checks.
 
-1. [[Your first pose]]: move the camera, select bones three ways, turn them with the rotate gizmo,
-   mirror one side onto the other, and save a pose to your library. *Craft: posing from the body
+1. [[Your first pose]]: select bones three ways, turn them by dragging the rotate gizmo onto a target
+   ghost, mirror one side onto the other, and save a pose to your library. *Craft: posing from the body
    outwards, avoiding symmetry.*
-2. [[Timing and spacing: a head nod]]: keys on the timeline, playback, and the graph editor; a linear
-   nod against an eased one. *Craft: timing, spacing, ease in and ease out, holds, arcs.*
-3. [[A breathing idle that loops]]: subtle motion, a seamless loop, priority, and export to `.anim`
-   with the upload size meter. *Craft: subtle motion, uneven timing, counter-animation, loops.*
+2. [[Timing and spacing: a head nod]]: keys on the timeline, retiming by dragging keys in the dope sheet,
+   and the graph editor; a linear nod against an eased one. *Craft: timing, spacing, ease in and ease out,
+   holds, arcs.*
+3. [[A breathing idle that loops]]: small drags for subtle motion, a seamless loop, priority, and export to
+   `.anim` with the upload size meter. *Craft: subtle motion, uneven timing, counter-animation, loops.*
 
 ## Routine
 
-- [[A sit pose for furniture]]: the Sitting pose on the starter chair, feet held on the floor and hands bound to
-  the thighs, a static pose at priority 4, exported for three avatar heights. *Craft: ground and seat contact,
+- [[A sit pose for furniture]]: the starter chair and **Sit on This**, the hands bound to the thighs with
+  **Bind to...**, the back leaned by dragging, a static pose at priority 4, exported for three avatar heights. *Craft: ground and seat contact,
   weight, static poses.*
 - [[Sip from a mug]]: the starter Mug in a Grip (Cylinder) hand, a keyed sip with the hand bound to the head while
   drinking. *Craft: anticipation, settle, leading and following.*

@@ -50,7 +50,82 @@ DynChain dyn_preset(const std::string& kind, const std::string& root, int length
     // Follow-through on a limb or spine: lags and settles with little swing back, no droop.
     else if (kind == "overlap") c.stiffness = 0.3, c.damping = 0.35, c.drag = 0.02, c.gravity = 0.0, c.radius = 0.02;
     else if (kind == "jiggle") c.stiffness = 0.12, c.damping = 0.08, c.drag = 0.0, c.gravity = 0.0, c.radius = 0, c.length = 1;
+    // Parts on spare chains: cloth lags and hangs more than a tail, hair less, a cape is heavy and slow.
+    else if (kind == "scarf") c.stiffness = 0.06, c.damping = 0.15, c.drag = 0.04, c.gravity = 0.4, c.radius = 0.02;
+    else if (kind == "hair") c.stiffness = 0.12, c.damping = 0.2, c.drag = 0.03, c.gravity = 0.25, c.radius = 0.015;
+    else if (kind == "cape") c.stiffness = 0.05, c.damping = 0.25, c.drag = 0.06, c.gravity = 0.5, c.radius = 0.04;
     return c;
+}
+
+namespace {
+
+// SL's avatar physics motions (llphysicsmotion.cpp's LLPhysicsMotionController::onInitialize) and the volume_morph each
+// one's driven param moves (avatar_lad.xml ids 1200..1207): the joint whose motion drives it, the direction in that
+// joint's frame, the driven param's range, its pos at weight 1, and which of the part's directions sets it.
+struct MotionDef {
+    const char *volume, *driver;
+    Vec3 dir;
+    double lo, hi;
+    Vec3 pos;
+    PhysicsAxis PhysicsPart::*axis;
+};
+const MotionDef kMotions[] = {
+    {"LEFT_PEC", "mChest", {0, 0, 1}, -3, 3, {0, 0, -0.01}, &PhysicsPart::updown},             // Breast Bounce
+    {"LEFT_PEC", "mChest", {-1, 0, 0}, -1.25, 1.25, {0, -0.026, 0}, &PhysicsPart::inout},     // Breast Cleavage
+    {"LEFT_PEC", "mChest", {0, -1, 0}, -2, 2, {0, 0.03, 0}, &PhysicsPart::leftright},         // Breast Sway
+    {"RIGHT_PEC", "mChest", {0, 0, 1}, -3, 3, {0, 0, -0.01}, &PhysicsPart::updown},
+    {"RIGHT_PEC", "mChest", {-1, 0, 0}, -1.25, 1.25, {0, 0.026, 0}, &PhysicsPart::inout},
+    {"RIGHT_PEC", "mChest", {0, -1, 0}, -2, 2, {0, 0.03, 0}, &PhysicsPart::leftright},
+    {"BUTT", "mPelvis", {0, 0, -1}, -1, 1, {0, 0, 0.05}, &PhysicsPart::updown},              // Butt Bounce
+    {"BUTT", "mPelvis", {0, -1, 0}, -1, 1, {0, 0.05, 0}, &PhysicsPart::leftright},           // Butt Sway
+    {"BELLY", "mPelvis", {0, 0, -1}, -1, 1, {0, 0, 0.05}, &PhysicsPart::updown}};            // Belly Bounce
+
+}  // namespace
+
+const std::vector<std::pair<std::string, AvatarPhysics>>& avatar_physics_presets() {
+    // Every direction of every part alike: how far it may go (max effect), how hard it springs back, how much the body's
+    // acceleration throws it (gain) and how soon it calms (damping). SL's mass, gravity and drag stay at their defaults.
+    static const std::vector<std::pair<std::string, AvatarPhysics>> presets = [] {
+        auto make = [](double max_effect, double spring, double gain, double damping) {
+            PhysicsPart p;
+            p.updown = p.inout = p.leftright = {max_effect, spring, gain, damping};
+            return AvatarPhysics{p, p, p};
+        };
+        return std::vector<std::pair<std::string, AvatarPhysics>>{
+            {"Subtle", make(0.6, 30, 10, 0.4)}, {"Natural", make(1.0, 18, 15, 0.25)}, {"Bouncy", make(1.6, 10, 25, 0.12)}};
+    }();
+    return presets;
+}
+
+const std::vector<std::string>& avatar_physics_volumes() {
+    static const std::vector<std::string> v = {"BELLY", "BUTT", "LEFT_PEC", "RIGHT_PEC"};
+    return v;
+}
+
+DynChain avatar_physics_chain(const std::string& volume, const AvatarPhysics& physics) {
+    DynChain c = dyn_preset("jiggle", volume, 1);
+    c.physics = volume == "BUTT" ? physics.butt : volume == "BELLY" ? physics.belly : physics.breasts;
+    return c;
+}
+
+int bake_avatar_physics(Clip& clip, const Rig& rig, const Shape* shape, const AvatarPhysics& physics,
+                        const std::vector<std::string>& volumes, bool match_loop) {
+    int baked = 0;
+    for (const std::string& v : volumes) {
+        if (rig.skeleton().find_volume(v) < 0) continue;
+        const DynChain d = avatar_physics_chain(v, physics);
+        int i = 0;
+        while (i < int(clip.dynamics.size()) && !(clip.dynamics[size_t(i)].root == v && clip.dynamics[size_t(i)].physics)) ++i;
+        if (i == int(clip.dynamics.size())) {
+            clip.dynamics.push_back(d);
+        } else {  // baked again from the keys it had before its last bake
+            unbake_dynamics(clip, rig.skeleton(), i);
+            clip.dynamics[size_t(i)] = d;
+        }
+        bake_dynamics(clip, rig, shape, i, match_loop);
+        ++baked;
+    }
+    return baked;
 }
 
 std::vector<int> dyn_nodes(const Skeleton& skel, const DynChain& chain, bool branches) {
@@ -69,16 +144,17 @@ std::vector<int> dyn_nodes(const Skeleton& skel, const DynChain& chain, bool bra
         for (int c : skel[out[i]].children) {
             if (skel[c].attachment) continue;
             if (first < 0) first = c;
-            if (c == first || (branches && (skel[c].pos - skel[first].pos).length() < 1e-3))
+            if (c == first || (branches && chain.fans && (skel[c].pos - skel[first].pos).length() < 1e-3))
                 out.push_back(c), depth.push_back(depth[i] + 1);
         }
     }
     return out;
 }
 
-DynSim::DynSim(const Skeleton& skel, const std::vector<DynChain>& chains) : skel_(skel) {
+DynSim::DynSim(const Skeleton& skel, const std::vector<DynChain>& chains, const Shape* shape) : skel_(skel), shape_(shape) {
     for (const DynChain& d : chains) {
-        Chain c{d, dyn_nodes(skel, d), {}, {}, {}, {}, {}, {}, {}};
+        Chain c;
+        c.def = d, c.nodes = dyn_nodes(skel, d);
         if (c.nodes.empty()) continue;
         c.up.assign(c.nodes.size(), -1);
         c.child.assign(c.nodes.size(), -1);
@@ -89,14 +165,23 @@ DynSim::DynSim(const Skeleton& skel, const std::vector<DynChain>& chains) : skel
         }
         c.p.resize(c.nodes.size());
         c.prev = c.target_prev = c.origin_prev = c.body_prev = c.p;
+        if (d.physics)
+            for (const MotionDef& m : kMotions)
+                if (d.root == m.volume && skel[c.nodes[0]].volume) {
+                    c.driver = skel.find(m.driver);
+                    c.motions.push_back({(*d.physics).*m.axis, m.dir, m.lo, m.hi, m.pos});
+                }
+        if (d.physics && c.motions.empty()) continue;  // physics only on the volumes SL's avatar physics moves
         chains_.push_back(std::move(c));
     }
 }
 
-// The bone's tail in its own frame: its first child in the chain, else the display tail, else the first joint child.
+// The bone's tail in its own frame: its first child in the chain, else the body's own tail for it (a mesh body's bone,
+// a scarf's end on a reused wing joint), else SL's display tail, else the first joint child.
 Vec3 DynSim::tail_local(const Chain& c, size_t i, const std::vector<Xform>& g) const {
     const int n = c.nodes[i];
     if (c.child[i] >= 0) return (g[n].inverse() * g[c.nodes[c.child[i]]]).pos;
+    if (shape_ && n < static_cast<int>(shape_->tails.size()) && shape_->tails[n].length() > 1e-4) return shape_->tails[n];
     if (skel_[n].end.length() > 1e-4) return skel_[n].end;
     for (int k : skel_[n].children)
         if (!skel_[k].attachment) return (g[n].inverse() * g[k]).pos;
@@ -104,7 +189,13 @@ Vec3 DynSim::tail_local(const Chain& c, size_t i, const std::vector<Xform>& g) c
 }
 
 void DynSim::reset(const std::vector<Xform>& g) {
-    for (Chain& c : chains_)
+    max_speed_ = 0;
+    for (Chain& c : chains_) {
+        if (c.driver >= 0) {
+            c.driver_prev = g[c.driver].pos;
+            c.offset = {}, c.pending = c.moving = 0;
+            for (Chain::Motion& m : c.motions) m.at = 0.5, m.speed = m.joint_speed = m.joint_accel = 0;
+        }
         for (size_t i = 0; i < c.nodes.size(); ++i) {
             const Xform& x = g[c.nodes[i]];
             c.p[i] = skel_[c.nodes[i]].volume ? x.pos : x.apply(tail_local(c, i, g));
@@ -112,6 +203,46 @@ void DynSim::reset(const std::vector<Xform>& g) {
             c.origin_prev[i] = x.pos;
             c.body_prev[i] = x.rot.rotate(tail_local(c, i, g)).normalized();
         }
+    }
+}
+
+// LLPhysicsMotion::onUpdate, once per frame of the viewer's (60 Hz here): each motion is a spring in its driven param's
+// [0, 1] space, at rest half way (a Physics wearable never moves its controllers), thrown by the driver joint's
+// acceleration along its direction (in centimetres, smoothed over three frames), pulled down by gravity, slowed by
+// damping and pushed by drag; its param, scaled by max effect about the middle, sets its volume_morph's pos.
+void DynSim::step_physics(Chain& c, const std::vector<Xform>& g, double dt) {
+    c.pending += dt;
+    if (c.pending < 1.0 / 60 - 1e-9) return;
+    const double frame = std::min(c.pending, 1.0);  // SL skips a frame over a second long
+    c.pending = 0;
+    const PhysicsPart& part = *c.def.physics;
+    const double mass = std::max(part.mass, 1e-3);
+    const Xform& joint = g[size_t(c.driver)];
+    const Vec3 moved = (joint.pos - c.driver_prev) * 100;
+    c.driver_prev = joint.pos;
+    const Vec3 was = c.offset;
+    c.offset = {};
+    const double t = frame * 30;  // SL's joint_local_factor
+    const int steps = int(frame / 0.05) + 1;
+    const double h = frame / steps;
+    for (Chain::Motion& m : c.motions) {
+        const PhysicsAxis& a = m.axis;
+        const Vec3 dir = joint.rot.rotate(m.dir).normalized();
+        const double v_joint = moved.dot(dir) / t;
+        const double a_joint = (v_joint - m.joint_speed) / t / 3 + m.joint_accel * 2 / 3;
+        for (int s = 0; s < steps && (a.max_effect > 0 || m.at != 0.5); ++s) {
+            const double x = std::clamp(m.at, 0.0, 1.0);
+            const double force = -(x - 0.5) * a.spring + a.gain * a_joint * mass + dir.z * part.gravity * mass -
+                                 a.damping * m.speed + 0.5 * part.drag * v_joint * std::fabs(v_joint);
+            m.speed = std::clamp(m.speed + force / mass * h, -100.0, 100.0);
+            m.at = a.max_effect > 0 ? x + m.speed * h : 0.5;
+            if ((m.at < 0 && m.speed < 0) || (m.at > 1 && m.speed > 0)) m.speed = 0;
+        }
+        m.joint_speed = v_joint, m.joint_accel = a_joint;
+        const double me = a.max_effect, at = std::clamp(m.at, 0.0, 1.0);
+        c.offset += m.pos * std::clamp(m.lo + (m.hi - m.lo) * (0.5 - me / 2 + me * at), m.lo, m.hi);
+    }
+    c.moving = (c.offset - was).length() / frame;
 }
 
 // Pushes p out of every collision volume, inflated by radius. A volume that holds the point's place in the animated
@@ -147,6 +278,10 @@ void DynSim::step(const std::vector<Xform>& g, double dt) {
     const double m = dt * kStepsPerSecond;
     auto per_step = [m](double f) { return 1 - std::pow(1 - std::clamp(f, 0.0, 1.0), m); };
     for (Chain& c : chains_) {
+        if (c.driver >= 0) {  // SL's avatar physics (RM-10)
+            step_physics(c, g, dt);
+            continue;
+        }
         const DynChain& d = c.def;
         const double stiffness = per_step(d.stiffness), damping = per_step(d.damping), drag = per_step(d.drag);
         std::vector<Xform> sim(c.nodes.size());
@@ -193,10 +328,22 @@ void DynSim::step(const std::vector<Xform>& g, double dt) {
             sim[i] = a;
         }
     }
+    max_speed_ = 0;
+    for (const Chain& c : chains_) {
+        max_speed_ = std::max(max_speed_, c.moving);
+        for (size_t i = 0; i < c.nodes.size() && c.driver < 0; ++i) {
+            const double spd = dt > 1e-9 ? (c.p[i] - c.prev[i]).length() / dt : 0.0;
+            max_speed_ = std::max(max_speed_, spd);
+        }
+    }
 }
 
 void DynSim::apply(const std::vector<Xform>& g, Pose& pose) const {
     for (const Chain& c : chains_) {
+        if (c.driver >= 0) {  // the volume_morph pos SL's avatar physics gives it, in its joint's frame
+            pose.offset[size_t(c.nodes[0])] += c.offset;
+            continue;
+        }
         std::vector<Xform> sim(c.nodes.size());
         for (size_t i = 0; i < c.nodes.size(); ++i) {
             const int n = c.nodes[i];
@@ -270,7 +417,7 @@ void bake_samples(Clip& clip, const Skeleton& skel, const std::vector<int>& node
     }
 }
 
-void bake_dynamics(Clip& clip, const Rig& rig, const Shape* shape, int which) {
+void bake_dynamics(Clip& clip, const Rig& rig, const Shape* shape, int which, bool match_loop) {
     const Skeleton& skel = rig.skeleton();
     // Drive from the pre-bake tracks of the chains being baked.
     Clip drive = clip;
@@ -289,7 +436,8 @@ void bake_dynamics(Clip& clip, const Rig& rig, const Shape* shape, int which) {
         index.push_back(i);
     }
     if (chosen.empty()) return;
-    DynSim sim(skel, chosen);
+    if (!match_loop) drive.loop = false;  // simulated straight through, as the clip plays once
+    DynSim sim(skel, chosen, shape);
     std::vector<Pose> frames = simulate_frames(rig, drive, shape, sim);
     for (int i : index) {
         DynChain& d = clip.dynamics[i];
@@ -307,6 +455,23 @@ void bake_dynamics(Clip& clip, const Rig& rig, const Shape* shape, int which) {
         bake_samples(clip, skel, nodes, frames);
         d.baked = true;
     }
+}
+
+int bake_follow_through(Clip& clip, const Rig& rig, const Shape* shape, const std::string& root, int length,
+                        const std::string& kind, bool match_loop) {
+    DynChain d = dyn_preset(kind, root, length);
+    d.fans = false;  // the chain only: a fan beside its last joint is no part of what it carries
+    int i = 0;
+    while (i < int(clip.dynamics.size()) && clip.dynamics[size_t(i)].root != root) ++i;
+    if (i == int(clip.dynamics.size())) {
+        clip.dynamics.push_back(d);
+    } else {  // set up again; a bake already made keeps the keys from before it to drive the new one
+        DynChain& old = clip.dynamics[size_t(i)];
+        unbake_dynamics(clip, rig.skeleton(), i);
+        old = d;
+    }
+    bake_dynamics(clip, rig, shape, i, match_loop);
+    return i;
 }
 
 void unbake_dynamics(Clip& clip, const Skeleton& skel, int which) {

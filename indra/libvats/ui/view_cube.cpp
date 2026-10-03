@@ -93,48 +93,18 @@ ImU32 shade(float r, float g, float b, float k, float a) {
 
 // Turns the camera to look from a direction, animated over 0.3 s (VP-63).
 void App::look_from(const Vec3& dir) {
-    Vec3 d = dir.normalized();
-    double horiz = std::hypot(d.x, d.y);
-    double yaw = horiz > 1e-6 ? std::atan2(d.y, d.x) : camera_.yaw;
-    // Ortho looks straight down or up (a true plan, VP-67); perspective keeps the orbit's +-1.5 rad.
-    const double limit = camera_.ortho ? kPi / 2 - 1e-4 : 1.5;
-    double pitch = std::clamp(std::atan2(d.z, horiz), -limit, limit);
-    yaw = camera_.yaw + std::remainder(yaw - camera_.yaw, 2 * kPi);  // the short way round
-    cam_anim_from_yaw_ = camera_.yaw, cam_anim_from_pitch_ = camera_.pitch;
-    cam_anim_to_yaw_ = yaw, cam_anim_to_pitch_ = pitch;
-    cam_anim_from_target_ = cam_anim_to_target_ = camera_.target;
-    cam_anim_from_dist_ = cam_anim_to_dist_ = camera_.distance;
-    cam_anim_t_ = 0;
-    cam_anim_fixed_eye_ = false;
+    cam_glide_.look_from(camera_, dir);
 }
 
 // Second Life's focus swing (LLAgentCamera::setFocusGlobal, then startCameraAnimation and updateCamera): the camera
-// stays where it is and the focus slides from the old point to the new over ZoomTime (0.4 s, settings.xml), smoothstep
-// eased (llagentcamera.cpp:1521, 1545, 1569-1570).
+// stays where it is and the focus slides from the old point to the new over ZoomTime (~0.4 s), exponential
+// smoothed with blended inputs matching LLAgentCamera.
 void App::focus_camera_on(const Vec3& point) {
-    update_camera_animation(1);  // one in progress lands first
-    cam_anim_eye_ = camera_.eye();
-    cam_anim_from_target_ = camera_.target, cam_anim_to_target_ = point;
-    cam_anim_fixed_eye_ = true;
-    cam_anim_t_ = 0;
+    cam_glide_.focus_on(camera_, point);
 }
 
 void App::update_camera_animation(double dt) {
-    if (cam_anim_t_ < 0) return;
-    if (cam_anim_fixed_eye_) {
-        cam_anim_t_ = std::min(1.0, cam_anim_t_ + dt / 0.4);
-        const double t = cam_anim_t_, e = t * t * (3 - 2 * t);  // llsmoothstep
-        camera_.look(cam_anim_eye_, cam_anim_from_target_ + (cam_anim_to_target_ - cam_anim_from_target_) * e);
-        if (cam_anim_t_ >= 1) cam_anim_t_ = -1;
-        return;
-    }
-    cam_anim_t_ = std::min(1.0, cam_anim_t_ + dt / 0.3);
-    double e = std::sin(cam_anim_t_ * kPi / 2);  // sine ease-out
-    camera_.yaw = cam_anim_from_yaw_ + (cam_anim_to_yaw_ - cam_anim_from_yaw_) * e;
-    camera_.pitch = cam_anim_from_pitch_ + (cam_anim_to_pitch_ - cam_anim_from_pitch_) * e;
-    camera_.target = cam_anim_from_target_ + (cam_anim_to_target_ - cam_anim_from_target_) * e;
-    camera_.distance = cam_anim_from_dist_ + (cam_anim_to_dist_ - cam_anim_from_dist_) * e;
-    if (cam_anim_t_ >= 1) cam_anim_t_ = -1;
+    cam_glide_.update(camera_, dt, settings_.reduce_motion);
 }
 
 void App::draw_view_cube(ImDrawList* dl, ImVec2 vp_min, bool viewport_hovered) {
@@ -197,9 +167,11 @@ void App::draw_view_cube(ImDrawList* dl, ImVec2 vp_min, bool viewport_hovered) {
                 ImFont* font = ImGui::GetFont();
                 float fs = ImGui::GetFontSize() * scale;
                 ImVec2 ts = font->CalcTextSizeA(fs, FLT_MAX, 0, r.label);
-                ImU32 tc = i == hot ? IM_COL32(255, 255, 255, int(255 * fade * cube_alpha_))
-                                    : IM_COL32(45, 47, 52, int(230 * fade * cube_alpha_));
-                dl->AddText(font, fs, ImVec2(c.x - ts.x / 2, c.y - ts.y / 2), tc, r.label);
+                // Light on the faces, with a dark edge under it, so it reads on the see-through cube and on the
+                // light faces of a hovered one.
+                const ImVec2 at(c.x - ts.x / 2, c.y - ts.y / 2);
+                dl->AddText(font, fs, ImVec2(at.x + 1, at.y + 1), IM_COL32(0, 0, 0, int(150 * fade * cube_alpha_)), r.label);
+                dl->AddText(font, fs, at, IM_COL32(245, 245, 245, int(255 * fade * cube_alpha_)), r.label);
             }
         }
     }
@@ -226,9 +198,10 @@ void App::draw_view_cube(ImDrawList* dl, ImVec2 vp_min, bool viewport_hovered) {
         } else {
             cube_moved_ = cube_moved_ || std::hypot(d.x, d.y) > 3;
             if (cube_moved_) {
-                cam_anim_t_ = -1;
-                camera_.yaw -= io.MouseDelta.x * 0.012;
-                camera_.pitch = std::clamp(camera_.pitch + io.MouseDelta.y * 0.012, -1.5, 1.5);
+                cam_glide_.apply_input(camera_, [&](Camera& c) {
+                    c.yaw -= io.MouseDelta.x * 0.012;
+                    c.pitch = std::clamp(c.pitch + io.MouseDelta.y * 0.012, -1.5, 1.5);
+                });
             }
         }
         if (!ImGui::IsMouseDown(0)) {

@@ -6,6 +6,8 @@
 #include <cmath>
 
 #include "app.h"
+#include "icons.h"
+#include "icon_button.h"
 #include "imgui.h"
 #include "widgets.h"
 #include "vats/pose_presets.h"
@@ -53,20 +55,21 @@ void App::open_match_poses(Clip incoming, const std::string& name) {
 
 void App::draw_match_poses_window() {
     if (!show_match_) return;
-    place_tool_window(26, 26);
+    place_tool_window("Match Poses", 26, 26);
     if (!ImGui::Begin("Match Poses", &show_match_)) return ImGui::End();
     help_button("project-library");
-    const float em = ImGui::GetFontSize();
     ImGui::TextWrapped("Joins %s onto the end of the clip where the poses match best.", match_.name.c_str());
     MatchOptions& o = match_.o;
     bool changed = false;
-    ImGui::SetNextItemWidth(em * 8);
-    changed |= slider_int("Search", &o.search, 2, 60, "%d frames");
+    labelled_row("Search");
+    changed |= slider_int("##search", &o.search, 2, 60, "%d frames");
     ImGui::SetItemTooltip("How many frames at the end of the clip and at the start of %s are compared", match_.name.c_str());
-    ImGui::SetNextItemWidth(em * 8);
-    changed |= slider_int("Blend", &o.blend, 0, 30, o.blend ? "%d frames" : "a straight cut");
+    labelled_row("Blend");
+    changed |= slider_int("##blend", &o.blend, 0, 30, o.blend ? "%d frames" : "a straight cut");
     ImGui::SetItemTooltip("Frames over which the clip's motion eases into the new one's");
-    changed |= ease_combo("Ease", o.ease);
+    labelled_row("Ease");
+    changed |= ease_combo("##ease", o.ease);
+    ImGui::SetCursorPosX(label_column());
     changed |= ImGui::Checkbox("Align the hips", &o.align);
     ImGui::SetItemTooltip("Turn and move the new clip so its hips carry on where the clip's are (height kept)");
     if (changed || match_.stale) {
@@ -95,10 +98,9 @@ void App::draw_match_poses_window() {
 
 void App::draw_transition_window() {
     if (!show_transition_) return;
-    place_tool_window(26, 26);
+    place_tool_window("Make Transition", 26, 26);
     if (!ImGui::Begin("Make Transition", &show_transition_)) return ImGui::End();
     help_button("pose-library");
-    const float em = ImGui::GetFontSize();
     const int last = doc_.clip().end_frame;
     // The library's poses (not clips), then the starter body poses.
     std::vector<const LibraryItem*> poses;
@@ -107,12 +109,12 @@ void App::draw_transition_window() {
     for (const LibraryItem& it : builtin_poses(skel_))
         if (it.kind != "hand") poses.push_back(&it);
     TransitionState& t = transition_;
-    ImGui::TextUnformatted("From");
-    ImGui::SameLine(em * 5);
+    labelled_row("From");
     ImGui::RadioButton("Frame", &t.from_pose, 0);
     ImGui::SameLine();
     ImGui::RadioButton("Library pose", &t.from_pose, 1);
-    ImGui::SetNextItemWidth(em * 12);
+    ImGui::SetCursorPosX(label_column());
+    ImGui::SetNextItemWidth(-FLT_MIN);
     if (t.from_pose) {
         t.pose = std::clamp(t.pose, 0, std::max(int(poses.size()) - 1, 0));
         if (ImGui::BeginCombo("##pose", poses.empty() ? "(no poses saved)" : poses[t.pose]->name.c_str())) {
@@ -123,21 +125,25 @@ void App::draw_transition_window() {
     } else {
         ImGui::InputInt("##from", &t.from);
     }
-    ImGui::SetNextItemWidth(em * 12);
-    ImGui::InputInt("To frame", &t.to);
-    ImGui::SetNextItemWidth(em * 12);
-    ImGui::InputInt("Frames", &t.frames);
+    labelled_row("To frame");
+    ImGui::InputInt("##to", &t.to);
+    labelled_row("Frames");
+    ImGui::InputInt("##frames", &t.frames);
     t.to = std::clamp(t.to, 0, last);
     t.from = std::clamp(t.from, 0, last);
     t.frames = std::clamp(t.frames, 1, std::max(t.to, 1));
-    if (!t.from_pose && ImGui::SmallButton("Span From to To")) t.frames = std::max(t.to - t.from, 1);
-    ease_combo("Ease", t.ease);
+    if (!t.from_pose) {
+        ImGui::SetCursorPosX(label_column());
+        if (ImGui::Button("Span From to To")) t.frames = std::max(t.to - t.from, 1);
+    }
+    labelled_row("Ease");
+    ease_combo("##ease", t.ease);
     const int at = t.to - t.frames;
     ImGui::Text("Writes frames %d to %d, every frame keyed.", at, t.to);
     note(kSlBlendNote);
     const bool can = at >= 0 && (!t.from_pose || !poses.empty());
     ImGui::BeginDisabled(!can);
-    if (ImGui::Button("Make Transition")) {
+    if (primary_button("Make Transition", "", 0, icon::kTransition)) {
         int n = 0;
         edit("Make Transition", [&](Clip& c) {
             if (t.from_pose) {
@@ -152,6 +158,9 @@ void App::draw_transition_window() {
                std::to_string(n) + (n == 1 ? " track" : " tracks"));
     }
     ImGui::EndDisabled();
+    if (!can)
+        ImGui::SetItemTooltip("%s", at < 0 ? "Frames reaches back before frame 0: fewer frames, or a later To frame"
+                                           : "No poses to start from: save one in Inventory > Poses");
     ImGui::End();
 }
 

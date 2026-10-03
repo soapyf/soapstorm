@@ -1,0 +1,117 @@
+{
+	"name": "Character Creator",
+	"hint": "CC_Base_",
+	"mirror": [
+		[
+			"_L_",
+			"_R_"
+		]
+	],
+	"bones": {
+		"mPelvis": [
+			"CC_Base_Hip"
+		],
+		"mTorso": [
+			"CC_Base_Waist"
+		],
+		"mChest": [
+			"CC_Base_Spine02"
+		],
+		"mNeck": [
+			"CC_Base_NeckTwist01"
+		],
+		"mHead": [
+			"CC_Base_Head"
+		],
+		"mFaceJaw": [
+			"CC_Base_JawRoot"
+		],
+		"mEyeLeft": [
+			"CC_Base_L_Eye"
+		],
+		"mCollarLeft": [
+			"CC_Base_L_Clavicle"
+		],
+		"mShoulderLeft": [
+			"CC_Base_L_Upperarm"
+		],
+		"mElbowLeft": [
+			"CC_Base_L_Forearm"
+		],
+		"mWristLeft": [
+			"CC_Base_L_Hand"
+		],
+		"mHipLeft": [
+			"CC_Base_L_Thigh"
+		],
+		"mKneeLeft": [
+			"CC_Base_L_Calf"
+		],
+		"mAnkleLeft": [
+			"CC_Base_L_Foot"
+		],
+		"mFootLeft": [
+			"CC_Base_L_ToeBase"
+		],
+		"mHandThumb1Left": [
+			"CC_Base_L_Thumb1",
+			"CC_Base_L_Finger00"
+		],
+		"mHandThumb2Left": [
+			"CC_Base_L_Thumb2",
+			"CC_Base_L_Finger01"
+		],
+		"mHandThumb3Left": [
+			"CC_Base_L_Thumb3",
+			"CC_Base_L_Finger02"
+		],
+		"mHandIndex1Left": [
+			"CC_Base_L_Index1",
+			"CC_Base_L_Finger10"
+		],
+		"mHandIndex2Left": [
+			"CC_Base_L_Index2",
+			"CC_Base_L_Finger11"
+		],
+		"mHandIndex3Left": [
+			"CC_Base_L_Index3",
+			"CC_Base_L_Finger12"
+		],
+		"mHandMiddle1Left": [
+			"CC_Base_L_Mid1",
+			"CC_Base_L_Finger20"
+		],
+		"mHandMiddle2Left": [
+			"CC_Base_L_Mid2",
+			"CC_Base_L_Finger21"
+		],
+		"mHandMiddle3Left": [
+			"CC_Base_L_Mid3",
+			"CC_Base_L_Finger22"
+		],
+		"mHandRing1Left": [
+			"CC_Base_L_Ring1",
+			"CC_Base_L_Finger30"
+		],
+		"mHandRing2Left": [
+			"CC_Base_L_Ring2",
+			"CC_Base_L_Finger31"
+		],
+		"mHandRing3Left": [
+			"CC_Base_L_Ring3",
+			"CC_Base_L_Finger32"
+		],
+		"mHandPinky1Left": [
+			"CC_Base_L_Pinky1",
+			"CC_Base_L_Finger40"
+		],
+		"mHandPinky2Left": [
+			"CC_Base_L_Pinky2",
+			"CC_Base_L_Finger41"
+		],
+		"mHandPinky3Left": [
+			"CC_Base_L_Pinky3",
+			"CC_Base_L_Finger42"
+		]
+	}
+}

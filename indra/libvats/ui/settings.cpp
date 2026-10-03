@@ -41,7 +41,7 @@ std::string normalise(const std::string& path) {
 }  // namespace
 
 void Settings::load(const std::string& file) {
-    std::ifstream f(file, std::ios::binary);
+    std::ifstream f(u8path(file), std::ios::binary);
     if (!f) return;
     std::ostringstream ss;
     ss << f.rdbuf();
@@ -57,9 +57,14 @@ void Settings::load(const std::string& file) {
     auto str = [&](const char* k, std::string& v) {
         if (auto* x = j.find(k); x && x->is_string()) v = x->str;
     };
-    std::string p;
-    str("preset", p);
-    preset_from_name(p, preset);
+    if (auto* x = j.find("preset"); x && x->is_string()) {
+        preset_from_name(x->str, preset);
+    } else {
+        // An existing settings file with no preset key was saved before presets, when Industry was default.
+        // Keep Industry for backwards compatibility so existing configs do not flip unexpectedly.
+        preset = Preset::Industry;
+    }
+    boolean("reduce_motion", reduce_motion);
     boolean("emulate_3_button", emulate_3_button);
     num("interface_size", interface_size, 0.5, 3.0);
     num("gizmo_size", gizmo_size, 50, 220);
@@ -76,6 +81,19 @@ void Settings::load(const std::string& file) {
     boolean("mixamo_notice_seen", mixamo_notice_seen);
     boolean("mirror_centre", mirror_centre);
     boolean("auto_ik", auto_ik);
+    boolean("follow_through", follow_through);
+    boolean("show_weights", show_weights);
+    boolean("avatar_physics", avatar_physics);
+    if (const Json* v = j.find("physics"); v && v->is_object()) physics = *v;
+    // Saved as "show_unused_bones" since hiding became the default; the old key (saved off by default) is ignored.
+    bool show_unused = !hide_unused_bones;
+    boolean("show_unused_bones", show_unused);
+    hide_unused_bones = !show_unused;
+    boolean("plain_bone_names", plain_bone_names);
+    boolean("respect_joint_limits", respect_joint_limits);
+    str("bone_style", bone_style);
+    if (bone_style == "glyph") bone_style = "stick";
+    if (bone_style != "stick" && bone_style != "hidden") bone_style.clear();
     boolean("scratch_existing_only", scratch_existing_only);
     str("scratch_scrub", scratch_scrub);
     str("picker_style", picker_style);
@@ -101,6 +119,22 @@ void Settings::load(const std::string& file) {
             if (auto* x = c.find("distance")) v.distance = x->num;
         }
     if (auto* m = j.find("mocap"); m && m->is_object()) mocap = *m;
+    if (j.find("workspace")) {
+        boolean("workspaces", workspaces);
+        str("workspace", workspace);
+    } else {
+        workspace = "all";  // saved before workspaces: the full layout, as it was
+    }
+    // 0.2.0: the tabs are on for everyone, once. An install that had them off (the trial's default for existing users)
+    // gets them, on All so its layout stays; turned off again after this, they stay off.
+    if (!j.find("workspace_tabs_default_on")) workspaces = true;
+    if (auto* o = j.find("workspace_layouts"); o && o->is_object())
+        for (auto& [id, v] : o->obj)
+            if (v.is_string()) workspace_layouts[id] = v.str;
+    if (auto* o = j.find("workspace_extra"); o && o->is_object())
+        for (auto& [id, v] : o->obj)
+            for (size_t i = 0; v.is_array() && i < v.arr.size(); ++i)
+                if (v.arr[i].is_string()) workspace_extra[id].push_back(v.arr[i].str);
     if (auto* o = j.find("key_overrides"); o && o->is_object())
         for (auto& [id, v] : o->obj)
             if (v.is_array() && v.arr.size() == 2 && v.arr[0].is_string() && v.arr[1].is_string())
@@ -118,6 +152,7 @@ void Settings::load(const std::string& file) {
 void Settings::save(const std::string& file) const {
     Json j = Json::object();
     j.set("preset", kPresets[int(preset)]);
+    j.set("reduce_motion", reduce_motion);
     j.set("emulate_3_button", emulate_3_button);
     j.set("interface_size", double(interface_size));
     j.set("gizmo_size", double(gizmo_size));
@@ -131,6 +166,14 @@ void Settings::save(const std::string& file) const {
     j.set("mixamo_notice_seen", mixamo_notice_seen);
     j.set("mirror_centre", mirror_centre);
     j.set("auto_ik", auto_ik);
+    j.set("follow_through", follow_through);
+    j.set("show_weights", show_weights);
+    j.set("avatar_physics", avatar_physics);
+    j.set("physics", physics);
+    j.set("show_unused_bones", !hide_unused_bones);
+    j.set("plain_bone_names", plain_bone_names);
+    j.set("respect_joint_limits", respect_joint_limits);
+    if (!bone_style.empty()) j.set("bone_style", bone_style);
     j.set("scratch_existing_only", scratch_existing_only);
     j.set("scratch_scrub", scratch_scrub);
     j.set("picker_style", picker_style);
@@ -166,6 +209,18 @@ void Settings::save(const std::string& file) const {
         j.set(key, a);
     }
     j.set("mocap", mocap);
+    j.set("workspaces", workspaces);
+    j.set("workspace_tabs_default_on", true);
+    j.set("workspace", workspace);
+    Json layouts = Json::object(), extra = Json::object();
+    for (auto& [id, ini] : workspace_layouts) layouts.set(id, ini);
+    for (auto& [id, list] : workspace_extra) {
+        Json a = Json::array();
+        for (auto& w : list) a.push(w);
+        extra.set(id, a);
+    }
+    j.set("workspace_layouts", layouts);
+    j.set("workspace_extra", extra);
     Json keys = Json::object();
     for (auto& [id, k] : key_overrides) {
         Json pair = Json::array();
@@ -175,11 +230,14 @@ void Settings::save(const std::string& file) const {
     j.set("key_overrides", keys);
     std::string p = file, tmp = p + ".tmp";
     {
-        std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+        std::ofstream f(u8path(tmp), std::ios::binary | std::ios::trunc);
         f << write_json(j);
         if (!f) return;
     }
-    std::rename(tmp.c_str(), p.c_str());
+    // filesystem::rename replaces the old file on Windows too (std::rename refuses there, so only the first save
+    // ever stuck); u8path keeps a non-ASCII %APPDATA% working.
+    std::error_code ec;
+    std::filesystem::rename(u8path(tmp), u8path(p), ec);
 }
 
 void Settings::add_recent(const std::string& file) {
