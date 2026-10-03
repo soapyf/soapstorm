@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <map>
 #include <optional>
+#include <set>
 
 #include "vats/curve_ops.h"
 #include "vats/deformer.h"
@@ -14,6 +15,7 @@
 #include "vats/edit.h"
 #include "vats/footlock.h"
 #include "vats/loop_tools.h"
+#include "vats/position_reset.h"
 #include "vats/ragdoll.h"
 #include "vats/rig.h"
 #include "vats/world_reduce.h"
@@ -51,6 +53,8 @@ const std::vector<LintRule> kRules = {
     {"ground", "Feet off the ground"},
     {"self_contact", "Body parts pass through each other"},
     {"actor_contact", "Actors pass through each other"},
+    {"position_ends_moved", "Joint positions end moved"},
+    {"position_leftovers", "Joint positions inherited from other clips"},
     {"upload_size", "Upload size"},
     {"duration", "Duration"},
 };
@@ -140,6 +144,7 @@ AnimExportOptions with_clip_settings(const Clip& clip, AnimExportOptions o) {
     }
     if (const Json* v = ex.find("end_at_rest"); v && v->is_bool()) o.end_at_rest = v->b;  // 09 0l
     if (const Json* v = ex.find("hold_no_sink"); v && v->is_bool()) o.hold_without_sinking = v->b;
+    if (const Json* v = ex.find("reset_positions"); v && v->is_bool()) o.reset_positions = v->b;
     return o;
 }
 
@@ -173,7 +178,8 @@ int lint_goto_frame(const std::vector<int>& frames, int here) {
 
 std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const AnimExportOptions& opt,
                                    const std::vector<std::string>& off, const Shape* mesh_body,
-                                   const std::string& ao_state, const std::vector<LintPartner>& partners) {
+                                   const std::string& ao_state, const std::vector<LintPartner>& partners,
+                                   const std::vector<const Clip*>& other_clips) {
     std::vector<LintFinding> out;
     auto on = [&](const char* rule) { return std::find(off.begin(), off.end(), rule) == off.end(); };
     auto add = [&](const char* rule, LintSeverity sev, std::vector<std::string> bones, std::vector<int> frames,
@@ -459,10 +465,10 @@ std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const
                             auto keys = [&](double tol) {
                                 std::size_t k = 0;
                                 for (int n : nodes) {
-                                    std::vector<Quat> r;
+                                    std::vector<Quat> rots;
                                     std::vector<Vec3> p;
-                                    for (const Pose& f : fk) r.push_back(f.rot[n]), p.push_back(f.offset[n]);
-                                    k += reduce_rotation_keys(r, tol, gap).size();
+                                    for (const Pose& f : fk) rots.push_back(f.rot[n]), p.push_back(f.offset[n]);
+                                    k += reduce_rotation_keys(rots, tol, gap).size();
                                     if (std::find(with_pos.begin(), with_pos.end(), n) != with_pos.end())
                                         k += reduce_position_keys(p, tol / 100, gap).size();
                                 }
@@ -542,7 +548,8 @@ std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const
         add("ao_priority", LintSeverity::Warning, low_priority, {},
             layered ? "The whole body is animated but the hips and legs play below priority 4; as the AO's " + ao_state +
                           " animation it plays over its walks and stands, which win them"
-                    : "The whole body is animated but the hips and legs play below priority 4; a walking or standing AO wins them",
+                    : "The whole body is animated but the hips and legs play below priority 4; a walking or standing AO wins "
+                      "them. For an AO's own stand or walk, set its AO state in Tools > Clips (AO Sets) instead",
             {"Set Priority 4", [low_priority](Clip& c) {
                  c.priority = std::max(c.priority, kAoPriority);
                  for (const std::string& b : low_priority)
@@ -558,7 +565,8 @@ std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const
     // animation starts or stops (LLVOAvatar::processSingleAnimationStateChange), and a joint no motion drives keeps its
     // last position (LLPoseBlender sets only joints with active states), so a neck-stretch deformer sinks the wearer
     // as it ends and for good. A hip key cannot undo it: the pelvis_fix motion takes the hip back when it ends.
-    std::vector<std::string> taller;
+    std::vector<std::string> taller, height_warned;
+    if (eo.hold_without_sinking) height_warned = {"mTorso", "mChest", "mNeck", "mHead", "mSkull"};
     for (const AnimJoint& j : file.joints)
         for (const char* b : {"mTorso", "mChest", "mNeck", "mHead", "mSkull"})
             if (!j.pos.empty() && skel.find_viewer(j.name) == skel.find(b)) taller.push_back(b);
@@ -583,6 +591,7 @@ std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const
             if (std::fabs(sink) > std::fabs(worst)) worst = sink;
         }
         if (!frames.empty()) {
+            height_warned = taller;
             const double cm = std::fabs(worst) * 100;
             const bool stays = std::fabs(end) > kSinkTol;
             // The spine hint: a taller torso or chest can be built on the spine bones, which the height never reads.
@@ -628,6 +637,63 @@ std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const
         add("face_positions", LintSeverity::Warning, face_pos, {},
             "Face bones carry position keys written from the SL Default face; they pull a mesh head towards it",
             {"Remove the Face Position Keys", delete_all(face_pos, true)});
+    // A looping animation stops wherever it is, so a position anywhere in the loop can be left behind; End at Rest
+    // would play only if it ran to its end. Otherwise only the last frame counts, and End at Rest clears it.
+    const Json* und = clip.export_settings.find("undeformer");
+    const bool undeformer = und && und->is_bool() && und->b;
+    if (on("position_ends_moved") && (clip.loop ? !undeformer : !eo.end_at_rest)) {
+        auto moved = clip.loop ? joints_moved_by_position(skel, clip) : joints_ending_moved_by_position(skel, clip);
+        if (!height_warned.empty()) {
+            const std::set<std::string> hw(height_warned.begin(), height_warned.end());
+            moved.erase(std::remove_if(moved.begin(), moved.end(), [&](const std::string& b) { return hw.count(b) > 0; }),
+                        moved.end());
+        }
+        if (!moved.empty()) {
+            const int n = static_cast<int>(moved.size());
+            if (clip.loop) {
+                const std::string msg = std::to_string(n) +
+                    (n == 1 ? " joint is moved by position in the loop, and a looping animation stops wherever it is; the "
+                              "next animation inherits it unless it keys or resets its position"
+                            : " joints are moved by position in the loop, and a looping animation stops wherever it is; the "
+                              "next animation inherits them unless it keys or resets their positions");
+                add("position_ends_moved", LintSeverity::Warning, moved, {}, msg,
+                    {"Also Export an Undeformer", [](Clip& c) {
+                         if (!c.export_settings.is_object()) c.export_settings = Json::object();
+                         c.export_settings.set("undeformer", true);
+                     }});
+            } else {
+                const std::string msg = std::to_string(n) +
+                    (n == 1 ? " joint ends moved by position; the next animation inherits it unless it keys its position"
+                            : " joints end moved by position; the next animation inherits them unless it keys their positions");
+                add("position_ends_moved", LintSeverity::Warning, moved, {clip.end_frame}, msg,
+                    {"End at Rest", [&skel](Clip& c) { end_at_rest(c, skel); }});
+            }
+        }
+    }
+    // Joints this clip turns but whose position it writes no key for (IO-11a leaves keys at rest out), which other
+    // clips move by position. Reset joint positions covers the ones it resolves to.
+    if (on("position_leftovers") && !other_clips.empty()) {
+        const auto other_pos = other_clips_position_joints(skel, other_clips);
+        const std::set<std::string> other_pos_set(other_pos.begin(), other_pos.end());
+        const auto reset = resolve_reset_position_joints(skel, clip, other_clips, clip.export_settings);
+        const std::set<std::string> reset_set(reset.begin(), reset.end());
+        const double tol = position_tolerance(clip.export_settings);
+        std::vector<std::string> leftovers;
+        for (const std::string& name : clip_rotated_joints(skel, clip))
+            if (other_pos_set.count(name) && !reset_set.count(name) && !writes_position(clip, name, tol))
+                leftovers.push_back(name);
+        if (!leftovers.empty()) {
+            const std::string msg = (leftovers.size() == 1)
+                ? list(leftovers) + " keys rotation but not position; other clips move it by position, so it will inherit leftovers"
+                : list(leftovers) + " key rotation but not position; other clips move them by position, so they will inherit leftovers";
+            add("position_leftovers", LintSeverity::Warning, leftovers, {}, msg,
+                {"Reset Joint Positions", [](Clip& c) {
+                     if (!c.export_settings.is_object()) c.export_settings = Json::object();
+                     c.export_settings.set("reset_positions", true);
+                     c.export_settings.set("reset_positions_mode", "rotated");  // covers every joint it turns
+                 }});
+        }
+    }
     return out;
 }
 

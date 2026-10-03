@@ -29,7 +29,8 @@ void grey_text(const char* text) {
 // CM-1: the support polygon on the ground, the centre of mass and its plumb line; red when it falls outside.
 void App::draw_balance(ImDrawList* dl) const {
     if (!show_com_ || globals_.empty()) return;
-    const Balance b = balance_of(skel_, globals_, shape());
+    std::function<bool(int)> weighted = [this](int node) { return is_joint_weighted(node); };
+    const Balance b = balance_of(skel_, globals_, shape(), &weighted, std::vector<std::span<const float>>{}, &current_contact_floor());
     if (!b.contact) return;
     auto at = [&](const Vec3& p, ImVec2& out) {
         double x, y;
@@ -58,18 +59,12 @@ void App::draw_balance(ImDrawList* dl) const {
 // CM-2: Tools > Auto-Balance...
 void App::draw_auto_balance_panel() {
     if (!show_auto_balance_) return;
-    place_tool_window(24, 22);
+    place_tool_window("Auto-Balance", 24, 22);
     if (!ImGui::Begin("Auto-Balance", &show_auto_balance_)) return ImGui::End();
     help_button("balance");
     const Clip& clip = doc_.clip();
     grey_text("Moves the hips over the planted feet on every frame of the range, holding the feet with leg IK.");
-    const float label_w = ImGui::GetFontSize() * 6.5f;
-    auto label = [&](const char* text) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(text);
-        ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(-1);
-    };
+    auto label = [&](const char* text) { labelled_row(text); };
     if (balance_.to < 0) balance_.to = clip.end_frame;
     label("From frame");
     ImGui::InputInt("##bal_from", &balance_.from);
@@ -80,11 +75,11 @@ void App::draw_auto_balance_panel() {
     double ra, rb;
     const bool range = clip_range(ra, rb);
     ImGui::BeginDisabled(!range);
-    if (ImGui::SmallButton("Timeline Range")) balance_.from = int(std::floor(ra)), balance_.to = int(std::ceil(rb));
+    if (ImGui::Button("Timeline Range")) balance_.from = int(std::floor(ra)), balance_.to = int(std::ceil(rb));
     ImGui::EndDisabled();
     ImGui::SetItemTooltip(range ? "Use the range picked on the timeline" : "Shift-drag a frame range on the timeline first");
     ImGui::SameLine();
-    if (ImGui::SmallButton("Whole Clip")) balance_.from = 0, balance_.to = clip.end_frame;
+    if (ImGui::Button("Whole Clip")) balance_.from = 0, balance_.to = clip.end_frame;
     float margin = float(balance_.margin * 100);
     label("Margin");
     if (slider_float("##bal_margin", &margin, 0.f, 6.f, "%.1f cm")) balance_.margin = margin / 100;
@@ -92,11 +87,17 @@ void App::draw_auto_balance_panel() {
     label("Smoothing");
     slider_int("##bal_smooth", &balance_.smooth, 0, 10, "%d frames");
     ImGui::SetItemTooltip("The hips' correction is averaged over this many frames each side");
-    ImGui::Checkbox("Counter-Lean the Torso", &balance_.counter_lean);
+    ImGui::Checkbox("Counter-lean the torso", &balance_.counter_lean);
     ImGui::SetItemTooltip("mTorso also leans back towards the feet, so the hips move less");
-    if (icon_label_button(icon::kBalance, "Balance")) {
+    if (primary_button("Balance", "", 0, icon::kBalance)) {
         AutoBalanceOptions opt = balance_;
         opt.shape = export_shape();
+        // The floor and feet the view's Centre of Mass shows: the shown body's mesh, posed on the bake shape.
+        opt.mesh_floor = [this, sh = opt.shape](const std::vector<Xform>& g) {
+            const auto parts = shown_body_skin(g, sh);
+            return compute_mesh_contact_floor(std::vector<std::span<const float>>(parts.begin(), parts.end()));
+        };
+        opt.is_weighted = [this](int node) { return is_joint_weighted(node); };
         std::string report;
         edit("Auto-Balance", [&](Clip& c) { report = auto_balance(c, *rig_, opt); });
         status(report);
@@ -107,17 +108,12 @@ void App::draw_auto_balance_panel() {
 // JA-1: Tools > Jump Arc...
 void App::draw_jump_arc_panel() {
     if (!show_jump_arc_) return;
-    place_tool_window(24, 22);
+    place_tool_window("Jump Arc", 24, 22);
     if (!ImGui::Begin("Jump Arc", &show_jump_arc_)) return ImGui::End();
     help_button("balance");
     const Clip& clip = doc_.clip();
     grey_text("Keys the hips on a free-fall arc between the takeoff and landing frames. The two ends keep their keys.");
-    const float label_w = ImGui::GetFontSize() * 6.5f;
-    auto label = [&](const char* text) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(text);
-        ImGui::SameLine(label_w);
-    };
+    auto label = [&](const char* text) { labelled_row(text); };
     const int here = int(std::lround(frame_));
     for (int k = 0; k < 2; ++k) {
         int& f = k ? jump_.landing : jump_.takeoff;
@@ -127,7 +123,7 @@ void App::draw_jump_arc_panel() {
         ImGui::InputInt("##frame", &f);
         f = std::clamp(f, 0, clip.end_frame);
         ImGui::SameLine();
-        if (ImGui::SmallButton("Current Frame")) f = here;
+        if (ImGui::Button("Current Frame")) f = here;
         ImGui::PopID();
     }
     float g = float(jump_.gravity);
@@ -135,9 +131,9 @@ void App::draw_jump_arc_panel() {
     ImGui::SetNextItemWidth(-1);
     if (ImGui::DragFloat("##gravity", &g, 0.05f, 0.5f, 50.f, "%.2f m/s²")) jump_.gravity = std::clamp(double(g), 0.5, 50.0);
     ImGui::SetItemTooltip("9.81 is Earth's; lower floats, higher snaps");
-    ImGui::Checkbox("Forward Travel", &jump_.forward);
+    ImGui::Checkbox("Forward travel", &jump_.forward);
     ImGui::SetItemTooltip("The hips travel forward (X) at an even speed from the takeoff to the landing position");
-    ImGui::Checkbox("Keep Lateral Motion", &jump_.keep_lateral);
+    ImGui::Checkbox("Keep lateral motion", &jump_.keep_lateral);
     ImGui::SetItemTooltip("The hips' side-to-side (Y) keys stay; untick to travel sideways at an even speed too");
     const int span = jump_.landing - jump_.takeoff;
     if (span >= 2) {
@@ -145,7 +141,7 @@ void App::draw_jump_arc_panel() {
         const double dz = curve_offset(clip, "mPelvis", jump_.landing).z - curve_offset(clip, "mPelvis", jump_.takeoff).z;
         ImGui::TextDisabled("%.2f s in the air, the hips rise %.1f cm", t, jump_apex(t, dz, jump_.gravity) * 100);
     }
-    if (icon_label_button(icon::kJumpArc, "Apply Jump Arc")) {
+    if (primary_button("Apply Jump Arc", "", 0, icon::kJumpArc)) {
         std::string msg;
         bool ok = false;
         edit("Jump Arc", [&](Clip& c) { ok = jump_arc(c, jump_, msg); });  // a refusal changes nothing: no step

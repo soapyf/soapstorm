@@ -5,7 +5,7 @@ Linden body. VATs can show your mesh body in the view and use its joint position
 exported animation fit its proportions. VATs remembers where the devkit files are and never copies,
 shares or uploads them.
 
-> Related articles: [[Props]], [[Export to Second Life]], [[IK]], [[Hold and bind]], [[Skeleton]]
+> Related articles: [[Props]], [[Export to Second Life]], [[Rigging for SL without add-ons]], [[Rig any model]], [[IK]], [[Hold and bind]], [[Skeleton]]
 
 > **Note:** In the [[VATs Editor (viewer)]] your body is the avatar you wear, until **View → Body**
 > shows an imported body in its place, on your screen only: see
@@ -20,23 +20,26 @@ shares or uploads them.
 *Before any import: **Linden body** is the only entry, highlighted as the body shown.*
 
 1. Open the **Inventory** and find **Bodies** at the top.
-2. Press **Import Body Parts (.dae, .fbx)...** and choose every part at once: body, head, hands and
-   feet.
+2. Press **Add Body** and choose **Import Body Parts (.dae, .fbx, .gltf, .glb)...**, then choose every part at
+   once: body, head, hands and feet. (**Add Body** also offers **Map Rig to Second Life...** and **Rig a Model
+   from Scratch...**.)
 3. VATs checks each part and reports the result in **Imported body** with the parts, their triangle
    counts and any weights to joints it does not know. Parts that cannot be read, or that are not rigged
    to the SL skeleton, are listed under **Left out**.
 
-The body takes the name of the first file and becomes the body shown. An import where no part is usable
-reports **No body imported**.
+The body takes the name of the folder its files share (one file: the file's name) and becomes the body shown.
+Importing the same files again does not add a second copy: the body already there reads its files afresh and is
+shown. An import where no part is usable reports **No body imported**.
 
-Importing a whole-body mesh with **File → Import Prop / Mesh (.dae, .fbx)...** also works: VATs sees
+Importing a whole-body mesh with **File → Import Prop / Mesh (.dae, .fbx, .gltf, .glb)...** also works: VATs sees
 that it is rigged to most of the skeleton and asks **This Looks Like an Avatar Body**. Choose **Use as
 Body**, **Add as Prop** or **Cancel**.
 
 ### Switch bodies
 
 - In **Inventory → Bodies**, double-click a body, or **Linden body** to go back. Hover a body to see its
-  files.
+  files. Under the body shown, set in from it, **Parts** and **Shape Keys** hide its objects and set its shape keys
+  ([[Rig any model#Parts and shape keys]]).
 - **View → Body** lists the Linden shapes (**SL Default**, **SL Default (Male)**, **Female**, **Male**,
   **Skeleton Only**) and, under **Mesh bodies**, your bodies. In the viewer it lists **Your Avatar** and
   your bodies, and a body chosen there shows in your avatar's place.
@@ -49,6 +52,10 @@ The body shown is a preference, not part of the project.
 
 A body does not have to be a human devkit. Any mesh rigged to the SL skeleton imports the same way, a
 creature with its own proportions included, and shows at the size its rig declares.
+
+A model rigged to bones of its own (a game character, a creature from an asset pack) is mapped onto SL's skeleton
+first: importing it opens **Map Rig to Second Life**, which names an SL joint for each of its bones and keeps its own
+joint positions; see [[Rig any model]].
 
 ### Pose on the body's proportions
 
@@ -75,8 +82,8 @@ shown:
   knee is the knee's own hinge, however it was rolled.
 - **Properties → Rotation** reads the turn about the rig axes (**In the body's rig axes** shows under it). Typing a
   value turns the bone about its own axes.
-- **The bone glyphs** roll with the rig axes. A bone points along its rig bone axis (Y for a Blender rig), as far as
-  its child joint; an end bone, such as a foot or a head, as far as its own mesh reaches.
+- **Stick bones** follow the body's joints, and the selected bone's roll indicator follows the rig axes.
+  An end bone, such as a foot or a head, ends where its own mesh reaches.
 - **[[IK#Auto IK|Auto IK]]** bends elbows, knees and hind legs about their rig hinge.
 
 The keys and the exported `.anim` stay in Second Life's joint frames, exactly as without the body: rig axes only
@@ -89,25 +96,38 @@ chooses which body you pose on; in the viewer, rig axes apply while a body is sh
 
 ### Export a devkit from Blender
 
-Select the armature and every mesh part, then export FBX with the default settings and **Add Leaf Bones**
-off. Import all the parts together, so they share one alignment.
+Select the armature and every mesh part, then export glTF (`.glb`) or FBX with the default settings and,
+for FBX, **Add Leaf Bones** off; see [[Rigging for SL without add-ons#Export from Blender]]. Import all
+the parts together, so they share one alignment. Blender 5 writes no COLLADA; older `.dae` files still
+import.
+
+### Export a body back for Second Life
+
+**File → Export Rigged Mesh for SL...** writes the body shown as a rigged `.dae` the SL uploader takes,
+joint positions included, after checking it: [[Rigging for SL without add-ons]]. Parts you hid under **Parts** are
+left out and shape keys are baked in as you set them: [[Rig any model#Parts and shape keys]].
 
 ## How VATs reads a devkit
 
 - **Axes.** A devkit exported with other axes is turned upright, and a quarter turn about the vertical
   is applied when the binds clearly call for it. All parts of one body share the same turn, so the eyes
   and head stay on the body.
-- **Bone-oriented binds.** FBX and COLLADA files whose binds follow Blender's bone orientation are aligned joint
-  by joint, and their bone axes are kept as the body's rig axes (above).
+- **Bone-oriented binds.** FBX, COLLADA and glTF files whose binds follow Blender's bone orientation are aligned
+  joint by joint, and their bone axes are kept as the body's rig axes (above).
 - **Mixed COLLADA.** Blender's COLLADA exporter can write SL bind data for some joints and Blender's own
   positions for others, often the face. VATs corrects each such joint on its own.
 - **Weights.** A vertex with more than four weights keeps its strongest four, as in Second Life.
+- **glTF.** Y up becomes Z up; a skinned mesh's own node transform is ignored, as the format says, and
+  a skin without inverse bind matrices is taken as bound at the origin (with a warning).
 
 ## Troubleshooting
 
 ### A part is left out: not rigged to the SL skeleton
 
-The file has no skin, or its joints are not SL bones. Export the part again with the armature selected.
+The file has no skin, or its joints are not SL bones. Export the part again with the armature selected. A part
+rigged to bones of its own is listed as **rigged to bones of its own, not SL's: map them first**, and **Map Rig to
+Second Life** opens on it ([[Rig any model]]). A part with no skeleton is listed as **not rigged; rig it from scratch
+first**, and **Rig a Model from Scratch** opens on it ([[Rig a model from scratch]]).
 
 ### Face bones on the centre line are slightly off
 

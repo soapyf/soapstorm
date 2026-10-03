@@ -49,16 +49,12 @@ void App::draw_expression_pack(const FaceTable& table, bool positions) {
     if (ui.starters.size() != starters.size()) ui.starters.assign(starters.size(), 1);
     ui.opt.prefix = ui.prefix;
     ui.opt.positions = positions;
-    const float label_w = ImGui::GetFontSize() * 6.5f;
-    auto label = [&](const char* text) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(text);
-        ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 9);
-    };
-    hint("One short .anim per expression, face bones only, each easing in and out, for an expression HUD.");
+    ui.opt.scale = face_move_scale();
+    const float label_w = label_column();
+    auto label = [&](const char* text) { labelled_row(text, kLabelEm, 9); };
+    hint("One short face-only .anim per expression, for an expression HUD.");
 
-    ImGui::SeparatorText("Starter set");
+    subheading("Starter set");
     for (size_t i = 0; i < starters.size(); ++i) {
         const bool keys = !expression_clip(table, starters[i], ui.opt).curves.empty();
         if (i % 3) ImGui::SameLine(ImGui::GetFontSize() * (1 + 9 * float(i % 3)));
@@ -69,7 +65,7 @@ void App::draw_expression_pack(const FaceTable& table, bool positions) {
         if (!keys) ImGui::SetItemTooltip("Only moves face bones: turn on Move face bones in the Face window");
     }
 
-    ImGui::SeparatorText("Your face poses");
+    subheading("Your face poses");
     int poses = 0;
     for (const LibraryItem& it : library_.items) {
         if (it.kind != "face") continue;
@@ -81,7 +77,7 @@ void App::draw_expression_pack(const FaceTable& table, bool positions) {
     }
     if (!poses) ImGui::TextDisabled("None yet: Save Face Pose in the Face window keeps one.");
 
-    ImGui::SeparatorText("Files");
+    subheading("Files");
     label("Prefix");
     ImGui::InputText("##packprefix", ui.prefix, sizeof ui.prefix);
     ImGui::SetItemTooltip("Every file is <prefix>_<expression>, lower case with _ for spaces: Face_wink_l");

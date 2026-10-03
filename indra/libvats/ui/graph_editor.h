@@ -119,6 +119,7 @@ private:
     int active_ = -1;                      // active channel index
     View view_;
     bool framed_once_ = false, fit_pending_ = false, hovered_ = false, snap_ = true;
+    float toolbar_w_ = 0;  // the toolbar's width on one row without the tangents' names, last frame
 
     // Canvas geometry of the current frame.
     ImVec2 canvas_min_;

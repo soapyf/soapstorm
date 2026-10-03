@@ -36,6 +36,32 @@ void build_default_layout(ImGuiID dock, bool world, const char* host_pane) {
     ImGui::DockBuilderFinish(dock);
 }
 
+namespace {
+
+void fit_node(ImGuiDockNode* node, float k, float min_w) {
+    if (!node || node->IsLeafNode()) return;
+    ImGuiDockNode* kids[2] = {node->ChildNodes[0], node->ChildNodes[1]};
+    const int axis = node->SplitAxis;
+    for (int i = 0; i < 2; ++i) {
+        ImGuiDockNode *side = kids[i], *centre = kids[1 - i];
+        if (!side || !centre || side->HasCentralNodeChild || side->IsCentralNode() ||
+            !(centre->HasCentralNodeChild || centre->IsCentralNode()) || side->SizeRef[axis] <= 0)
+            continue;
+        const float avail = node->Size[axis];
+        float s = side->SizeRef[axis] * k;
+        if (axis == ImGuiAxis_X && avail >= 2 * min_w) s = std::max(s, min_w);  // a side panel, if the view keeps min_w
+        if (axis == ImGuiAxis_X) s = std::min(s, std::max(avail - min_w, side->SizeRef[axis]));
+        else if (k != 1) s = std::min(s, std::max(0.6f * avail, side->SizeRef[axis]));  // grown, the view keeps 40%
+        if (s != side->SizeRef[axis]) side->SizeRef[axis] = side->Size[axis] = s;
+    }
+    fit_node(kids[0], k, min_w);
+    fit_node(kids[1], k, min_w);
+}
+
+}  // namespace
+
+void fit_side_panels(ImGuiID dock, float k, float min_w) { fit_node(ImGui::DockBuilderGetNode(dock), k, min_w); }
+
 bool is_view_drop(const ImGuiPayload* payload) {
     return payload && (payload->IsDataType("VATS_PROP") || payload->IsDataType("VATS_POSE") || payload->IsDataType("VATS_FILE"));
 }

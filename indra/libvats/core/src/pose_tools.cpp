@@ -3,9 +3,14 @@
 #include "vats/pose_tools.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
 
 #include "vats/edit.h"
+#include "vats/footlock.h"
 #include "vats/pose_ops.h"
+#include "vats/ragdoll.h"
+#include "vats/rig.h"
 
 namespace vats {
 namespace {
@@ -15,7 +20,96 @@ bool starts_with(const std::string& s, const char* p) { return s.rfind(p, 0) == 
 Quat mirror_q(const Quat& q) { return {q.w, -q.x, q.y, -q.z}; }
 Vec3 mirror_v(const Vec3& v) { return {v.x, -v.y, v.z}; }
 
+// A finger segment's curl axis: across the palm from the bone (the thumb's palm side slants toward the fingers).
+Vec3 curl_axis(const Skeleton& skel, int node) {
+    const bool thumb = skel[node].name.find("Thumb") != std::string::npos;
+    const Vec3 palm = thumb ? Vec3{-0.7, 0, -1}.normalized() : Vec3{0, 0, -1};
+    return skel[node].end.normalized().cross(palm).normalized();
+}
+
 }  // namespace
+
+Quat finger_segment_rotation(const Skeleton& skel, int node, const Quat& start, double curl_deg, double spread_deg,
+                             bool first, const JointLimit* limit, const Shape* shape) {
+    // Past half a turn a curl reads as a bend the other way (a long drag down came out bent back), so it stops short.
+    curl_deg = std::clamp(curl_deg, -170.0, 170.0), spread_deg = std::clamp(spread_deg, -90.0, 90.0);
+    Quat q = start * Quat::axis_angle(curl_axis(skel, node), curl_deg * kDegToRad);  // curl in the segment's own frame
+    if (first && spread_deg != 0) {
+        const bool right = skel[node].name.ends_with("Right");
+        const Vec3 side = right ? Vec3{-1, 0, 0} : Vec3{1, 0, 0};
+        q = Quat::axis_angle(skel[node].end.normalized().cross(side), spread_deg * kDegToRad) * q;
+    }
+    // Respect Joint Limits: a long drag folded a finger back through the hand.
+    return limit ? clamp_joint_rotation(*limit, q.normalized(), shape, node) : q;
+}
+
+double finger_curl_degrees(const Skeleton& skel, const Clip& clip, const std::vector<std::string>& segments, double frame) {
+    double total = 0;
+    for (const std::string& bone : segments) {
+        const int node = skel.find(bone);
+        if (node < 0) continue;
+        const Vec3 axis = curl_axis(skel, node);
+        Quat swing, twist;
+        decompose_swing_twist(euler_to_quat(curve_euler(clip, bone, frame)), axis, swing, twist);
+        double a = 2 * std::atan2(twist.x * axis.x + twist.y * axis.y + twist.z * axis.z, twist.w) * kRadToDeg;
+        if (a > 180) a -= 360;
+        if (a < -180) a += 360;
+        total += a;
+    }
+    return total;
+}
+
+namespace {
+
+// The lowest point the body sits on at a pose: the bottom of the pelvis's and thighs' capsules.
+double seat_bottom(const Skeleton& skel, const std::vector<Xform>& globals) {
+    double low = 1e300;
+    for (const RagdollCapsule& c : ragdoll_capsules(skel, globals)) {
+        const std::string& n = skel[c.node].name;
+        if (n != "mPelvis" && n != "mHipLeft" && n != "mHipRight") continue;
+        for (const auto& [a, b] : c.segments) low = std::min(low, std::min(a.z, b.z) - c.radius);
+    }
+    return low;
+}
+
+}  // namespace
+
+std::vector<Vec3> thigh_points(const Rig& rig, const Clip& clip, double frame, const Shape* shape) {
+    const Skeleton& skel = rig.skeleton();
+    const Evaluation e = evaluate(rig, clip, frame, shape);
+    std::vector<Vec3> out;
+    for (const char* side : {"Left", "Right"}) {
+        const int hip = skel.find(std::string("mHip") + side), knee = skel.find(std::string("mKnee") + side);
+        if (hip >= 0 && knee >= 0)
+            for (double t : {0.0, 0.25, 0.5, 0.75}) {
+                const Vec3 a = e.globals[size_t(hip)].pos, b = e.globals[size_t(knee)].pos;
+                out.push_back(a + (b - a) * t);
+            }
+    }
+    return out;
+}
+
+bool sit_on_seat(Clip& clip, const Rig& rig, double frame, double seat_z, const Shape* shape, std::string& report) {
+    const Skeleton& skel = rig.skeleton();
+    auto raise = [&](double dz) { key_offset(clip, "mPelvis", frame, curve_offset(clip, "mPelvis", frame) + Vec3{0, 0, dz}); };
+    // The feet onto the floor first, as the Animation Check's Drop the Hips does.
+    const double drop = sole_height(skel, evaluate(rig, clip, frame, shape).globals) - sole_floor(skel, shape);
+    raise(-drop);
+    // Held there, so the hips can move and the knees bend (Hold in World from Here). A foot already pinned stays so.
+    for (const char* ankle : {"mAnkleLeft", "mAnkleRight"}) {
+        const int node = skel.find(ankle);
+        if (node >= 0 && pin_at(clip, rig, node, frame) < 0 && !pin_here(clip, rig, frame, node, -1, shape, report))
+            return false;
+    }
+    // The thighs onto the seat.
+    const double up = seat_z - seat_bottom(skel, evaluate(rig, clip, frame, shape).globals);
+    raise(up);
+    char buf[160];
+    std::snprintf(buf, sizeof buf, "the hips %s %.0f cm onto the seat at %.0f cm, the feet held on the floor",
+                  up - drop < 0 ? "down" : "up", std::fabs(up - drop) * 100, (seat_z - sole_floor(skel, shape)) * 100);
+    report = buf;
+    return true;
+}
 
 void mirror_live(Clip& clip, const Skeleton& skel, double frame, const std::vector<std::string>& tracks,
                  bool centre_in_place) {
@@ -36,7 +130,7 @@ void mirror_live(Clip& clip, const Skeleton& skel, double frame, const std::vect
             continue;
         }
         const int s = skel.find(src);
-        if (s < 0) continue;  // pins and unknown tracks
+        if (s < 0 || skel.reused(s)) continue;  // pins and unknown tracks; a reused bone keeps its own motion
         const int d = skel.mirror(s);
         const Quat rot = euler_to_quat(curve_euler(before, src, frame));
         const Vec3 off = curve_offset(before, src, frame);

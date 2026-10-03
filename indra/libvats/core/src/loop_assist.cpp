@@ -149,11 +149,26 @@ std::vector<LoopCandidate> find_loop_points(const Rig& rig, const Clip& clip, in
     });
     for (const LoopCandidate& c : all) {
         if (int(out.size()) >= count) break;
-        bool near = false;
-        for (const LoopCandidate& o : out) near = near || (std::abs(o.in - c.in) <= 3 && std::abs(o.out - c.out) <= 3);
-        if (!near) out.push_back(c);
+        bool close = false;
+        for (const LoopCandidate& o : out) close = close || (std::abs(o.in - c.in) <= 3 && std::abs(o.out - c.out) <= 3);
+        if (!close) out.push_back(c);
     }
     return out;
+}
+
+LoopCandidate current_loop(const Rig& rig, const Clip& clip, const Shape* shape) {
+    const int n = std::max(clip.end_frame, 0) + 1;
+    LoopCandidate c{clip.loop_in, clip.loop_out, -1};
+    if (!clip.loop || c.in < 0 || c.out >= n || c.out <= c.in) return c;
+    const PoseTrace t = pose_trace(rig, clip, 0, n - 1, shape);  // the whole clip, as find_loop_points traces it
+    const PoseDistance dist(rig.skeleton(), {&t});
+    c.distance = dist.any() ? dist(t, c.in, t, c.out) : 0;
+    return c;
+}
+
+bool loop_joins(const LoopCandidate& current, const std::vector<LoopCandidate>& found) {
+    constexpr double kUnseen = 0.5;  // degrees, LP-5's distance
+    return current.distance >= 0 && (current.distance < kUnseen || found.empty() || current.distance <= found[0].distance);
 }
 
 BeatFit fit_to_beats(double bpm, int fps, int beats) {
@@ -299,10 +314,14 @@ Gait measure_gait(const Rig& rig, const Clip& clip, const Shape* shape) {
     return g;
 }
 
-int match_speed_by_time(Clip& clip, const Gait& g, double target) {
+int match_speed_frames(const Clip& clip, const Gait& g, double target) {
     const LoopRange r = loop_range(clip);
     if (!(g.speed > 0) || !(target > 0)) return r.out - r.in;
-    const int frames = std::max(1, int(std::lround((r.out - r.in) * g.speed / target)));
+    return std::max(1, int(std::lround((r.out - r.in) * g.speed / target)));
+}
+
+int match_speed_by_time(Clip& clip, const Gait& g, double target) {
+    const int frames = match_speed_frames(clip, g, target);
     stretch_loop(clip, frames);
     return frames;
 }

@@ -33,9 +33,10 @@ namespace {
 // every direction; human eyes reach about 35-45 degrees sideways and less upwards.
 constexpr double kEyeTurn = 30;
 
-std::vector<double> face_values(const FaceTable& table, const std::map<std::string, double>& weights, bool positions) {
+std::vector<double> face_values(const FaceTable& table, const std::map<std::string, double>& weights, bool positions,
+                                double scale) {
     Clip c;
-    key_face_weights(c, table, weights, positions, 0);
+    key_face_weights(c, table, weights, positions, 0, nullptr, scale);
     return face_bone_values(c, table, 0, positions);
 }
 
@@ -151,7 +152,7 @@ void restore_source(Clip& clip, const Skeleton& skel, const FaceLayer& L, const 
 // --- Face panel ---------------------------------------------------------------------------------
 
 void key_face_weights(Clip& clip, const FaceTable& table, const std::map<std::string, double>& weights,
-                      bool positions, double frame, const std::map<std::string, double>* from) {
+                      bool positions, double frame, const std::map<std::string, double>* from, double scale) {
     auto keyed = [&](const std::map<std::string, double>& w, Clip& out, double at) {
         VmcState s;
         for (auto& [name, v] : w)
@@ -159,6 +160,7 @@ void key_face_weights(Clip& clip, const FaceTable& table, const std::map<std::st
         FaceSettings fs;
         fs.positions = positions;
         fs.head = false;
+        fs.scale = scale;
         key_face(out, table, s, fs, at);
     };
     if (!from) return keyed(weights, clip, frame);
@@ -173,14 +175,15 @@ void key_face_weights(Clip& clip, const FaceTable& table, const std::map<std::st
 }
 
 bool face_weights_match(const Clip& clip, const FaceTable& table, const std::map<std::string, double>& weights,
-                        bool positions, double frame) {
-    const std::vector<double> want = face_values(table, weights, positions), have = face_bone_values(clip, table, frame, positions);
+                        bool positions, double frame, double scale) {
+    const std::vector<double> want = face_values(table, weights, positions, scale), have = face_bone_values(clip, table, frame, positions);
     for (size_t i = 0; i < want.size(); ++i)
         if (std::fabs(want[i] - have[i]) > 0.01) return false;
     return true;
 }
 
-std::map<std::string, double> read_face_weights(const Clip& clip, const FaceTable& table, double frame, bool positions) {
+std::map<std::string, double> read_face_weights(const Clip& clip, const FaceTable& table, double frame, bool positions,
+                                                double scale) {
     // min |A w - b|^2 + 0.001 sum(w) over 0 <= w <= 1 by coordinate descent (projected Gauss-Seidel; convex, so it
     // converges). The small cost per shape prefers few shapes: a blink stays a blink rather than half a blink
     // plus a wide eye and a squint cancelling out. Each column is what one shape at full weight keys; key_face is
@@ -189,9 +192,9 @@ std::map<std::string, double> read_face_weights(const Clip& clip, const FaceTabl
     std::vector<std::string> names;
     std::vector<std::vector<double>> cols;
     std::vector<double> norm;
-    for (auto& [shape, motions] : table.shapes) {
-        names.push_back(shape);
-        cols.push_back(face_values(table, {{shape, 1.0}}, positions));
+    for (auto& [sname, motions] : table.shapes) {
+        names.push_back(sname);
+        cols.push_back(face_values(table, {{sname, 1.0}}, positions, scale));
         double n2 = 0;
         for (double x : cols.back()) n2 += x * x;
         norm.push_back(n2);
@@ -335,7 +338,7 @@ Vec3 saccade_offset(const FaceEvents& ev, double t) {
 }
 
 void bake_face_layer(Clip& clip, const Rig& rig, const Shape* shape, const FaceTable& table, bool positions,
-                     const LookTarget& look) {
+                     const LookTarget& look, double scale) {
     if (!clip.face_layer) return;
     const Skeleton& skel = rig.skeleton();
     FaceLayer& L = *clip.face_layer;
@@ -399,7 +402,7 @@ void bake_face_layer(Clip& clip, const Rig& rig, const Shape* shape, const FaceT
                         const int n = skel.find(m.bone);
                         if (n <= 0) continue;
                         if (m.has_rot) p.rot[n] = add_euler(p.rot[n], m.rot * w);
-                        if (m.has_pos && positions) p.offset[n] += m.pos * w;
+                        if (m.has_pos && positions) p.offset[n] += m.pos * (w * scale);
                     }
         frames.push_back(std::move(p));
     }

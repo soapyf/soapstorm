@@ -1,6 +1,7 @@
 // Viewport Avatar Toolset - IK rigs, pins, follow bake and full pose evaluation.
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 #include "vats/rig.h"
+#include "vats/rig_constraints.h"
 
 #include <algorithm>
 #include <climits>
@@ -140,7 +141,13 @@ Quat bend_frame(const LimbInfo& l, IkSolve mode, const Vec3& e, const Vec3& w, d
     // VATs: towards the mid joint. Section 3.7 (Literal) takes x1 x hinge, but SL legs and fingers are not
     // planar about their hinge, so that axis twists the chain off the pose AM-57 derives the pole from.
     // The hinge is the same vector in the root and mid frames: the mid turns about it.
-    y1 = mode == IkSolve::Literal ? x1.cross(l.hinge) : perp_to(e, x1);
+    // A nearly straight limb's mid joint points where the rest pose's small kink puts it, not where the limb bends:
+    // SL's knee sits 2.5 cm inside the hip-ankle line, and a pole taken from that turned the knees in until they
+    // crossed. So below kRefBend the direction is the one the mid joint takes at kRefBend; above it, its own.
+    constexpr double kRefBend = 30 * kDegToRad;
+    const double b = 0.5 * (lo + hi);
+    const Vec3 xr = b < kRefBend ? (e + Quat::axis_angle(l.hinge, kRefBend).rotate(w)).normalized() : x1;
+    y1 = mode == IkSolve::Literal ? x1.cross(l.hinge) : perp_to(perp_to(e, xr), x1);
     if (y1.length() < 1e-6 * l1) y1 = x1.cross(l.hinge);
     y1 = y1.length() < 1e-9 ? any_perp(x1) : y1.normalized();
     return bend;
@@ -150,8 +157,25 @@ Quat bend_frame(const LimbInfo& l, IkSolve mode, const Vec3& e, const Vec3& w, d
 // mid bone is bent about its hinge only). AM-57's foot point and distance, but along the solver's own
 // F1 second axis as the pose carries it, so there is no straight-chain fallback, and under Literal the
 // pole is turned about the root-end line to (root-end direction) x (world hinge).
-Vec3 switch_pole(const Rig& rig, int limb, const std::vector<Xform>& g, IkSolve mode) {
+// A limb the VATs solve hands to Auto IK's solver: one the shown body bends off SL's hinge (bent-rigged, rig
+// axes) and the hind legs, whose hock bends too. `hinges` is auto_ik_hinges(rig, shape).
+bool auto_ik_limb(const Rig& rig, const LimbInfo& l, const std::vector<Vec3>& hinges) {
+    return !l.spine && ((hinges[l.mid] - l.hinge).length() > 1e-4 || rig.skeleton()[l.root].name.rfind("mHindLimb", 0) == 0);
+}
+
+Vec3 switch_pole(const Rig& rig, int limb, const std::vector<Xform>& g, IkSolve mode, const Shape* shape) {
     const LimbInfo& l = rig.limbs()[limb];
+    if (mode == IkSolve::VATs && auto_ik_limb(rig, l, auto_ik_hinges(rig, shape))) {
+        // Auto IK's limbs: the pole in the plane the limb bends in as it stands, so switching doesn't swivel it.
+        Vec3 a = g[l.root].pos, m = g[l.mid].pos, t = g[l.end].pos;
+        Vec3 u = (t - a).length() > 1e-9 ? (t - a).normalized() : any_perp(m - a);
+        Vec3 off = perp_to(m - a, u);
+        if (off.length() < 1e-5) {
+            off = perp_to(parent_global(rig.skeleton(), g, l.root).rot.rotate(l.fallback_pole), u);
+            if (off.length() < 1e-9) off = any_perp(u);
+        }
+        return a + u * (m - a).dot(u) + off.normalized() * (l.finger ? 0.04 : 0.40);
+    }
     Vec3 a = g[l.root].pos, m = g[l.mid].pos, u = g[l.end].pos - a, x1, y1;
     if (u.length() < 1e-9) return derive_pole(rig, limb, g);
     const Quat& r = g[l.root].rot;
@@ -163,7 +187,7 @@ Vec3 switch_pole(const Rig& rig, int limb, const std::vector<Xform>& g, IkSolve 
 }
 
 void read_controller(const Rig& rig, const Clip& clip, int limb, double frame, const std::vector<Xform>& g,
-                     LimbState& s) {
+                     LimbState& s, const Shape* shape) {
     const LimbInfo& l = rig.limbs()[limb];
     std::string name = ik_track(l);
     Xform space = controller_space(rig, l, g);
@@ -175,13 +199,111 @@ void read_controller(const Rig& rig, const Clip& clip, int limb, double frame, c
     if (clip.has_channels(name, kPoleChannels))
         s.pole = space.apply(eval3(clip, name, frame, kPoleChannels));
     else  // Literal (section 3.7 as written) derives a pole-less controller's pole from the pose
-        s.pole = clip.ik_solve == IkSolve::VATs ? switch_pole(rig, limb, g, clip.ik_solve) : derive_pole(rig, limb, g);
+        s.pole = clip.ik_solve == IkSolve::VATs ? switch_pole(rig, limb, g, clip.ik_solve, shape) : derive_pole(rig, limb, g);
+}
+
+// The swivel of a limb's root about the root-to-end line (world axis) nearest want that keeps the root inside its
+// limit; want itself when there is no limit or none fits. The swivel keeps the end where it is, so the knee turns
+// toward the pole only as far as the hip's limit lets it and the foot still reaches the target: swivelling all the
+// way and clamping the hip after missed by 0.2-0.3 m.
+double swivel_in_limit(const Skeleton& skel, const Shape* shape, const RigConstraints* constraints, int root,
+                       const Quat& parent_rot, const Quat& root_world, const Vec3& axis, double want) {
+    const JointLimit* lim = constraints ? constraints->find(skel[root].name) : nullptr;
+    if (!lim) return want;
+    auto fits = [&](double a) {
+        const Quat local = (skel[root].rest.conj() * parent_rot.conj() * Quat::axis_angle(axis, a) * root_world).normalized();
+        return is_rotation_within_limits(*lim, local, shape, root, 1e-4);
+    };
+    if (fits(want)) return want;
+    const double step = 2 * kDegToRad;
+    for (double d = step; d <= kPi + 1e-9; d += step)
+        for (double a : {want - d, want + d})
+            if (fits(a)) {
+                double in = a, out = a < want ? a + step : a - step;  // refine to the limit's edge
+                for (int i = 0; i < 20; ++i) {
+                    const double mid = 0.5 * (in + out);
+                    (fits(mid) ? in : out) = mid;
+                }
+                return in;
+            }
+    return want;
+}
+
+}  // namespace
+
+void solve_limb_vats(const Rig& rig, int limb_index, const Shape* shape, const Xform& target, const Vec3& pole,
+                     const Pose& input_pose, const std::vector<Xform>& g, Quat out[3],
+                     const RigConstraints* constraints, ClampReport* report) {
+    const Skeleton& skel = rig.skeleton();
+    const LimbInfo& l = rig.limbs()[limb_index];
+    AutoIkChain chain;
+    chain.bones = {l.root, l.mid};
+    chain.end = l.end;
+    chain.turning = 2;
+
+    const std::vector<Vec3> hinges = auto_ik_hinges(rig, shape);
+    Pose solved = input_pose;
+    solve_auto_ik(skel, shape, chain, hinges, target.pos, solved, constraints, report);
+
+    // Swivel the limb around root-to-end axis so l.mid points towards pole
+    Xform base = parent_global(skel, g, l.root);
+    Xform root_g = base * skel.local_xform(l.root, solved, shape);
+    Xform mid_g = root_g * skel.local_xform(l.mid, solved, shape);
+    Xform end_g = mid_g * skel.local_xform(l.end, solved, shape);
+
+    Vec3 u = end_g.pos - root_g.pos;
+    if (u.length() > 1e-6) {
+        Vec3 u_axis = u.normalized();
+        Vec3 v_cur = perp_to(mid_g.pos - root_g.pos, u_axis);
+        Vec3 v_want = perp_to(pole - root_g.pos, u_axis);
+        if (v_cur.length() >= 1e-5) {
+            if (v_want.length() < 1e-5) {
+                v_want = perp_to(base.rot.rotate(l.fallback_pole), u_axis);
+            }
+            if (v_want.length() >= 1e-5) {
+                Vec3 v1 = v_cur.normalized();
+                Vec3 v2 = v_want.normalized();
+                const double want = std::atan2(u_axis.dot(v1.cross(v2)), v1.dot(v2));
+                const double angle = swivel_in_limit(skel, shape, constraints, l.root, base.rot, root_g.rot, u_axis, want);
+                if (std::fabs(angle) > 1e-9) {
+                    const Quat swivel = Quat::axis_angle(u_axis, angle);
+                    Quat new_root_g_rot = (swivel * root_g.rot).normalized();
+                    Quat new_root_local = (base.rot.conj() * new_root_g_rot).normalized();
+                    solved.rot[l.root] = (skel[l.root].rest.conj() * new_root_local).normalized();
+                }
+            }
+        }
+    }
+
+    // Align l.end to target.rot
+    Xform new_root_g = base * skel.local_xform(l.root, solved, shape);
+    Xform new_mid_g = new_root_g * skel.local_xform(l.mid, solved, shape);
+    solved.rot[l.end] = (skel[l.end].rest.conj() * new_mid_g.rot.conj() * target.rot).normalized();
+
+    if (constraints) {
+        const int bones[3] = {l.root, l.mid, l.end};
+        for (int k = 0; k < 3; ++k) {
+            int bk = bones[k];
+            if (const JointLimit* lim = constraints->find(skel[bk].name)) {
+                ClampedJoint c;
+                if (report && check_joint_clamp(skel[bk].name, bk, *lim, solved.rot[bk], shape, c)) {
+                    if (!report->contains(skel[bk].name)) report->clamped.push_back(std::move(c));
+                }
+                solved.rot[bk] = clamp_joint_rotation(*lim, solved.rot[bk], shape, bk);
+            }
+        }
+    }
+
+    const int bones[3] = {l.root, l.mid, l.end};
+    for (int k = 0; k < 3; ++k) {
+        out[k] = (skel[bones[k]].rest * solved.rot[bones[k]]).normalized();
+    }
 }
 
 // IK local rotations (rest included) of root, mid and end (02 section 3.7).
 void solve_two_bone(const Skeleton& skel, const LimbInfo& l, IkSolve mode, const Pose& pose,
                     const std::vector<Xform>& g, const Shape* shape, const Xform& target, const Vec3& pole,
-                    Quat out[3]) {
+                    Quat out[3], const RigConstraints* constraints) {
     Xform parent = parent_global(skel, g, l.root);
     Vec3 a = g[l.root].pos, x1, y1;
     Quat bend = bend_frame(l, mode, skel.local_xform(l.mid, pose, shape).pos,
@@ -193,10 +315,25 @@ void solve_two_bone(const Skeleton& skel, const LimbInfo& l, IkSolve mode, const
     y2 = y2.length() < 1e-9 ? any_perp(x2) : y2.normalized();
 
     Quat world = (from_basis(x2, y2, x2.cross(y2)) * from_basis(x1, y1, x1.cross(y1)).conj()).normalized();
+    world = (Quat::axis_angle(x2, swivel_in_limit(skel, shape, constraints, l.root, parent.rot, world, x2, 0)) * world)
+                .normalized();
     out[0] = (parent.rot.conj() * world).normalized();
     out[1] = bend;
     out[2] = ((world * bend).conj() * target.rot).normalized();
+
+    if (constraints) {
+        const int bones[3] = {l.root, l.mid, l.end};
+        for (int k = 0; k < 3; ++k) {
+            if (const JointLimit* lim = constraints->find(skel[bones[k]].name)) {
+                Quat local_rot = (skel[bones[k]].rest.conj() * out[k]).normalized();
+                local_rot = clamp_joint_rotation(*lim, local_rot, shape, bones[k]);
+                out[k] = (skel[bones[k]].rest * local_rot).normalized();
+            }
+        }
+    }
 }
+
+namespace {
 
 // mTorso and mChest local rotations (02 section 3.8).
 void solve_spine(const Skeleton& skel, const LimbInfo& l, const Pose& pose, const std::vector<Xform>& g,
@@ -234,7 +371,8 @@ bool pin_base(const Rig& rig, const Pin& p, double frame, const std::vector<Xfor
 
 // 02 section 3.9: moves via so the joint lands on the pin's goal. A pin on a limb's end instead solves the
 // limb's IK for that goal, so the arm or leg follows and nothing detaches (the reach clamp applies).
-void apply_pin(const Rig& rig, const Clip& clip, const Pin& p, double frame, Evaluation& ev, const Shape* shape) {
+void apply_pin(const Rig& rig, const Clip& clip, const Pin& p, double frame, Evaluation& ev, const Shape* shape,
+               const RigConstraints* constraints = nullptr) {
     if (!p.active(frame)) return;
     const Skeleton& skel = rig.skeleton();
     Pose& pose = ev.pose;
@@ -246,9 +384,12 @@ void apply_pin(const Rig& rig, const Clip& clip, const Pin& p, double frame, Eva
     if (int limb = pin_limb(rig, p); limb >= 0) {
         const LimbInfo& l = rig.limbs()[limb];
         // The bend plane of the limb as it stands: its IK pole when IK drives it, else the animated elbow/knee.
-        Vec3 pole = ev.limbs[limb].blend > 0 ? ev.limbs[limb].pole : switch_pole(rig, limb, g, clip.ik_solve);
+        Vec3 pole = ev.limbs[limb].blend > 0 ? ev.limbs[limb].pole : switch_pole(rig, limb, g, clip.ik_solve, shape);
         Quat ik[3];
-        solve_two_bone(skel, l, clip.ik_solve, pose, g, shape, goal, pole, ik);
+        if (clip.ik_solve == IkSolve::VATs && auto_ik_limb(rig, l, auto_ik_hinges(rig, shape)))
+            solve_limb_vats(rig, limb, shape, goal, pole, pose, g, ik, constraints);
+        else
+            solve_two_bone(skel, l, clip.ik_solve, pose, g, shape, goal, pole, ik, constraints);
         const int bones[3] = {l.root, l.mid, l.end};
         for (int k = 0; k < 3; ++k) pose.rot[bones[k]] = (skel[bones[k]].rest.conj() * ik[k]).normalized();
     } else {
@@ -269,13 +410,15 @@ std::vector<int> pin_bones(const Rig& rig, const Pin& p) {
 }
 
 // Evaluation with only the first npins pins applied.
-Evaluation run(const Rig& rig, const Clip& clip, double frame, const Shape* shape, size_t npins) {
+Evaluation run(const Rig& rig, const Clip& clip, double frame, const Shape* shape, size_t npins,
+               const RigConstraints* constraints = nullptr) {
     const Skeleton& skel = rig.skeleton();
     const auto& limbs = rig.limbs();
     Evaluation ev;
     ev.pose = evaluate_curves(skel, clip, frame);
     ev.globals = skel.global_pose(ev.pose, shape);
     ev.limbs.resize(limbs.size());
+    const std::vector<Vec3> hinges = auto_ik_hinges(rig, shape);
     for (int stage = 0; stage < 3; ++stage) {
         for (size_t i = 0; i < limbs.size(); ++i) {
             const LimbInfo& l = limbs[i];
@@ -284,13 +427,15 @@ Evaluation run(const Rig& rig, const Clip& clip, double frame, const Shape* shap
             s.uses_ik = uses_ik(clip, l);
             s.blend = blend_at(clip, ik_track(l), frame);
             s.ik_on = s.blend >= 0.5;
-            read_controller(rig, clip, static_cast<int>(i), frame, ev.globals, s);
+            read_controller(rig, clip, static_cast<int>(i), frame, ev.globals, s, shape);
             if (s.blend <= 0) continue;
             Quat ik[3];
             if (l.spine)
                 solve_spine(skel, l, ev.pose, ev.globals, shape, s.target, ik);
+            else if (clip.ik_solve == IkSolve::VATs && auto_ik_limb(rig, l, hinges))
+                solve_limb_vats(rig, static_cast<int>(i), shape, s.target, s.pole, ev.pose, ev.globals, ik, constraints);
             else
-                solve_two_bone(skel, l, clip.ik_solve, ev.pose, ev.globals, shape, s.target, s.pole, ik);
+                solve_two_bone(skel, l, clip.ik_solve, ev.pose, ev.globals, shape, s.target, s.pole, ik, constraints);
             const int bones[3] = {l.root, l.mid, l.end};
             for (int k = 0; k < (l.spine ? 2 : 3); ++k) {
                 const Node& n = skel[bones[k]];
@@ -301,10 +446,10 @@ Evaluation run(const Rig& rig, const Clip& clip, double frame, const Shape* shap
         }
     }
     npins = std::min(npins, clip.pins.size());
-    for (size_t p = 0; p < npins; ++p) apply_pin(rig, clip, clip.pins[p], frame, ev, shape);
+    for (size_t p = 0; p < npins; ++p) apply_pin(rig, clip, clip.pins[p], frame, ev, shape, constraints);
     if (npins > 0)  // finger controllers ride the (possibly pinned) wrist
         for (size_t i = 0; i < limbs.size(); ++i)
-            if (limbs[i].finger) read_controller(rig, clip, static_cast<int>(i), frame, ev.globals, ev.limbs[i]);
+            if (limbs[i].finger) read_controller(rig, clip, static_cast<int>(i), frame, ev.globals, ev.limbs[i], shape);
     return ev;
 }
 
@@ -450,8 +595,9 @@ bool uses_ik(const Clip& clip, const LimbInfo& limb) {
     return std::any_of(c->second.keys.begin(), c->second.keys.end(), [](const Key& k) { return k.value > 0; });
 }
 
-Evaluation evaluate(const Rig& rig, const Clip& clip, double frame, const Shape* shape) {
-    return run(rig, clip, frame, shape, clip.pins.size());
+Evaluation evaluate(const Rig& rig, const Clip& clip, double frame, const Shape* shape,
+                    const RigConstraints* constraints) {
+    return run(rig, clip, frame, shape, clip.pins.size(), constraints);
 }
 
 Vec3 derive_pole(const Rig& rig, int limb, const std::vector<Xform>& g) {
@@ -477,7 +623,7 @@ void key_blend(Clip& clip, const Rig& rig, double frame, int limb, double value)
 void switch_to_ik(Clip& clip, const Rig& rig, double frame, int limb, const Shape* shape) {
     Evaluation ev = evaluate(rig, clip, frame, shape);
     const LimbInfo& l = rig.limbs()[limb];
-    Vec3 pole = l.spine ? Vec3{} : switch_pole(rig, limb, ev.globals, clip.ik_solve);
+    Vec3 pole = l.spine ? Vec3{} : switch_pole(rig, limb, ev.globals, clip.ik_solve, shape);
     key_controller(clip, rig, frame, limb, end_world(l, ev.globals), pole, ev.globals);
     key_blend(clip, rig, frame, limb, 1);
 }
@@ -492,9 +638,23 @@ void switch_to_fk(Clip& clip, const Rig& rig, double frame, int limb, const Shap
 }
 
 void key_limb_target(Clip& clip, const Rig& rig, double frame, int limb, const Xform& world_target,
-                     const Shape* shape) {
+                     const Shape* shape, const RigConstraints* constraints, ClampReport* report) {
     Evaluation ev = evaluate(rig, clip, frame, shape);
     key_controller(clip, rig, frame, limb, world_target, ev.limbs[limb].pole, ev.globals);
+    if (!constraints || !report) return;
+    // The limb's IK with no limits: a joint past its limit there is one evaluate stops at it.
+    const Evaluation free = evaluate(rig, clip, frame, shape);
+    const LimbInfo& l = rig.limbs()[limb];
+    if (free.limbs[limb].blend <= 0) return;
+    const int bones[3] = {l.root, l.mid, l.end};
+    for (int k = 0; k < (l.spine ? 2 : 3); ++k) {  // the spine's IK turns mTorso and mChest
+        const int b = bones[k];
+        const JointLimit* lim = b >= 0 ? constraints->find(rig.skeleton()[b].name) : nullptr;
+        ClampedJoint c;
+        if (lim && check_joint_clamp(rig.skeleton()[b].name, b, *lim, free.pose.rot[b], shape, c) &&
+            !report->contains(c.joint))
+            report->clamped.push_back(std::move(c));
+    }
 }
 
 void key_limb_pole(Clip& clip, const Rig& rig, double frame, int limb, const Vec3& world_pole, const Shape* shape) {
@@ -858,7 +1018,8 @@ namespace {
 
 // Damped least squares over chain (AI-4).
 void dls(const Skeleton& skel, const Shape* shape, const AutoIkChain& chain, const std::vector<Vec3>& hinges,
-         const Vec3& target, Pose& pose) {
+         const Vec3& target, Pose& pose, const RigConstraints* constraints = nullptr,
+         ClampReport* report = nullptr) {
     const std::vector<int>& b = chain.bones;
     const int n = static_cast<int>(b.size());
     if (n == 0 || chain.end < 0) return;
@@ -868,50 +1029,146 @@ void dls(const Skeleton& skel, const Shape* shape, const AutoIkChain& chain, con
     auto fk = [&] {
         Xform cur = base;
         for (int k = 0; k < n; ++k) g[k] = cur = cur * skel.local_xform(b[k], pose, shape);
-        end = cur.apply(skel.local_xform(chain.end, pose, shape).pos);
+        end = chain.grab_on ? cur.apply(chain.grab) : cur.apply(skel.local_xform(chain.end, pose, shape).pos);
     };
     auto parent_rot = [&](int k) { return k > 0 ? g[k - 1].rot : base.rot; };
-    auto hinge_of = [&](int k) { return b[k] < static_cast<int>(hinges.size()) ? hinges[b[k]] : Vec3{}; };
+    auto hinge_of = [&](int k) -> Vec3 {
+        if (constraints) {
+            if (const JointLimit* lim = constraints->find(skel[b[k]].name)) {
+                if (lim->kind == JointLimitKind::Hinge) {
+                    const Vec3 local_axis = from_joint_frame(shape, b[k], lim->axis);
+                    return (skel[b[k]].rest.rotate(local_axis)).normalized();
+                }
+                if (lim->kind == JointLimitKind::Cone) {
+                    return Vec3{};
+                }
+            }
+        }
+        return b[k] < static_cast<int>(hinges.size()) ? hinges[b[k]] : Vec3{};
+    };
     // The signed bend at hinge k, about its world hinge: from the bone above it to its own bone.
     auto bend = [&](int k, const Vec3& axis) {
         const Vec3 above = g[k].pos - (k > 0 ? g[k - 1].pos : base.pos), own = (k + 1 < n ? g[k + 1].pos : end) - g[k].pos;
         const Vec3 a = perp_to(above, axis), o = perp_to(own, axis);
         return a.length() < 1e-6 || o.length() < 1e-6 ? 0.0 : std::atan2(axis.dot(a.cross(o)), a.dot(o));
     };
+    if (constraints) {
+        for (int k = 0; k < n; ++k) {
+            if (stiffness_weight(skel[b[k]].name) == 0) continue;  // only bones the drag turns: mSpine1..4 are not keyed
+            if (const JointLimit* lim = constraints->find(skel[b[k]].name)) {
+                pose.rot[b[k]] = clamp_joint_rotation(*lim, pose.rot[b[k]], shape, b[k]);
+            }
+        }
+    }
     fk();
-    double reach = (end - g[0].pos).length();
-    for (int k = 1; k < n; ++k) reach += (g[k].pos - g[k - 1].pos).length();
+    if ((target - end).length() < 1e-6) return;
+    double reach = 0;
+    for (int k = 0; k + 1 < n; ++k) reach += (g[k + 1].pos - g[k].pos).length();
+    reach += (end - g[n - 1].pos).length();
     reach = std::max(reach, 1e-3);
+    const Vec3 to_target = target - g[0].pos;
+    const double target_dist = to_target.length();
+    const Vec3 goal = (target_dist > reach && target_dist > 1e-9)
+                          ? g[0].pos + to_target * (reach / target_dist)
+                          : target;
     // A hinge keeps the side it bends to (straight counts as SL's usual side): it never folds through straight.
     std::vector<double> side(n, 0);
-    for (int k = 0; k < n; ++k)
-        if (Vec3 h = hinge_of(k); h.length() > 1e-9) side[k] = bend(k, parent_rot(k).rotate(h).normalized()) < -kDegToRad ? -1 : 1;
-    const double min_bend = 1 * kDegToRad, max_bend = 178 * kDegToRad, lambda = 0.05 * reach;
+    for (int k = 0; k < n; ++k) {
+        if (constraints && constraints->find(skel[b[k]].name)) {
+            side[k] = 0;
+        } else if (Vec3 h = hinge_of(k); h.length() > 1e-9) {
+            side[k] = bend(k, parent_rot(k).rotate(h).normalized()) < -kDegToRad ? -1 : 1;
+        }
+    }
+    const double min_bend = 1 * kDegToRad, max_bend = 178 * kDegToRad;
+    enum class DofKind { Free, UnconstrainedHinge, LimitHinge, ConeSwing, ConeTangent, ConeTwist };
     struct Dof {
         int k;
         Vec3 axis, col;
         double w;
+        DofKind kind = DofKind::Free;
     };
     std::vector<Dof> dofs;
+    // The solve keeps the nearest it got: a goal the limits keep it from (or only reach far round) left the hinges
+    // swinging from stop to stop on every step of a drag. When the error stops shrinking it stops there.
+    std::vector<Quat> best(n);
+    for (int k = 0; k < n; ++k) best[k] = pose.rot[b[k]];
+    double best_err = (goal - end).length();
+    int stalled = 0;
+    // Nor does a bone turn further in one solve than the way to the goal can ask of it: twice what its lever needs, a
+    // straight joint's bend included (that one grows with the square root). A drag step of a centimetre can't swing a
+    // bone round, while a solve from far (K-IK from the keyed pose, a body drag from the press) has the room it needs.
+    std::vector<double> turned(n, 0), cap(n);
+    for (int k = 0; k < n; ++k) {
+        const double d = best_err / std::max((end - g[k].pos).length(), 0.01);
+        cap[k] = 2 * (d + std::sqrt(2 * d));
+    }
     for (int it = 0; it < 150; ++it) {
-        Vec3 e = target - end;
+        Vec3 e = goal - end;
         if (e.length() < 1e-6) break;
         if (e.length() > 0.2 * reach) e = e.normalized() * (0.2 * reach);  // small steps: the solve follows a path
+        const double cur_dist = (end - g[0].pos).length();
+        const double ext = reach > 0 ? cur_dist / reach : 0;
+        const double damp_boost = ext > 0.85 ? 1.0 + 3.0 * (ext - 0.85) / 0.15 : 1.0;
+        const double lambda = 0.05 * reach * damp_boost;
         dofs.clear();
         for (int k = 0; k < n; ++k) {
-            const Vec3 r = end - g[k].pos, h = hinge_of(k);
+            const Vec3 r = end - g[k].pos;
             const double w = stiffness_weight(skel[b[k]].name);
             if (w == 0) continue;
-            if (h.length() > 1e-9) {
-                const Vec3 axis = parent_rot(k).rotate(h).normalized();
-                dofs.push_back({k, axis, axis.cross(r), w});
+
+            const JointLimit* lim = constraints ? constraints->find(skel[b[k]].name) : nullptr;
+            if (lim && lim->is_limited()) {
+                if (lim->kind == JointLimitKind::Hinge) {
+                    const Vec3 local_axis = from_joint_frame(shape, b[k], lim->axis.normalized());
+                    const Vec3 axis = parent_rot(k).rotate(skel[b[k]].rest.rotate(local_axis)).normalized();
+                    dofs.push_back({k, axis, axis.cross(r), w, DofKind::LimitHinge});
+                } else if (lim->kind == JointLimitKind::Cone) {
+                    const Quat cur_frame = to_joint_frame(shape, b[k], pose.rot[b[k]]);
+                    const Vec3 u_joint = lim->bone_axis.length() > 1e-6 ? lim->bone_axis.normalized() : Vec3{0, 1, 0};
+                    Quat swing, twist;
+                    decompose_swing_twist(cur_frame, u_joint, swing, twist);
+
+                    Vec3 s_joint{swing.x, swing.y, swing.z};
+                    const double s_len = s_joint.length();
+                    if (s_len > 1e-6) {
+                        s_joint = s_joint * (1.0 / s_len);
+                    } else {
+                        s_joint = std::fabs(u_joint.x) < 0.9 ? u_joint.cross({1, 0, 0}).normalized()
+                                                             : u_joint.cross({0, 1, 0}).normalized();
+                    }
+                    const Vec3 t_joint = s_joint.cross(u_joint).normalized();
+
+                    auto to_world = [&](const Vec3& jax) -> Vec3 {
+                        const Vec3 loc = from_joint_frame(shape, b[k], jax);
+                        return parent_rot(k).rotate(skel[b[k]].rest.rotate(loc)).normalized();
+                    };
+
+                    const Vec3 s_axis = to_world(s_joint);
+                    const Vec3 t_axis = to_world(t_joint);
+                    // Twist turns the bone about itself as it points now: about its rest direction, it swung the bone
+                    // round the cone's rim. It reaches little, so it takes a small share of the step.
+                    const Vec3 u_axis = g[k].rot.rotate(from_joint_frame(shape, b[k], u_joint)).normalized();
+
+                    dofs.push_back({k, s_axis, s_axis.cross(r), w, DofKind::ConeSwing});
+                    dofs.push_back({k, t_axis, t_axis.cross(r), w, DofKind::ConeTangent});
+                    dofs.push_back({k, u_axis, u_axis.cross(r), 0.1 * w, DofKind::ConeTwist});
+                }
             } else {
-                for (Vec3 axis : {Vec3{1, 0, 0}, Vec3{0, 1, 0}, Vec3{0, 0, 1}}) dofs.push_back({k, axis, axis.cross(r), w});
+                const Vec3 h = hinge_of(k);
+                if (h.length() > 1e-9) {
+                    const Vec3 axis = parent_rot(k).rotate(h).normalized();
+                    dofs.push_back({k, axis, axis.cross(r), w, DofKind::UnconstrainedHinge});
+                } else {
+                    for (Vec3 axis : {Vec3{1, 0, 0}, Vec3{0, 1, 0}, Vec3{0, 0, 1}}) {
+                        dofs.push_back({k, axis, axis.cross(r), w, DofKind::Free});
+                    }
+                }
             }
         }
-        // A hinge at its stop that the step would push further takes no part in it (the others make up for it), so
-        // the solve is done again without it.
-        std::vector<Vec3> turn(n);  // world rotation vector per bone
+        // A hinge or limited joint at its stop that the step would push further takes no part in it (the others make up for it),
+        // so the solve is done again without it.
+        std::vector<Vec3> turn(n), unclamped_turn(n);
         for (int pass = 0; pass < 2; ++pass) {
             double m[3][3] = {{lambda * lambda, 0, 0}, {0, lambda * lambda, 0}, {0, 0, lambda * lambda}};
             for (const Dof& d : dofs)
@@ -920,35 +1177,111 @@ void dls(const Skeleton& skel, const Shape* shape, const AutoIkChain& chain, con
             const Vec3 y = solve3(m, e);
             bool stopped = false;
             std::fill(turn.begin(), turn.end(), Vec3{});
+            std::fill(unclamped_turn.begin(), unclamped_turn.end(), Vec3{});
             for (Dof& d : dofs) {
-                double a = d.w * d.col.dot(y);
-                if (side[d.k] != 0) {  // a hinge: the bend changes by exactly a
+                const double raw_a = d.w * d.col.dot(y);
+                double a = raw_a;
+                if (d.kind == DofKind::UnconstrainedHinge) {
                     const double s = bend(d.k, d.axis) * side[d.k];
                     const double clamped = std::clamp(a * side[d.k], min_bend - s, max_bend - s) * side[d.k];
                     if (pass == 0 && d.w > 0 && std::fabs(clamped - a) > 1e-9 && std::fabs(clamped) < 1e-6)
                         d.w = 0, stopped = true;
                     a = clamped;
+                } else if (d.kind == DofKind::LimitHinge) {
+                    const JointLimit* lim = constraints->find(skel[b[d.k]].name);
+                    const Quat cur_frame = to_joint_frame(shape, b[d.k], pose.rot[b[d.k]]);
+                    const Vec3 ax = lim->axis.length() > 1e-6 ? lim->axis.normalized() : Vec3{0, 1, 0};
+                    Quat sw, tw;
+                    decompose_swing_twist(cur_frame, ax, sw, tw);
+                    const Vec3 tv{tw.x, tw.y, tw.z};
+                    double cur_angle = 2.0 * std::atan2(tv.dot(ax), tw.w);
+                    const double ref = 0.5 * (lim->min_angle + lim->max_angle);
+                    cur_angle = wrap_near_pi(cur_angle, ref);
+
+                    const double clamped = std::clamp(cur_angle + a, lim->min_angle, lim->max_angle) - cur_angle;
+                    if (pass == 0 && d.w > 0 && std::fabs(clamped - a) > 1e-9 && std::fabs(clamped) < 1e-6)
+                        d.w = 0, stopped = true;
+                    a = clamped;
+                } else if (d.kind == DofKind::ConeSwing) {
+                    const JointLimit* lim = constraints->find(skel[b[d.k]].name);
+                    const Quat cur_frame = to_joint_frame(shape, b[d.k], pose.rot[b[d.k]]);
+                    const Vec3 u_joint = lim->bone_axis.length() > 1e-6 ? lim->bone_axis.normalized() : Vec3{0, 1, 0};
+                    Quat sw, tw;
+                    decompose_swing_twist(cur_frame, u_joint, sw, tw);
+                    const Vec3 s_vec{sw.x, sw.y, sw.z};
+                    const double alpha = 2.0 * std::atan2(s_vec.length(), sw.w);
+
+                    const double clamped = std::clamp(alpha + a, 0.0, cone_stop(*lim, s_vec.cross(u_joint))) - alpha;
+                    if (pass == 0 && d.w > 0 && std::fabs(clamped - a) > 1e-9 && std::fabs(clamped) < 1e-6)
+                        d.w = 0, stopped = true;
+                    a = clamped;
+                } else if (d.kind == DofKind::ConeTwist) {
+                    const JointLimit* lim = constraints->find(skel[b[d.k]].name);
+                    const Quat cur_frame = to_joint_frame(shape, b[d.k], pose.rot[b[d.k]]);
+                    const Vec3 u_joint = lim->bone_axis.length() > 1e-6 ? lim->bone_axis.normalized() : Vec3{0, 1, 0};
+                    Quat sw, tw;
+                    decompose_swing_twist(cur_frame, u_joint, sw, tw);
+                    const Vec3 tv{tw.x, tw.y, tw.z};
+                    double cur_twist = 2.0 * std::atan2(tv.dot(u_joint), tw.w);
+                    const double ref = 0.5 * (lim->twist_min + lim->twist_max);
+                    cur_twist = wrap_near_pi(cur_twist, ref);
+
+                    const double clamped = std::clamp(cur_twist + a, lim->twist_min, lim->twist_max) - cur_twist;
+                    if (pass == 0 && d.w > 0 && std::fabs(clamped - a) > 1e-9 && std::fabs(clamped) < 1e-6)
+                        d.w = 0, stopped = true;
+                    a = clamped;
                 }
                 turn[d.k] += d.axis * a;
+                unclamped_turn[d.k] += d.axis * raw_a;
             }
             if (!stopped) break;
         }
         for (int k = 0; k < n; ++k) {
-            const double a = turn[k].length();
-            if (a < 1e-12) continue;
-            const Quat pr = parent_rot(k), r = Quat::axis_angle(turn[k], a);
+            const double a = std::clamp(turn[k].length(), 0.0, cap[k] - turned[k]);
+            turned[k] += a;
+            const Quat pr = parent_rot(k);
             const Node& node = skel[b[k]];
+            if (report && constraints) {
+                if (const JointLimit* lim = constraints->find(node.name)) {
+                    const double ua = unclamped_turn[k].length();
+                    if (ua > 1e-12) {
+                        const Quat ur = Quat::axis_angle(unclamped_turn[k], ua);
+                        const Quat ulocal = (pr.conj() * ur * pr * node.rest * pose.rot[b[k]]).normalized();
+                        const Quat cand_unclamped = (node.rest.conj() * ulocal).normalized();
+                        ClampedJoint c;
+                        if (check_joint_clamp(node.name, b[k], *lim, cand_unclamped, shape, c)) {
+                            if (!report->contains(node.name)) report->clamped.push_back(std::move(c));
+                        }
+                    }
+                }
+            }
+            if (a < 1e-12) continue;
+            const Quat r = Quat::axis_angle(turn[k], a);
             const Quat local = (pr.conj() * r * pr * node.rest * pose.rot[b[k]]).normalized();
-            pose.rot[b[k]] = (node.rest.conj() * local).normalized();
+            Quat next_rot = (node.rest.conj() * local).normalized();
+            if (constraints) {
+                if (const JointLimit* lim = constraints->find(node.name)) {
+                    next_rot = clamp_joint_rotation(*lim, next_rot, shape, b[k]);
+                }
+            }
+            pose.rot[b[k]] = next_rot;
         }
         fk();
+        if (const double err = (goal - end).length(); err < best_err - 1e-7) {
+            best_err = err, stalled = 0;
+            for (int k = 0; k < n; ++k) best[k] = pose.rot[b[k]];
+        } else if (++stalled >= 8) {
+            break;
+        }
     }
+    for (int k = 0; k < n; ++k) pose.rot[b[k]] = best[k];
 }
 
 }  // namespace
 
 void solve_auto_ik(const Skeleton& skel, const Shape* shape, const AutoIkChain& chain, const std::vector<Vec3>& hinges,
-                   const Vec3& target, Pose& pose) {
+                   const Vec3& target, Pose& pose, const RigConstraints* constraints,
+                   ClampReport* report) {
     // A chain longer than its limb's default reaches with the limb first; the bones above take only what is left, as
     // the spine does for an IK target's Pull (RC-1). Solved all at once, a straight arm pulled in would bend the chest
     // (the only bone that moves the hand towards the shoulder at first) instead of the elbow.
@@ -959,17 +1292,19 @@ void solve_auto_ik(const Skeleton& skel, const Shape* shape, const AutoIkChain& 
             inner.turning -= !passive(skel[inner.bones.front()].name);
             inner.bones.erase(inner.bones.begin());
         }
-        dls(skel, shape, inner, hinges, target, pose);
+        dls(skel, shape, inner, hinges, target, pose, constraints, report);
     }
-    dls(skel, shape, chain, hinges, target, pose);
+    dls(skel, shape, chain, hinges, target, pose, constraints, report);
 }
 
 std::vector<std::string> key_auto_ik(Clip& clip, const Rig& rig, double frame, const AutoIkChain& chain,
-                                     const Evaluation& start, const Vec3& target, const Shape* shape, Pose* solved) {
+                                     const Evaluation& start, const Vec3& target, const Shape* shape,
+                                     Pose* solved, const RigConstraints* constraints,
+                                     ClampReport* report) {
     std::vector<std::string> keyed;
     if (chain.bones.empty()) return keyed;
     Pose pose = start.pose;
-    solve_auto_ik(rig.skeleton(), shape, chain, auto_ik_hinges(rig, shape), target, pose);
+    solve_auto_ik(rig.skeleton(), shape, chain, auto_ik_hinges(rig, shape), target, pose, constraints, report);
     for (int b : chain.bones) {
         if (passive(rig.skeleton()[b].name)) continue;  // never turned
         keyed.push_back(rig.skeleton()[b].name);

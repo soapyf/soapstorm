@@ -8,10 +8,12 @@
 #include <optional>
 
 #include "app.h"
+#include "imgui_internal.h"
 #include "icon_button.h"
 #include "icons.h"
 #include "imgui.h"
 #include "theme.h"
+#include "vats/clips.h"
 #include "vats/lint.h"
 
 namespace vats {
@@ -25,11 +27,7 @@ struct CheckUi {
     std::vector<LintFinding> findings;
 };
 
-namespace {
-
-constexpr std::uint64_t kIdleNs = 500'000'000;  // re-check once the clip has been still this long
-constexpr ImU32 kContactMark = IM_COL32(235, 80, 70, 230);  // self-contact frames on the timeline (08 SX)
-
+// The Animation Check's finding icons, shared with the rig export window (widgets.h).
 ImU32 severity_colour(LintSeverity s) {
     return s == LintSeverity::Error ? IM_COL32(235, 80, 70, 255) : s == LintSeverity::Warning ? IM_COL32(240, 180, 70, 255)
                                                                                              : IM_COL32(110, 170, 240, 255);
@@ -60,6 +58,11 @@ void severity_icon(LintSeverity s) {
         dl->AddCircleFilled(ImVec2(c.x, c.y - r * 0.45f), w * 0.6f, col);
     }
 }
+
+namespace {
+
+constexpr std::uint64_t kIdleNs = 500'000'000;  // re-check once the clip has been still this long
+constexpr ImU32 kContactMark = IM_COL32(235, 80, 70, 230);  // self-contact frames on the timeline (08 SX)
 
 }  // namespace
 
@@ -115,8 +118,15 @@ void App::run_check() {
             }
             partners.push_back(std::move(other));
         }
+    std::vector<const Clip*> other_clips;
+    const int total_clips = clip_count(p);
+    for (int k = 0; k < total_clips; ++k) {
+        if (k != p.active_clip) {
+            other_clips.push_back(&active_actor_clip(k));
+        }
+    }
     ui.findings = lint_clip(skel_, clip, opt, settings_.check_off, mesh_body() ? view_body_shape() : nullptr, ui.ao_state,
-                            partners);
+                            partners, other_clips);
 }
 
 // The self-penetration findings (08 SX) at a whole frame: their bones are tinted in the view.
@@ -130,15 +140,32 @@ bool App::contact_bone(int node) const {
     return false;
 }
 
-// The self-penetration findings' frames (08 SX): a short red mark at the foot of the timeline strip for each.
-void App::draw_contact_marks(ImDrawList* dl, float x0, float x1, float y1, int last) const {
+// The self-penetration findings' frames (08 SX): a short red mark at the foot of the timeline strip for each. Hovered,
+// they say what they are: a newcomer took the red marks and the red bones for something broken.
+void App::draw_contact_marks(ImDrawList* dl, float x0, float x1, float y1, int last, bool hovered) const {
     if (!check_ui_) return;
+    const ImVec2 m = ImGui::GetIO().MousePos;
+    const bool low = hovered && m.y >= y1 - 12 && m.y <= y1;
+    std::string tip;
     for (const LintFinding& f : check_ui_->findings)
-        if (f.rule == "self_contact")
+        if (f.rule == "self_contact") {
+            bool here = false;
             for (int fr : f.frames) {
                 const float x = x0 + (x1 - x0) * float(fr) / float(std::max(last, 1));
                 dl->AddLine(ImVec2(x, y1 - 6), ImVec2(x, y1), kContactMark, 2);
+                here = here || (low && std::fabs(m.x - x) < 4);
             }
+            if (here) tip += "\n  " + bone_label(f.bones[0]) + " and " + bone_label(f.bones[1]);
+        }
+    if (!tip.empty() && ImGui::BeginTooltip()) {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 28);
+        ImGui::TextWrapped("Red marks: frames where body parts pass through each other, by the avatar's capsules (a hint, "
+                           "not the mesh). Their bones show red in the view.");
+        ImGui::TextUnformatted(tip.c_str() + 1);
+        ImGui::TextWrapped("Animation Check lists them, with Push Out where it can move them apart.");
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
 }
 
 void App::draw_check_badge() {
@@ -157,19 +184,24 @@ void App::draw_check_badge() {
 void App::draw_check_panel() {
     update_check();
     if (!show_check_ || ImGui::GetFrameCount() < 3) return;  // placed beside the view once its size is known (--tab)
-    place_tool_window(30, 32);
+    place_tool_window("Animation Check", 30, 32);
     if (!ImGui::Begin("Animation Check", &show_check_)) return ImGui::End();
     help_button("animation-check");
     CheckUi& ui = *check_ui_;
     if (ui.due) hint("Checking once the animation is still...");
     else if (ui.findings.empty()) hint("No problems found.");
-    else hint("Problems Second Life will show. Fix applies the suggested change as one undo step.");
-    if (icon_label_small_button(icon::kRefresh, "Check Again")) ui.due = ui.at_once = true;
+    else hint("Problems Second Life will show. Fix makes the suggested change.");
+    if (ImGui::Button("Check Again")) ui.due = ui.at_once = true;
     ImGui::SetItemTooltip("After changing the body, the bake shape or the worn avatar, which the check cannot see change");
     ImGui::Separator();
 
     const std::vector<LintFinding> findings = ui.findings;  // a Fix below re-checks and replaces the list
-    ImGui::BeginChild("##findings", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 1.2f));
+    // Floating, the findings are the window's own rows (it fits them on opening), Rules... under the last one. Docked,
+    // they scroll in a list that fills the panel, Rules... at its foot.
+    const bool docked = ImGui::GetCurrentWindow()->DockIsActive;
+    if (docked)
+        ImGui::BeginChild("##findings", ImVec2(0, std::max(ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing() * 1.2f,
+                                                           ImGui::GetTextLineHeightWithSpacing() * 4)));
     for (size_t i = 0; i < findings.size(); ++i) {
         const LintFinding& f = findings[i];
         ImGui::PushID(int(i));
@@ -178,7 +210,7 @@ void App::draw_check_panel() {
         ImGui::TextWrapped("%s", f.message.c_str());
         ImGui::Indent(ImGui::GetFontSize() + ImGui::GetStyle().ItemSpacing.x);
         ImGui::BeginDisabled(!f.fix.apply);
-        if (icon_label_small_button(icon::kFix, "Fix")) {
+        if (ImGui::Button("Fix")) {
             // A list made before the latest edit is stale: check now and take the same finding's fix from the fresh
             // list, so the first click always applies (it used to be greyed out until the idle re-check).
             std::optional<LintFix> fix = f.fix;
@@ -204,7 +236,7 @@ void App::draw_check_panel() {
             if (int n = skel_.find(b); n >= 0) nodes.push_back(n);
         if (!nodes.empty()) {
             ImGui::SameLine();
-            if (icon_label_small_button(icon::kSelect, "Select Bones")) {
+            if (ImGui::Button("Select Bones")) {
                 clear_selection();
                 for (int n : nodes) select(n, true);
             }
@@ -213,7 +245,7 @@ void App::draw_check_panel() {
             // The start of the next run of the finding's frames, wrapping: repeated clicks step through the runs.
             const int to = lint_goto_frame(f.frames, int(std::lround(frame_)));
             ImGui::SameLine();
-            if (icon_label_small_button(icon::kGoTo, ("Go to Frame " + std::to_string(to) + "###goto").c_str())) set_frame(to);
+            if (ImGui::Button(("Go to Frame " + std::to_string(to) + "###goto").c_str())) set_frame(to);
             if (const int runs = lint_frame_runs(f.frames); runs > 1)
                 ImGui::SetItemTooltip("%zu frames in %d stretches; click again for the next", f.frames.size(), runs);
             else if (f.frames.size() > 1)
@@ -223,10 +255,10 @@ void App::draw_check_panel() {
         ImGui::Spacing();
         ImGui::PopID();
     }
-    ImGui::EndChild();
+    if (docked) ImGui::EndChild();
 
     // Per-rule switches, remembered in the settings.
-    if (icon_label_button(icon::kRules, "Rules...")) ImGui::OpenPopup("##check_rules");
+    if (ImGui::Button("Rules...")) ImGui::OpenPopup("##check_rules");
     if (!settings_.check_off.empty()) {
         ImGui::SameLine();
         ImGui::TextDisabled("%zu switched off", settings_.check_off.size());

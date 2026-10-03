@@ -102,7 +102,7 @@ keys on `mElbowRight` and `mWristRight` only.
 1. **Properties → Animation → Priority** reads 2.
 2. Select `mWristRight`: **Properties → Bone → Priority** reads 5. Select `mElbowRight`: it reads
    **Clip (2)**, so the elbow follows the clip.
-3. Press **Ctrl+E**, then **Export SL .anim**. The status bar says "2 bones, 1.00 s, priority 2, 293
+3. Press **Ctrl+E**, then **Export .anim**. The status bar says "2 bones, 1.00 s, priority 2, 293
    bytes": only the two keyed bones are in the file, at the clip's priority 2, with the wrist's record
    carrying its own 5 (see [[Anim format#Joint records]]).
 4. Worn with a priority-4 dance, this file moves the wrist and nothing else. Set the wrist back to

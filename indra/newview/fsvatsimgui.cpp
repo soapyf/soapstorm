@@ -25,6 +25,7 @@
 
 #include "fsvatsimgui.h"
 #include "fsvatshost.h"
+#include "profile.h"
 
 #include "llclipboard.h"
 #include "lldir.h"
@@ -46,6 +47,7 @@
 #include "imgui_impl_opengl3.h"
 #include "imgui_internal.h"  // the hovered window, for routing presses
 
+#include <algorithm>
 #include <cctype>
 #include <cfloat>
 #include <iterator>
@@ -69,6 +71,10 @@ namespace
     U32 sWorldHoverFrame = 0;           // the last frame the viewer's hover reached the world (worldHover)
     bool sBuilt = false;                // this frame's ImGui frame is built (buildFrame)
     bool sDrawn = false;                // and drawn (renderWorld, or render on a frame without a world pass)
+    // The editor's menus, popups and tooltips: drawn after the viewer's windows, not under them, and taking the pointer
+    // where they lie over one (a chat floater under an open File menu). Their draw lists and their rectangles.
+    std::vector<ImDrawList*> sTopLists;
+    std::vector<ImRect> sTopRects;
     std::string sIniPath;
     std::string sClipboard;             // backing store for ImGui's GetClipboardText
     LLTimer sFrameTimer;
@@ -155,6 +161,7 @@ namespace
         { SDL_SCANCODE_F19, ImGuiKey_F19 }, { SDL_SCANCODE_F20, ImGuiKey_F20 }, { SDL_SCANCODE_F21, ImGuiKey_F21 },
         { SDL_SCANCODE_F22, ImGuiKey_F22 }, { SDL_SCANCODE_F23, ImGuiKey_F23 }, { SDL_SCANCODE_F24, ImGuiKey_F24 },
         { SDL_SCANCODE_PAUSE, ImGuiKey_Pause }, { SDL_SCANCODE_PRINTSCREEN, ImGuiKey_PrintScreen },
+        { SDL_SCANCODE_RALT, ImGuiKey_RightAlt },  // the editor's key badges; the viewer's KEY_ALT is either Alt
     };
     bool sPolledDown[std::size(kPolled)] = {};
 
@@ -475,9 +482,66 @@ namespace
 
     // The pointer reaches ImGui only where no LLUI view is under it (the viewer's hover reached the world, which
     // includes the world view under the editor's panels), or while ImGui holds a button (a drag).
+    // The pointer (ImGui coordinates) over one of the editor's open menus, popups or tooltips.
+    bool overTopLayer(const ImVec2& p)
+    {
+        for (const ImRect& r : sTopRects)
+        {
+            if (r.Contains(p))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     bool pointerForImGui()
     {
-        return sWorldHoverFrame == LLFrameTimer::getFrameCount() || sCapturedButtons != 0;
+        return sWorldHoverFrame == LLFrameTimer::getFrameCount() || sCapturedButtons != 0 || overTopLayer(toImGui(sMousePos));
+    }
+
+    // Splits this frame's draw lists: the editor's popups (menus, combos, context menus, modals) and tooltips, with the
+    // foreground list, form the top layer; the rest is drawn under the viewer's windows.
+    void splitLayers(ImDrawData* data)
+    {
+        sTopLists.clear();
+        sTopRects.clear();
+        ImGuiContext& g = *GImGui;
+        const ImGuiWindowFlags top = ImGuiWindowFlags_Popup | ImGuiWindowFlags_Tooltip;
+        for (ImGuiWindow* w : g.Windows)
+        {
+            if (!w->Active || w->Hidden || !(w->RootWindow->Flags & top))  // this frame's, after Render
+            {
+                continue;
+            }
+            sTopLists.push_back(w->DrawList);
+            if (w == w->RootWindow && !(w->Flags & ImGuiWindowFlags_Tooltip))  // tooltips take no clicks
+            {
+                sTopRects.push_back(w->Rect());
+            }
+        }
+        sTopLists.push_back(ImGui::GetForegroundDrawList(ImGui::GetMainViewport()));  // after Render: no current window
+    }
+
+    // The frame's draw lists of one layer, as draw data for the backend.
+    ImDrawData layerOf(const ImDrawData& data, bool top_layer)
+    {
+        ImDrawData out = data;
+        out.CmdLists.clear();
+        out.TotalVtxCount = out.TotalIdxCount = 0;
+        for (ImDrawList* list : data.CmdLists)
+        {
+            const bool is_top = std::find(sTopLists.begin(), sTopLists.end(), list) != sTopLists.end();
+            if (is_top != top_layer)
+            {
+                continue;
+            }
+            out.CmdLists.push_back(list);
+            out.TotalVtxCount += list->VtxBuffer.Size;
+            out.TotalIdxCount += list->IdxBuffer.Size;
+        }
+        out.CmdListsCount = out.CmdLists.Size;
+        return out;
     }
 
     // Draws the frame built this frame: the world layer (the background list: bones, gizmos, markers) and the
@@ -496,8 +560,10 @@ namespace
         {
             before.read();
         }
+        VATS_PROFILE("viewer drawFrame (scene + ImGui GL)");
         FSVATsEditor::drawScene();  // the editor's triangles (other actors' bodies, props), under ImGui's lines
-        ImGui_ImplOpenGL3_RenderDrawData(data);
+        ImDrawData under = layerOf(*data, false);  // the popups come after LLUI (drawTopLayer)
+        ImGui_ImplOpenGL3_RenderDrawData(&under);
         if (sGLChecksLeft > 0)
         {
             --sGLChecksLeft;
@@ -530,11 +596,15 @@ void FSVATsImGui::destroyGL()
         FSVATsEditor::releaseGL();
         sGLReady = false;
     }
+    sBuilt = sDrawn = false;  // no frame built for a backend that is gone
+    sTopLists.clear();
+    sTopRects.clear();
 }
 
 // Builds this frame's ImGui frame (clients, input, layout); false when nothing is open.
 static bool buildFrame()
 {
+    VATS_PROFILE("viewer buildFrame (UI frame)");
     if (!gViewerWindow)
     {
         return false;
@@ -624,6 +694,7 @@ static bool buildFrame()
     ImDrawData* draw_data = ImGui::GetDrawData();
     draw_data->DisplayPos = ImVec2(-sOrigin.x, -sOrigin.y);
     draw_data->DisplaySize = ImVec2((F32)gViewerWindow->getWindowWidthScaled(), window_h);
+    splitLayers(draw_data);
     sBuilt = true;
     sDrawn = false;
     return true;
@@ -648,6 +719,16 @@ void FSVATsImGui::render()
     if (!sDrawn)
     {
         drawFrame();  // no pass before LLUI this frame (a snapshot)
+    }
+    // The editor's open menus, popups and tooltips, over the viewer's windows (a chat floater stays under the File menu).
+    if (ImDrawData* data = ImGui::GetDrawData(); data && data->Valid)
+    {
+        ImDrawData top = layerOf(*data, true);
+        if (top.CmdLists.Size > 0)
+        {
+            gGL.flush();
+            ImGui_ImplOpenGL3_RenderDrawData(&top);
+        }
     }
     sBuilt = sDrawn = false;
 
@@ -701,6 +782,18 @@ bool FSVATsImGui::mouseButton(LLCoordGL pos, MASK mask, EMouseClickType click, b
     }
     if (down)
     {
+        // A press on the editor's open menu or popup is the editor's, even over a viewer window (drawn under it).
+        if (overTopLayer(toImGui(pos)))
+        {
+            ImGuiIO& io = ImGui::GetIO();
+            setMods(io, mask);
+            const ImVec2 p = toImGui(pos);
+            io.AddMousePosEvent(p.x, p.y);
+            io.AddMouseButtonEvent(button, true);
+            sCapturedButtons |= 1u << button;
+            gViewerWindow->getWindow()->captureMouse();
+            return true;
+        }
         return false;  // LLUI first: a press no viewer window takes comes back through worldClick
     }
     // Releases always reach ImGui, so it is never left with a button held; the viewer loses only those
@@ -795,6 +888,17 @@ bool FSVATsImGui::keyDown(KEY key, MASK mask)
     ImGuiIO& io = ImGui::GetIO();
     setMods(io, mask);
     ImGuiKey k = toImGuiKey(key);
+    // KEY_ALT is either Alt. The editor keeps Left Alt for the camera and holds Right Alt for its key badges, so only a
+    // Left Alt press is Left Alt; Right Alt is told apart from the system's own key state.
+    if (key == KEY_ALT)
+    {
+#if LL_SDL2
+        if (!(SDL_GetModState() & SDL_KMOD_LALT)) k = ImGuiKey_None;  // Right Alt reaches ImGui from keypadKeys
+#elif LL_WINDOWS
+        if (GetKeyState(VK_RMENU) & 0x8000) io.AddKeyEvent(ImGuiKey_RightAlt, true);
+        if (!(GetKeyState(VK_LMENU) & 0x8000)) k = ImGuiKey_None;
+#endif
+    }
     if (k != ImGuiKey_None)
     {
         io.AddKeyEvent(k, true);
@@ -814,6 +918,9 @@ void FSVATsImGui::keyUp(KEY key, MASK mask)
         {
             io.AddKeyEvent(k, false);
         }
+#if LL_WINDOWS
+        if (key == KEY_ALT && !(GetKeyState(VK_RMENU) & 0x8000)) io.AddKeyEvent(ImGuiKey_RightAlt, false);
+#endif
     }
 }
 
@@ -841,10 +948,16 @@ void FSVATsImGui::focusLost()
     }
 }
 
+ImVec2 FSVATsImGui::toImGuiScaled(S32 x, S32 y)
+{
+    return ImVec2((F32)x - sOrigin.x, (F32)(gViewerWindow->getWindowHeightScaled() - y) - sOrigin.y);
+}
+
 bool FSVATsImGui::capturesMouse()
 {
-    // Not ImGui's world capture (a bone under the pointer): LLUI windows over the world keep their hover.
-    return sCtx && sCapturedButtons != 0;
+    // Not ImGui's world capture (a bone under the pointer): LLUI windows over the world keep their hover. Over the
+    // editor's open menu or popup, the viewer's windows under it get no hover either.
+    return sCtx && (sCapturedButtons != 0 || overTopLayer(toImGui(sMousePos)));
 }
 
 bool FSVATsImGui::pointerOnWorld()

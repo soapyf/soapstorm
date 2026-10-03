@@ -21,7 +21,7 @@ the animation as it is now, in a **Now** column.
 |---|---|---|---|
 | **Keys** | keys | every key of every curve in the animation | **Edit → Simplify Curves...** ([[Graph editor#Simplifying curves]]) |
 | **Size** | bytes | the size of the `.anim` export writes, with the project's export settings (**Reduce keys**, bake shape) | **Fit to 250 KB** ([[Export to Second Life#Check the upload size]]) |
-| **Shake** | deg/s³ | the RMS over the bones of each bone's shake: the jerk (third difference) of its three rotation curves together, frame 0 to the last frame | **Filter Curves...** ([[Graph editor#Filtering curves]]) |
+| **Jitter** | deg/s³ | the RMS over the bones of each bone's shake: the jerk (third difference) of its three rotation curves together, frame 0 to the last frame | **Filter Curves...** ([[Graph editor#Filtering curves]]) |
 | **Foot slide** | mm | how far the ankles move along the ground while a foot is planted, summed over every foot contact | **Tools → Clean Up Foot Sliding** ([[Retargeting#Clean up foot sliding]]) |
 | **Hip drift** | mm | how far `mPelvis` travels along the ground (X and Y) from loop in to loop out, or over the whole animation when **Loop** is off | **Remove Hip Travel (In Place)** ([[Loop tools]]) |
 | **Seam jump** | deg | the largest rotation jump from loop out back to loop in; a whole turn is no jump | **Make Loop Seamless** ([[Loop tools]]) |
@@ -31,7 +31,7 @@ The seam rows are shown only when the animation loops. Foot contacts are found a
 Sliding** finds them with its defaults: an ankle within 5 cm of its lowest point and moving slower than
 0.3 m/s for at least 3 frames. The line under the table gives how many it found.
 
-**Shake per bone** opens a table of each bone's shake, in deg/s³, for bones with rotation curves.
+**Jitter per Bone** opens a table of each bone's jitter, in deg/s³, for bones with rotation curves.
 
 ### Before and after a clean-up
 
@@ -55,7 +55,7 @@ comparison. In a couple or group scene, only the active actor's steps count.
 
 ## Tips and tricks
 
-- A typical clean-up of a capture: **Filter Curves...** (Shake falls), **Clean Up Foot Sliding** (Foot
+- A typical clean-up of a capture: **Filter Curves...** (Jitter falls), **Clean Up Foot Sliding** (Foot
   slide falls), then **Simplify Curves...** (Keys fall). Check each change here before the next step.
 - A **Change** that rises is worth a look: a bake adds keys, and filtering a planted foot can make it
   slide again.

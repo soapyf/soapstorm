@@ -4,17 +4,22 @@
 // Spec: docs/spec/04 sections 2.7 and 2.8, docs/spec/03 sections 2.5, 3.3 and 3.6, docs/spec/06 section 4.2.
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iterator>
 #include <sstream>
 
 #include "app.h"
+#include "profile.h"
+#include "widgets.h"
+#include "theme.h"
 #include "imgui_internal.h"  // BeginDragDropTargetCustom
 #include "dock_layout.h"
 #include "vats/fbx.h"
 #include "vats/gif.h"
 #include "vats/pose_presets.h"
+#include "vats/pose_tools.h"
 
 namespace vats {
 namespace {
@@ -47,8 +52,17 @@ const DaeModel* App::prop_model(const std::string& path) {
         ok = load_mesh_file(path, skel_, *model, report, err);
     } catch (const std::exception&) {  // a broken file is treated like a missing one (the box placeholder)
     }
-    if (!ok) model.reset();  // missing: a placeholder later
-    return (prop_models_[path] = std::move(model)).get();
+    prop_reports_[path] = report;
+    ++paint_generation_;  // a model (re)loaded: the weight brush's caches are made again
+    if (!ok) {  // missing: a placeholder later
+        prop_sources_.erase(path);
+        return (prop_models_[path] = nullptr).get();
+    }
+    const MeshLook look = look_for_path(path);
+    auto shown = std::make_unique<DaeModel>(shown_model(*model, look));
+    prop_sources_[path] = std::move(model);
+    prop_looks_[path] = look;
+    return (prop_models_[path] = std::move(shown)).get();
 }
 
 // World transform of a static prop's mesh (without scale): parent x (rotation, position), vats::prop_frame.
@@ -119,7 +133,7 @@ void App::draw_props(std::vector<Vertex>& verts, std::vector<std::uint32_t>& ind
 
 void App::draw_prop(const Prop& p, std::vector<Vertex>& verts, std::vector<std::uint32_t>& indices,
                     const std::vector<Xform>* globals, const Shape* shape_override, float dim, const Xform& world,
-                    const float* tint) {
+                    const float* tint, const std::vector<float>* heat) {
     const DaeModel* m = prop_model(p.path);
     if (!m) return;
     verts.clear();
@@ -128,6 +142,7 @@ void App::draw_prop(const Prop& p, std::vector<Vertex>& verts, std::vector<std::
     const std::vector<float>* nrm = &m->normals;
     Xform frame;
     if (p.rigged) {
+        VATS_PROFILE("prop skin");
         skin_prop(*m, skel_, globals ? *globals : globals_, globals ? shape_override : shape(), prop_skin_pos_,
                   prop_skin_nrm_);
         pos = &prop_skin_pos_;
@@ -135,6 +150,10 @@ void App::draw_prop(const Prop& p, std::vector<Vertex>& verts, std::vector<std::
     } else {
         frame = prop_frame(p, globals, world);
     }
+    verts.reserve(m->positions.size() / 3);
+    indices.reserve(m->indices.size());
+    {
+    VATS_PROFILE("prop vertices");
     for (const DaeGroup& g : m->groups) {
         const DaeMaterial& mat = m->materials[g.material];
         for (std::uint32_t v = g.first_vertex; v < g.first_vertex + g.vertex_count; ++v) {
@@ -146,13 +165,19 @@ void App::draw_prop(const Prop& p, std::vector<Vertex>& verts, std::vector<std::
             if (tint)
                 verts.push_back({{float(x.x), float(x.y), float(x.z)}, {float(n.x), float(n.y), float(n.z)},
                                  {tint[0], tint[1], tint[2], tint[3]}});
-            else
+            else {
+                float c[3] = {mat.rgba[0] * dim, mat.rgba[1] * dim, mat.rgba[2] * dim};
+                if (heat && heat->size() >= (v + 1) * 4)
+                    for (int k = 0; k < 3; ++k) c[k] += ((*heat)[v * 4 + k] - c[k]) * (*heat)[v * 4 + 3];
                 verts.push_back({{float(x.x), float(x.y), float(x.z)}, {float(n.x), float(n.y), float(n.z)},
-                                 {mat.rgba[0] * dim, mat.rgba[1] * dim, mat.rgba[2] * dim, mat.blend ? mat.rgba[3] : 1.f}});
+                                 {c[0], c[1], c[2], mat.blend ? mat.rgba[3] : 1.f}});
+            }
         }
         indices.insert(indices.end(), m->indices.begin() + g.first_index,
                        m->indices.begin() + g.first_index + g.index_count);
     }
+    }
+    VATS_PROFILE("prop submit");
     scene_triangles(verts, indices, true, 0.15f, tint != nullptr);  // gathered by the Picker's render
 }
 
@@ -202,13 +227,8 @@ void App::draw_prop_section() {
     if (p.rigged) {
         ImGui::TextDisabled("Rigged meshes follow the avatar and have no transform of their own.");
     } else {
-        const float label_w = ImGui::GetFontSize() * 5.5f;
-        auto label = [&](const char* text) {
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(text);
-            ImGui::SameLine(label_w);
-            ImGui::SetNextItemWidth(-1);
-        };
+        const float label_w = label_column();
+        auto label = [&](const char* text) { labelled_row(text); };
         auto track = [&](const char* step) {
             if (ImGui::IsItemActivated()) doc_.history.begin(doc_.clip());
             if (ImGui::IsItemDeactivated() && doc_.history.is_open() && doc_.history.commit(step, doc_.clip())) mark_dirty();
@@ -224,10 +244,10 @@ void App::draw_prop_section() {
                 });
             };
             if (ImGui::Selectable("World", current == "World")) choose("", "");
-            ImGui::SeparatorText("Attachment points");
+            subheading("Attachment points");
             for (int i = skel_.joint_count(); i < skel_.size(); ++i)
                 if (ImGui::Selectable(skel_[i].name.c_str(), current == skel_[i].name)) choose("", skel_[i].name);
-            ImGui::SeparatorText("Bones");
+            subheading("Bones");
             for (int i = 0; i < skel_.joint_count(); ++i)
                 if (ImGui::Selectable(skel_[i].name.c_str(), current == skel_[i].name)) choose(skel_[i].name, "");
             ImGui::EndCombo();
@@ -255,11 +275,16 @@ void App::draw_prop_section() {
             bool clicked = ImGui::SmallButton(labels[k]);
             ImGui::SetItemTooltip("Copy as a vector to paste into the SL build window");
             if (clicked) {
-                std::string v = prop_sl_string(p, k);
-                ImGui::SetClipboardText(v.c_str());
-                status("Copied " + v);
+                std::string sl_str = prop_sl_string(p, k);
+                ImGui::SetClipboardText(sl_str.c_str());
+                status("Copied " + sl_str);
             }
         }
+    }
+    if (!p.rigged && p.bone.empty() && p.point.empty()) {
+        if (ImGui::Button("Sit on This")) sit_on(selected_prop_);
+        ImGui::SetItemTooltip("Sits the avatar on it at this frame: the Sitting pose if it is not sitting yet, the thighs on "
+                              "the seat, the feet held on the floor");
     }
     if (!prop_model(p.path)) ImGui::TextColored(ImVec4(1, 0.6f, 0.4f, 1), "Mesh file not found: %s", p.path.c_str());
     if (ImGui::Button("Remove Prop")) {
@@ -267,6 +292,60 @@ void App::draw_prop_section() {
         selected_prop_ = -1;
         edit("Remove Prop", [&](Clip& c) { c.props.erase(c.props.begin() + i); });
     }
+}
+
+std::vector<int> App::seat_props() const {
+    std::vector<int> out;
+    const auto& props = doc_.clip().props;
+    for (int i = 0; i < int(props.size()); ++i)
+        if (!props[i].rigged && props[i].visible && props[i].bone.empty() && props[i].point.empty()) out.push_back(i);
+    return out;
+}
+
+// A sit needed pins, Hold in World, Bind and a hip drop, ideas a newcomer does not have: this is the sit tutorial's
+// first steps in one click. ponytail: the seat is found straight under the thighs, as a sit target puts a seat under
+// the hips; a seat beside the avatar is not walked to.
+void App::sit_on(int k) {
+    const std::vector<int> seats = seat_props();
+    if (seats.empty()) return status("Nothing to sit on: add a seat from Inventory > Starter props > Seating, under the avatar");
+    const int frame = int(std::round(frame_));
+    Clip work = doc_.clip();
+    // Not sitting yet (thighs more down than forward): the Sitting starter pose first.
+    const int hip = skel_.find("mHipLeft"), knee = skel_.find("mKneeLeft");
+    std::string sat_pose;
+    if (hip >= 0 && knee >= 0) {
+        const Evaluation e = vats::evaluate(*rig_, work, frame, shape());
+        const Vec3 thigh = e.globals[size_t(knee)].pos - e.globals[size_t(hip)].pos;
+        if (std::fabs(thigh.z) > 0.5 * thigh.length())
+            for (const LibraryItem& it : builtin_poses(skel_))
+                if (it.id == "builtin:body-sit") apply_pose(work, skel_, it, frame, false), sat_pose = it.name;
+    }
+    // The seat: the highest surface straight down from above the thighs, hip to knee (a chair's seat is shorter than a
+    // thigh: its front edge stops before the knee).
+    double seat_z = -1e30;
+    int hit = -1;
+    const auto& props = doc_.clip().props;
+    for (int i : seats)
+        if (k < 0 || i == k) {
+            prop_model(props[size_t(i)].path);  // loaded when first drawn: a project just opened has not been yet
+            for (const Vec3& at : thigh_points(*rig_, work, frame, shape())) {
+                const Vec3 o{at.x, at.y, at.z + 0.6};
+                if (const double t = ray_prop(i, o, {0, 0, -1}); t < 1e29 && o.z - t > seat_z) seat_z = o.z - t, hit = i;
+            }
+        }
+    if (hit < 0)
+        return status(k >= 0 ? props[size_t(k)].name + " is not under the avatar's thighs: move it under them"
+                             : "Nothing to sit on under the avatar's thighs: move a seat under them");
+    const std::string name = props[size_t(hit)].name;
+    std::string report;
+    bool ok = false;
+    edit("Sit on " + name, [&](Clip& c) {
+        if (!sat_pose.empty())
+            for (const LibraryItem& it : builtin_poses(skel_))
+                if (it.id == "builtin:body-sit") apply_pose(c, skel_, it, frame, false);
+        ok = sit_on_seat(c, *rig_, frame, seat_z, shape(), report);
+    });
+    status(ok ? "Sat on " + name + (sat_pose.empty() ? "" : " in the " + sat_pose + " pose") + ": " + report : report);
 }
 
 // --- Prop library (03 section 3.6, IO-39) ---
@@ -279,11 +358,12 @@ std::string App::library_dir() const {
 void App::save_prop_library() {
     std::string path = library_dir() + "library.json", tmp = path + ".tmp";
     {
-        std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+        std::ofstream f(u8path(tmp), std::ios::binary | std::ios::trunc);
         f << vats::save_prop_library(prop_library_);
         if (!f) return message("Could not save the prop library", path);
     }
-    std::rename(tmp.c_str(), path.c_str());
+    std::error_code ec;  // replaces the old file on Windows too, where std::rename refuses
+    std::filesystem::rename(u8path(tmp), u8path(path), ec);
 }
 
 std::string App::add_to_prop_library(const Prop& p) {

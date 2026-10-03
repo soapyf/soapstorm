@@ -244,6 +244,106 @@ inline void pan(Camera& cam, const Focus& f, double left, double up) {
 
 }  // namespace slcam
 
+// Camera glide: smoothly eases the camera to a new focus or look direction, blending user inputs (orbit,
+// pan, zoom, wheel, view keys and view-cube clicks) smoothly into the target while the glide runs without
+// jumping or restarting, matching Second Life viewer's LLAgentCamera easing.
+struct CameraGlide {
+    Camera target_cam;
+    bool active = false;
+    bool fixed_eye = false;  // a focus glide: the eye stays put and only the look-at point travels (SL Alt-click)
+    double half_life = 0.06;  // exponential smoothing half-life in seconds (ZoomTime ~0.4s)
+
+    // Focus on a point (SL Alt-click): the eye stays where it is and turns to look at point.
+    void focus_on(const Camera& current, const Vec3& point) {
+        // The eye is the one on screen: a turn or an input still blending in stops here, else the eye would jump to
+        // where that glide was heading. The lens and ground stay the target's (they apply at once anyway).
+        if (!active || !fixed_eye) {
+            const Camera was = target_cam;
+            target_cam = current;
+            if (active) target_cam.fov = was.fov, target_cam.ortho = was.ortho, target_cam.min_eye_z = was.min_eye_z;
+            active = true;
+        }
+        fixed_eye = true;
+        target_cam.focus_on(point);
+        target_cam.yaw = current.yaw + std::remainder(target_cam.yaw - current.yaw, 2 * kPi);
+    }
+
+    // Look from a direction (View Cube): sets target yaw and pitch to face along direction.
+    void look_from(const Camera& current, const Vec3& dir) {
+        if (!active) {
+            target_cam = current;
+            active = true;
+        }
+        fixed_eye = false;
+        const Vec3 d = dir.normalized();
+        const double horiz = std::hypot(d.x, d.y);
+        double yaw = horiz > 1e-6 ? std::atan2(d.y, d.x) : current.yaw;
+        const double limit = target_cam.ortho ? kPi / 2 - 1e-4 : 1.5;
+        double pitch = std::clamp(std::atan2(d.z, horiz), -limit, limit);
+        yaw = current.yaw + std::remainder(yaw - current.yaw, 2 * kPi);
+        target_cam.yaw = yaw;
+        target_cam.pitch = pitch;
+    }
+
+    // Apply an input mutation. While a glide is active, changes the target so smoothing blends into it.
+    // When idle, mutates cam directly and keeps target in sync.
+    template <typename Fn>
+    void apply_input(Camera& cam, Fn&& fn) {
+        if (active) {
+            fixed_eye = false;  // input moved the eye: blend the parts from here
+            fn(target_cam);
+        } else {
+            fn(cam);
+            target_cam = cam;
+        }
+    }
+
+    // Step current camera toward target using frame-rate independent exponential smoothing.
+    void update(Camera& cam, double dt, bool reduce_motion = false) {
+        if (!active) return;
+        if (reduce_motion || dt >= 1.0) {
+            cam = target_cam;
+            active = false;
+            return;
+        }
+        if (dt <= 0) return;
+
+        const double s = std::clamp(1.0 - std::pow(2.0, -dt / half_life), 0.0, 1.0);
+        if (fixed_eye) {  // turn from the fixed eye toward a look-at point gliding to the new focus
+            const Vec3 eye = target_cam.eye();
+            const double yaw0 = cam.yaw;
+            cam.look(eye, cam.target + (target_cam.target - cam.target) * s);
+            cam.yaw = yaw0 + std::remainder(cam.yaw - yaw0, 2 * kPi);
+            cam.fov = target_cam.fov, cam.ortho = target_cam.ortho, cam.min_eye_z = target_cam.min_eye_z;
+            if ((cam.target - target_cam.target).length() < 1e-4) cam = target_cam, active = false, fixed_eye = false;
+            return;
+        }
+        cam.target += (target_cam.target - cam.target) * s;
+        cam.distance += (target_cam.distance - cam.distance) * s;
+        const double dyaw = std::remainder(target_cam.yaw - cam.yaw, 2 * kPi);
+        cam.yaw += dyaw * s;
+        cam.pitch += (target_cam.pitch - cam.pitch) * s;
+        cam.fov = target_cam.fov;
+        cam.ortho = target_cam.ortho;
+        cam.min_eye_z = target_cam.min_eye_z;
+
+        if ((cam.target - target_cam.target).length() < 1e-4 &&
+            std::abs(dyaw) < 1e-4 &&
+            std::abs(cam.pitch - target_cam.pitch) < 1e-4 &&
+            std::abs(cam.distance - target_cam.distance) < 1e-4) {
+            cam = target_cam;
+            active = false;
+        }
+    }
+
+    void snap(Camera& cam) {
+        if (active) {
+            cam = target_cam;
+            active = false;
+        }
+    }
+};
+
 // Nearest hit distance of a ray on a triangle mesh (3 floats per vertex), or 1e30 (Moller-Trumbore).
 template <class Index>
 double ray_triangles(const Vec3& o, const Vec3& d, const std::vector<float>& pos, const std::vector<Index>& idx) {

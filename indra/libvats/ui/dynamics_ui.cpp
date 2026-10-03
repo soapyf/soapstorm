@@ -4,10 +4,13 @@
 #include <cmath>
 
 #include "app.h"
+#include "icons.h"
+#include "icon_button.h"
 #include "theme.h"
 #include "imgui.h"
 #include "widgets.h"
 #include "vats/dynamics.h"
+#include "vats/rig_map.h"
 
 namespace vats {
 
@@ -53,10 +56,11 @@ void App::apply_dynamics_preview(Evaluation& e) {
     const double fps = std::max(clip.fps, 1);
     double span = frame_ - dyn_last_frame_;
     if (span < 0 && clip.loop) span += clip.loop_out - clip.loop_in;  // wrapped round the loop
-    if (!dyn_sim_ || live != dyn_chains_ || span < 0 || span > fps) {
-        dyn_sim_ = std::make_unique<DynSim>(skel_, live);
+    if (!dyn_sim_ || live != dyn_chains_ || shape() != dyn_shape_ || span < 0 || span > fps) {
+        dyn_sim_ = std::make_unique<DynSim>(skel_, live, shape());
         dyn_sim_->reset(e.globals);
         dyn_chains_ = live;
+        dyn_shape_ = shape();  // the sim reads its bone tails: built afresh for another body
     } else if (span > 0) {
         const int steps = std::max(1, int(std::lround(span / fps * DynSim::kStepsPerSecond)));
         const double dt = span / fps / steps;
@@ -71,37 +75,107 @@ void App::apply_dynamics_preview(Evaluation& e) {
     e.globals = skel_.global_pose(e.pose, shape());
 }
 
+// RM-8: the body's parts on spare chains (a scarf on a wing) swing from its motion, baked in one click. SL has no
+// physics for rigged mesh, so keys on the reused joints are the only way the part moves in-world.
+void App::draw_spare_follow_through() {
+    Clip& clip = doc_.clip();
+    bool any = false;
+    for (const SpareSlot& s : spare_slots()) {
+        int length = 0;  // the slot's joints the body uses, from its first
+        while (length < int(s.joints.size()) && bone_labels_.count(s.joints[size_t(length)])) ++length;
+        if (!length || s.carries_body) continue;  // the body hangs from mSpine1..4: bending them bends it
+        if (!any) {
+            subheading("Parts on spare chains");
+            hint("Rigged mesh has no physics in SL: bake its swing as keys.");
+            if (clip.loop) {
+                ImGui::Checkbox("Match the loop", &spare_match_loop_);
+                ImGui::SetItemTooltip("The loop is simulated twice first, so the swing ends where it starts and the clip loops "
+                                      "without a jump. Off: simulated once from frame 0.");
+            }
+            any = true;
+        }
+        const std::string& root = s.joints.front(), label = bone_labels_[root];
+        std::string& kind = spare_kind_[s.id];
+        if (kind.empty()) {  // a guess from the label; the picker says it
+            const auto has = [&](const char* w) { return label.find(w) != std::string::npos; };
+            kind = has("hair") || has("pony") || has("braid") || has("tuft") ? "hair"
+                 : has("cape") || has("coat") || has("skirt") || has("cloak") ? "cape"
+                 : has("tail")                                                 ? "tail"
+                                                                               : "scarf";
+        }
+        ImGui::PushID(s.id.c_str());
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("%s, %s", label.c_str(), s.name.c_str());
+        ImGui::SetItemTooltip("%s..%s (%d joints), the %s", root.c_str(), s.joints[size_t(length - 1)].c_str(), length, s.name.c_str());
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(5.5f * ImGui::GetFontSize());
+        if (ImGui::BeginCombo("##kind", kind.c_str())) {
+            for (const char* k : {"scarf", "hair", "cape", "tail"})
+                if (ImGui::Selectable(k, kind == k)) kind = k;
+            ImGui::EndCombo();
+        }
+        ImGui::SetItemTooltip("How it swings: a scarf lags and hangs, hair springs back sooner, a cape is heavy and slow,\na "
+                              "tail swings the most. Fine-tune the chain below once it is baked.");
+        ImGui::SameLine();
+        if (ImGui::Button(("Animate " + label + " from Body Motion").c_str())) {
+            int i = -1;
+            graph_.snapshot_curves(clip);  // PT-4
+            edit("Animate " + label, [&](Clip& c) {
+                i = bake_follow_through(c, *rig_, export_shape(), root, length, kind, spare_match_loop_);
+            });
+            dyn_selected_ = i;
+            status("Baked the " + label + "'s swing on " + root + ".." + s.joints[size_t(length - 1)] + " (one undo step)");
+        }
+        ImGui::SetItemTooltip("Simulates the whole clip with the %s preset and writes the swing as keys on its %d joints;\n"
+                              "keys on every other joint stay as they are. Again: set up and baked afresh.",
+                              kind.c_str(), length);
+        ImGui::PopID();
+    }
+    if (any) ImGui::Separator();
+}
+
 void App::draw_dynamics_panel() {
     if (!show_dynamics_) return;
-    place_tool_window(24, 40);
+    place_tool_window("Dynamics", 24, 40);
     if (!ImGui::Begin("Dynamics", &show_dynamics_)) return ImGui::End();
     help_button("dynamics");
     Clip& clip = doc_.clip();
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped("Tails, ears, hair and soft parts swing behind the animation. Select the first bone of a "
-                       "chain (or a collision volume such as BELLY) and add it; bake to write the motion as keys.");
-    ImGui::PopStyleColor();
+    hint("Swing tails, ears and soft parts behind the motion.");
+    draw_spare_follow_through();
+    draw_avatar_physics();  // RM-10
 
     const int p = primary();
     const bool can_add = p >= 0 && !(skel_[p].attachment && !skel_[p].volume);
-    ImGui::BeginDisabled(!can_add);
-    if (ImGui::Button("Add Chain from Selected Bone")) {
-        const Node& n = skel_[p];
-        DynChain d = dyn_preset(guess_kind(n), n.name, n.volume ? 1 : chain_depth(skel_, p));
-        edit("Add Dynamic Chain", [&](Clip& c) { c.dynamics.push_back(d); });
-        dyn_selected_ = int(clip.dynamics.size()) - 1;
+    auto add_chain = [&](bool pressed) {
+        if (pressed) {
+            const Node& n = skel_[p];
+            DynChain d = dyn_preset(guess_kind(n), n.name, n.volume ? 1 : chain_depth(skel_, p));
+            edit("Add Dynamic Chain", [&](Clip& c) { c.dynamics.push_back(d); });
+            dyn_selected_ = int(clip.dynamics.size()) - 1;
+        }
+        ImGui::SetItemTooltip("%s", can_add ? "A chain from the selected bone down, swinging behind the motion"
+                                            : "Select a joint or a collision volume first");
+    };
+    if (!clip.dynamics.empty()) {
+        ImGui::BeginDisabled(!can_add);
+        add_chain(primary_button("Add Chain from Selected Bone", "", 0, icon::kAdd));
+        ImGui::EndDisabled();
     }
-    ImGui::EndDisabled();
-    if (!can_add) ImGui::SetItemTooltip("Select a joint or a collision volume first");
     ImGui::Checkbox("Preview while playing", &dyn_preview_);
     ImGui::SetItemTooltip("Simulate chains that are not baked yet while the clip plays");
 
-    // Chain list.
+    // Chain list; empty, it holds the button that fills it.
     if (ImGui::BeginListBox("##chains", ImVec2(-1, ImGui::GetTextLineHeightWithSpacing() * 5))) {
+        if (clip.dynamics.empty()) {
+            ImGui::BeginDisabled(!can_add);
+            add_chain(empty_state("No chains yet. Select the first bone of a tail, ear or soft part.",
+                                  "Add Chain from Selected Bone"));
+            ImGui::EndDisabled();
+        }
         for (int i = 0; i < int(clip.dynamics.size()); ++i) {
             const DynChain& d = clip.dynamics[i];
             std::string label = d.root + (d.length > 1 ? " +" + std::to_string(d.length - 1) : "") +
-                                (d.baked ? "  (baked)" : "") + "##" + std::to_string(i);
+                                (d.physics ? "  SL bounce" : "") + (d.baked ? "  (baked)" : "") + "##" + std::to_string(i);
             if (ImGui::Selectable(label.c_str(), dyn_selected_ == i)) {
                 dyn_selected_ = i;
                 if (int n = skel_.find(d.root); n >= 0) select(n, false);
@@ -111,18 +185,36 @@ void App::draw_dynamics_panel() {
     }
     if (dyn_selected_ >= int(clip.dynamics.size())) dyn_selected_ = int(clip.dynamics.size()) - 1;
 
-    if (dyn_selected_ >= 0) {
+    if (dyn_selected_ >= 0 && clip.dynamics[size_t(dyn_selected_)].physics) {  // RM-10: set in Avatar physics above
+        const int i = dyn_selected_;
+        const std::string root = clip.dynamics[size_t(i)].root;
+        subheading(root.c_str());
+        hint("SL's avatar physics, baked with the settings above; Re-bake takes them as they are now.");
+        if (ImGui::Button(clip.dynamics[size_t(i)].baked ? "Re-bake" : "Bake")) {
+            graph_.snapshot_curves(doc_.clip());  // PT-4
+            edit("Bake Bounce", [&](Clip& c) { bake_avatar_physics(c, *rig_, export_shape(), avatar_physics(), {root}, spare_match_loop_); });
+            status("Baked " + root + "'s bounce to keys");
+        }
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!clip.dynamics[size_t(i)].baked);
+        if (ImGui::Button("Unbake")) edit("Unbake Dynamics", [&](Clip& c) { unbake_dynamics(c, skel_, i); });
+        ImGui::SetItemTooltip("Put back the keys it had before baking");
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Remove")) {
+            edit("Remove Dynamic Chain", [&](Clip& c) {
+                unbake_dynamics(c, skel_, i);
+                c.dynamics.erase(c.dynamics.begin() + i);
+            });
+            dyn_selected_ = -1;
+        }
+        ImGui::SetItemTooltip("Remove the bake and put back its pre-bake keys");
+    } else if (dyn_selected_ >= 0) {
         const int i = dyn_selected_;
         DynChain& d = clip.dynamics[i];
-        ImGui::SeparatorText(d.root.c_str());
+        subheading(d.root.c_str());
         // Label on the left, like the rest of the app (spec 06 section 1.1).
-        const float label_w = ImGui::GetFontSize() * 5.5f;
-        auto label = [&](const char* text) {
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(text);
-            ImGui::SameLine(label_w);
-            ImGui::SetNextItemWidth(-1);
-        };
+        auto label = [&](const char* text) { labelled_row(text); };
         // Drags are one undo step each: opened on activation, committed on release. A slider jumps to the click on
         // its first frame, so the snapshot is taken with the value put back to what it was before the widget.
         auto track = [&](const char* step, auto& value, auto before) {
@@ -134,8 +226,8 @@ void App::draw_dynamics_panel() {
             }
             if (ImGui::IsItemDeactivated() && doc_.history.is_open() && doc_.history.commit(step, clip)) mark_dirty();
         };
-        auto preset = [&](const char* label, const char* kind) {
-            if (ImGui::Button(label)) {
+        auto preset = [&](const char* btn_label, const char* kind) {
+            if (ImGui::Button(btn_label)) {
                 DynChain q = dyn_preset(kind, d.root, d.length);
                 edit("Dynamics Preset", [&](Clip& c) {
                     DynChain& t = c.dynamics[i];

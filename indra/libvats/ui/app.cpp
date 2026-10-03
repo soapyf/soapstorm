@@ -27,6 +27,7 @@
 #include "vats/edit.h"
 #include "vats/footlock.h"
 #include "vats/pose_presets.h"
+#include "vats/position_reset.h"
 #include "vats/world_reduce.h"
 #include "theme.h"
 #ifdef VATS_LEGACY_IMPORT
@@ -135,9 +136,11 @@ bool App::init(float display_scale, std::string& err) {
     assets_dir_ = host_.paths().assets;
     display_scale_ = display_scale;
     std::error_code ec;
-    [[maybe_unused]] const bool first_run = !std::filesystem::exists(u8path(host_.paths().settings), ec);
+    const bool first_run = !std::filesystem::exists(u8path(host_.paths().settings), ec);
     settings_.load(host_.paths().settings);
     apply_look();
+    // Scripted runs on a fresh data folder (docs screenshots) keep the full layout unless --workspace asks.
+    if (first_run && headless_) settings_.workspaces = false;
 #ifdef VATS_LEGACY_IMPORT
     offer_migration(first_run);
 #endif
@@ -191,7 +194,10 @@ bool App::apply_builtin_pose(const std::string& slug) {
 
 void App::apply_look() {
     has_host_colours_ = host_.skin_colours(host_colours_);
-    apply_theme(find_theme(settings_.theme), display_scale_ * settings_.interface_size, has_host_colours_ ? &host_colours_ : nullptr);
+    const float scale = display_scale_ * settings_.interface_size;
+    if (look_scale_ > 0 && scale != look_scale_) dock_scale_ *= scale / look_scale_;  // the panels follow (draw_dockspace)
+    look_scale_ = scale;
+    apply_theme(find_theme(settings_.theme), scale, has_host_colours_ ? &host_colours_ : nullptr);
 }
 
 const CameraView* App::project_camera(int slot) const {
@@ -255,7 +261,9 @@ void App::new_document() {
     clear_autosave();
     raw_import_.reset();
     doc_ = Document();
+    forget_paint("");         // RG-15: weight strokes undo in turn with this document's steps
     graph_.clear_snapshot();  // PT-4
+    pending_limits_.clear();  // JL: suggestions (and their undo) were for the old document
     scratch_.reset(), scratch_marks_.clear();  // PT-2: the scratch pose and its history were the old document's
     pinned_ghosts_.clear();  // 08 ON-5: they point at the old document's frames and actors
     doc_.clip() = new_project_clip();  // 08 LP-7 loop tangents, eases that fit (opened projects keep their own)
@@ -490,6 +498,9 @@ static bool export_flag(const Json& ex, const char* key) {
 AnimExportOptions App::anim_export_options() {
     AnimExportOptions opt;
     opt.shape = export_shape();
+    // K-IK limbs bake as clamped as the view draws them, by the applied limits only: suggestions under review in
+    // Suggest Limits never reach a file.
+    opt.constraints = settings_.respect_joint_limits ? doc_.project.body_constraints(current_body_id()) : nullptr;
     opt.positions = export_positions();
     opt.worn_overrides = host_.joint_overrides();  // the viewer: warns when face positions would pin a mesh head
     if (const Json* v = export_home_settings().find("leave_static"); v && v->is_bool()) opt.leave_out_static_rotations = v->b;  // IO-11b
@@ -506,12 +517,32 @@ AnimExportOptions App::anim_export_options() {
     }
     opt.end_at_rest = export_flag(ex, "end_at_rest");  // 09 0l: the deformer tool
     opt.hold_without_sinking = export_flag(ex, "hold_no_sink");
+    opt.reset_positions = export_flag(ex, "reset_positions");
+    if (opt.reset_positions) opt.reset_position_joints = reset_position_joints();
+    // Reset keys hold the body's rest: a mesh body bake shape's own joints, which positions (IO-11) leaves null.
+    if (bake_shape_key(ex, exporting_yours()).rfind("mesh:", 0) == 0) opt.reset_shape = opt.shape;
     if (height_shape_) opt.shape = height_shape_, opt.positions = nullptr;  // HV: a height variant bakes on its body
     return opt;
 }
 
 Clip App::anim_export_clip() const {
     return doc_.clip().mirror_export ? mirrored_clip(skel_, doc_.clip()) : doc_.clip();
+}
+
+// Reset joint positions' joints, resolved on the clips as they export: this one mirrored with Export mirrored (its
+// picked joints too), and each other clip as its own export writes it.
+std::vector<std::string> App::reset_position_joints() const {
+    std::vector<Clip> others;
+    const int total_clips = clip_count(doc_.project);
+    for (int k = 0; k < total_clips; ++k) {
+        if (k == doc_.project.active_clip) continue;
+        const Clip& c = active_actor_clip(k);
+        others.push_back(c.mirror_export ? mirrored_clip(skel_, c) : c);
+    }
+    std::vector<const Clip*> other_clips;
+    for (const Clip& c : others) other_clips.push_back(&c);
+    const Clip clip = anim_export_clip();
+    return resolve_reset_position_joints(skel_, clip, other_clips, clip.export_settings);
 }
 
 // The .anim the project exports, made in memory and saying nothing: 1 exported, 2 an imported .anim nobody has
@@ -521,7 +552,8 @@ int App::export_in_memory(AnimExportResult& r, std::vector<std::uint8_t>& bytes)
     ScratchAside aside(*this);  // PT-2: the document, not a scratch pose
     const AnimExportOptions opt = anim_export_options();
     // The deformer options change the file, so an unedited import is exported through them too (09 0l).
-    if (raw_import_ && !doc_.clip().mirror_export && !height_shape_ && !opt.end_at_rest && !opt.hold_without_sinking)
+    if (raw_import_ && !doc_.clip().mirror_export && !height_shape_ && !opt.end_at_rest && !opt.hold_without_sinking &&
+        !opt.reset_positions)
         if (const AnimFile* same = raw_reexport(*raw_import_, doc_.clip())) {
             r.file = *same;
             bytes = write_anim(*same);
@@ -707,8 +739,14 @@ void App::open_path(const std::string& path) {
         guarded(path, [&] { import_prop(path); });
     else if (ext == "anim" || ext == "bvh")
         guard_unsaved([this, path] { guarded(path, [&] { import_file(path); }); });
-    else if (ext == "gltf" || ext == "glb")  // as File > Import Animation (Retarget)...
-        guard_unsaved([this, path] { guarded(path, [&] { open_retarget(path); }); });
+    else if (ext == "gltf" || ext == "glb") {  // an animation: File > Import Animation (Retarget)...; a mesh: a prop or body
+        std::ifstream f(path, std::ios::binary);
+        const std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        if (text.find("\"animations\"") != std::string::npos)
+            guard_unsaved([this, path] { guarded(path, [&] { open_retarget(path); }); });
+        else
+            guarded(path, [&] { import_prop(path); });
+    }
     else if (ext == "wav" || ext == "mp3" || ext == "ogg" || ext == "flac")  // as File > Load Audio...
         guarded(path, [&] { load_audio(path); });
     else
@@ -719,7 +757,7 @@ void App::show_dialog(Dialog kind, std::function<void()> after_save) {
     if (kind == Dialog::SaveAs) after_save_as_ = std::move(after_save);  // another dialog leaves a pending action alone
     // Save As starts beside the current project (UI-36).
     const std::string dir = doc_.path.empty() ? "" : doc_.path.substr(0, doc_.path.find_last_of('/') + 1);
-    const ui::FileFilter mesh{"Mesh", "dae;fbx"};
+    const ui::FileFilter mesh{"Mesh", "dae;fbx;gltf;glb"};
     std::string stem = doc_.path.empty() ? "Animation" : file_name(doc_.path).substr(0, file_name(doc_.path).rfind('.'));
     std::vector<ui::FileFilter> projects = {{"VATs project", "vat"}};
     std::string animations = "anim;bvh;vat";
@@ -738,8 +776,15 @@ void App::show_dialog(Dialog kind, std::function<void()> after_save) {
             break;
         case Dialog::LoadAudio: host_.open_file_dialog({{"Audio", "wav;mp3;ogg;flac"}}, false, dialog_result(kind)); break;
         case Dialog::ImportBody: host_.open_file_dialog({mesh}, true, dialog_result(kind)); break;
+        case Dialog::MapRig: host_.open_file_dialog({mesh}, false, dialog_result(kind)); break;
+        case Dialog::RigScratch: host_.open_file_dialog({mesh}, false, dialog_result(kind)); break;
         case Dialog::ExportFolder: host_.open_folder_dialog("", dialog_result(kind)); break;
         case Dialog::ExportFile: break;  // export_now opens it with the name it would write
+        case Dialog::ExportRig: {
+            const MeshBody* b = mesh_body();
+            host_.save_file_dialog({{"COLLADA rigged mesh", "dae"}}, dir + (b ? b->name : "rigged") + ".dae", dialog_result(kind));
+            break;
+        }
         case Dialog::LoadActor:
             host_.open_file_dialog({{"Animation", animations}}, false, dialog_result(kind));
             break;
@@ -788,6 +833,13 @@ void App::build_actions() {
 
     // No document change while an actor is being dragged: the drag's start state would outlive it.
     auto not_busy = [this]() -> const char* { return scene_busy() ? "Finish the current edit first" : nullptr; };
+    add("find_tool", {"Find a Tool...", ImGuiKey_F3, 0, false, [this] {
+                          show_tool_search_ = tool_search_focus_ = true;
+                          tool_search_.clear(), tool_search_sel_ = 0;
+                      }, {}});
+    // The Tab pie (pie_menu_ui.cpp): held over the 3D view; no preset uses Tab.
+    add("pie_menu", {"Tool Pie", ImGuiKey_Tab, 0, false, [this] { open_pie(); }, {}});
+    add_workspace_actions(add);  // workspace_ui.cpp
     add("new", {"New", ctrl | ImGuiKey_N, 0, false, [this] { guard_unsaved([this] { new_document(); }); }, not_busy});
     add("open", {"Open...", ctrl | ImGuiKey_O, 0, false, [this] { guard_unsaved([this] { show_dialog(Dialog::Open); }); }, not_busy});
     add("save", {"Save", ctrl | ImGuiKey_S, 0, false,
@@ -803,7 +855,7 @@ void App::build_actions() {
                            }, {}});
     add("import_anim", {"Import SL .anim...", 0, 0, false,
                         [this] { guard_unsaved([this] { show_dialog(Dialog::ImportAnim); }); }, {}});
-    add("import_prop", {"Import Prop / Mesh (.dae, .fbx)...", ctrl | ImGuiKey_I, 0, false, [this] { show_dialog(Dialog::ImportProp); }, {}});
+    add("import_prop", {"Import Prop / Mesh (.dae, .fbx, .gltf, .glb)...", ctrl | ImGuiKey_I, 0, false, [this] { show_dialog(Dialog::ImportProp); }, {}});
     // Export settings first (UI-31); the dialog's button writes straight to the export folder.
     add("export_anim", {"Export SL .anim...", ctrl | ImGuiKey_E, 0, false, [this] { show_export_dialog_ = true; }, {}});
     if (host_.can_upload()) add("upload", {"Upload Animation...", 0, 0, false, [this] { upload_now(); }, {}});
@@ -819,6 +871,9 @@ void App::build_actions() {
 
     add("undo", {"Undo", ctrl | ImGuiKey_Z, 0, false,
                  [this] {
+                     if (undo_pending_limits(false)) return;  // JL: the last edit was to the suggestions
+                     if (undo_paint(false)) return;           // RG-15: the last edit was a weight stroke
+                     if (undo_share(false)) return;           // RM-10: the last edit was a share drag
                      std::string label = doc_.history.undo_label();
                      apply_restore(doc_.history.undo_step());
                      clip_replaced();
@@ -827,10 +882,15 @@ void App::build_actions() {
                  },
                  [this]() -> const char* {
                      return doc_.history.is_open() || scene_busy() ? "Finish the current edit first"
-                            : doc_.history.can_undo() ? nullptr : "Nothing to undo";
+                            : doc_.history.can_undo() || can_undo_pending_limits(false) || can_undo_paint(false) || can_undo_share(false)
+                                ? nullptr
+                                : "Nothing to undo";
                  }});
     add("redo", {"Redo", ctrl | ImGuiKey_Y, ctrl | shift | ImGuiKey_Z, false,
                  [this] {
+                     if (undo_pending_limits(true)) return;
+                     if (undo_paint(true)) return;
+                     if (undo_share(true)) return;
                      apply_restore(doc_.history.redo_step());
                      clip_replaced();
                      mark_dirty();
@@ -838,7 +898,9 @@ void App::build_actions() {
                  },
                  [this]() -> const char* {
                      return doc_.history.is_open() || scene_busy() ? "Finish the current edit first"
-                            : doc_.history.can_redo() ? nullptr : "Nothing to redo";
+                            : doc_.history.can_redo() || can_undo_pending_limits(true) || can_undo_paint(true) || can_undo_share(true)
+                                ? nullptr
+                                : "Nothing to redo";
                  }});
     add("key", {"Set Key", ImGuiKey_S, 0, false,
                 [this] {
@@ -858,7 +920,7 @@ void App::build_actions() {
                             if (!rig_->limbs()[h.limb].spine) key_limb_pole(c, *rig_, frame_, h.limb, s.pole, shape());
                         }
                     });
-                    status("Keyed " + std::to_string(selection_.size() + handles_.size()) + " item(s) at frame " +
+                    status("Keyed " + count_noun(selection_.size() + handles_.size(), "item") + " at frame " +
                            std::to_string(int(frame_)));
                 },
                 [this]() -> const char* {
@@ -899,7 +961,7 @@ void App::build_actions() {
                          [this] {
                              int n = 0;
                              edit("Delete Keys at Frame", [&](Clip& c) { n = delete_keys_at_all(c, frame_); });
-                             status(std::to_string(n) + " key(s) deleted at frame " + std::to_string(int(frame_)));
+                             status(count_noun(size_t(n), "key") + " deleted at frame " + std::to_string(int(frame_)));
                          },
                          {}});
     add("reset_bone", {"Reset Selected Bone", alt | ImGuiKey_R, 0, false,
@@ -937,13 +999,21 @@ void App::build_actions() {
     };
     add("mirror_l2r", {"Mirror Left to Right", 0, 0, false, [=] { mirror(MirrorMode::LeftToRight, "Mirror Left to Right"); }, {}});
     add("mirror_r2l", {"Mirror Right to Left", 0, 0, false, [=] { mirror(MirrorMode::RightToLeft, "Mirror Right to Left"); }, {}});
-    add("flip_pose", {"Flip Pose", 0, 0, false, [=] { mirror(MirrorMode::Flip, "Flip Pose"); }, {}});
+    // Blender's Paste X-Flipped Pose key, free in every preset (a mirrored passing pose is a menu trip without one).
+    add("flip_pose", {"Flip Pose", ctrl | shift | ImGuiKey_V, 0, false, [=] { mirror(MirrorMode::Flip, "Flip Pose"); }, {}});
     add("reverse", {"Reverse Animation", 0, 0, false,
                     [this] {
                         edit("Reverse Animation", [&](Clip& c) { reverse_clip(c); });
                         status("The animation now plays backwards");
                     },
                     {}});
+    // The whole clip with left and right swapped: animate one side, flip for the other (a wave with either hand).
+    add("flip_animation", {"Flip Animation", 0, 0, false,
+                           [this] {
+                               edit("Flip Animation", [&](Clip& c) { c = mirrored_clip(skel_, c); });
+                               status("Flipped the whole animation: left and right swapped on every key");
+                           },
+                           {}});
 
     add("play", {"Play / Pause", ImGuiKey_Space, 0, false,
                  [this] {
@@ -990,6 +1060,38 @@ void App::build_actions() {
                                                  : "Auto IK off: the Move tool moves a bone's position");
                     },
                     {}});
+    // Spec 08 FP-4: Tools > Follow-Through While Posing, on by default and saved.
+    add("follow_through", {"Follow-Through While Posing", 0, 0, false,
+                           [this] {
+                               settings_.follow_through = !settings_.follow_through;
+                               save_settings();
+                               status(settings_.follow_through
+                                          ? "Follow-through on: loose parts lag and settle while posing"
+                                          : "Follow-through off");
+                           },
+                           {}});
+    // Spec 08 RM-10: Tools > Avatar Physics Preview, off by default and saved.
+    add("avatar_physics", {"Avatar Physics Preview", 0, 0, false,
+                           [this] {
+                               settings_.avatar_physics = !settings_.avatar_physics;
+                               save_settings();
+                               status(settings_.avatar_physics
+                                          ? "Avatar physics preview on: BELLY, BUTT and the breasts bounce as SL's avatar physics "
+                                            "would; nothing is keyed"
+                                          : "Avatar physics preview off");
+                           },
+                           {}});
+    // Spec 08 JL: Tools > Respect Joint Limits, on by default and saved.
+    add("respect_joint_limits", {"Respect Joint Limits", 0, 0, false,
+                                 [this] {
+                                     settings_.respect_joint_limits = !settings_.respect_joint_limits;
+                                     save_settings();
+                                     status(settings_.respect_joint_limits
+                                                ? "Respect Joint Limits on: stops bones bending past natural ranges"
+                                                : "Respect Joint Limits off");
+                                 },
+                                 {}});
+    add("edit_limits", {"Edit Limits", ImGuiKey_L, 0, false, [this] { toggle_edit_limits(); }, {}});
     // View > Target Ghost: another animation over the avatar, to match by eye.
     auto need_target = [this]() -> const char* { return target_ ? nullptr : "Load a target first"; };
     add("target_show", {"Show Target Ghost", 0, 0, false, [this] { if (target_) target_on_ = !target_on_; }, need_target});
@@ -1011,21 +1113,22 @@ void App::build_actions() {
     add("frame_selected", {"Frame Selected", ImGuiKey_F, 0, false,
                            [this] {
                                if (keys_hovered()) return (void)with_graph([&](GraphContext& g) { graph_.frame_selected(g); });
-                               int p = primary();
-                               if (p < 0) {
-                                   camera_.target = {0, 0, 1.0};
-                                   return;
-                               }
-                               Vec3 head = globals_[p].pos, tail = globals_[p].apply(skel_[p].end);
-                               camera_.target = (head + tail) * 0.5;
-                               if (skel_[p].category != Category::Body) camera_.distance = std::min(camera_.distance, 1.2);
+                               // Through the glide: given while a view turn glides, it lands instead of being undone.
+                               cam_glide_.apply_input(camera_, [&](Camera& c) {
+                                   const int p = primary();
+                                   if (p < 0) return void(c.target = {0, 0, 1.0});
+                                   c.target = (globals_[p].pos + globals_[p].apply(skel_[p].end)) * 0.5;
+                                   if (skel_[p].category != Category::Body) c.distance = std::min(c.distance, 1.2);
+                               });
                            },
                            {}});
     add("frame_all", {"Frame All", ImGuiKey_A, 0, false,
                       [this] {
                           if (keys_hovered()) return (void)with_graph([&](GraphContext& g) { graph_.frame_all(g); });
-                          camera_.target = {0, 0, 1.0};
-                          camera_.distance = Camera::kDefaultDistance;
+                          cam_glide_.apply_input(camera_, [](Camera& c) {
+                              c.target = {0, 0, 1.0};
+                              c.distance = Camera::kDefaultDistance;
+                          });
                       },
                       {}});
 
@@ -1037,7 +1140,7 @@ void App::build_actions() {
                      for (int s : selection_) tracks.push_back(skel_[s].name);
                      for (auto& h : handles_) tracks.push_back("ik." + rig_->limbs()[h.limb].name);
                      pose_clipboard_ = copy_pose(doc_.clip(), frame_, tracks);
-                     status("Copied " + std::to_string(pose_clipboard_.entries.size()) + " item(s)" +
+                     status("Copied " + count_noun(pose_clipboard_.entries.size(), "item") +
                             (tracks.empty() ? " (the whole pose)" : ""));
                  },
                  {}});
@@ -1087,6 +1190,16 @@ void App::build_actions() {
                           status(ok ? skel_[p].name + " is held in place from frame " + std::to_string(int(frame_)) : why);
                       },
                       need_selection});
+    add("sit_on_seat", {"Sit on Seat", 0, 0, false, [this] { sit_on(-1); },
+                        [this]() -> const char* {
+                            return seat_props().empty() ? "Add a seat first: Inventory > Starter props > Seating" : nullptr;
+                        }});
+    add("bind_to", {"Bind to...", 0, 0, false,
+                    [this] {
+                        bind_pick_ = primary();
+                        status("Bind " + bone_label(bind_pick_) + ": click the bone it should ride, in the view (Esc cancels)");
+                    },
+                    [this]() -> const char* { return primary() >= 0 ? nullptr : "Select the bone to pin first, such as a hand"; }});
     add("pin_bone", {"Bind to Selected Bone from Here", 0, 0, false,
                      [this] {
                          std::string why;
@@ -1128,16 +1241,21 @@ void App::build_actions() {
                   {}});
     add("graph", {"Graph Editor", ctrl | ImGuiKey_G, 0, false,
                   [this] {
+                      if (!panel_shown("Graph")) return void(show_window("graph"));  // a workspace without it: in it comes
                       show_graph_ = !show_graph_;
                       settings_.show_graph = show_graph_;
                       save_settings();
                   },
                   {}});
-    add("dope_sheet", {"Dope Sheet", 0, 0, false, [this] { show_dope_ = !show_dope_; }, {}});  // spec 08 DS
+    add("dope_sheet", {"Dope Sheet", 0, 0, false,  // spec 08 DS
+                       [this] { panel_shown("Dope Sheet") ? void(show_dope_ = !show_dope_) : void(show_window("dope-sheet")); }, {}});
+    add("maximise_panel", {"Maximise Panel", ctrl | ImGuiKey_Space, 0, false, [this] { toggle_maximised_panel(); }, {}});
     add("reset_layout", {"Reset Layout", 0, 0, false,
                          [this] {
                              // Every panel back where the first run put it (draw_dockspace, next frame).
                              reset_layout_ = true;
+                             settings_.workspace_extra.erase(workspace_def(workspace()).id);  // the workspace's own panels
+                             open_workspace_tools(workspace());
                              show_graph_ = show_dope_ = show_host_pane_ = true;
                              settings_.show_graph = true;
                              save_settings();
@@ -1146,8 +1264,13 @@ void App::build_actions() {
     add("select_all", {"Select All", ctrl | ImGuiKey_A, 0, false,
                        [this] {
                            clear_selection();
+                           // The eyes sit in SL's body group, but a key on them fights the viewer's look-at (the
+                           // Animation Check warns): they come only with the face bones shown (user test: Select All,
+                           // Copy and Paste Pose keyed them).
+                           const bool face = show_category_[int(Category::Face)];
                            for (int i = 0; i < skel_.size(); ++i)
-                               if (node_visible(i)) selection_.push_back(i);
+                               if (node_visible(i) && (face || (skel_[i].name != "mEyeLeft" && skel_[i].name != "mEyeRight")))
+                                   selection_.push_back(i);
                            for (int l = 0; l < int(limb_states_.size()); ++l)  // and the handles of IK limbs (AM-132)
                                if (limb_states_[l].ik_on && node_visible(rig_->limbs()[l].end)) {
                                    handles_.push_back({l, false});
@@ -1177,7 +1300,10 @@ void App::build_actions() {
     };
     add("select_keyed_frame", {"Select Keyed on Frame", ctrl | shift | ImGuiKey_A, 0, false, [=] { select_keyed(true); }, {}});
     add("select_all_keyed", {"Select All Keyed", 0, 0, false, [=] { select_keyed(false); }, {}});
-    add("select_none", {"Select None", ImGuiKey_Escape, 0, false, [this] { clear_selection(); }, {}});
+    add("select_none", {"Select None", ImGuiKey_Escape, 0, false, [this] { clear_selection(); },
+                        [this]() -> const char* {
+                            return selection_.empty() && handles_.empty() && selected_prop_ < 0 ? "Nothing is selected" : nullptr;
+                        }});
     add("select_parent", {"Select Parent", ImGuiKey_UpArrow, ImGuiKey_LeftBracket, true,
                           [this] {
                               int p = primary();
@@ -1212,7 +1338,7 @@ void App::build_actions() {
                              camera_ = Camera();
                              camera_.ortho = was.ortho, camera_.fov = was.fov, camera_.min_eye_z = was.min_eye_z;
                              camera_.distance *= std::tan(Camera::kFov / 2) / std::tan(was.fov / 2);  // framed alike
-                             cam_anim_t_ = -1;
+                             cam_glide_.active = false;
                              sl_focus_ = sl_avatar_focus(-1);  // Second Life: the focus back on the avatar
                              status("Camera reset");
                          },
@@ -1247,8 +1373,8 @@ void App::build_actions() {
     add("tutorials", {"Tutorials", 0, 0, false, [this] { open_help("tutorials"); }, {}});
     add("help", {"Controls", 0, 0, false, [this] { show_help_ = !show_help_; }, {}});
     add("welcome", {"Welcome", 0, 0, false, [this] { show_welcome_ = true; }, {}});
-    add("zoom_in", {"Zoom In", 0, 0, true, [this] { camera_.zoom(0.85); }, {}});
-    add("zoom_out", {"Zoom Out", 0, 0, true, [this] { camera_.zoom(1 / 0.85); }, {}});
+    add("zoom_in", {"Zoom In", 0, 0, true, [this] { cam_glide_.apply_input(camera_, [](Camera& c) { c.zoom(0.85); }); }, {}});
+    add("zoom_out", {"Zoom Out", 0, 0, true, [this] { cam_glide_.apply_input(camera_, [](Camera& c) { c.zoom(1 / 0.85); }); }, {}});
     static const char* view_ids[4] = {"cam_1", "cam_2", "cam_3", "cam_4"};
     static const char* store_ids[4] = {"store_cam_1", "store_cam_2", "store_cam_3", "store_cam_4"};
     static const char* view_labels[4] = {"Camera View 1", "Camera View 2", "Camera View 3", "Camera View 4"};
@@ -1261,8 +1387,9 @@ void App::build_actions() {
                               const CameraView* v = project_camera(i);
                               if (!v) v = settings_.cameras[i].set ? &settings_.cameras[i] : nullptr;
                               if (!v) return status("Camera view " + std::to_string(i + 1) + " is empty: store it first");
-                              camera_.target = v->target, camera_.yaw = v->yaw, camera_.pitch = v->pitch,
-                              camera_.distance = v->distance;
+                              cam_glide_.apply_input(camera_, [v](Camera& c) {
+                                  c.target = v->target, c.yaw = v->yaw, c.pitch = v->pitch, c.distance = v->distance;
+                              });
                           },
                           {}});
         add(store_ids[i], {store_labels[i], 0, 0, false,
@@ -1290,7 +1417,6 @@ void App::apply_preset() {
         {"key_all", {shift | ImGuiKey_I, 0}},
         {"delete_key", {alt | ImGuiKey_I, ImGuiKey_Delete}},
         {"reset_hip", {alt | ImGuiKey_G, alt | ImGuiKey_H}},
-        {"flip_pose", {ctrl | shift | ImGuiKey_V, 0}},
         {"next_key", {ImGuiKey_UpArrow, 0}},
         {"prev_key", {ImGuiKey_DownArrow, 0}},
         {"start", {shift | ImGuiKey_LeftArrow, 0}},
@@ -1331,11 +1457,11 @@ void App::apply_preset() {
         {"store_cam_3", {shift | ImGuiKey_F11, 0}},
         {"store_cam_4", {shift | ImGuiKey_F12, 0}},
     };
-    // Second Life: its build-tool habits. Esc resets the camera, G toggles snapping; the Move gizmo
-    // is the default and Ctrl / Ctrl+Shift switch to Rotate / Scale while held (see viewport.cpp).
+    // Second Life: its build-tool habits. Esc clears the selection as everywhere, and with nothing selected resets
+    // the camera as in world (handle_shortcuts runs the first of a key's actions that can); G toggles snapping; the
+    // Move gizmo is the default and Ctrl / Ctrl+Shift switch to Rotate / Scale while held (see viewport.cpp).
     // The tool keys (Q W E R) and Frame All (A) stay as in Industry: nothing else here uses them.
     static const std::map<std::string, Keys> second_life = {
-        {"select_none", {0, 0}},
         {"reset_camera", {ImGuiKey_Escape, 0}},
         {"snap_toggle", {ImGuiKey_G, 0}},
         {"reset_hip", {alt | ImGuiKey_H, 0}},  // Alt+W is the camera's move_forward (keyboard_camera)
@@ -1379,6 +1505,21 @@ std::string App::key_hint(const char* id) const {
     return "";
 }
 
+void App::key_badge(const char* action) {
+    if (!key_badges_ || !action) return;
+    const std::string k = key_hint(action);
+    if (k.empty()) return;
+    ImFont* font = bold_font();
+    const float fs = ImGui::GetFontSize() * 0.78f, pad = fs * 0.3f;
+    const ImVec2 t = font->CalcTextSizeA(fs, FLT_MAX, 0, k.c_str());
+    const ImVec2 max = ImGui::GetItemRectMax(), min = ImGui::GetItemRectMin();
+    const ImVec2 p0(std::max(min.x, max.x - t.x - pad * 1.5f), min.y - t.y * 0.45f), p1(p0.x + t.x + 2 * pad, p0.y + t.y);
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    dl->AddRectFilled(ImVec2(p0.x + 1, p0.y + 1), ImVec2(p1.x + 1, p1.y + 1), IM_COL32(0, 0, 0, 110), 3);
+    dl->AddRectFilled(p0, p1, accent_colour(), 3);
+    dl->AddText(font, fs, ImVec2(p0.x + pad, p0.y), IM_COL32(24, 25, 29, 255), k.c_str());
+}
+
 std::string App::nav_hint() const {
     if (host_.world_view())
         return "Clicks and keys: the editor   Camera: Alt+drag, wheel, Alt+arrows   Chat: click the Chat pane";
@@ -1417,13 +1558,19 @@ void App::handle_shortcuts() {
         run_action(std::exchange(deferred_action_, nullptr));
         return;
     }
-    // Keys go to text fields first, except Ctrl shortcuts (spec UI-15/UI-16).
+    // Keys go to text fields first, except Ctrl shortcuts (spec UI-15/UI-16). A key two actions share (the Second
+    // Life preset's Esc: Select None, then Reset Camera) runs the first that can run now.
+    const char* why_not = nullptr;
     for (auto& [id, a] : actions_) {
         for (ImGuiKeyChord k : {a.key, a.key2}) {
             if (!k) continue;
             static const std::string_view global[] = {"new", "open", "save", "save_as", "export_anim", "quit",
                                                        "undo", "redo", "prefs", "graph"};
-            bool is_global = (k & ImGuiMod_Ctrl) && std::find(std::begin(global), std::end(global), id) != std::end(global);
+            // Ctrl+A/C/V/X are the field's own while typing, whatever they run elsewhere (QAvimator's Ctrl+A is Save As).
+            const ImGuiKey base = ImGuiKey(k & ~ImGuiMod_Mask_);
+            const bool text_edit = (k & ImGuiMod_Mask_) == ImGuiMod_Ctrl &&
+                                   (base == ImGuiKey_A || base == ImGuiKey_C || base == ImGuiKey_V || base == ImGuiKey_X);
+            bool is_global = (k & ImGuiMod_Ctrl) && !text_edit && std::find(std::begin(global), std::end(global), id) != std::end(global);
             if (io.WantTextInput && !is_global) continue;  // text fields keep every other key (UI-15/16)
             // A text field locks keys like Ctrl+Z for itself, so global actions read the raw key state (UI-15).
             const bool pressed =
@@ -1436,15 +1583,16 @@ void App::handle_shortcuts() {
                     deferred_action_ = id.c_str(), deferred_frames_ = 5;
                     return;
                 }
-                const char* why = a.unavailable ? a.unavailable() : nullptr;
-                if (why)
-                    status(why);
-                else
-                    a.run();
+                if (const char* why = a.unavailable ? a.unavailable() : nullptr) {
+                    if (!why_not) why_not = why;
+                    break;  // the next action may share this key
+                }
+                a.run();
                 return;
             }
         }
     }
+    if (why_not) status(why_not);
 }
 
 void App::menu_item(const char* id) {
@@ -1460,9 +1608,9 @@ void App::menu_item(const char* id) {
 
 void App::draw_menus() {
     if (!ImGui::BeginMainMenuBar()) return;
-    if (begin_menu_icon(nullptr, "File")) {
+    if (begin_top_menu("File")) {
         for (const char* id : {"new", "open"}) menu_item(id);
-        if (ImGui::BeginMenu("Open Recent")) {
+        if (begin_menu_icon(icon::kRecent, "Open Recent")) {
             bool any = false;
             for (size_t i = 0; i < settings_.recent.size(); ++i) {
                 const std::string path = settings_.recent[i];
@@ -1474,7 +1622,7 @@ void App::draw_menus() {
             }
             if (!any) ImGui::MenuItem("(no recent projects)", nullptr, false, false);
             ImGui::Separator();
-            if (ImGui::MenuItem("Clear Recent", nullptr, false, !settings_.recent.empty())) {
+            if (menu_item_icon(nullptr, "Clear Recent", nullptr, false, !settings_.recent.empty())) {
                 settings_.recent.clear();
                 save_settings();
             }
@@ -1495,13 +1643,17 @@ void App::draw_menus() {
             ImGui::SetItemTooltip("The animation as an animated GIF or numbered PNG pictures, for a Marketplace listing");
         }
         if (host_.can_upload()) menu_item("upload"), menu_item("upload_all_clips");
+        if (menu_item_icon(icon::kIkFk, "Export Rigged Mesh for SL...", nullptr, show_rig_export_)) show_rig_export_ = !show_rig_export_;  // 08 RG-5
+        ImGui::SetItemTooltip("The mesh body shown as an uploadable rigged .dae, with joint positions, checked against the uploader's rules");
         ImGui::Separator();
         menu_item("quit");
         ImGui::EndMenu();
     }
-    if (begin_menu_icon(nullptr, "Edit")) {
+    if (begin_top_menu("Edit")) {
         menu_item("undo");
         menu_item("redo");
+        if (menu_item_icon(icon::kPlanner, "Undo History...", nullptr, show_undo_history_)) show_undo_history_ = !show_undo_history_;
+        ImGui::SetItemTooltip("Every step undo can take back, by name: click one to go back (or forward) to it");
         ImGui::Separator();
         for (const char* id : {"key", "key_all", "tween", "delete_key", "delete_frame"}) menu_item(id);
         ImGui::Separator();
@@ -1510,7 +1662,7 @@ void App::draw_menus() {
         for (const char* id : {"reset_bone", "reset_hip", "reset_pose"}) menu_item(id);
         ImGui::Separator();
         for (const char* id : {"copy", "paste", "save_clip"}) menu_item(id);
-        if (ImGui::BeginMenu("Time")) {
+        if (begin_menu_icon(nullptr, "Time")) {
             draw_time_menu_items();
             ImGui::EndMenu();
         }
@@ -1520,6 +1672,9 @@ void App::draw_menus() {
         draw_pose_tool_menu_items();  // Scratch Pose, Propagate Pose (PT-2, PT-3)
         ImGui::Separator();
         menu_item("reverse");
+        menu_item("flip_animation");
+        ImGui::SetItemTooltip("Left and right swapped on every key of the clip. To ship both sides, the Export window's "
+                              "\"Also export the other side (mirrored)\" writes the flipped copy beside the original");
         if (menu_item_icon(icon::kSimplify, "Simplify Curves...", nullptr, false, !doc_.history.is_open())) open_simplify();
         ImGui::SetItemTooltip("Fewer keys on the selected bones' curves (or all), within a tolerance");
         ImGui::Separator();
@@ -1527,17 +1682,17 @@ void App::draw_menus() {
         menu_item("prefs");
         ImGui::EndMenu();
     }
-    if (begin_menu_icon(nullptr, "Playback")) {
+    if (begin_top_menu("Playback")) {
         for (const char* id : {"play", "next_frame", "prev_frame", "next_key", "prev_key", "start", "end"}) menu_item(id);
         ImGui::EndMenu();
     }
-    if (begin_menu_icon(nullptr, "View")) {  // spec 06 section 3.4's items, grouped so the menu fits a short screen
+    if (begin_top_menu("View")) {  // spec 06 section 3.4's items, grouped so the menu fits a short screen
         if (begin_menu_icon(icon::kFrameAll, "Camera")) {
             for (const char* id : {"view_front", "view_back", "view_right", "view_left", "view_top"}) menu_item(id);
             if (menu_item_icon(icon::kOrtho, "Orthographic", key_hint("view_ortho").c_str(), camera_.ortho)) run_action("view_ortho");
             ImGui::Separator();
             for (const char* id : {"frame_selected", "frame_all", "zoom_in", "zoom_out", "reset_camera"}) menu_item(id);
-            if (ImGui::BeginMenu("Camera Views")) {
+            if (begin_menu_icon(nullptr, "Camera Views")) {
                 for (const char* id : {"cam_1", "cam_2", "cam_3", "cam_4"}) menu_item(id);
                 ImGui::Separator();
                 for (const char* id : {"store_cam_1", "store_cam_2", "store_cam_3", "store_cam_4"}) menu_item(id);
@@ -1548,16 +1703,59 @@ void App::draw_menus() {
         ImGui::Separator();
         menu_item("graph");
         menu_item("dope_sheet");
+        menu_item("maximise_panel");
+        ImGui::SetItemTooltip("With the pointer over a panel, press the key: the panel fills the window; press it again "
+                              "to put the panels back");
         menu_item("reset_layout");
+        draw_workspace_menu();
         ImGui::Separator();
         if (begin_menu_icon(icon::kShown, "Bones")) {
             static const char* cats[] = {"Show Body Bones", "Show Hand Bones",  "Show Face Bones",  "Show Wing Bones",
                                          "Show Tail Bones", "Show Hind Limb Bones", "Show Groin Bones", "Show Attachment Points"};
-            for (int c = 0; c < 8; ++c) ImGui::MenuItem(cats[c], nullptr, &show_category_[c]);
+            for (int c = 0; c < 8; ++c)
+                if (menu_item_icon(nullptr, cats[c], nullptr, show_category_[c]))
+                    show_category_[c] = !show_category_[c], auto_shown_[size_t(c)] = false;  // yours now
             ImGui::Separator();
-            ImGui::MenuItem("Show Collision Volumes", nullptr, &show_volumes_);
+            if (menu_item_icon(nullptr, "Show Collision Volumes", nullptr, show_volumes_)) show_volumes_ = !show_volumes_, auto_shown_[8] = false;
+            if (menu_item_icon(nullptr, "Collision Volumes in Front (X-ray)", nullptr, xray_)) xray_ = !xray_;
+            ImGui::SetItemTooltip("Draw the collision volumes over the body; off, the body hides the parts inside it. "
+                                  "Bones are always drawn in front");
+            if (menu_item_icon(nullptr, "Show Weights of Selected", nullptr, settings_.show_weights)) {
+                settings_.show_weights = !settings_.show_weights;
+                save_settings();
+            }
+            ImGui::SetItemTooltip("The bone or collision volume under the pointer, else the selected one, tints the body "
+                                  "where it carries the skin: blue a little, red all of it");
             ImGui::Separator();
-            ImGui::MenuItem("Bones in Front (X-ray)", nullptr, &xray_);
+            if (menu_item_icon(nullptr, "Hide Unused Bones", nullptr, settings_.hide_unused_bones)) {
+                settings_.hide_unused_bones = !settings_.hide_unused_bones;
+                save_settings();
+            }
+            ImGui::SetItemTooltip("With a mesh body shown, hide the bones it isn't weighted to (in the view, the Bones "
+                                  "list and the picker); a bone above a used one stays so its chain does. Picking a "
+                                  "hidden bone in the Bones list or the picker turns this off");
+            if (ImGui::MenuItem("Plain Names", nullptr, settings_.plain_bone_names)) {
+                settings_.plain_bone_names = !settings_.plain_bone_names;
+                save_settings();
+            }
+            ImGui::SetItemTooltip("A plain name beside each SL bone name, in the Bones list, the status bar and the view's "
+                                  "labels: mHipLeft \xc2\xb7 Left Thigh. The bone filter finds either. Untick it once SL's "
+                                  "names are second nature");
+            if (begin_menu_icon(nullptr, "Style")) {  // 08 FP-1
+                const bool hidden = bones_hidden();
+                if (menu_item_icon(nullptr, "Stick", nullptr, !hidden)) {
+                    settings_.bone_style = "stick";
+                    save_settings();
+                }
+                ImGui::SetItemTooltip("A line from each joint to the next and a dot on every joint, over the body: "
+                                      "follows the body's own joints, whatever its proportions");
+                if (menu_item_icon(nullptr, "Hidden", nullptr, hidden)) {
+                    settings_.bone_style = "hidden";
+                    save_settings();
+                }
+                ImGui::SetItemTooltip("Hide bone lines and joints in the viewport");
+                ImGui::EndMenu();
+            }
             ImGui::EndMenu();
         }
         if (menu_item_icon(icon::kBalance, "Centre of Mass", nullptr, show_com_)) show_com_ = !show_com_;  // 08 CM-1
@@ -1595,17 +1793,17 @@ void App::draw_menus() {
         if (begin_menu_icon(icon::kWalkTest, "Body")) {
             const bool linden = !mesh_body();
             if (host_.world_view()) {  // spec 09 build 32: your avatar, or a mesh body in its place on your screen only
-                if (ImGui::MenuItem("Your Avatar", nullptr, linden)) use_mesh_body("");
+                if (menu_item_icon(nullptr, "Your Avatar", nullptr, linden)) use_mesh_body("");
                 ImGui::SetItemTooltip("The avatar you wear, as everyone sees it");
             } else {  // SL defaults first: they are what people see in-world.
                 for (Body b : {Body::SLDefault, Body::SLDefaultMale, Body::Female, Body::Male, Body::SkeletonOnly})
-                    if (ImGui::MenuItem(kBodyNames[int(b)], nullptr, linden && body_ == b)) {
+                    if (menu_item_icon(nullptr, kBodyNames[int(b)], nullptr, linden && body_ == b)) {
                         set_body(int(b));
                         if (!linden) use_mesh_body("");
                     }
             }
             if (!bodies_.empty()) {
-                ImGui::SeparatorText("Mesh bodies");
+                subheading("Mesh bodies");
                 for (int k = 0; k < int(bodies_.size()); ++k) {  // two bodies may share a name
                     const MeshBody& mb = bodies_[k];
                     ImGui::PushID(k);
@@ -1621,9 +1819,10 @@ void App::draw_menus() {
             } else if (host_.world_view()) {
                 ImGui::TextDisabled("Import a mesh body in Inventory > Bodies");
             }
+            draw_body_parts_menu();  // the shown body's clothes and other parts, on and off
             if (host_.world_view()) {  // spec 09 build 34
                 ImGui::Separator();
-                if (ImGui::MenuItem("Keep in Real-Avatar Modes", nullptr, settings_.viewer_keep_swap)) {
+                if (menu_item_icon(nullptr, "Keep in Real-Avatar Modes", nullptr, settings_.viewer_keep_swap)) {
                     settings_.viewer_keep_swap = !settings_.viewer_keep_swap;
                     save_settings();
                 }
@@ -1641,21 +1840,35 @@ void App::draw_menus() {
         ImGui::EndMenu();
     }
     draw_light_menu();
-    if (begin_menu_icon(nullptr, "Select")) {
+    if (begin_top_menu("Select")) {
         for (const char* id : {"select_all", "select_keyed_frame", "select_all_keyed", "select_none"}) menu_item(id);
         ImGui::Separator();
         for (const char* id : {"select_parent", "select_child", "next_sibling", "prev_sibling"}) menu_item(id);
         ImGui::EndMenu();
     }
-    if (begin_menu_icon(nullptr, "Tools")) {
+    if (begin_top_menu("Tools")) {
         for (const char* id : {"tool_select", "tool_move", "tool_rotate", "tool_scale"}) menu_item(id);
         ImGui::Separator();
         menu_item("orientation");
         if (menu_item_icon(icon::kPull, "Auto IK", nullptr, settings_.auto_ik)) run_action("auto_ik");
         ImGui::SetItemTooltip("Drag a joint and the bones above it follow: with the Move tool, or by the dot on a joint "
                               "with any tool. Keys plain rotations.");
+        if (menu_item_icon(icon::kFollowThrough, "Follow-Through While Posing", nullptr, settings_.follow_through))
+            run_action("follow_through");
+        ImGui::SetItemTooltip("Tails, wings, ears and soft collision volumes lag and settle while dragging the body.");
+        if (menu_item_icon(icon::kAvatarPhysics, "Avatar Physics Preview", nullptr, settings_.avatar_physics))
+            run_action("avatar_physics");
+        ImGui::SetItemTooltip("BELLY, BUTT and the breasts bounce as SL's avatar physics bounces them, while playing, "
+                              "scrubbing or dragging. A preview: nothing is keyed. Its settings and Bake Bounce are in "
+                              "Tools > Dynamics.");
+        if (menu_item_icon(icon::kLocked, "Respect Joint Limits", nullptr, settings_.respect_joint_limits))
+            run_action("respect_joint_limits");
+        ImGui::SetItemTooltip("Joint limits stop bones bending past natural ranges during Auto IK, body drag and rotate tool "
+                              "posing. Set them in the Rig menu.");
         ImGui::Separator();
-        for (const char* id : {"ik_toggle", "follow_target", "pin_world", "pin_bone", "unpin", "delete_pin", "foot_lock"}) menu_item(id);
+        for (const char* id : {"ik_toggle", "follow_target", "pin_world", "bind_to", "pin_bone", "unpin", "delete_pin", "sit_on_seat",
+                               "foot_lock"})
+            menu_item(id);
         if (begin_menu_icon(icon::kLoop, "Loop Tools")) {
             draw_loop_tools_menu();
             ImGui::EndMenu();
@@ -1682,22 +1895,65 @@ void App::draw_menus() {
         if (menu_item_icon(icon::kPlanner, "Priority Planner...", nullptr, show_planner_)) show_planner_ = !show_planner_;
         ImGui::EndMenu();
     }
+    // Rigging, as the Rig workspace holds it: a model onto SL's skeleton, its weights, the joints' limits and offsets.
+    if (begin_top_menu("Rig")) {
+        // A tool open behind another tab comes to the front; the one in front closes, as before.
+        auto behind = [this](const char* id) {
+            const ImGuiWindow* w = ImGui::FindWindowByName(id);
+            const bool back = w && w->DockIsActive && w->DockNode && w->DockNode->VisibleWindow != w;
+            if (back) pending_tab_ = id;
+            return back;
+        };
+        if (menu_item_icon(icon::kSwap, "Map Rig to Second Life...", nullptr, show_rig_map_) && !(show_rig_map_ && behind("###map-rig"))) {  // 08 RM
+            if (show_rig_map_) close_rig_map(false);
+            else show_rig_map_ = true;
+        }
+        ImGui::SetItemTooltip("Put any rigged model (FBX, glTF, COLLADA) on SL's skeleton: its own bones mapped onto SL's joints");
+        if (menu_item_icon(icon::kIkFk, "Rig a Model from Scratch...", nullptr, show_rig_scratch_) &&
+            !(show_rig_scratch_ && behind("###rig-scratch"))) {  // 08 RG-14
+            if (show_rig_scratch_) close_rig_scratch(false);
+            else show_rig_scratch_ = true;
+        }
+        ImGui::SetItemTooltip("A model with no skeleton for SL: markers you drag onto its joints place SL's skeleton in it, and bone "
+                              "heat weights it");
+        if (menu_item_icon(icon::kPaint, "Paint Weights...", nullptr, show_paint_) && !(show_paint_ && behind("###paint-weights")))
+            show_paint_ = !show_paint_;  // 08 RG-15
+        ImGui::SetItemTooltip("Touch up the weights of a rigged mesh body with a brush, posed or playing");
+        ImGui::Separator();
+        if (menu_item_icon(icon::kEditLimits, "Edit Limits", key_hint("edit_limits").c_str(), edit_limits_mode_))
+            run_action("edit_limits");
+        ImGui::SetItemTooltip("Direct manipulation handles in the 3D viewport to set joint limits.");
+        if (menu_item_icon(icon::kRules, "Suggest Joint Limits...", nullptr, show_suggest_limits_))
+            open_suggest_limits();
+        ImGui::SetItemTooltip("Suggest joint limits from anatomical templates, bind pose detection, collision sweep, and motion.");
+        ImGui::Separator();
+        if (menu_item_icon(icon::kFind, "Joint Offset Inspector...", nullptr, show_joint_inspector_) &&
+            !(show_joint_inspector_ && behind("Joint Offset Inspector")))
+            show_joint_inspector_ = !show_joint_inspector_;  // 08 RG-4
+        ImGui::EndMenu();
+    }
     if (ui::Host::HostUi* h = host_.host_ui()) {  // the viewer's own UI beside the editor (spec 09 U4b)
         const int n = h->unread_notices();
         const std::string count = n > 0 ? " (" + std::to_string(n) + ")" : "";
-        if (begin_menu_icon(nullptr, ("Viewer" + count + "###host_menu").c_str())) {
+        if (begin_top_menu(("Viewer" + count + "###host_menu").c_str())) {
             ImGui::MenuItem(h->pane_title(), nullptr, &show_host_pane_);
             if (ImGui::MenuItem(("Notifications" + count).c_str())) h->toggle_notices();
+            if (const char* inv = h->inventory_label()) {
+                if (ImGui::MenuItem(inv)) h->toggle_inventory();
+                ImGui::SetItemTooltip("Your inventory, to wear and take off attachments and clothes while you animate (a "
+                                      "prop to hold, a weapon for a stance). Edit them in the viewer, not here");
+            }
             if (ImGui::MenuItem(h->reveal_label(), h->reveal_shortcut(), h->revealed())) h->reveal(!h->revealed());
             ImGui::Separator();
             menu_item("quit");
             ImGui::EndMenu();
         }
     }
-    if (begin_menu_icon(nullptr, "Help")) {
-        for (const char* id : {"help_contents", "tutorials", "help", "welcome", "about"}) menu_item(id);
+    if (begin_top_menu("Help")) {
+        for (const char* id : {"find_tool", "help_contents", "tutorials", "help", "welcome", "about"}) menu_item(id);
         ImGui::EndMenu();
     }
+    draw_workspace_tabs();
     ImGui::EndMainMenuBar();
 }
 
@@ -1790,13 +2046,24 @@ void App::draw_message_popup(bool in_export_dialog) {
     if (show_export_dialog_ != in_export_dialog) return;
     if (!message_title_.empty() && !ImGui::IsPopupOpen("##message")) ImGui::OpenPopup("##message");
     ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSizeConstraints(ImVec2(360, 0), ImVec2(640, 600));
+    // Sized to its text, in the font's units: a fixed 640-pixel cap cut the lines of a larger font on the right
+    // (user test). A long text scrolls in its own box, so OK always shows.
+    const ImVec2 work = ImGui::GetMainViewport()->WorkSize;
+    const ImGuiStyle& st = ImGui::GetStyle();
+    const float wrap = std::min(ImGui::GetFontSize() * 36, work.x * 0.9f - 2 * st.WindowPadding.x - st.ScrollbarSize);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(std::min(ImGui::GetFontSize() * 18, wrap), 0), ImVec2(FLT_MAX, FLT_MAX));
     if (ImGui::BeginPopupModal("##message", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar)) {
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + wrap);
         ImGui::TextUnformatted(message_title_.c_str());
+        ImGui::PopTextWrapPos();
         ImGui::Separator();
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 36);
+        const ImVec2 ts = ImGui::CalcTextSize(message_text_.c_str(), nullptr, false, wrap);
+        const float box_h = std::min(ts.y, work.y * 0.6f);
+        ImGui::BeginChild("##text", ImVec2(ts.x + (ts.y > box_h ? st.ScrollbarSize + st.ItemSpacing.x : 0), box_h));
+        ImGui::PushTextWrapPos(ts.x + 1);
         ImGui::TextUnformatted(message_text_.c_str());
         ImGui::PopTextWrapPos();
+        ImGui::EndChild();
         ImGui::Spacing();
         if (ImGui::Button("OK", ImVec2(96, 0)) || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
             message_title_.clear();
@@ -1806,24 +2073,85 @@ void App::draw_message_popup(bool in_export_dialog) {
     }
 }
 
+// ImGui draws docked panels square. Each one's corners are filled with the ground between the panels, after its
+// contents, so the panels read as rounded cards on it. Not over the world in the viewer, which shows through there.
+void App::round_docked_corners() {
+    if (host_.world_view()) return;
+    const float r = ImGui::GetStyle().WindowRounding;
+    if (r < 1) return;
+    const ImU32 ground = ImGui::GetColorU32(ImGuiCol_MenuBarBg);
+    for (ImGuiWindow* w : GImGui->Windows) {
+        if (!w->DockIsActive || !w->Active || w->Hidden || !w->DockNode || w->DockNode->VisibleWindow != w) continue;
+        ImDrawList* dl = w->DrawList;
+        const ImVec2 a = w->Pos, b(w->Pos.x + w->Size.x, w->Pos.y + w->Size.y);
+        dl->PushClipRect(a, b, false);
+        // Each corner: the corner point, then the arc around the inset centre (a fan from the corner covers it).
+        const struct { ImVec2 corner, centre; float from; } corners[] = {
+            {a, ImVec2(a.x + r, a.y + r), IM_PI},
+            {ImVec2(b.x, a.y), ImVec2(b.x - r, a.y + r), 1.5f * IM_PI},
+            {b, ImVec2(b.x - r, b.y - r), 0},
+            {ImVec2(a.x, b.y), ImVec2(a.x + r, b.y - r), 0.5f * IM_PI}};
+        for (const auto& c : corners) {
+            dl->PathLineTo(c.corner);
+            dl->PathArcTo(c.centre, r, c.from, c.from + 0.5f * IM_PI, 8);
+            dl->PathFillConvex(ground);  // a fan from the corner, which is what this shape needs
+        }
+        dl->PopClipRect();
+    }
+}
+
 void App::draw_dockspace() {
     // In the viewer the centre stays empty and lets the pointer through to the world (spec 09 U3).
     const bool world = host_.world_view();
-    ImGuiID dock = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), world ? ImGuiDockNodeFlags_PassthruCentralNode : 0);
+    follow_tool_workspaces();  // a tool opened in another job's workspace goes to its own (before the layout is picked)
+    workspace_frame_start();  // a workspace switch: its own layout back before the dockspace is submitted
+    // The gaps between the panels are the menu bar's darker ground (round_docked_corners).
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImGui::GetColorU32(ImGuiCol_MenuBarBg));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImGui::GetColorU32(ImGuiCol_MenuBarBg));  // the splitters between them (ImGui draws them in Border)
+    // A docked panel's tab strip is the strip colour; floating windows keep their lighter title bars (theme.cpp).
+    for (ImGuiCol c : {ImGuiCol_TitleBg, ImGuiCol_TitleBgActive, ImGuiCol_TitleBgCollapsed})
+        ImGui::PushStyleColor(c, ImGui::GetStyleColorVec4(ImGuiCol_Tab));
+    // One close box per panel: its tab's. The node's own, at the strip's far end, would close every tab in it.
+    ImGuiID dock = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(),
+                                                ImGuiDockNodeFlags_NoCloseButton | (world ? ImGuiDockNodeFlags_PassthruCentralNode : 0));
+    ImGui::PopStyleColor(5);
     dockspace_id_ = dock;
     bool rebuild = std::exchange(reset_layout_, false);  // View > Reset Layout
     if (std::exchange(first_frame_, false)) {
         ImGuiDockNode* node = ImGui::DockBuilderGetNode(dock);
-        bool known = ImGui::FindWindowSettingsByID(ImHashStr("Graph")) && ImGui::FindWindowSettingsByID(ImHashStr("Inventory"));
-        rebuild |= !node || node->IsEmpty() || !known;
+        rebuild |= !node || node->IsEmpty() || !workspace_layout_known();
     }
     if (rebuild) {
+        if (!maximised_.empty()) end_maximised(false);  // the new layout replaces the one a maximised panel would restore
         ui::Host::HostUi* h = host_.host_ui();
-        build_default_layout(dock, world, h ? h->pane_title() : nullptr);
+        build_workspace_layout(dock, workspace(), world, h ? h->pane_title() : nullptr);
     }
+    // Interface size changed: the panels' widths and the bottom row's height scale with it; side panels never get
+    // narrower than their text needs (a rebuilt layout is sized for the new text already).
+    fit_side_panels(dock, rebuild ? 1 : std::exchange(dock_scale_, 1.f), 12 * ImGui::GetFontSize());
+    if (rebuild) dock_scale_ = 1;
 }
 
 bool App::frame() {
+    {
+        // Right Alt alone shows the key badges and is not Alt to the rest of the editor, so the Second Life camera
+        // keeps Left Alt and holding Right Alt never orbits.
+        ImGuiIO& io = ImGui::GetIO();
+        const bool right_alt = ImGui::IsKeyDown(ImGuiKey_RightAlt) && !ImGui::IsKeyDown(ImGuiKey_LeftAlt);
+        if (right_alt) io.KeyAlt = false, io.KeyMods &= ~ImGuiMod_Alt;
+        key_badges_ = right_alt && !io.WantTextInput;
+        // ImGui's keyboard navigation only in menus and popups. Elsewhere the arrows step through keys and Alt is the
+        // camera; its focus box following them, and an Alt tap jumping to the menu bar, were noise. (Tab between
+        // fields works without it.) A key being captured in Keyboard Shortcuts has it off already.
+        if (capture_slot_ < 0) {
+            const bool popup = ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId);
+            if (popup) io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+            else if (io.ConfigFlags & ImGuiConfigFlags_NavEnableKeyboard) {
+                io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableKeyboard;
+                GImGui->NavCursorVisible = false;
+            }
+        }
+    }
     {
         // The viewer's skin (Host::skin_colours): restyle when it changes.
         HostColours now{};
@@ -1864,6 +2192,9 @@ bool App::frame() {
                 case Dialog::SitLines: save_sit_lines(with_extension(path, "txt")); break;
                 case Dialog::AoNotecard: save_ao_notecard(with_extension(path, "txt")); break;
                 case Dialog::ExpressionPack: export_expression_pack(path); break;
+                case Dialog::ExportRig: export_rig(with_extension(path, "dae")); break;
+                case Dialog::MapRig: guarded(path, [&] { open_rig_map(path); }); break;
+                case Dialog::RigScratch: guarded(path, [&] { open_rig_scratch(path); }); break;
                 case Dialog::Rhubarb: guarded(path, [&] { import_rhubarb(path); }); break;
                 case Dialog::LoadReference: guarded(path, [&] { load_reference(path, reference_pick_sequence_); }); break;
                 case Dialog::LoadTarget: guarded(path, [&] { load_target(path); }); break;
@@ -1898,7 +2229,8 @@ bool App::frame() {
         if (frame_ > hi) frame_ = lo + std::fmod(frame_ - lo, hi - lo);  // from before loop_in it just runs on (TG-13)
     }
     update_audio();  // follows the playhead: plays, loops, scrub snippets (AU-3)
-    update_camera_animation(double(now - last_tick_) * 1e-9);
+    const double tick_dt = double(now - last_tick_) * 1e-9;
+    update_camera_animation(tick_dt);
     last_tick_ = now;
 
     scratch_tick();  // PT-2: before the pose is evaluated, so a scrub away from a scratch pose waits on the question
@@ -1906,6 +2238,7 @@ bool App::frame() {
     viewer_tools_tick();  // spec 09 build 20: the in-world claims, the walk test, the furniture click
     sl_export_tick();  // the shared in-memory export, refreshed when idle (08 SP, UM)
     { VATS_PROFILE("evaluate"); evaluate(); }
+    update_joint_limit_test_sweep(tick_dt);  // the frame's time (now - last_tick_ is 0 here)
     {
         ImGuiContext& g = *GImGui;
         // No item tooltip while a drag runs (a slider's would cover the row below); it shows once the drag ends.
@@ -1914,10 +2247,11 @@ bool App::frame() {
         // a modal dialog keeps its own Esc.
         if (menu_open_ && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ImGui::ClosePopupsExceptModals(), skip_shortcuts_ = true;
     }
-    { VATS_PROFILE("dock+menus"); draw_dockspace(); draw_menus(); }
-    { VATS_PROFILE("panel bones"); draw_bones_panel(); }
-    draw_picker_panel();  // 08 PK
-    { VATS_PROFILE("panel inventory"); draw_inventory_panel(); }
+    { VATS_PROFILE("dock+menus"); draw_dockspace(); draw_menu_bar(); }
+    // A workspace draws only its own panels (workspace_ui.cpp); the tool windows open and close as ever.
+    { VATS_PROFILE("panel bones"); if (panel_shown("Bones")) draw_bones_panel(); }
+    if (panel_shown("Picker")) draw_picker_panel();  // 08 PK
+    { VATS_PROFILE("panel inventory"); if (panel_shown("Inventory")) draw_inventory_panel(); }
     draw_dynamics_panel();
     draw_idle_panel();
     draw_overlap_panel();
@@ -1933,8 +2267,16 @@ bool App::frame() {
     draw_clips_panel();
     draw_mocap_panel();  // every frame: it polls the socket while listening
     draw_check_panel();  // every frame: it re-checks after edits
+    draw_rig_export_window();
+    draw_joint_inspector();
+    draw_rig_map_window();
+    draw_rig_scratch_window();
+    draw_paint_window();
     draw_quality_panel();
     draw_planner_panel();
+    draw_suggest_limits_panel();
+    draw_tool_search();
+    draw_undo_history();
     draw_in_world_window();  // spec 09 build 20
     draw_walk_test_window();
     draw_face_cam();
@@ -1942,15 +2284,16 @@ bool App::frame() {
     draw_split_dance_window();  // 08 TE-6
     draw_reference_window();
     draw_listing_window();
-    { VATS_PROFILE("panel timeline"); draw_timeline_panel(); }
+    { VATS_PROFILE("panel timeline"); if (panel_shown("Timeline")) draw_timeline_panel(); }
     if (!pending_tab_.empty() && ImGui::GetFrameCount() > 2)  // once the dock layout exists
         ImGui::SetWindowFocus(std::exchange(pending_tab_, "").c_str());
-    { VATS_PROFILE("panel graph"); draw_graph_panel(); }
-    draw_dope_panel();
+    { VATS_PROFILE("panel graph"); if (panel_shown("Graph")) draw_graph_panel(); }
+    if (panel_shown("Dope Sheet")) draw_dope_panel();
     // A scrub in the timeline, graph or dope sheet moved the playhead: Properties and the view (the gizmo and its
     // readout) show the frame it is on now, not the one evaluated before the scrub.
     if (frame_ != evaluated_frame_) { VATS_PROFILE("evaluate"); evaluate(); }
-    { VATS_PROFILE("panel properties"); draw_properties_panel(); }
+    { VATS_PROFILE("panel properties"); if (panel_shown("Properties")) draw_properties_panel(); }
+    draw_export_panel();  // the Export workspace's
     { VATS_PROFILE("viewport"); draw_viewport(); }
     draw_host_pane();
     draw_hand_poser();
@@ -1977,26 +2320,97 @@ bool App::frame() {
     draw_welcome();
     draw_help_browser();
     draw_recovery();
+    draw_pie_menu();  // over everything, after the 3D view has said what is under the pointer
+    round_docked_corners();
+    decorate_floating_windows();
     {
         const ImGuiContext& g = *GImGui;
         menu_open_ = !g.OpenPopupStack.empty() && g.OpenPopupStack.back().Window &&
                      !(g.OpenPopupStack.back().Window->Flags & ImGuiWindowFlags_Modal);
     }
+    // A double-click in a number field selects the whole number: ImGui selects a word, and "." split 0.200 (user test).
+    if (ImGuiInputTextState* s = ImGui::GetInputTextState(ImGui::GetActiveID()); s && ImGui::IsMouseDoubleClicked(0)) {
+        const std::string_view text(s->TextA.Data, size_t(s->TextLen));
+        if (!text.empty() && text.find_first_not_of("0123456789.,+-eE ") == std::string_view::npos) s->SelectAll();
+    }
     handle_shortcuts();
     return !quit_;
 }
 
+void App::apply_follow_through_preview(Evaluation& e) {
+    if (!settings_.follow_through || playing_) {
+        follow_through_.reset();
+        return;
+    }
+    const bool dragging = dragging_gizmo_ || modal_ == Modal::Move || modal_ == Modal::Rotate ||
+                          dot_drag_started_ || bone_drag_started_;
+    if (!dragging && (!follow_through_ || follow_through_->settled())) {
+        follow_through_.reset();
+        return;
+    }
+    if (!follow_through_) {
+        std::vector<int> moving;
+        if (body_drag_on_) {
+            if (body_drag_.node >= 0) moving.push_back(body_drag_.node);
+            for (int b : body_drag_.spine.bones) moving.push_back(b);
+            for (const PlantedFoot& f : body_drag_.feet) {
+                for (int b : f.chain.bones) moving.push_back(b);
+                if (f.node >= 0) moving.push_back(f.node);
+            }
+            const int pelvis = skel_.find("mPelvis");
+            if (pelvis >= 0) moving.push_back(pelvis);
+        } else if (auto_ik_.on) {
+            for (int b : auto_ik_.chain.bones) moving.push_back(b);
+            if (auto_ik_.node >= 0) moving.push_back(auto_ik_.node);
+        } else if (primary() >= 0) {
+            moving.push_back(primary());
+        }
+
+        auto weighted = [this](int node) -> bool {
+            const auto& sl = avatar_physics_volumes();  // RM-10: SL's own physics previews those
+            if (settings_.avatar_physics && std::find(sl.begin(), sl.end(), skel_[node].name) != sl.end()) return false;
+            return is_joint_weighted(node);
+        };
+
+        // No chains still makes one (settled from the start), so the drag does not look for chains again every frame.
+        std::vector<DynChain> chains = follow_through_chains(skel_, doc_.clip(), moving, weighted);
+        follow_through_ = std::make_unique<FollowThrough>(skel_, chains, e.globals);
+        follow_through_last_time_ = std::chrono::steady_clock::now();
+    }
+
+    auto now = std::chrono::steady_clock::now();
+    double dt = std::chrono::duration<double>(now - follow_through_last_time_).count();
+    follow_through_last_time_ = now;
+    dt = std::clamp(dt, 0.001, 0.1);
+
+    if (follow_through_->step(e.globals, dt, e.pose)) {
+        e.globals = skel_.global_pose(e.pose, shape());
+    } else if (!dragging) {
+        follow_through_.reset();
+    }
+}
+
 void App::evaluate() {
+    { VATS_PROFILE("mesh looks"); sync_mesh_looks(); }  // SK: a part hidden or a shape key moved since the last frame
+    sync_reused_bones();  // RM-8: before anything mirrors or limits a reused joint this frame
+    reveal_rigged_groups();  // a mesh body rigged to wings, a tail or hind limbs shows those groups
     if (multi_actor()) sync_actor_timing(doc_.project);  // GR-3: one timeline for every actor
     rig_->external = multi_actor() ? actor_resolver(doc_.project.active) : ExternalTarget{};
     evaluated_frame_ = frame_;
-    Evaluation e = [&] { VATS_PROFILE("eval rig"); return vats::evaluate(*rig_, doc_.clip(), frame_, shape()); }();
+    invalidate_floor_cache();
+    Evaluation e = [&] { VATS_PROFILE("eval rig"); return vats::evaluate(*rig_, doc_.clip(), frame_, shape(), constraints()); }();
     VATS_PROFILE("eval previews");
     apply_ragdoll_preview(e);
     apply_idle_preview(e);
     apply_dynamics_preview(e);
+    apply_follow_through_preview(e);
+    apply_avatar_physics_preview(e);
     apply_mocap_preview(e);
     apply_sl_preview(e);
+    if (rig_scratch_holds_rest()) {  // 08 RG-14: the markers are placed on the model at rest
+        e.pose = Pose(size_t(skel_.size()));
+        e.globals = skel_.global_pose(e.pose, shape());
+    }
     pose_ = std::move(e.pose);
     globals_ = std::move(e.globals);
     limb_states_ = std::move(e.limbs);
@@ -2028,6 +2442,8 @@ void App::evaluate() {
         host_.set_view_frame(p.actors[0].placement().inverse() * p.actors[p.active].placement());
     } else {
         host_.drive_avatar(skel_, sl_ghost_.empty() ? pose_ : sl_pose_, doc_.clip(), frame_);  // SL preview (08 SP-1)
+        // The viewer stands a swapped body on its soles itself (FSVATsEditor, pelvis-to-foot at pin time, tested
+        // in-world); lifting the view frame here as well would move the editor's space off the body it draws.
         host_.set_view_frame({});
     }
     // Handles of limbs that lost their IK data at this frame drop out of the selection (VP-27).

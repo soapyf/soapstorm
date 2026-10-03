@@ -2,7 +2,7 @@
 	"format": "vats-face-table",
 	"version": 1,
 	"name": "ARKit / VRM onto Bento face bones (SL default head)",
-	"note": "Each shape lists Bento face-bone motion at full weight: rot in degrees (VATs Euler), pos in metres from rest. Right-side shapes mirror the left (Y negated). Values are a starting point for the SL default head; tune gains in the Motion Capture window. SL's default skeleton has the lip corner bones swapped by name (mFaceLipCornerLeft sits on the avatar's right), so the corners here go by position: a left-side shape moves mFaceLipCornerRight.",
+	"note": "Each shape lists Bento face-bone motion at full weight: rot in degrees (VATs Euler), pos in metres from rest. Right-side shapes mirror the left (Y negated). Values are a starting point for the SL default head; rotations only where they turn the skin the same way on any head (the skin sits in front of the eye, lid, jaw, brow and lip-centre joints), so the lip corners only move: a mesh head may weight a corner's skin centimetres from its joint, where a turn swings it the wrong way; tune gains in the Motion Capture window. SL's default skeleton has the lip corner bones swapped by name (mFaceLipCornerLeft sits on the avatar's right), so the corners here go by position: a left-side shape moves mFaceLipCornerRight.",
 	"shapes": {
 		"eyeBlinkLeft": {
 			"mFaceEyeLidUpperLeft": {
@@ -174,6 +174,11 @@
 		},
 		"browDownLeft": {
 			"mFaceEyebrowInnerLeft": {
+				"rot": [
+					0,
+					6,
+					0
+				],
 				"pos": [
 					0,
 					-0.001,
@@ -181,6 +186,11 @@
 				]
 			},
 			"mFaceEyebrowCenterLeft": {
+				"rot": [
+					0,
+					4,
+					0
+				],
 				"pos": [
 					0,
 					0,
@@ -197,6 +207,11 @@
 		},
 		"browDownRight": {
 			"mFaceEyebrowInnerRight": {
+				"rot": [
+					0,
+					6,
+					0
+				],
 				"pos": [
 					0,
 					0.001,
@@ -204,6 +219,11 @@
 				]
 			},
 			"mFaceEyebrowCenterRight": {
+				"rot": [
+					0,
+					4,
+					0
+				],
 				"pos": [
 					0,
 					0,
@@ -220,6 +240,11 @@
 		},
 		"browInnerUp": {
 			"mFaceEyebrowInnerLeft": {
+				"rot": [
+					0,
+					-8,
+					0
+				],
 				"pos": [
 					0,
 					0,
@@ -227,6 +252,11 @@
 				]
 			},
 			"mFaceEyebrowInnerRight": {
+				"rot": [
+					0,
+					-8,
+					0
+				],
 				"pos": [
 					0,
 					0,
@@ -243,6 +273,11 @@
 		},
 		"browOuterUpLeft": {
 			"mFaceEyebrowOuterLeft": {
+				"rot": [
+					0,
+					-8,
+					0
+				],
 				"pos": [
 					0,
 					0,
@@ -250,6 +285,11 @@
 				]
 			},
 			"mFaceEyebrowCenterLeft": {
+				"rot": [
+					0,
+					-4,
+					0
+				],
 				"pos": [
 					0,
 					0,
@@ -259,6 +299,11 @@
 		},
 		"browOuterUpRight": {
 			"mFaceEyebrowOuterRight": {
+				"rot": [
+					0,
+					-8,
+					0
+				],
 				"pos": [
 					0,
 					0,
@@ -266,6 +311,11 @@
 				]
 			},
 			"mFaceEyebrowCenterRight": {
+				"rot": [
+					0,
+					-4,
+					0
+				],
 				"pos": [
 					0,
 					0,
@@ -421,6 +471,11 @@
 		},
 		"mouthFunnel": {
 			"mFaceLipUpperCenter": {
+				"rot": [
+					0,
+					-5,
+					0
+				],
 				"pos": [
 					0.003,
 					0,
@@ -428,6 +483,11 @@
 				]
 			},
 			"mFaceLipLowerCenter": {
+				"rot": [
+					0,
+					5,
+					0
+				],
 				"pos": [
 					0.003,
 					0,

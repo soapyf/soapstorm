@@ -1,0 +1,155 @@
+{
+	"name": "Auto-Rig Pro",
+	"hint": "root.x",
+	"mirror": [
+		[
+			".l",
+			".r"
+		]
+	],
+	"bones": {
+		"mPelvis": [
+			"root.x"
+		],
+		"mTorso": [
+			"spine_01.x"
+		],
+		"mChest": [
+			"spine_03.x",
+			"spine_02.x"
+		],
+		"mNeck": [
+			"neck.x"
+		],
+		"mHead": [
+			"head.x"
+		],
+		"mFaceJaw": [
+			"jawbone.x",
+			"c_jawbone.x"
+		],
+		"mEyeLeft": [
+			"c_eye.l"
+		],
+		"mFaceEar1Left": [
+			"ear_01.l",
+			"c_ear_01.l"
+		],
+		"mFaceEar2Left": [
+			"ear_02.l",
+			"c_ear_02.l"
+		],
+		"mCollarLeft": [
+			"shoulder.l"
+		],
+		"mShoulderLeft": [
+			"arm_stretch.l",
+			"arm.l"
+		],
+		"mElbowLeft": [
+			"forearm_stretch.l",
+			"forearm.l"
+		],
+		"mWristLeft": [
+			"hand.l"
+		],
+		"mHipLeft": [
+			"thigh_stretch.l",
+			"thigh.l"
+		],
+		"mKneeLeft": [
+			"leg_stretch.l",
+			"leg.l"
+		],
+		"mAnkleLeft": [
+			"foot.l"
+		],
+		"mFootLeft": [
+			"toes_01.l"
+		],
+		"mHandThumb1Left": [
+			"thumb1.l",
+			"c_thumb1.l"
+		],
+		"mHandThumb2Left": [
+			"thumb2.l",
+			"c_thumb2.l"
+		],
+		"mHandThumb3Left": [
+			"thumb3.l",
+			"c_thumb3.l"
+		],
+		"mHandIndex1Left": [
+			"index1.l",
+			"c_index1.l"
+		],
+		"mHandIndex2Left": [
+			"index2.l",
+			"c_index2.l"
+		],
+		"mHandIndex3Left": [
+			"index3.l",
+			"c_index3.l"
+		],
+		"mHandMiddle1Left": [
+			"middle1.l",
+			"c_middle1.l"
+		],
+		"mHandMiddle2Left": [
+			"middle2.l",
+			"c_middle2.l"
+		],
+		"mHandMiddle3Left": [
+			"middle3.l",
+			"c_middle3.l"
+		],
+		"mHandRing1Left": [
+			"ring1.l",
+			"c_ring1.l"
+		],
+		"mHandRing2Left": [
+			"ring2.l",
+			"c_ring2.l"
+		],
+		"mHandRing3Left": [
+			"ring3.l",
+			"c_ring3.l"
+		],
+		"mHandPinky1Left": [
+			"pinky1.l",
+			"c_pinky1.l"
+		],
+		"mHandPinky2Left": [
+			"pinky2.l",
+			"c_pinky2.l"
+		],
+		"mHandPinky3Left": [
+			"pinky3.l",
+			"c_pinky3.l"
+		],
+		"mTail1": [
+			"c_tail_00.x",
+			"tail_00.x"
+		],
+		"mTail2": [
+			"c_tail_01.x",
+			"tail_01.x"
+		],
+		"mTail3": [
+			"c_tail_02.x",
+			"tail_02.x"
+		],
+		"mTail4": [
+			"c_tail_03.x",
+			"tail_03.x"
+		],
+		"mTail5": [
+			"c_tail_04.x",
+			"tail_04.x"
+		],
+		"mTail6": [
+			"c_tail_05.x",
+			"tail_05.x"
+		]
+	}
+}

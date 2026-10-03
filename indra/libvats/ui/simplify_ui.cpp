@@ -6,6 +6,7 @@
 #include <cmath>
 
 #include "app.h"
+#include "icon_button.h"
 #include "imgui.h"
 #include "widgets.h"
 #include "vats/footlock.h"
@@ -48,18 +49,15 @@ void App::draw_simplify_dialog() {
                             ImVec2(1, 1));
     ImGui::GetStyle().Colors[ImGuiCol_ModalWindowDimBg].w = 0;
     if (!ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
-    const float label_w = ImGui::GetFontSize() * 8, field_w = ImGui::GetFontSize() * 14;
-    auto label = [&](const char* text) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(text);
-        ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(field_w);
-    };
+    help_button("graph-editor#Simplifying curves");
+    const float label_w = label_column(8);
+    auto label = [&](const char* text) { labelled_row(text, 8, 14); };
     bool changed = false;
     ImGui::BeginDisabled(simplify_tracks_.empty());
+    ImGui::SetCursorPosX(label_w);
     changed |= ImGui::Checkbox("All bones", &simplify_all_);
     ImGui::EndDisabled();
-    ImGui::SetItemTooltip("Off: only the %zu selected track(s)", simplify_tracks_.size());
+    ImGui::SetItemTooltip("Off: only the %s selected", count_noun(simplify_tracks_.size(), "track").c_str());
     float deg = float(simplify_.tol_deg), mm = float(simplify_.tol_mm);
     label("Rotation");
     if (slider_float("##sdeg", &deg, 0.01f, 5.f, "%.2f deg", 0, SliderCurve::Log))
@@ -69,17 +67,13 @@ void App::draw_simplify_dialog() {
     if (slider_float("##smm", &mm, 0.05f, 20.f, "%.2f mm", 0, SliderCurve::Log))
         simplify_.tol_mm = std::clamp(double(mm), 0.05, 20.0), changed = true;
     ImGui::SetItemTooltip("The same for position curves (the hips' travel)");
-    label("From");
-    const float half_w = (field_w - ImGui::CalcTextSize("to").x - 2 * ImGui::GetStyle().ItemSpacing.x) / 2;
-    ImGui::SetNextItemWidth(half_w);
+    label("From frame");
     changed |= ImGui::InputInt("##sfrom", &simplify_.from, 0);
-    ImGui::SameLine();
-    ImGui::TextUnformatted("to");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(half_w);
+    label("To frame");
     changed |= ImGui::InputInt("##sto", &simplify_.to, 0);
     simplify_.from = std::clamp(simplify_.from, 0, 100000), simplify_.to = std::clamp(simplify_.to, simplify_.from, 100000);
     ImGui::BeginDisabled(simplify_contacts_.empty());
+    ImGui::SetCursorPosX(label_w);
     changed |= ImGui::Checkbox("Keep frames where feet are planted", &simplify_planted_);
     ImGui::EndDisabled();
     ImGui::SetItemTooltip(simplify_contacts_.empty() ? "No foot contacts found in this animation"
@@ -102,7 +96,7 @@ void App::draw_simplify_dialog() {
         simplify_before_ = Clip{};
         ImGui::CloseCurrentPopup();
     };
-    if (ImGui::Button("OK") || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+    if (primary_button("OK") || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
         if (doc_.history.commit("Simplify Curves", doc_.clip())) mark_dirty();
         graph_.clip_replaced();  // the range's keys were replaced
         status("Simplified: " + count_noun(simplify_result_.before, "key") + " to " + std::to_string(simplify_result_.after));

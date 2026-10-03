@@ -35,7 +35,7 @@ Second Life decides each bone on its own:
 1. The animation with the highest priority on that bone wins it.
 2. On equal priority, the animation started most recently wins: the lowest one in the list.
 
-A bone that no clip keys shows no colour. With **Tint Bones** ticked (the default) and at least one clip added:
+A bone that no clip keys shows no colour. With **Tint bones** ticked (the default) and at least one clip added:
 
 - each row of the **Bones** list gets the winning clip's colour, with a bar at its right edge;
 - the bones in the view are drawn in that colour;

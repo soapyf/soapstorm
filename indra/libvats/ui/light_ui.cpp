@@ -36,7 +36,7 @@ bool App::set_light(const std::string& id) {
 }
 
 void App::draw_light_menu() {
-    if (!begin_menu_icon(nullptr, "Light")) return;
+    if (!begin_top_menu("Light")) return;
     const bool world = host_.world_view();
     auto use = [&](int i) { set_light(i < 0 ? "studio" : kLightIds[i]); };
     if (menu_item_icon(world ? icon::kWorld : icon::kStudio, world ? "The World's Own" : "Studio (Default)", nullptr, light_ < 0))

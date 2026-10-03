@@ -25,7 +25,8 @@ struct OnionFrame {
     float weight = 1;   // 1 nearest, falling towards 0 with distance (for opacity)
 };
 
-// The frames to show, nearest first on each side, inside 0..end_frame, never the current frame itself.
+// The frames to show, nearest first on each side, inside 0..end_frame, never the current frame itself. In a looping
+// clip, at a frame inside the loop, they wrap round it as playback does.
 std::vector<OnionFrame> onion_frames(const Clip& clip, double frame, const OnionSettings& s);
 
 struct OnionGhost {

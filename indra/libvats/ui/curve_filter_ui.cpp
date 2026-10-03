@@ -97,14 +97,9 @@ void GraphEditor::draw_filter_dialog(GraphContext& ctx) {
                             ImVec2(1, 1));
     ImGui::GetStyle().Colors[ImGuiCol_ModalWindowDimBg].w = 0;
     if (!ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
-    const float label_w = ImGui::GetFontSize() * 8, field_w = ImGui::GetFontSize() * 14;
-    auto label = [&](const char* text) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(text);
-        ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(field_w);
-    };
-    ImGui::Text("%zu curve(s). The ghost is the pose before filtering.", filter_ids_.size());
+    const float label_w = label_column(8), field_w = ImGui::GetFontSize() * 14;
+    auto label = [&](const char* text) { labelled_row(text, 8, 14); };
+    ImGui::Text("%s. The ghost is the pose before filtering.", count_noun(filter_ids_.size(), "curve").c_str());
     bool changed = false;
     label("Filter");
     changed |= filter_kind_ui(filter_.kind);
@@ -160,7 +155,7 @@ void GraphEditor::draw_filter_dialog(GraphContext& ctx) {
     if (ImGui::Button("OK") || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
         if (ctx.history.commit("Filter Curves", ctx.clip)) ctx.changed();
         selection_.clear();  // the range's keys were replaced
-        ctx.status(std::string(filter_name(filter_.kind)) + " filter on " + std::to_string(filter_ids_.size()) + " curve(s)");
+        ctx.status(std::string(filter_name(filter_.kind)) + " filter on " + count_noun(filter_ids_.size(), "curve"));
         close();
     }
     ImGui::SameLine();

@@ -61,7 +61,7 @@ round to its left.
 
 1. In the **Clips** window press **Duplicate**: a copy called `turn_left 2` is now the clip you edit.
 2. Press **Rename**, type `turn_right`, press **Enter**, and pick **Turning Right** as its **AO state**.
-3. In **Properties → Export**, tick **Export mirrored (left and right swapped)**.
+3. In **File → Export SL .anim...**, open **Also Write** and tick **Export mirrored (left and right swapped)**.
 
 The keys of `turn_right` are still the left turn's; only its exported file is mirrored. Check it with **View →
 Preview as SL Plays It**: the body plays the file as Second Life will, turned to its right, over a green ghost
@@ -86,7 +86,7 @@ Press **Export All Clips (.anim)** and pick a folder. Under **AO notecard**, pic
 | **Properties → Bone**, frame 0 | **mHead** Rotation Z `20.0°`, **mChest** `8.0°`, **mPelvis** `4.0°` |
 | **Properties → Animation** | **Last frame** `24`, **Loop** ticked, **Priority** `3` |
 | **Tools → Clips (AO Sets)...** | `turn_left` (**Turning Left**), `turn_right` (**Turning Right**) |
-| **Properties → Export** of `turn_right` | **Export mirrored (left and right swapped)** ticked |
+| **Export SL .anim → Also Write** of `turn_right` | **Export mirrored (left and right swapped)** ticked |
 | **View → Preview as SL Plays It** on `turn_right` | the body turned to its right, the ghost to its left |
 | **Tools → Animation Check...** | no priority finding: the clips' AO states are turns, and an AO plays its turns instead of its stand, so 3 is enough (see [[Run cycle production]]) |
 

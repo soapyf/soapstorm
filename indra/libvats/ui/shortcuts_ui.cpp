@@ -15,6 +15,7 @@
 #include "icons.h"
 #include "imgui.h"
 #include "theme.h"
+#include "widgets.h"
 
 namespace vats {
 namespace {
@@ -40,7 +41,10 @@ const std::vector<Group>& groups() {
         {"Playback", {"play", "next_frame", "prev_frame", "next_key", "prev_key", "start", "end"}},
         {"View",
          {"view_front", "view_back", "view_right", "view_left", "view_top", "view_ortho", "frame_selected", "frame_all",
-          "zoom_in", "zoom_out", "reset_camera", "graph", "dope_sheet", "reset_layout"}},
+          "zoom_in", "zoom_out", "reset_camera", "graph", "dope_sheet", "maximise_panel", "reset_layout"}},
+        {"View > Workspaces",
+         {"workspace_pose", "workspace_animate", "workspace_face", "workspace_rig", "workspace_export", "workspace_all",
+          "workspace_next", "workspace_prev"}},
         {"View > Camera > Camera Views",
          {"cam_1", "cam_2", "cam_3", "cam_4", "store_cam_1", "store_cam_2", "store_cam_3", "store_cam_4"}},
         {"View > Target Ghost", {"target_show", "target_load", "target_clear"}},
@@ -48,8 +52,10 @@ const std::vector<Group>& groups() {
          {"select_all", "select_keyed_frame", "select_all_keyed", "select_none", "select_parent", "select_child",
           "next_sibling", "prev_sibling"}},
         {"Tools",
-         {"tool_select", "tool_move", "tool_rotate", "tool_scale", "orientation", "snap_toggle", "ik_toggle",
-          "follow_target", "pin_world", "pin_bone", "unpin", "delete_pin", "foot_lock", "hands"}},
+         {"pie_menu", "tool_select", "tool_move", "tool_rotate", "tool_scale", "orientation", "auto_ik", "follow_through",
+          "avatar_physics", "respect_joint_limits", "snap_toggle", "ik_toggle", "follow_target", "pin_world", "bind_to", "pin_bone",
+          "unpin", "delete_pin", "sit_on_seat", "foot_lock", "hands"}},
+        {"Rig", {"edit_limits"}},
         {"Timeline (right-click)", {"remove_audio", "tap_beat", "clear_beats"}},
         {"Help", {"help_contents", "tutorials", "help", "welcome", "about"}},
     };
@@ -85,6 +91,8 @@ bool matches(const std::string& text, const std::string& search) {
     return true;
 }
 
+bool g_nav_was_on = false;  // keyboard navigation is off while a key is captured (arrows, Space, Enter)
+
 std::string keys_text(ImGuiKeyChord k) {
     if (!k) return "";
     return key_label(k) + (needs_numpad(k) ? " numpad keypad number pad" : "");
@@ -98,113 +106,23 @@ void App::set_action_keys(const std::string& id, const KeyPair& keys) {
     save_settings();
 }
 
-void App::draw_shortcuts() {
-    ImGuiIO& io = ImGui::GetIO();
-    static bool nav_was_on = false;  // keyboard navigation is off while a key is captured (arrows, Space, Enter)
-    auto end_capture = [&] {
-        if (std::exchange(nav_was_on, false)) io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-        capture_slot_ = -1;
-        capture_id_.clear();
-        skip_shortcuts_ = true;  // the key that ended it runs nothing
-    };
-    if (!show_shortcuts_) {
-        if (capture_slot_ != -1) end_capture();
-        return;
-    }
-    const bool was_capturing = capture_slot_ != -1;  // the Esc that ends a capture does not close the window
-    ImGui::SetNextWindowSize(window_size(46, 46), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
-    if (!ImGui::Begin("Keyboard Shortcuts", &show_shortcuts_, ImGuiWindowFlags_NoDocking)) return ImGui::End();
-
+// Every command with its keys, a section per menu (the menus' order). Editable: click a key to capture a new one,
+// and a reset per changed command; read-only (Help > Controls): the commands that have keys.
+void App::draw_shortcut_table(bool editable, const char* search, float height) {
     const float fs = ImGui::GetFontSize();
     const ImU32 accent = accent_colour();
     const ImVec4 dim = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
-    auto find_action = [&](const std::string& id) -> Action* {
-        for (auto& [aid, a] : actions_)
-            if (aid == id) return &a;
-        return nullptr;
-    };
-
-    // A captured key: Esc cancels, Backspace clears, anything else (with its modifiers) binds or asks first.
-    if (capture_slot_ >= 0) {
-        skip_shortcuts_ = true;
-        if (ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1)) end_capture();  // clicking elsewhere cancels
-        for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END && capture_slot_ >= 0; ++k) {
-            if (!bindable_key(ImGuiKey(k)) || !ImGui::IsKeyPressed(ImGuiKey(k), false)) continue;
-            const ImGuiKeyChord mods = io.KeyMods & (ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiMod_Alt | ImGuiMod_Super);
-            Action* a = find_action(capture_id_);
-            if (!a || (k == ImGuiKey_Escape && !mods)) {
-                end_capture();
-                break;
-            }
-            KeyPair keys = {a->key, a->key2};
-            const ImGuiKeyChord chord = k == ImGuiKey_Backspace && !mods ? 0 : mods | k;
-            keys[capture_slot_] = chord;
-            std::vector<std::pair<std::string, KeyPair>> bindings;
-            for (auto& [aid, b] : actions_) bindings.push_back({aid, {b.key, b.key2}});
-            auto [other, slot] = find_conflict(bindings, capture_id_, chord);
-            if (!other.empty()) {
-                conflict_with_ = other, conflict_slot_ = slot, conflict_chord_ = chord;
-                ImGui::OpenPopup("Shortcut in use");
-                if (std::exchange(nav_was_on, false)) io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-                capture_slot_ = -(capture_slot_ + 2);  // -2 / -3: waiting on the popup, the slot kept
-            } else {
-                set_action_keys(capture_id_, keys);
-                status(std::string(a->label) + ": " + (chord ? key_label(chord) : "no key"));
-                end_capture();
-            }
-        }
-    }
-
-    // Search, Reset All.
-    const char* reset_all = "Reset All";
-    const float reset_w = ImGui::CalcTextSize(reset_all).x + fs * 1.6f + ImGui::GetStyle().FramePadding.x * 2 + 8;
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextColored(dim, "%s", icon::kFind);
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - reset_w - ImGui::GetStyle().ItemSpacing.x);
-    if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
-    ImGui::InputTextWithHint("##search", "Search commands, menus or keys, e.g. numpad", shortcut_search_, sizeof shortcut_search_);
-    ImGui::SameLine();
-    ImGui::BeginDisabled(settings_.key_overrides.empty());
-    if (icon_label_button(icon::kUnbake, reset_all, "Every command back to the preset's keys")) ImGui::OpenPopup("Reset all shortcuts?");
-    ImGui::EndDisabled();
-
-    // The preset, what is changed, and a way to the keys a keyboard without a number pad cannot press.
-    int numpad = 0;
-    for (auto& [id, a] : actions_) numpad += needs_numpad(a.key) + needs_numpad(a.key2);
-    if (capture_slot_ >= 0) {
-        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(accent), "Press a key\xE2\x80\xA6 (Esc cancels, Backspace clears)");
-    } else {
-        const size_t n = settings_.key_overrides.size();
-        ImGui::TextColored(dim, "Preset: %s  \xC2\xB7  %s", preset_label(settings_.preset),
-                           n ? (std::to_string(n) + (n == 1 ? " command changed" : " commands changed")).c_str()
-                             : "no changes");
-        if (numpad > 0) {
-            ImGui::SameLine();
-            ImGui::TextColored(dim, " \xC2\xB7 ");
-            ImGui::SameLine();
-            ImGui::PushStyleColor(ImGuiCol_Text, ui::kKey);
-            const std::string show = std::to_string(numpad) + (numpad == 1 ? " key needs" : " keys need") + " a number pad";
-            if (ImGui::SmallButton(show.c_str())) std::snprintf(shortcut_search_, sizeof shortcut_search_, "numpad");
-            ImGui::PopStyleColor();
-            ImGui::SetItemTooltip("Show them, to give them keys your keyboard has");
-        }
-    }
-    ImGui::Spacing();
-
-    // The table, one section per menu.
+    ImGuiIO& io = ImGui::GetIO();
     const float key_w = fs * 8.5f, reset_col = ImGui::GetFrameHeight();
     const ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_BordersOuterH |
                                   ImGuiTableFlags_PadOuterX;
-    const float table_h = -ImGui::GetTextLineHeightWithSpacing() * 1.6f;
-    if (ImGui::BeginTable("##shortcuts", 5, flags, ImVec2(0, table_h))) {
+    if (ImGui::BeginTable("##shortcuts", editable ? 5 : 4, flags, ImVec2(0, height))) {
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableSetupColumn("##icon", ImGuiTableColumnFlags_WidthFixed, fs * 1.3f);
         ImGui::TableSetupColumn("Command", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("Shortcut", ImGuiTableColumnFlags_WidthFixed, key_w);
         ImGui::TableSetupColumn("Alternate", ImGuiTableColumnFlags_WidthFixed, key_w);
-        ImGui::TableSetupColumn("##reset", ImGuiTableColumnFlags_WidthFixed, reset_col);
+        if (editable) ImGui::TableSetupColumn("##reset", ImGuiTableColumnFlags_WidthFixed, reset_col);
         ImGui::TableHeadersRow();
 
         std::vector<size_t> order(actions_.size());  // the actions in menu order
@@ -218,7 +136,7 @@ void App::draw_shortcuts() {
                 auto& [id, a] = actions_[row];
                 const char* menu = menu_of(id);
                 const std::string text = std::string(a.label) + " " + menu + " " + keys_text(a.key) + " " + keys_text(a.key2);
-                if (!matches(text, shortcut_search_)) continue;
+                if (!matches(text, search) || (!editable && !a.key && !a.key2)) continue;
                 if (menu != last_menu) {  // the menu's name, once it has a row to show
                     last_menu = menu;
                     ImGui::TableNextRow(ImGuiTableRowFlags_None, ImGui::GetFrameHeight());
@@ -263,10 +181,13 @@ void App::draw_shortcuts() {
                                                          : numpad_key ? ui::kKey
                                                          : k ? ImGui::GetColorU32(ImGuiCol_Text) : ImGui::GetColorU32(ImGuiCol_TextDisabled));
                     ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.5f, 0.5f));
-                    if (ImGui::Button((label + "###k" + char('0' + s)).c_str(), ImVec2(-FLT_MIN, 0)) && capture_slot_ < 0 &&
-                        !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
+                    if (!editable) ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true), ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetColorU32(ImGuiCol_FrameBg)),
+                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetColorU32(ImGuiCol_FrameBg));
+                    const bool clicked = ImGui::Button((label + "###k" + char('0' + s)).c_str(), ImVec2(-FLT_MIN, 0));
+                    if (!editable) ImGui::PopStyleColor(2), ImGui::PopItemFlag();
+                    if (editable && clicked && capture_slot_ < 0 && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
                         capture_id_ = id, capture_slot_ = s;
-                        nav_was_on = io.ConfigFlags & ImGuiConfigFlags_NavEnableKeyboard;
+                        g_nav_was_on = io.ConfigFlags & ImGuiConfigFlags_NavEnableKeyboard;
                         io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableKeyboard;
                     }
                     ImGui::PopStyleVar();
@@ -274,13 +195,13 @@ void App::draw_shortcuts() {
                     if (capturing) ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), accent,
                                                                        ImGui::GetStyle().FrameRounding, 0, 1.5f);
                     else if (numpad_key)
-                        ImGui::SetItemTooltip("A number pad key: keyboards without a number pad cannot press it. Click to "
-                                              "change it.");
-                    else
+                        ImGui::SetItemTooltip("A number pad key: keyboards without a number pad cannot press it.%s",
+                                              editable ? " Click to change it." : "");
+                    else if (editable)
                         ImGui::SetItemTooltip("Click, then press the new key");
                 }
-                ImGui::TableSetColumnIndex(4);
-                if (changed && icon_small_button("reset", icon::kUnbake, "Back to the preset's keys")) {
+                if (editable) ImGui::TableSetColumnIndex(4);
+                if (editable && changed && icon_small_button("reset", icon::kUnbake, "Back to the preset's keys")) {
                     settings_.key_overrides.erase(id);
                     apply_preset();
                     save_settings();
@@ -291,10 +212,109 @@ void App::draw_shortcuts() {
         if (!shown) {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(1);
-            ImGui::TextColored(dim, "No command matches \"%s\"", shortcut_search_);
+            ImGui::TextColored(dim, "No command matches \"%s\"", search);
         }
         ImGui::EndTable();
     }
+}
+
+void App::draw_shortcuts() {
+    ImGuiIO& io = ImGui::GetIO();
+        auto end_capture = [&] {
+        if (std::exchange(g_nav_was_on, false)) io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        capture_slot_ = -1;
+        capture_id_.clear();
+        skip_shortcuts_ = true;  // the key that ended it runs nothing
+    };
+    if (!show_shortcuts_) {
+        if (capture_slot_ != -1) end_capture();
+        return;
+    }
+    const bool was_capturing = capture_slot_ != -1;  // the Esc that ends a capture does not close the window
+    ImGui::SetNextWindowSize(window_size(46, 46), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
+    if (!ImGui::Begin("Keyboard Shortcuts", &show_shortcuts_, ImGuiWindowFlags_NoDocking)) return ImGui::End();
+
+    const float fs = ImGui::GetFontSize();
+    const ImU32 accent = accent_colour();
+    const ImVec4 dim = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+    auto find_action = [&](const std::string& id) -> Action* {
+        for (auto& [aid, a] : actions_)
+            if (aid == id) return &a;
+        return nullptr;
+    };
+
+    // A captured key: Esc cancels, Backspace clears, anything else (with its modifiers) binds or asks first.
+    if (capture_slot_ >= 0) {
+        skip_shortcuts_ = true;
+        if (ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1)) end_capture();  // clicking elsewhere cancels
+        for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END && capture_slot_ >= 0; ++k) {
+            if (!bindable_key(ImGuiKey(k)) || !ImGui::IsKeyPressed(ImGuiKey(k), false)) continue;
+            const ImGuiKeyChord mods = io.KeyMods & (ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiMod_Alt | ImGuiMod_Super);
+            Action* a = find_action(capture_id_);
+            if (!a || (k == ImGuiKey_Escape && !mods)) {
+                end_capture();
+                break;
+            }
+            KeyPair keys = {a->key, a->key2};
+            const ImGuiKeyChord chord = k == ImGuiKey_Backspace && !mods ? 0 : mods | k;
+            keys[capture_slot_] = chord;
+            std::vector<std::pair<std::string, KeyPair>> bindings;
+            for (auto& [aid, b] : actions_) bindings.push_back({aid, {b.key, b.key2}});
+            auto [other, slot] = find_conflict(bindings, capture_id_, chord);
+            if (!other.empty()) {
+                conflict_with_ = other, conflict_slot_ = slot, conflict_chord_ = chord;
+                ImGui::OpenPopup("Shortcut in use");
+                if (std::exchange(g_nav_was_on, false)) io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+                capture_slot_ = -(capture_slot_ + 2);  // -2 / -3: waiting on the popup, the slot kept
+            } else {
+                set_action_keys(capture_id_, keys);
+                status(std::string(a->label) + ": " + (chord ? key_label(chord) : "no key"));
+                end_capture();
+            }
+        }
+    }
+
+    // Search, Reset All.
+    const char* reset_all = "Reset All";
+    const float reset_w = ImGui::CalcTextSize(reset_all).x + ImGui::GetStyle().FramePadding.x * 2;
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextColored(dim, "%s", icon::kFind);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - reset_w - ImGui::GetStyle().ItemSpacing.x);
+    if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+    filter_input("##search", "Search commands, menus or keys, e.g. numpad", shortcut_search_, sizeof shortcut_search_);
+    ImGui::SameLine();
+    ImGui::BeginDisabled(settings_.key_overrides.empty());
+    if (ImGui::Button(reset_all)) ImGui::OpenPopup("Reset all shortcuts?");
+    ImGui::EndDisabled();
+    ImGui::SetItemTooltip("%s", settings_.key_overrides.empty() ? "Every key is the preset's already"
+                                                                 : "Every command back to the preset's keys");
+
+    // The preset, what is changed, and a way to the keys a keyboard without a number pad cannot press.
+    int numpad = 0;
+    for (auto& [id, a] : actions_) numpad += needs_numpad(a.key) + needs_numpad(a.key2);
+    if (capture_slot_ >= 0) {
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(accent), "Press a key\xE2\x80\xA6 (Esc cancels, Backspace clears)");
+    } else {
+        const size_t n = settings_.key_overrides.size();
+        ImGui::TextColored(dim, "Preset: %s  \xC2\xB7  %s", preset_label(settings_.preset),
+                           n ? (std::to_string(n) + (n == 1 ? " command changed" : " commands changed")).c_str()
+                             : "no changes");
+        if (numpad > 0) {
+            ImGui::SameLine();
+            ImGui::TextColored(dim, " \xC2\xB7 ");
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, ui::kKey);
+            const std::string show = std::to_string(numpad) + (numpad == 1 ? " key needs" : " keys need") + " a number pad";
+            if (ImGui::SmallButton(show.c_str())) std::snprintf(shortcut_search_, sizeof shortcut_search_, "numpad");
+            ImGui::PopStyleColor();
+            ImGui::SetItemTooltip("Show them, to give them keys your keyboard has");
+        }
+    }
+    ImGui::Spacing();
+
+    draw_shortcut_table(true, shortcut_search_, -ImGui::GetTextLineHeightWithSpacing() * 1.6f);
     ImGui::Spacing();
     if (!host_.world_view())
         hint("Mouse controls follow the preset (Edit > Preferences...). Your keys stay when you change the preset.");

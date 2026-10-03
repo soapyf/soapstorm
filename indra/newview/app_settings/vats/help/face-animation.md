@@ -37,6 +37,19 @@ Type a name under the sliders and click **Save Face Pose**. The pose goes to **I
 `face`, and applies like any pose, mirrored too (see [[Pose library]]). It holds every face bone's rotation at the
 frame and, with **Move face bones** on, the offsets of the bones the table moves.
 
+### Face poses from shape keys
+
+A mesh body with shape keys (visemes such as `vrc.v_aa`, eyelids, smiles) can turn each into a face pose, the way
+Second Life can play it: SL moves bones, never shape keys. In **Inventory → Bodies → Shape Keys**, right-click a face
+key's slider and choose **Make Face Pose from This Key** (see [[Rig any model#Parts and shape keys]]). VATs fits the Bento
+face bones the key's vertices are weighted to, turning them and, with **Move face bones** on, moving them, until the
+skinned mesh is as close as it gets to the key at full strength. The pose goes to **Inventory → Poses** under the
+key's name, kind `face`: apply it, key it, or tick it in **Export Expression Pack...** like any face pose.
+
+How close it gets depends on the weights. The status bar says how much of the key the bones explain and how far off
+the vertices are, in millimetres. A key on vertices that only **mHead** carries cannot be fitted at all, and VATs says
+so: such a face moves by its shape keys alone, and needs weights to the Bento face bones before SL can show it.
+
 ### Exporting an expression pack
 
 **Export Expression Pack...**, under **Save Face Pose**, writes one short `.anim` per expression, ready for an
@@ -100,10 +113,10 @@ the actor chosen in **Other actor**, on every frame: the head turns half-way (at
 | Setting | Default | Effect |
 |---|---|---|
 | **Head** | **SL default head** | the face table the sliders, the layer and [[Face tracking]] use |
-| **Move face bones** | off | also key face-bone offsets; the same setting as in **Motion Capture** |
+| **Move face bones** | off | also key face-bone offsets; face tracking in **Motion Capture** follows it too |
 
-With **Move face bones** off, shapes that only move bones (most brow, cheek, smile and lip shapes) are greyed
-out, because they have nothing to key.
+With **Move face bones** off, shapes that only move bones (smiles, frowns, puckers, cheeks and most lip
+shapes) are greyed out, because they have nothing to key.
 
 VATs ships one head, **SL default head** (`data/retarget/face-arkit.json`). Your own heads are JSON files in
 the `faces` folder of the data folder (see [[Projects and files#Data folders]]):

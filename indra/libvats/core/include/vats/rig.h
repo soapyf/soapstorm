@@ -64,8 +64,12 @@ struct Evaluation {
     std::vector<LimbState> limbs;  // one per Rig::limbs()
 };
 
+struct RigConstraints;
+struct ClampReport;
+
 // curves -> FK -> IK (Spine, then arms/legs/hind legs/wings, then fingers) -> pins (AM-58, AM-81).
-Evaluation evaluate(const Rig& rig, const Clip& clip, double frame, const Shape* shape);
+Evaluation evaluate(const Rig& rig, const Clip& clip, double frame, const Shape* shape,
+                    const RigConstraints* constraints = nullptr);
 
 // The pole AM-57 derives from a pose, in world space.
 Vec3 derive_pole(const Rig& rig, int limb, const std::vector<Xform>& globals);
@@ -78,9 +82,10 @@ void key_blend(Clip& clip, const Rig& rig, double frame, int limb, double value)
 // pole keys uses the same pole.
 void switch_to_ik(Clip& clip, const Rig& rig, double frame, int limb, const Shape* shape);
 void switch_to_fk(Clip& clip, const Rig& rig, double frame, int limb, const Shape* shape);  // AM-56, no jump
-// Keys the 9 controller channels (6 for the spine); the pole keeps its evaluated value (AM-61).
+// Keys the 9 controller channels (6 for the spine); the pole keeps its evaluated value (AM-61). The limb's joints
+// its IK would turn past their limits (evaluate holds them there) go into report.
 void key_limb_target(Clip& clip, const Rig& rig, double frame, int limb, const Xform& world_target,
-                     const Shape* shape);
+                     const Shape* shape, const RigConstraints* constraints = nullptr, ClampReport* report = nullptr);
 // Keys the 9 controller channels; the target keeps its evaluated value.
 void key_limb_pole(Clip& clip, const Rig& rig, double frame, int limb, const Vec3& world_pole, const Shape* shape);
 
@@ -118,6 +123,10 @@ struct AutoIkChain {
     int turning = 0;         // how many of bones turn
     int longest = 0;         // the most bones that turn a chain from this joint can have now
     std::string why;         // why there is no chain, when bones is empty
+    // FP-2: a point grabbed on the body, in end's own frame. With grab_on, end is the last of bones and turns too,
+    // and this point, not end's head, follows the pointer.
+    bool grab_on = false;
+    Vec3 grab;
 };
 // AI-2: how many bones a drag of node turns by default: an arm to its collar, a leg to its hip, a hind leg, wing, tail
 // or finger to its first bone; any other joint 2 (fewer when it has fewer above it). 0: none (the pelvis, attachment
@@ -137,13 +146,25 @@ std::vector<Vec3> auto_ik_hinges(const Rig& rig, const Shape* shape);
 // keeping the chain's root joint where it is. Damped least squares from pose: the smallest turn that gets there,
 // hinges bend only about their hinge and never through straight to the other side. A chain longer than the joint's
 // default (auto_ik_default_length) reaches with those bones first, and the ones above only take what is left.
+// IK local rotations (rest included) of root, mid and end (02 section 3.7).
+void solve_two_bone(const Skeleton& skel, const LimbInfo& l, IkSolve mode, const Pose& pose,
+                    const std::vector<Xform>& g, const Shape* shape, const Xform& target, const Vec3& pole,
+                    Quat out[3], const RigConstraints* constraints = nullptr);
+
+// Limb solve for VATs rigs, using Auto IK and pole swivel.
+void solve_limb_vats(const Rig& rig, int limb_index, const Shape* shape, const Xform& target, const Vec3& pole,
+                     const Pose& input_pose, const std::vector<Xform>& g, Quat out[3],
+                     const RigConstraints* constraints = nullptr, ClampReport* report = nullptr);
+
 void solve_auto_ik(const Skeleton& skel, const Shape* shape, const AutoIkChain& chain, const std::vector<Vec3>& hinges,
-                   const Vec3& target, Pose& pose);
+                   const Vec3& target, Pose& pose, const RigConstraints* constraints = nullptr,
+                   ClampReport* report = nullptr);
 // Keys chain's bones at frame with the solve for target from start's pose, and gives the solved pose in solved. A drag
 // solves each step from the last one's pose (solved), so the chain follows the pointer's path; from the evaluation at
 // the press, a target where the joint was keys the pose it had.
 std::vector<std::string> key_auto_ik(Clip& clip, const Rig& rig, double frame, const AutoIkChain& chain,
                                      const Evaluation& start, const Vec3& target, const Shape* shape,
-                                     Pose* solved = nullptr);
+                                     Pose* solved = nullptr, const RigConstraints* constraints = nullptr,
+                                     ClampReport* report = nullptr);
 
 }  // namespace vats

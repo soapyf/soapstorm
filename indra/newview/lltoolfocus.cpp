@@ -49,6 +49,7 @@
 #include "lltoolmgr.h"
 #include "llviewercamera.h"
 #include "llviewerobject.h"
+#include "fsvatshost.h"
 #include "llviewerregion.h" // <SS:Nexii> alt-cam reach: the region water plane fallback in pickCallback
 #include "llviewerwindow.h"
 #include "llvoavatarself.h"
@@ -164,6 +165,22 @@ void LLToolCamera::pickCallback(const LLPickInfo& pick_in)
     camera->mMouseDownY = pick_info.mMousePt.mY;
 
     gViewerWindow->moveCursorToCenter();
+
+    // <SS:VATs> The VATs editor's mesh body in your avatar's place (View > Body) is drawn by the editor, not a world
+    // object: an alt-click on it focuses on it, when it is nearer than what the pick found. [FSVATsEditor::bodyUnderPointer]
+    if (pick_info.mKeyMask & MASK_ALT)
+    {
+        LLVector3d body;
+        if (FSVATsEditor::bodyUnderPointer(pick_info.mMousePt.mX, pick_info.mMousePt.mY, body))
+        {
+            const LLVector3d cam = gAgentCamera.getCameraPositionGlobal();
+            if (pick_info.mPosGlobal.isExactlyZero() || (body - cam).magVec() < (pick_info.mPosGlobal - cam).magVec())
+            {
+                pick_info.mPosGlobal = body;
+                pick_info.mObjectID.setNull();  // the point, not the object behind it
+            }
+        }
+    }
 
     // Potentially recenter if click outside rectangle
     LLViewerObject* hit_obj = pick_info.getObject();

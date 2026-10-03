@@ -9,9 +9,19 @@
 #include <utility>
 #include <vector>
 
+#include "vats/ragdoll.h"
 #include "vats/rig.h"
 
 namespace vats {
+
+struct Hit {
+    double depth = -1e9;
+    Vec3 push;  // moves the capsule out of the other
+};
+
+Hit capsule_hit(const RagdollCapsule& A, const RagdollCapsule& B);
+Hit volume_hit(const RagdollCapsule& A, const Xform& g, const Vec3& s);
+std::vector<RagdollCapsule> contact_hull(const Skeleton& skel, const std::vector<Xform>& globals);
 
 struct SelfContact {
     int a = -1, b = -1;  // ragdoll joints (capsules), a < b

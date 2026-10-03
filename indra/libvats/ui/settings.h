@@ -34,7 +34,8 @@ struct CameraView {
 };
 
 struct Settings {
-    Preset preset = Preset::Industry;
+    Preset preset = Preset::SecondLife;
+    bool reduce_motion = false;
     bool emulate_3_button = false;
     float interface_size = 1.0f;  // on top of the display scale
     float gizmo_size = 90;
@@ -52,7 +53,15 @@ struct Settings {
     bool viewer_show_others = false;  // in the viewer: other avatars stay shown while the editor is open (spec 09 U5)
     bool viewer_keep_swap = true;     // in the viewer: View > Body's swapped body stays in the real-avatar modes (build 34)
     bool mirror_centre = false;        // PT-1: live mirror makes centre bones symmetric in place
+    std::string bone_style;            // "stick" or "hidden"; "" = stick (default)
     bool auto_ik = true;               // 08 AI-1: a Move drag of a bone pulls the bones above it by IK
+    bool hide_unused_bones = true;     // View > Bones > Hide Unused Bones (on by default): a mesh body's unweighted bones
+    bool plain_bone_names = true;      // View > Bones > Plain Names: "Left Thigh" beside mHipLeft (off for those who know SL's)
+    bool follow_through = true;        // 08 FP-4: Tools > Follow-Through While Posing
+    bool show_weights = true;          // RM-10: View > Bones > Show Weights of Selected (the heat map on the body)
+    bool avatar_physics = false;       // RM-10: Tools > Avatar Physics Preview (SL's bounce on BELLY, BUTT and the PECs)
+    Json physics = Json::object();     // its settings, read and written by dynamics_ui.cpp
+    bool respect_joint_limits = true;  // Spec 08 JL: Tools > Respect Joint Limits
     bool scratch_existing_only = false;  // PT-2: a scratch pose keys only channels that already have keys
     std::string scratch_scrub = "ask";   // PT-2: scrubbing off a scratch pose: "ask", "keep" or "discard"
     std::string picker_style = "silhouette";  // 08 PK-3: the Picker's backdrop, "silhouette" or "avatar"
@@ -68,6 +77,12 @@ struct Settings {
     // The user's own shortcuts over the preset (ui/keymap.h): action id -> both slots, "" for none.
     std::map<std::string, std::array<std::string, 2>> key_overrides;
     Json mocap = Json::object();  // Motion Capture and face-tracking choices, read and written by mocap_ui.cpp
+    // Workspaces (a trial, ui/workspaces.h): on with Pose for a new user; a settings file from before them keeps
+    // All with the tabs off, so nobody's layout changes under them.
+    bool workspaces = true;
+    std::string workspace = "pose";
+    std::map<std::string, std::string> workspace_layouts;  // each left workspace's arrangement: ImGui's .ini text
+    std::map<std::string, std::vector<std::string>> workspace_extra;  // panels brought into a workspace, by title
 
     // file: the host's settings.json (ui::Paths::settings; --data-dir puts it there too, IO-53).
     void load(const std::string& file);

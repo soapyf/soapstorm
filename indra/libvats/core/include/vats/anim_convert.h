@@ -9,6 +9,7 @@
 
 #include "vats/anim_file.h"
 #include "vats/clip.h"
+#include "vats/rig_constraints.h"
 #include "vats/skeleton.h"
 
 namespace vats {
@@ -18,6 +19,7 @@ struct AnimExportOptions {
     double reduce_pos_m = 0.0005;
     int max_gap = 60;              // frames between kept keys
     const Shape* shape = nullptr;  // body IK and pins are baked against (IO-13); null = no shape
+    const RigConstraints* constraints = nullptr;  // joint limits IK is solved within, as the view shows it (JL)
     ExternalTarget external;       // cross-actor pin targets (GR-4); empty = those pins are skipped
     // The joint positions non-pelvis position keys are written from: the skeleton's plus this shape's offsets
     // (the worn avatar with its mesh joint positions, "Your avatar"); null = the skeleton's defaults (IO-11).
@@ -38,6 +40,11 @@ struct AnimExportOptions {
     // sinking" (mSkull counter-keys that keep SL's height at rest height). Their notes join the warnings.
     bool end_at_rest = false;
     bool hold_without_sinking = false;
+    // Reset joint positions: keys position at rest value on first and last frame for the chosen joints.
+    bool reset_positions = false;
+    std::vector<std::string> reset_position_joints;
+    // The body whose rest the reset keys hold: a mesh body bake shape's own joints; null = positions' (above).
+    const Shape* reset_shape = nullptr;
 };
 
 struct AnimExportResult {

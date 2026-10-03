@@ -9,6 +9,9 @@
 #include <sstream>
 
 #include "app.h"
+#include "icons.h"
+#include "icon_button.h"
+#include "theme.h"
 #include "imgui.h"
 #include "widgets.h"
 #include "vats/batch_retarget.h"
@@ -72,30 +75,30 @@ std::vector<RigTable> App::retarget_tables() const {
 // RT-7, RT-9 and RT-11: the settings the Retarget dialog and Batch Retarget share. heel_toe and to_ground (08 FC):
 // shown when given (the dialog; Batch Retarget uses the foot clean-up's defaults).
 void retarget_settings_ui(RetargetOptions& opt, FitOptions& fit, bool& lock_feet, bool* heel_toe, bool* to_ground) {
-    ImGui::Checkbox("Rest Pose from Frame 0", &opt.rest_from_frame0);
+    ImGui::Checkbox("Rest pose from frame 0", &opt.rest_from_frame0);
     ImGui::SetItemTooltip("Use when the file's own rest pose is wrong or missing: frame 0 must then be a T-pose or A-pose");
     ImGui::SameLine();
-    ImGui::Checkbox("Clean Up Foot Sliding", &lock_feet);
+    ImGui::Checkbox("Clean up foot sliding", &lock_feet);
     ImGui::SetItemTooltip("Holds planted feet still with leg IK where the source had them on the ground");
     if (heel_toe && to_ground) {
         ImGui::BeginDisabled(!lock_feet);  // a row of its own: beside the two above it runs past the dialog's edge
-        ImGui::Checkbox("Heel and Toe", heel_toe);
+        ImGui::Checkbox("Heel and toe", heel_toe);
         ImGui::SetItemTooltip("Heel and toe land and leave separately (a heel-toe roll); off, the ankle alone");
         ImGui::SameLine();
-        ImGui::Checkbox("Put Feet on the Ground", to_ground);
+        ImGui::Checkbox("Put feet on the ground", to_ground);
         ImGui::SetItemTooltip("First moves the hips so the lowest foot touches the floor: fixes a take that floats or sinks");
         ImGui::EndDisabled();
     }
     ImGui::TextUnformatted("To fit SL's limits, VATs may:");
-    ImGui::Checkbox("Reduce Keys", &fit.allow_tolerance);
+    ImGui::Checkbox("Reduce keys", &fit.allow_tolerance);
     ImGui::SameLine();
-    ImGui::Checkbox("Lower the Frame Rate", &fit.allow_fps);
+    ImGui::Checkbox("Lower the frame rate", &fit.allow_fps);
     ImGui::SameLine();
-    ImGui::Checkbox("Drop Face", &fit.allow_drop_face);
+    ImGui::Checkbox("Drop face", &fit.allow_drop_face);
     ImGui::SameLine();
-    ImGui::Checkbox("Drop Finger Tips", &fit.allow_drop_fingers);
+    ImGui::Checkbox("Drop finger tips", &fit.allow_drop_fingers);
     ImGui::SameLine();
-    ImGui::Checkbox("Drop Toes", &fit.allow_drop_toes);
+    ImGui::Checkbox("Drop toes", &fit.allow_drop_toes);
 }
 
 // RT-10.4: clip in consecutive parts that each fit SL's limits (split_to_fit), saved as projects <stem>_part<N>.vat
@@ -142,7 +145,7 @@ std::string App::save_parts(std::vector<Clip> parts, const std::string& source, 
 
 // RT-10.4: a clip that still does not fit is split into parts saved beside the source, or trimmed.
 void App::draw_retarget_split(RetargetUi& ui) {
-    ImGui::SeparatorText("Too long or too big for one upload");
+    subheading("Too long or too big for one upload");
     auto split = [&](bool overwrite) {
         split_into_parts(ui.raw, ui.path, ui.fit, overwrite, ui.confirm_split, " Allow more trades, or trim.");
     };
@@ -255,9 +258,9 @@ void App::draw_retarget_dialog() {
             ImGui::PushID(sl.c_str());
             if (ImGui::BeginCombo("##src", j >= 0 ? ui.src.joints[j].name.c_str() : "(none)", ImGuiComboFlags_HeightLarge)) {
                 if (ImGui::Selectable("(none)", j < 0)) ui.map.erase(sl), ui.table = -1;
-                for (int k = 0; k < int(ui.src.joints.size()); ++k) {  // source files can repeat a joint name
-                    ImGui::PushID(k);
-                    if (ImGui::Selectable(ui.src.joints[k].name.c_str(), k == j)) ui.map[sl] = k, ui.table = -1;
+                for (int ji = 0; ji < int(ui.src.joints.size()); ++ji) {  // source files can repeat a joint name
+                    ImGui::PushID(ji);
+                    if (ImGui::Selectable(ui.src.joints[ji].name.c_str(), ji == j)) ui.map[sl] = ji, ui.table = -1;
                     ImGui::PopID();
                 }
                 ImGui::EndCombo();
@@ -272,7 +275,7 @@ void App::draw_retarget_dialog() {
     retarget_settings_ui(ui.opt, ui.fit, ui.lock_feet, &ui.heel_toe, &ui.to_ground);
 
     ImGui::BeginDisabled(!usable);
-    if (ImGui::Button(ui.imported ? "Import Again" : "Import")) guarded(ui.path, [&] {
+    if (primary_button(ui.imported ? "Import Again" : "Import", "", 0, icon::kImport)) guarded(ui.path, [&] {
         ui.opt.shape = ui.fit.shape = export_shape();
         RetargetResult r = retarget(skel_, ui.src, ui.map, ui.opt);
         if (ui.lock_feet) {
@@ -301,6 +304,7 @@ void App::draw_retarget_dialog() {
         status("Retargeted " + base_name(ui.path) + (fit.fits ? "" : " (over SL's limits: see the report)"));
     });
     ImGui::EndDisabled();
+    if (!usable) ImGui::SetItemTooltip("Pick source bones for %s first (the mapping above)", join(missing, ", ").c_str());
     ImGui::SameLine();
     if (ImGui::Button(ui.imported ? "Close" : "Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
         ui.open = false;

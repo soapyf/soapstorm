@@ -58,7 +58,9 @@ What this means for the curves:
 
 ### Opening the graph
 
-**View → Graph Editor** (**Ctrl+G**) shows or hides the **Graph** panel.
+**View → Graph Editor** (**Ctrl+G**) shows or hides the **Graph** panel. To give it the whole window while you
+polish curves, point at it and press **Ctrl+Space** (**View → Maximise Panel**); **Ctrl+Space** again puts the
+panels back.
 
 The list on the left shows the curves of the selected bones. The drop-down above it switches between **Selected bones** and **All animated bones**. Each bone lists its channels:
 
@@ -73,7 +75,7 @@ Click a row to show only that channel; **Shift+click** or **Ctrl+click** adds or
 
 ### The toolbar
 
-The buttons along the top show icons only; hover one for its name, its key in your [[Control presets|preset]] where it has one, and what it does. From left to right, after the drop-down:
+The buttons along the top show icons; hover one for its name, its key in your [[Control presets|preset]] where it has one, and what it does. When the panel is wide enough to keep the toolbar on one row with them (a wide window, or the graph maximised with **Ctrl+Space**), the tangent buttons also show their names: **Auto**, **Spline**, **Plateau** and so on. From left to right, after the drop-down:
 
 | Button | Icon |
 |---|---|

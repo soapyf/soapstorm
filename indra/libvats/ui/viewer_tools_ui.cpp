@@ -143,7 +143,7 @@ void App::draw_in_world_window() {
     clips.push_back(ui.own);
     const std::map<std::string, int> winners = plan_winners(clips);
 
-    place_tool_window(26, 30);
+    place_tool_window("As It Plays In-World", 26, 30);
     bool open = true;
     if (!ImGui::Begin("As It Plays In-World", &open)) {
         ImGui::End();
@@ -194,7 +194,7 @@ void App::draw_walk_test_window() {
     const Clip& c = avatar_clip(doc_.project);
     if (!(c == ui.gait_seen)) ui.gait_seen = c, ui.gait = measure_gait(*rig_, c, shape());
     const ui::Host::Locomotion l = host_.locomotion();
-    place_tool_window(24, 16);
+    place_tool_window("###walk_test", 24, 16);
     bool open = true;
     if (ImGui::Begin(walk_test_ == 1 ? "Test as My Walk###walk_test" : "Test as My Run###walk_test", &open)) {
         help_button("loop-tools");
@@ -305,7 +305,7 @@ void App::settle_on_seat() {
 
 void App::draw_seat_section() {
     const ui::Host::Seat s = host_.seat();
-    ImGui::SeparatorText("Your seat");
+    subheading("Your seat");
     if (!s.seated) {
         hint("Sit on a piece of furniture in-world before opening the editor: the editor then leaves you seated, measures "
              "where you sit and lets you place pins and IK targets on it.");
@@ -349,7 +349,7 @@ void App::draw_seat_section() {
     ImGui::SetItemTooltip(s.contact == 1 ? "Each selected bone or IK handle drops straight down onto the furniture"
                                          : "Only on furniture you created every part of");
     if (s.contact == 0) {
-        if (icon_label_small_button(icon::kCheck, "Check Whether You Made It")) host_.check_seat();
+        if (ImGui::Button("Check Whether You Made It")) host_.check_seat();
         ImGui::SetItemTooltip("Selects the furniture as the viewer's Edit does, to read who created each part, then "
                               "deselects it");
     } else {

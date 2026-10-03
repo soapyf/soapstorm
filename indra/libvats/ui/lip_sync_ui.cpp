@@ -66,12 +66,7 @@ void App::draw_lip_sync(bool positions) {
     Clip& clip = doc_.clip();
     hint("Keys the jaw and lips as mouth shapes over the frames below, from the loaded audio or from a Rhubarb Lip Sync "
          "file. The shapes show on the timeline: drag one to nudge it.");
-    const float label_w = ImGui::GetFontSize() * 6.5f;
-    auto label = [&](const char* text) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(text);
-        ImGui::SameLine(label_w);
-    };
+    auto label = [&](const char* text) { labelled_row(text); };
     if (ui.to < 0 || ui.to > clip.end_frame) ui.to = clip.end_frame;
     ui.from = std::clamp(ui.from, 0, ui.to);
     label("Frames");
@@ -80,12 +75,12 @@ void App::draw_lip_sync(bool positions) {
     ImGui::SameLine();
     double a = 0, b = 0;
     ImGui::BeginDisabled(!clip_range(a, b));
-    if (ImGui::SmallButton("Timeline Range")) ui.from = int(a), ui.to = int(b);
+    if (ImGui::Button("Timeline Range")) ui.from = int(a), ui.to = int(b);
     ImGui::EndDisabled();
     ImGui::SetItemTooltip("The range Shift+dragged on the timeline");
     if (!positions) hint("Move face bones is off, so only the jaw moves: most lip shapes only move bones.");
 
-    ImGui::SeparatorText("From the audio");
+    subheading("From the audio");
     label("Quietest");
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 9);
     slider_float("##liprange", &ui.range_db, 12, 48, "-%.0f dB");
@@ -97,6 +92,7 @@ void App::draw_lip_sync(bool positions) {
         opt.from = ui.from, opt.to = ui.to, opt.range_db = ui.range_db;
         LipSync ls = lip_sync_from_audio(audio_data_, clip.audio->offset, clip.fps, clip.end_frame, opt);
         ls.positions = positions;
+        ls.scale = face_move_scale();
         edit("Lip Sync from Audio", [&](Clip& c) { apply_lip_sync(c, ui.table, ui.shapes, ls); });
         status("Lip sync from the audio: " + std::to_string(ls.cues.size()) + " mouth shapes on frames " +
                std::to_string(ls.from) + " to " + std::to_string(ls.to));
@@ -105,7 +101,7 @@ void App::draw_lip_sync(bool positions) {
     ImGui::SetItemTooltip("%s", has_audio ? "The loudness opens the jaw; the vowel chooses an open, rounded or wide mouth"
                                           : "Load an audio file first (File > Load Audio...)");
 
-    ImGui::SeparatorText("From Rhubarb Lip Sync");
+    subheading("From Rhubarb Lip Sync");
     hint("Run Rhubarb Lip Sync on the audio yourself, for example rhubarb -f json -o mouth.json speech.wav, then "
          "import its JSON or TSV. Times count from the audio's start.");
     if (ImGui::Button("Import Rhubarb...")) show_dialog(Dialog::Rhubarb);
@@ -114,7 +110,7 @@ void App::draw_lip_sync(bool positions) {
     if (clip.lip_sync) {
         ImGui::Separator();
         ImGui::Text("%zu mouth shapes on frames %d to %d", clip.lip_sync->cues.size(), clip.lip_sync->from, clip.lip_sync->to);
-        if (icon_label_button(icon::kDelete, "Remove Lip Sync")) {
+        if (ImGui::Button("Remove Lip Sync")) {
             edit("Remove Lip Sync", [&](Clip& c) { remove_lip_sync(c, ui.table, ui.shapes); });
             status("Removed the lip sync: the mouth is as it was before");
         }
@@ -132,6 +128,7 @@ void App::import_rhubarb(const std::string& path) {
     if (ui.to < 0 || ui.to > clip.end_frame) ui.to = clip.end_frame;
     LipSync ls = lip_sync_from_cues(cues, clip.audio ? clip.audio->offset : 0, clip.fps, clip.end_frame, ui.from, ui.to);
     ls.positions = face_positions();
+    ls.scale = face_move_scale();
     edit("Import Rhubarb", [&](Clip& c) { apply_lip_sync(c, ui.table, ui.shapes, ls); });
     const double last = cues.back().start + (clip.audio ? clip.audio->offset : 0);
     status("Imported " + std::to_string(ls.cues.size()) + " mouth shapes from " + path.substr(path.find_last_of("/\\") + 1) +

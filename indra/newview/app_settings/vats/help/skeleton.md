@@ -24,7 +24,16 @@ Bones are grouped into categories. Show or hide each group from **View → Bones
 
 Body and Hands are shown by default; the rest are hidden. The **Bones** tab has the same switches in its **Show** section. Hidden bones keep their keys and still play; hiding only stops you picking them in the view.
 
-**View → Bones → Bones in Front (X-ray)** draws the bones over the body so that bones inside the mesh can be clicked.
+The bones are always drawn over the body, so a bone inside the mesh can still be clicked. **View → Bones →
+Collision Volumes in Front (X-ray)** does the same for the collision volumes; off, the body hides the parts inside it.
+
+When a [[Mesh bodies|mesh body]] is shown, the bone groups it is weighted to switch on by themselves: a creature rigged
+to wings, a tail or hind limbs shows those bones without a trip to **View → Bones**. **View → Bones → Hide Unused
+Bones** is on by default: it hides the bones the body isn't
+weighted to, in the view, the **Bones** tab and the [[Picker]]. A bone above a used one stays, so every chain still
+reaches its hand or foot. The SL avatar and the attachment points are never hidden by it. Picking a hidden bone in
+the **Bones** tab or the picker turns the option off, so the bone you picked shows with its gizmo; the status bar
+says so.
 
 Some Bento bones fold back on themselves. `mSpine1` goes up from the hips and `mSpine2` comes straight back down,
 so each would lie on top of `mPelvis`; `mSpine3` and `mSpine4` do the same over `mTorso`. They are drawn as small
@@ -54,18 +63,19 @@ A rotation key on an attachment point replaces the point's default rotation, the
 
 ### Collision volumes
 
-Collision volumes are the shapes Second Life uses for physics and for fitting some clothing. **View → Bones → Show Collision Volumes** draws them so you can check where the body is; they are hidden by default.
+Collision volumes are the shapes Second Life uses for physics and for fitting some clothing. **View → Bones → Show Collision Volumes** draws them as see-through shells at SL's size, the shape's included, so you can check where the body is; they are hidden by default, and shown once for a mesh body weighted to them. Click a shell to select it. The ones a body's soft parts ride are listed by name under **Soft body** in the **Bones** list: see [[Rig any model#Soft body]].
 
 ## Tips and tricks
 
-- In the **Bones** tab, type in **Filter bones...** to find a bone by name, for example `Wrist` or `Eye`.
+- In the **Bones** tab, type in **Filter bones...** to find a bone by name, for example `Wrist` or `Eye`, or by its plain
+  name, such as `thigh` for **mHipLeft**. The best match is outlined; **Enter** selects it.
 - The classic eyes are `mEyeLeft` and `mEyeRight`; the Bento face has its own alternate eyes, `mFaceEyeAltLeft` and `mFaceEyeAltRight`. Mesh heads use one pair or the other, so check which one your head follows.
 
 ## Troubleshooting
 
 ### A bone can't be clicked
 
-The bone's category is hidden, or it sits inside the body. Turn its group on in **View → Bones**, or switch on **View → Bones → Bones in Front (X-ray)**. Clicking the same spot again selects the next bone underneath.
+The bone's category is hidden, or it sits inside the body. Turn its group on in **View → Bones**, or turn off **View → Bones → Hide Unused Bones**. Where a stick crosses the body, the stick takes the click; click the skin away from the sticks to pick by the body. Clicking the same spot again selects the next bone underneath.
 
 ### A worn object sits at the wrong angle in-world
 

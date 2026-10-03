@@ -8,7 +8,9 @@ add_library(vats_core STATIC
     src/image_decoders.c
     src/anim_file.cpp
     src/avatar_mesh.cpp
-    src/bone_glyph.cpp
+    src/bone_heat.cpp
+    src/auto_rig.cpp
+    src/weight_paint.cpp
     src/bvh.cpp
     src/clip.cpp
     src/curve_filter.cpp
@@ -18,6 +20,7 @@ add_library(vats_core STATIC
     src/dope_sheet.cpp
     src/motion_path.cpp
     src/dynamics.cpp
+    src/fluid_pose.cpp
     src/idle.cpp
     src/overlap.cpp
     src/ragdoll.cpp
@@ -36,6 +39,10 @@ add_library(vats_core STATIC
     src/fcurve.cpp
     src/gif.cpp
     src/gltf.cpp
+    src/gltf_mesh.cpp
+    src/rig_export.cpp
+    src/rig_map.cpp
+    src/soft_body.cpp
     src/json.cpp
     src/pose_ops.cpp
     src/pose_tools.cpp
@@ -45,12 +52,14 @@ add_library(vats_core STATIC
     src/prop.cpp
     src/face_anim.cpp
     src/expression_pack.cpp
+    src/face_fit.cpp
     src/lip_sync.cpp
     src/facecap.cpp
     src/footlock.cpp
     src/balance.cpp
     src/jump_arc.cpp
     src/reach.cpp
+    src/position_reset.cpp
     src/lint.cpp
     src/deformer.cpp
     src/self_contact.cpp
@@ -70,6 +79,8 @@ add_library(vats_core STATIC
     src/batch_retarget.cpp
     src/priority_plan.cpp
     src/rig.cpp
+    src/rig_constraints.cpp
+    src/suggest_limits.cpp
     src/shape.cpp
     src/skeleton.cpp
     src/xml.cpp
@@ -98,6 +109,8 @@ endif()
 if(NOT WIN32)
     target_link_libraries(vats_core PRIVATE m)
 endif()
+find_package(Threads REQUIRED)  # bone heat solves its bones on several threads (bone_heat.cpp)
+target_link_libraries(vats_core PUBLIC Threads::Threads)
 
 # Legacy import: another app's project and library files (vats/legacy_import.h, ui/migrate.cpp and
 # tests/test_legacy_import.cpp). On by default when those files are present, off where they are left out.

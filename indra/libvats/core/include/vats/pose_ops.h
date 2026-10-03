@@ -63,7 +63,8 @@ std::string mirror_track(const Skeleton& skel, const std::string& track);
 void mirror_pose(Clip& clip, const Skeleton& skel, double frame, const Pose& current, MirrorMode mode);
 // Keys each node's counterpart with the node's mirrored rotation (and position, as above) (AM-113).
 void mirror_bones(Clip& clip, const Skeleton& skel, double frame, const Pose& current, const std::vector<int>& nodes);
-// A mirrored copy for export (AM-114, 03 section 4.5): tracks, joint priorities and pins included.
+// A mirrored copy for export (AM-114, 03 section 4.5): tracks, joint priorities, pins and the joints picked for
+// Reset joint positions included.
 Clip mirrored_clip(const Skeleton& skel, const Clip& clip);
 
 // Pose/clip library (03 section 3.6; AM-91..95)

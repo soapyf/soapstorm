@@ -19,12 +19,16 @@ namespace vats {
 // axes and units; the first animation stack is sampled at the file's frame rate.
 bool read_fbx_source(const std::vector<std::uint8_t>& bytes, SourceAnim& out, std::string& err);
 
-// Meshes as a DaeModel in SL space, rigged when any skin cluster maps to an SL joint (map_skin_joint).
-// Every mesh in the file is merged. dir is the file's folder, used to find textures.
+// Meshes as a DaeModel in SL space, rigged when any skin cluster maps to an SL joint (map_skin_joint), or through
+// remap (rig_map.h). Every mesh in the file is merged. dir is the file's folder, used to find textures.
 bool load_fbx_mesh(const std::vector<std::uint8_t>& bytes, const std::string& dir, const Skeleton& skel, DaeModel& out,
-                   DaeReport& report, std::string& err);
+                   DaeReport& report, std::string& err, const SkinRemap* remap = nullptr);
 
-// .dae or .fbx by extension: the one entry point for props and mesh bodies.
+// .dae, .fbx, .gltf or .glb by extension: the one entry point for props and mesh bodies. A file with a rig mapping
+// beside it (rig_map.h, rig_map_path) is loaded through that mapping.
 bool load_mesh_file(const std::string& path, const Skeleton& skel, DaeModel& out, DaeReport& report, std::string& err);
+// The file itself, ignoring any rig mapping beside it; through remap when one is given.
+bool load_mesh_file_as_is(const std::string& path, const Skeleton& skel, DaeModel& out, DaeReport& report, std::string& err,
+                          const SkinRemap* remap = nullptr);
 
 }  // namespace vats

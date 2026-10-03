@@ -45,6 +45,9 @@ namespace FSVATsEditor
     // True while the editor holds your avatar (logged in, editor open). audio_update_wind fades the flight wind out
     // then, as when not flying (spec 09 U5).
     bool holdsAvatar();
+    // The editor's own body under the pointer (View > Body's mesh body in your avatar's place: drawn by the editor, so
+    // no world object the viewer's picks find): its nearest point there, global. LLToolCamera's alt-cam focus uses it.
+    bool bodyUnderPointer(S32 x, S32 y, LLVector3d& out);
     // Build 32: true while View > Body shows a mesh body in your avatar's place (the editor holds your avatar):
     // LLVOAvatar::isVisible hides your own avatar and, with it, its attachments, on this screen only.
     bool hidesYourAvatar();

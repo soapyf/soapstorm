@@ -37,6 +37,26 @@ Select a collision volume such as `BELLY`, `BUTT`, `LEFT_PEC` or `RIGHT_PEC` (sh
 Show Collision Volumes**) and add a chain. A collision volume is one point that moves, not a chain of
 bones, so it has no **Bones** setting and is baked as position keys.
 
+To bounce them as SL's avatar physics does, use **Avatar physics (SL)** at the top of the window and **Tools →
+Avatar Physics Preview**: see [[Rig any model#Preview the bounce]].
+
+### Parts on spare chains
+
+A mesh body whose scarf, ponytail or skirt rides a spare SL chain ([[Rig any model#Put a scarf on a spare chain]])
+lists it at the top of the window under **Parts on spare chains**: `scarf, left wing`. SL has no physics for rigged
+mesh, so keys on those joints are the only way the part moves in-world.
+
+1. Pick how it swings: **scarf** lags and hangs, **hair** springs back sooner, **cape** is heavy and slow, **tail**
+   swings the most. VATs guesses from the part's name.
+2. With a looping clip, leave **Match the loop** ticked: the loop is simulated twice first, so the swing ends where it
+   starts. Untick it to simulate the clip once from frame 0.
+3. Press **Animate scarf from Body Motion**. VATs adds a chain on the part's joints (or sets up the one it added
+   before) and bakes it over the whole clip, as one undo step. Only those joints get keys; `mWing4Fan` beside the
+   wing's last joint is left out.
+
+Play the clip to check it, then fine-tune the chain like any other and **Re-bake**. Whatever animates those joints at a
+higher priority in-world wins over your keys, and worn Bento wings or a tail with animations of their own fight them.
+
 ### Previewing
 
 **Preview while playing** is ticked when the window opens; play the clip. Chains that are not baked yet are

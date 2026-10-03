@@ -73,7 +73,7 @@ moment, then explodes.
    the wind-up key at 10: the red marks along the timeline's foot are the keys.
 2. Drag the **Tween** slider on the timeline bar, right of **Blocking**, to the left until it reads about **Tween
    20%**, and let go. The slider is short, so a small move goes a long way; anything from 15% to 25% is right. The
-   status bar says, for example, "Tween 18%: keyed 9 item(s) at frame 12": the nine bones with a key on both sides.
+   status bar says, for example, "Tween 18%: keyed 9 items at frame 12": the nine bones with a key on both sides.
 3. A teal circle on the timeline marks the new **Breakdown** keys at frame 12. Drag the playhead back and forth
    across 10 to 15: the body lingers near the wind-up, then goes.
 
@@ -115,8 +115,8 @@ If you are starting here, open this example: it is the throw after steps 1 to 3.
 1. Choose **Tools → Animation Check...**. It lists three findings:
    - "Ease in and ease out are 0: the avatar snaps into and out of the pose" (Info);
    - "mShoulderRight goes 31 degrees past what a body can do" (Info), on the frames of the wind-up;
-   - "The whole body is animated but the hips and legs play below priority 4; a walking or standing AO wins them"
-     (Warning).
+   - "The whole body is animated but the hips and legs play below priority 4; a walking or standing AO wins them.
+     For an AO's own stand or walk, set its AO state in Tools > Clips (AO Sets) instead" (Warning).
 2. Press **Fix** on the first finding: **Ease in** and **Ease out** become `0.30 s`.
 3. Press **Go to Frame** on the second to see the wind-up (frame 9 in the example; a frame or so either side if you
    made the breakdown yourself): the arm is twisted further back than a shoulder turns.
@@ -157,14 +157,14 @@ motion file shows what to do.
 [Open the example](example:retarget-walk.vat)
 
 1. Open the walk example, choose **Tools → Motion Quality...** and read the **Now** column: **Keys** `2383`,
-   **Shake** `12324 deg/s3`.
+   **Jitter** `12324 deg/s³`.
 
 ![The Motion Quality window for the retarget-walk example: Keys 2383, Size 5939 bytes, Shake 12324 deg/s3, Foot slide 196.2 mm, Hip drift 3078.7 mm](images/tutorial-the-polish-pass/quality.png)
 *The captured walk as it comes in. After each clean-up step the window shows **Before**, **After** and **Change**.*
 
 2. Click **Select All** in the **Bones** tab. In the **Graph** panel, open **More** (the three dots) and choose
    **Filter Curves...**. Set **Filter** to **Butterworth**, keep **Cutoff** `6.0 Hz`, and press **OK**. **Motion
-   Quality** now shows the step's **Before** and **After**: **Shake** falls by 5%, **Keys** rise to `4393`, a key on
+   Quality** now shows the step's **Before** and **After**: **Jitter** falls by 5%, **Keys** rise to `4393`, a key on
    every frame.
 3. Choose **Edit → Simplify Curves...** and press **OK** with the defaults (**Rotation** `0.25 deg`, **Position**
    `0.50 mm`). The status bar says "Simplified: 4026 keys to 423", and **Motion Quality** shows **Keys** `4393` →

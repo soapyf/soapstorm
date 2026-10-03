@@ -15,7 +15,7 @@ Both key the mirrored bones at the current frame, including IK targets and poles
 
 ### Flipping the pose
 
-**Edit → Flip Pose** swaps the two sides at the current frame: the left arm takes the right arm's pose and the other way round, and bones in the middle (spine, neck, head) are mirrored in place, so a head turned left turns right. In the Blender preset the key is **Ctrl+Shift+V**.
+**Edit → Flip Pose** swaps the two sides at the current frame: the left arm takes the right arm's pose and the other way round, and bones in the middle (spine, neck, head) are mirrored in place, so a head turned left turns right. The key is **Ctrl+Shift+V** in every preset.
 
 ### Mirroring selected bones
 
@@ -31,6 +31,13 @@ To mirror as you pose, turn on **Mirror** on the timeline bar; see [[Posing#Mirr
 
 - **Paste Range Mirrored** pastes a copied frame range with left and right swapped. See [[Time editing]].
 - Saved poses and clips can be applied mirrored from the [[Pose library]] (**Apply mirrored**).
+
+### Flipping the whole animation
+
+**Edit → Flip Animation** swaps left and right on every key of the animation, as **Flip Pose** does on one frame:
+animate a wave with the right hand, flip it, and the left hand waves. Pins, IK and per-bone priorities change sides
+with their bones. It is one undo step; the status bar says "Flipped the whole animation: left and right swapped on
+every key". To keep both versions, flip only the export instead (**Export mirrored**, see the tips below).
 
 ### Reversing the animation
 
@@ -51,7 +58,7 @@ To reverse just some keys, select them in the [[Graph editor]] and choose **More
 
 ## Tips and tricks
 
-- To make a left-handed and a right-handed version of one animation, you don't need two projects: tick **Also export the other side (mirrored)** in the export settings, or **Export mirrored (left and right swapped)** to export only the swapped version. See [[Export to Second Life]].
+- To make a left-handed and a right-handed version of one animation, you don't need two projects: tick **Also export the other side (mirrored)** under **Also Write** in the export settings, or **Export mirrored (left and right swapped)** to export only the swapped version. See [[Export to Second Life]].
 - Pose one side of a symmetrical pose, then **Mirror Left to Right** instead of posing both sides.
 - A walk's second step is the first step flipped: key the first contact pose, go half a cycle later, paste the pose and **Flip Pose**.
 - Every command here is one undo step.

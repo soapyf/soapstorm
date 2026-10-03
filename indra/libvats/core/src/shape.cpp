@@ -68,8 +68,13 @@ void read_param(const XmlNode& x, int mesh, AvatarParams& out) {
             for (auto& b : c.children)
                 if (b.name == "bone")
                     p.bones.push_back({b.attr_or("name"), parse_vec(b.attr_or("scale")), parse_vec(b.attr_or("offset"))});
-        } else if (c.name == "param_morph" && mesh >= 0) {
-            p.morphs.push_back({mesh, p.name});
+        } else if (c.name == "param_morph") {
+            if (mesh >= 0) p.morphs.push_back({mesh, p.name});
+            // Its collision-volume morphs, once (the same param is repeated for each mesh it spans).
+            for (auto& v : c.children)
+                if (v.name == "volume_morph" && std::none_of(p.volumes.begin(), p.volumes.end(),
+                                                             [&](const VisualParam::Bone& b) { return b.name == v.attr_or("name"); }))
+                    p.volumes.push_back({v.attr_or("name"), parse_vec(v.attr_or("scale")), parse_vec(v.attr_or("pos"))});
         }
     }
 }
@@ -148,6 +153,13 @@ BodyShape evaluate_shape(const Skeleton& skel, const AvatarParams& params, const
             out.shape.offset[i] += b.offset * eff;
         }
         for (auto& [mesh, name] : p.morphs) out.morphs[mesh].push_back({name, eff});
+        // LLPolyMorphTarget::apply: a volume morph adds to the volume's scale and to its position against its joint.
+        for (auto& b : p.volumes)
+            if (const int v = skel.find_volume(b.name); v >= 0) {
+                const CollisionVolume& cv = skel.volumes()[size_t(v)];
+                out.shape.scale[cv.node] += Vec3{b.scale.x / cv.scale.x, b.scale.y / cv.scale.y, b.scale.z / cv.scale.z} * eff;
+                out.shape.offset[cv.node] += b.offset * eff;
+            }
     }
 
     // Keep the feet on the ground (SK-28).
