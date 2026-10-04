@@ -59,10 +59,10 @@ std::vector<App::ToolHit> App::tool_hits(const std::string& query) const {
         const Action& a = actions_[i].second;
         if (!a.label || !*a.label || actions_[i].first == "find_tool" || seen(a.label)) continue;
         const char* why = a.unavailable ? a.unavailable() : nullptr;
-        entries.push_back({a.label, a.key ? key_label(a.key) : "", why ? why : "", int(i), nullptr});
+        entries.push_back({a.label, a.key ? key_label(a.key) : "", why ? why : "", int(i), nullptr, "", false});
     }
     for (const ToolWindow& w : kWindows)
-        if (!seen(w.label)) entries.push_back({w.label, "", "", -1, w.window});
+        if (!seen(w.label)) entries.push_back({w.label, "", "", -1, w.window, "", false});
     // Every menu item the crawl found (user test: "seam" found nothing though Tools > Loop Tools > Make Loop Seamless
     // exists): an action or window gets its menu path; any other item comes in, run through its menu.
     for (const MenuEntry& m : menu_index_) {

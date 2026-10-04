@@ -289,7 +289,7 @@ void App::draw_actor_body(int i, const std::vector<Xform>& globals, const SceneC
         if (key == kBodyIds[k]) b = k;
     if (b < 0) return;
     if (Body(b) == Body::SkeletonOnly) {  // drawn as bones: render_scene, or draw_world_extras
-        if (!edited) other_skeletons_.push_back({globals, a.colour, i});
+        if (!edited) other_skeletons_.push_back({globals, a.colour, i, true});
         return;
     }
     AvatarMesh* m = &mesh_;
