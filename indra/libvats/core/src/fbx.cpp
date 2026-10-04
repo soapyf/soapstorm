@@ -287,7 +287,11 @@ static bool load_fbx(const std::vector<std::uint8_t>& bytes, const std::string& 
     ufbx_matrix up = up_axis;
     if (remap) {
         const Quat q = Quat::axis_angle({0, 0, 1}, remap->turn * kPi / 2);
-        const ufbx_transform t{{0, 0, 0}, {q.x, q.y, q.z, q.w}, {1, 1, 1}};
+        ufbx_transform t = ufbx_identity_transform;
+        t.rotation.x = q.x;
+        t.rotation.y = q.y;
+        t.rotation.z = q.z;
+        t.rotation.w = q.w;
         const ufbx_matrix m = ufbx_transform_to_matrix(&t);
         up = ufbx_matrix_mul(&m, &up_axis);
     }

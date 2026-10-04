@@ -2113,7 +2113,8 @@ void App::draw_dockspace() {
         ImGui::PushStyleColor(c, ImGui::GetStyleColorVec4(ImGuiCol_Tab));
     // One close box per panel: its tab's. The node's own, at the strip's far end, would close every tab in it.
     ImGuiID dock = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(),
-                                                ImGuiDockNodeFlags_NoCloseButton | (world ? ImGuiDockNodeFlags_PassthruCentralNode : 0));
+                                                (ImGuiDockNodeFlags)ImGuiDockNodeFlags_NoCloseButton |
+                                                    (world ? (ImGuiDockNodeFlags)ImGuiDockNodeFlags_PassthruCentralNode : 0));
     ImGui::PopStyleColor(5);
     dockspace_id_ = dock;
     bool rebuild = std::exchange(reset_layout_, false);  // View > Reset Layout

@@ -1563,7 +1563,9 @@ void App::draw_viewport() {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
         // Always there, as in Second Life: no tab to drag it off by, and nothing docks over it.
         ImGuiWindowClass fixed;
-        fixed.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_NoTabBar | ImGuiDockNodeFlags_NoUndocking | ImGuiDockNodeFlags_NoDockingOverMe;
+        fixed.DockNodeFlagsOverrideSet = (ImGuiDockNodeFlags)ImGuiDockNodeFlags_NoTabBar |
+                                         (ImGuiDockNodeFlags)ImGuiDockNodeFlags_NoUndocking |
+                                         (ImGuiDockNodeFlags)ImGuiDockNodeFlags_NoDockingOverMe;
         ImGui::SetNextWindowClass(&fixed);
         bool open = ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         ImGui::PopStyleVar();
