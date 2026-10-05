@@ -422,6 +422,19 @@ Settings groups to be restored (backup will always save all):
          function="Pref.RestoreSettings" />
     </button>
 
+    <button
+     layout="topleft"
+     top_pad="8"
+     left="50"
+     right="-50"
+     follows="left|right|top"
+     height="22"
+     label="Import Settings from Firestorm"
+     name="import_firestorm_settings" >
+        <button.commit_callback
+         function="Pref.ImportFirestormSettings" />
+    </button>
+
     </layout_panel>
     </layout_stack>
 

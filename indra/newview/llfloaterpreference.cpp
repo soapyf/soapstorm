@@ -5530,6 +5530,7 @@ FSPanelPreferenceBackup::FSPanelPreferenceBackup() : LLPanelPreference()
     mCommitCallbackRegistrar.add("Pref.RestoreSettings",        boost::bind(&FSPanelPreferenceBackup::onClickRestoreSettings, this));
     mCommitCallbackRegistrar.add("Pref.BackupSelectAll",        boost::bind(&FSPanelPreferenceBackup::onClickSelectAll, this));
     mCommitCallbackRegistrar.add("Pref.BackupDeselectAll",      boost::bind(&FSPanelPreferenceBackup::onClickDeselectAll, this));
+    mCommitCallbackRegistrar.add("Pref.ImportFirestormSettings", boost::bind(&FSPanelPreferenceBackup::onClickImportFirestormSettings, this));
 }
 
 bool FSPanelPreferenceBackup::postBuild()
@@ -6152,6 +6153,187 @@ void FSPanelPreferenceBackup::applySelection(LLScrollListCtrl* control, bool all
     }
 }
 // </FS:Zi>
+
+static std::string find_firestorm_settings_dir()
+{
+    std::string base = gDirUtilp->getOSUserDir();
+    std::vector<std::string> candidates = {
+        gDirUtilp->add(base, "Firestorm_x64"),
+        gDirUtilp->add(base, "FirestormOS_x64"),
+        gDirUtilp->add(base, "Firestorm"),
+        gDirUtilp->add(base, "FirestormOS"),
+        gDirUtilp->add(base, ".firestorm")
+    };
+    for (const auto& path : candidates)
+    {
+        if (gDirUtilp->fileExists(gDirUtilp->add(gDirUtilp->add(path, "user_settings"), "settings.xml")) ||
+            gDirUtilp->fileExists(gDirUtilp->add(path, "settings.xml")))
+        {
+            return path;
+        }
+    }
+    return "";
+}
+
+void FSPanelPreferenceBackup::onClickImportFirestormSettings()
+{
+    std::string fs_dir = find_firestorm_settings_dir();
+    if (fs_dir.empty())
+    {
+        (new LLDirPickerThread(boost::bind(&FSPanelPreferenceBackup::changeImportFirestormSettingsPath, this, _1, _2), gDirUtilp->getOSUserDir()))->getFile();
+        return;
+    }
+
+    LLSD args;
+    args["DIRECTORY"] = fs_dir;
+    LLNotificationsUtil::add("SettingsImportFirestormConfirm", args, LLSD(),
+        boost::bind(&FSPanelPreferenceBackup::doImportFirestormSettings, this, _1, _2));
+}
+
+void FSPanelPreferenceBackup::changeImportFirestormSettingsPath(const std::vector<std::string>& filenames, std::string proposed_name)
+{
+    if (filenames.empty())
+        return;
+    std::string dir_name = filenames[0];
+    if (dir_name.empty() || dir_name == proposed_name)
+        return;
+
+    if (!gDirUtilp->fileExists(gDirUtilp->add(gDirUtilp->add(dir_name, "user_settings"), "settings.xml")) &&
+        !gDirUtilp->fileExists(gDirUtilp->add(dir_name, "settings.xml")))
+    {
+        LLNotificationsUtil::add("FirestormSettingsNotFound");
+        return;
+    }
+
+    LLSD args;
+    args["DIRECTORY"] = dir_name;
+    LLNotificationsUtil::add("SettingsImportFirestormConfirm", args, LLSD(),
+        boost::bind(&FSPanelPreferenceBackup::doImportFirestormSettings, this, _1, _2));
+}
+
+void FSPanelPreferenceBackup::doImportFirestormSettings(const LLSD& notification, const LLSD& response)
+{
+    LL_INFOS("SettingsImport") << "entered" << LL_ENDL;
+    S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
+    if (option == 1) // CANCEL
+    {
+        LL_INFOS("SettingsImport") << "import canceled" << LL_ENDL;
+        return;
+    }
+
+    std::string fs_dir = notification["substitutions"]["DIRECTORY"].asString();
+    if (fs_dir.empty())
+    {
+        fs_dir = find_firestorm_settings_dir();
+    }
+    if (fs_dir.empty() || !LLFile::isdir(fs_dir))
+    {
+        LLNotificationsUtil::add("BackupPathDoesNotExist");
+        return;
+    }
+
+    // Close preferences dialog
+    LLFloaterPreference* instance = LLFloaterReg::findTypedInstance<LLFloaterPreference>("preferences");
+    if (instance)
+    {
+        instance->onBtnOK(LLSD());
+    }
+
+    // Determine the source user_settings directory
+    std::string src_user_settings = gDirUtilp->add(fs_dir, "user_settings");
+    if (!LLFile::isdir(src_user_settings))
+    {
+        if (gDirUtilp->fileExists(gDirUtilp->add(fs_dir, "settings.xml")))
+        {
+            src_user_settings = fs_dir;
+        }
+    }
+
+    std::string dst_user_settings = gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, "");
+    LLFile::mkdir(dst_user_settings);
+
+    // 1. Import global settings.xml
+    std::string src_global = gDirUtilp->add(src_user_settings, "settings.xml");
+    if (gDirUtilp->fileExists(src_global))
+    {
+        std::string global_name = gSavedSettings.getString("ClientSettingsFile");
+        LL_INFOS("SettingsImport") << "Importing global settings from " << src_global << LL_ENDL;
+        gSavedSettings.resetToDefaults();
+        LLFeatureManager::getInstance()->applyRecommendedSettings();
+        gSavedSettings.loadFromFile(src_global);
+        gSavedSettings.saveToFile(global_name, true);
+    }
+
+    std::error_code ec;
+
+    // 2. Copy user_settings XML files and presets
+    if (LLFile::isdir(src_user_settings))
+    {
+        for (const auto& entry : std::filesystem::directory_iterator(src_user_settings, ec))
+        {
+            if (entry.is_regular_file() && entry.path().extension() == ".xml")
+            {
+                std::string filename = entry.path().filename().string();
+                if (filename == "settings.xml") continue;
+                auto dst_file = std::filesystem::path(dst_user_settings) / filename;
+                std::filesystem::copy_file(entry.path(), dst_file,
+                    std::filesystem::copy_options::overwrite_existing, ec);
+            }
+        }
+
+        std::string src_presets = gDirUtilp->add(src_user_settings, "presets");
+        std::string dst_presets = gDirUtilp->add(dst_user_settings, "presets");
+        if (std::filesystem::exists(src_presets))
+        {
+            std::filesystem::create_directories(dst_presets, ec);
+            std::filesystem::copy(src_presets, dst_presets,
+                std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing, ec);
+            if (ec)
+            {
+                LL_WARNS("SettingsImport") << "Failed to copy presets: " << ec.message() << LL_ENDL;
+            }
+        }
+    }
+
+    // 3. Copy per-account directories (directories containing settings_per_account.xml)
+    for (const auto& entry : std::filesystem::directory_iterator(fs_dir, ec))
+    {
+        if (entry.is_directory())
+        {
+            std::string dirname = entry.path().filename().string();
+            if (dirname != "user_settings" && dirname != "logs" && dirname != "browser_profile" &&
+                LLFile::isdir(entry.path().string()))
+            {
+                auto acct_xml = entry.path() / "settings_per_account.xml";
+                if (std::filesystem::exists(acct_xml))
+                {
+                    auto dst_acct = std::filesystem::path(gDirUtilp->getOSUserAppDir()) / dirname;
+                    std::filesystem::create_directories(dst_acct, ec);
+                    std::filesystem::copy(entry.path(), dst_acct,
+                        std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing, ec);
+                    if (ec)
+                    {
+                        LL_WARNS("SettingsImport") << "Failed to copy account dir " << dirname << ": " << ec.message() << LL_ENDL;
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. If logged in, reload current per-account settings
+    std::string per_account_name = gDirUtilp->getExpandedFilename(LL_PATH_PER_SL_ACCOUNT,
+        LLAppViewer::instance()->getSettingsFilename("Default", "PerAccount"));
+    if (!per_account_name.empty() && gDirUtilp->fileExists(per_account_name))
+    {
+        gSavedPerAccountSettings.loadFromFile(per_account_name);
+        gSavedPerAccountSettings.saveToFile(per_account_name, true);
+    }
+
+    gSavedSettings.setBOOL("FSFirstRunAfterSettingsRestore", true);
+
+    LLNotificationsUtil::add("RestoreFinished", LLSD(), LLSD(),
+        boost::bind(&FSPanelPreferenceBackup::onQuitConfirmed, this, _1, _2));
+}
 
 // <FS:Kadah>
 void LLFloaterPreference::loadFontPresetsFromDir(const std::string& dir, LLComboBox* font_selection_combo)

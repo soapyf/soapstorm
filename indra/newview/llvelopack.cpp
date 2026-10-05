@@ -31,6 +31,7 @@
 #include "llstring.h"
 #include "llcorehttputil.h"
 #include "llversioninfo.h"
+#include "indra_constants.h"
 
 #include <boost/json.hpp>
 #include <fstream>
@@ -892,7 +893,7 @@ static void on_first_run(void* p_user_data, const char* app_version)
 
         // <FS:TJ> Look for Firestorms settings.xml and not LL's
         //std::string user_settings_path = app_data_path + "\\SecondLife\\user_settings\\settings.xml";
-        std::string user_settings_path = app_data_path + "\\Firestorm_x64\\user_settings\\settings.xml";
+        std::string user_settings_path = app_data_path + "\\" + APP_NAME + "_x64\\user_settings\\settings.xml";
         // </FS:TJ>
         LLControlGroup settings("global");
         if (settings.loadFromFile(user_settings_path))

@@ -1017,28 +1017,37 @@ Push $2
 # Required since ProfileImagePath is of type REG_EXPAND_SZ
     ExpandEnvStrings $2 $2
 
-# Delete files in \Users\<User>\AppData\Roaming\Firestorm
+# Delete files in \Users\<User>\AppData\Roaming\Soapstorm
 # Remove all settings files but leave any other .txt files to preserve the chat logs
-    RMDir /r "$2\AppData\Roaming\Firestorm\logs"
-    RMDir /r "$2\AppData\Roaming\Firestorm\browser_profile"
-    RMDir /r "$2\AppData\Roaming\Firestorm\user_settings"
-    Delete  "$2\AppData\Roaming\Firestorm\*.xml"
-    Delete  "$2\AppData\Roaming\Firestorm\*.bmp"
-    Delete  "$2\AppData\Roaming\Firestorm\search_history.txt"
-    Delete  "$2\AppData\Roaming\Firestorm\plugin_cookies.txt"
-    Delete  "$2\AppData\Roaming\Firestorm\typed_locations.txt"
-# Delete files in \Users\<User>\AppData\Local\Firestorm
+    RMDir /r "$2\AppData\Roaming\Soapstorm\logs"
+    RMDir /r "$2\AppData\Roaming\Soapstorm\browser_profile"
+    RMDir /r "$2\AppData\Roaming\Soapstorm\user_settings"
+    Delete  "$2\AppData\Roaming\Soapstorm\*.xml"
+    Delete  "$2\AppData\Roaming\Soapstorm\*.bmp"
+    Delete  "$2\AppData\Roaming\Soapstorm\search_history.txt"
+    Delete  "$2\AppData\Roaming\Soapstorm\plugin_cookies.txt"
+    Delete  "$2\AppData\Roaming\Soapstorm\typed_locations.txt"
+    RMDir /r "$2\AppData\Roaming\Soapstorm_x64\logs"
+    RMDir /r "$2\AppData\Roaming\Soapstorm_x64\browser_profile"
+    RMDir /r "$2\AppData\Roaming\Soapstorm_x64\user_settings"
+    Delete  "$2\AppData\Roaming\Soapstorm_x64\*.xml"
+    Delete  "$2\AppData\Roaming\Soapstorm_x64\*.bmp"
+    Delete  "$2\AppData\Roaming\Soapstorm_x64\search_history.txt"
+    Delete  "$2\AppData\Roaming\Soapstorm_x64\plugin_cookies.txt"
+    Delete  "$2\AppData\Roaming\Soapstorm_x64\typed_locations.txt"
+# Delete files in \Users\<User>\AppData\Local\Soapstorm
     ${If} ${ISOPENSIM} == "0"
         ${If} ${IS64BIT} == "0"
-            RMDir /r "$2\AppData\Local\Firestorm"				#Delete the Havok cache folder
+            RMDir /r "$2\AppData\Local\Soapstorm"				#Delete cache folder
         ${Else}
-            RMDir /r "$2\AppData\Local\Firestorm_x64"			#Delete the OpenSim cache folder
+            RMDir /r "$2\AppData\Local\Soapstorm_x64"			#Delete cache folder
         ${EndIf}
     ${Else}
         ${If} ${IS64BIT} == "0"
-            RMDir /r "$2\AppData\Local\FirestormOS"			#Delete the Havok cache folder
-        ${Else}
-            RMDir /r "$2\AppData\Local\FirestormOS_x64"		#Delete the OpenSim cache folder
+            RMDir /r "$2\AppData\Local\SoapstormOS"			#Delete cache folder
+        ${EndIf}
+        ${If} ${IS64BIT} == "1"
+            RMDir /r "$2\AppData\Local\SoapstormOS_x64"		#Delete cache folder
         ${EndIf}
     ${EndIf}
 
@@ -1051,11 +1060,11 @@ Pop $2
 Pop $1
 Pop $0
 
-# Delete files in ProgramData\Firestorm
+# Delete files in ProgramData\Soapstorm
 Push $0
   ReadRegStr $0 SHELL_CONTEXT "${MSCURRVER_KEY}\Explorer\Shell Folders" "Common AppData"
   StrCmp $0 "" +2
-  RMDir /r "$0\Firestorm"
+  RMDir /r "$0\Soapstorm"
 Pop $0
 
 Keep:

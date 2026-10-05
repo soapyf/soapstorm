@@ -14029,6 +14029,29 @@ Settings restore requires a viewer restart. Do you want to restore your settings
 
   <notification
    icon="alertmodal.tga"
+   name="SettingsImportFirestormConfirm"
+   type="alertmodal">
+Importing settings from Firestorm ([DIRECTORY]) will replace current settings and requires a viewer restart.
+
+Do you want to import your Firestorm settings and quit the viewer now?
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Cancel"
+     yestext="Import and Quit"/>
+  </notification>
+
+  <notification
+   icon="alertmodal.tga"
+   name="FirestormSettingsNotFound"
+   type="alertmodal">
+No valid Firestorm settings found in the selected folder. A Firestorm settings folder must contain 'user_settings' or 'settings.xml'.
+    <usetemplate
+     name="okbutton"
+     yestext="OK"/>
+  </notification>
+
+  <notification
+   icon="alertmodal.tga"
    name="RestoreFinished"
    type="alertmodal">
 Restore complete! Please restart your viewer now.
