@@ -26317,13 +26317,13 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>FSOTSConvergeMinDistance</key>
       <map>
       <key>Comment</key>
-      <string>Minimum OTS world convergence distance (meters); guards against the close-range shoulder-lean swing. Avatar capsule hits are exempt</string>
+      <string>Minimum OTS world convergence distance ahead of avatar eye (meters); guards against close-range shoulder-lean swing. Avatar capsule hits are exempt</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
       <string>F32</string>
       <key>Value</key>
-      <real>2.0</real>
+      <real>0.2</real>
     </map>
     <key>FSOTSConvergeSmoothingHalfLife</key>
       <map>

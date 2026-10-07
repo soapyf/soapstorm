@@ -4399,6 +4399,9 @@ void send_agent_update(bool force_send, bool send_reliable)
     LLVector3 camera_left = LLViewerCamera::getInstance()->getLeftAxis();
     LLVector3 camera_up = LLViewerCamera::getInstance()->getUpAxis();
 
+    LLQuaternion body_rotation = gAgent.getFrameAgent().getQuaternion();
+    LLQuaternion head_rotation = gAgent.getHeadRotation();
+
     // OTS convergence camera: report the mouselook-equivalent camera to the
     // sim. Campos weapons fire from llGetCameraPos along the camera's
     // at-axis; with the real OTS shoulder camera that means bullets
@@ -4433,11 +4436,16 @@ void send_agent_update(bool force_send, bool send_reliable)
             camera_at = frame.getAtAxis();
             camera_left = frame.getLeftAxis();
             camera_up = frame.getUpAxis();
+
+            // HeadRotation mirrors the converged look direction so attached
+            // weapons and avatar head tracking aim at the crosshair target.
+            head_rotation = frame.getQuaternion();
+            if (isAgentAvatarValid() && gAgentAvatarp->getParent())
+            {
+                head_rotation = head_rotation * ~gAgentAvatarp->getParent()->getRotation();
+            }
         }
     }
-
-    LLQuaternion body_rotation = gAgent.getFrameAgent().getQuaternion();
-    LLQuaternion head_rotation = gAgent.getHeadRotation();
     U8 render_state = gAgent.getRenderState();
 
     U8 flags = AU_FLAGS_NONE;
