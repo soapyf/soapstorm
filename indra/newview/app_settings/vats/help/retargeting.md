@@ -113,6 +113,12 @@ distance.
 The rest pose comes from the file's bind pose. Tick **Rest pose from frame 0** when that is wrong or
 missing; frame 0 must then be a T-pose or an A-pose.
 
+### Remove spikes
+
+**Remove spikes** (on by default) rebuilds capture glitches: a foot that flips 30° for a single frame, a hand that jumps and comes back. A key is a spike when it sits far from where the keys around it (a twentieth of a second each side) say it should be, both from their median and from a straight line through them, and by more than the curve's own jitter and at least 4° (or 1 cm for the hips). Runs of glitched keys lasting up to 40 ms are rebuilt by a smooth curve from the good keys either side; anything longer is motion and stays, so a quick flick of the hand is kept. The report says how many keys it rebuilt and the largest, for example "removed 30 spikes on 12 curves (the largest 48 degrees, mFootLeft rot_y)".
+
+The same clean-up works on an animation already open: **Edit → Remove Spikes** checks the selected bones (or every bone) and says what it rebuilt. Only curves with a key on nearly every frame are checked, as motion capture has; hand-keyed curves are never touched, since there a lone key is a pose.
+
 ### Clean up foot sliding
 
 **Clean up foot sliding** (on by default) holds planted feet still with leg IK where the source had them

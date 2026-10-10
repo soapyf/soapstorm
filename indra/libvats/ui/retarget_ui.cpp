@@ -80,6 +80,10 @@ void retarget_settings_ui(RetargetOptions& opt, FitOptions& fit, bool& lock_feet
     ImGui::SameLine();
     ImGui::Checkbox("Clean up foot sliding", &lock_feet);
     ImGui::SetItemTooltip("Holds planted feet still with leg IK where the source had them on the ground");
+    ImGui::SameLine();
+    ImGui::Checkbox("Remove spikes", &opt.remove_spikes);
+    ImGui::SetItemTooltip("Rebuilds capture glitches of a frame or few (a foot that flips for one frame) from the frames "
+                          "around them; real motion stays");
     if (heel_toe && to_ground) {
         ImGui::BeginDisabled(!lock_feet);  // a row of its own: beside the two above it runs past the dialog's edge
         ImGui::Checkbox("Heel and toe", heel_toe);

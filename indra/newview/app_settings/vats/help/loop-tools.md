@@ -19,8 +19,9 @@ With **Loop** on, a red tick on the timeline at **Loop out** means some channels
 
 Choose **Tools → Loop Tools → Make Loop Seamless**. Every channel is made to end exactly where it starts (a rotation may end a whole number of turns away), with the same slope at both ends, so the loop has no pop and no kink. The status bar says "Loop made seamless on N channels", or "The loop was already seamless".
 
-**Blend** (0–15 frames) sets how the correction is made:
+**Blend** sets how the correction is made:
 
+- **whole loop** (the default): the correction, of the value and of the slope, is spread smoothly over the whole loop, so no single frame shows it. Best for motion capture and retargeted clips, which have a key on every frame. IK targets still close at the end key, so a planted foot does not slide.
 - **end key only** (0): only the value at **Loop out** changes.
 - 1–15 frames: the last frames ease into the start pose, so the correction is spread out instead of bending the curve sharply at the end.
 
@@ -28,7 +29,15 @@ Choose **Tools → Loop Tools → Make Loop Seamless**. Every channel is made to
 
 **Tools → Loop Tools → Remove Hip Travel (In Place)** takes the forward and sideways travel out of the hips over the loop while keeping their sway and height. The status bar reports what it removed, for example "Removed hip travel: 1.20 m/s forward, 0.02 m/s sideways (1.20 m/s)". That speed is the one an AO's walk should match.
 
+With **Loop** off, the command works on the whole take and follows the hips' path instead of a straight line: the path is the hips' position averaged over about one walk cycle (1 s), and taking it out leaves only the sway around where the take starts (use **Move to Origin** after it to centre it). A motion capture take that turns, changes speed or paces back and forth then stays in place too; the status bar says, for example, "Removed hip travel along its path: 0.58 m/s on average; the sway stays". With **Loop** on, the travel over the loop comes out as a straight line, which keeps the loop seamless.
+
+Leg and arm IK targets move with the hips, so the feet that **Clean up foot sliding** planted on import stay under the body and slide back with the treadmill instead of being left behind. Pins held in the world stay where they are.
+
 **Add Travel Forward** does the reverse: set the speed in the field beside it (−5 to 5 m/s, 1.00 by default) and press the button to make the hips move forward at that speed.
+
+### Moving the animation to the origin
+
+**Tools → Loop Tools → Move to Origin** moves the hips so their average position over the loop (the whole clip without a loop) sits over the origin, the point the avatar stands on. Use it on motion capture, which is often recorded metres away. Only the ground position changes, never the height; IK targets and pins held in the world move with the hips. The status bar says how far, for example "Moved the hips 2.09 m back and 0.46 m right to stand over the origin".
 
 ### Starting the cycle on another pose
 
@@ -147,7 +156,7 @@ stops.
 
 1. Hover the red tick at frame 30 on the timeline. The tooltip lists four channels: `mHipLeft rot_y (+5)`, `mHipRight rot_y (-5)`, `mKneeLeft rot_y (+5)` and `mPelvis pos_x (+3.2)`. The last one is the travel: the hips end 3.2 m from where they start.
 2. Choose **Tools → Loop Tools → Remove Hip Travel (In Place)**. The status bar says "Removed hip travel: 3.20 m/s forward, 0.00 m/s sideways (3.20 m/s)". Select **mPelvis** and open the [[Graph editor]]: **Translate X** is now flat at 0 while **Translate Y** keeps its sway. Hover the tick again: only the three rotation channels are left.
-3. Leave **Blend** at **end key only** and choose **Tools → Loop Tools → Make Loop Seamless**. The status bar says "Loop made seamless on 3 channels" and the red tick is gone.
+3. Set **Blend** to **end key only** and choose **Tools → Loop Tools → Make Loop Seamless**. The status bar says "Loop made seamless on 3 channels" and the red tick is gone.
 4. Play. The avatar walks on the spot, and the loop wraps at frame 30 without a pop. Select **mHipLeft**: in the graph, **Rotate Y** reads −24° at frame 0 and −24° at frame 30, where it was −19°.
 
 The walk now plays in place at Second Life's walking speed: tick **View → Treadmill → Show Treadmill** with **SL Walk**, play, and the planted feet move back with the lines. **The cycle** reads a stride of about 1.6 m in 0.50 s, at about 102% of the treadmill's speed.
@@ -156,7 +165,8 @@ The walk now plays in place at Second Life's walking speed: tick **View → Trea
 
 - On walks and runs, run **Remove Hip Travel** first and **Make Loop Seamless** after it.
 - Run **Make Loop Seamless** before **Start Cycle at Frame N**: on a loop that isn't seamless, the old seam moves into the middle of the cycle.
-- On motion capture and retargeted clips, which have a key on every frame, a **Blend** of several frames spreads the correction instead of bending only the last frame.
+- On motion capture and retargeted clips, which have a key on every frame, keep **Blend** at **whole loop**: a short blend or the end key alone bends the last frames sharply, which shows as a hitch every time the loop wraps.
+- Retargeted motion capture often stands metres from the origin, where it was recorded. **Move to Origin** puts it back over the origin.
 - After fixing a seam, check the curves at **Loop in** and **Loop out** in the [[Graph editor]]; the ends should meet with the same slope.
 - To mark which part of the clip loops, drag the loop flags on the timeline; see [[Keys and timeline#Looping]].
 - On a motion capture take, **Find Best Loop Points**, **Use**, then **Make Seamless** gives a first loop in three clicks.

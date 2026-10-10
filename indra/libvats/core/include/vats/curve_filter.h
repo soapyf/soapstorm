@@ -56,6 +56,29 @@ struct CurveId {
 // Curves that do not exist are skipped.
 void filter_curves(Clip& clip, const std::vector<CurveId>& curves, int from, int to, const FilterSettings& s);
 
+// Spikes: glitches of a few frames in a curve with a key on (nearly) every frame, as motion capture has (a foot
+// that flips 30 degrees for one frame). A sample is a spike when it is further from a robust line through the frames
+// around it (over half_window_s seconds each side, at least 2 keys) than threshold times the curve's own typical deviation (a robust sigma from the median
+// absolute deviation), and at least floor_deg / floor_m. Runs lasting up to max_run_s seconds are rebuilt by a cubic
+// bridge from the good frames on either side, matching their slopes; longer ones (a quick flick of the hand) are real
+// motion and stay. Sparse curves
+// (hand keys, more than 1.5 frames apart on average) are left alone: there a lone key is a pose, not a glitch.
+struct SpikeSettings {
+    double threshold = 6;    // robust sigmas
+    double floor_deg = 4;    // never a spike below this on rot_* channels
+    double floor_m = 0.01;   // ... nor below this on pos_* and pole_* channels
+    double half_window_s = 0.05;  // the neighbours compared: 3 frames each side at 60 fps
+    double max_run_s = 0.04;  // a glitch lasts this long at most (2 frames at 60 fps); longer runs are motion
+};
+struct SpikeReport {
+    int samples = 0;   // keys rebuilt
+    int channels = 0;  // curves that had any
+    std::string worst;  // "track channel" of the largest spike
+    double worst_size = 0;
+};
+// The given tracks (empty = all).
+SpikeReport remove_spikes(Clip& clip, const std::vector<std::string>& tracks = {}, const SpikeSettings& s = {});
+
 // Shake per track over from..to (looped as filter_curves does): rotation jerk as the length of the three
 // channels' jerk vector (degrees/s^3), and the same for position (metres/s^3; 0 without position curves).
 struct JointShake {
