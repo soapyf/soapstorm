@@ -12,11 +12,13 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <functional>
 
 #include "vats/anim_convert.h"
 #include "vats/anim_file.h"
+#include "vats/curve_filter.h"
 #include "vats/curve_ops.h"
 #include "vats/json.h"
 #include "guard.h"
@@ -463,6 +465,16 @@ RetargetResult retarget(const Skeleton& skel, const SourceAnim& src, const BoneM
     }
     for (auto& [name, tr] : clip.curves)
         for (auto& [ch, c] : tr) c.recompute_handles();
+    if (opt.remove_spikes) {  // capture glitches of a frame or two, before anything reads the motion (foot contacts)
+        const SpikeReport sr = remove_spikes(clip);
+        if (sr.samples) {
+            char buf[200];
+            std::snprintf(buf, sizeof buf, "removed %d spike%s on %d curve%s (the largest %.0f%s, %s)", sr.samples,
+                          sr.samples == 1 ? "" : "s", sr.channels, sr.channels == 1 ? "" : "s", sr.worst_size,
+                          sr.worst.find(" rot_") != std::string::npos ? " degrees" : " m", sr.worst.c_str());
+            res.report.push_back(buf);
+        }
+    }
     return res;
 }
 

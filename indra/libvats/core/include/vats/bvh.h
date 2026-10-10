@@ -32,6 +32,7 @@ BvhExportResult export_bvh(const Skeleton& skel, const Clip& clip, const BvhExpo
 
 struct BvhImportResult {
     bool ok = false;
+    bool foreign_rig = false;  // a valid BVH whose root is not mPelvis: another rig, for the retarget importer
     std::string error;
     Clip clip;
     std::vector<std::string> report;

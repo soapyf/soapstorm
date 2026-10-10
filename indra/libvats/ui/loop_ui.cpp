@@ -82,8 +82,10 @@ void App::draw_loop_tools_menu() {
     const LoopRange r = loop_range(doc_.clip());
     ImGui::TextDisabled("Frames %d to %d%s", r.in, r.out, doc_.clip().loop ? " (loop)" : " (whole clip)");
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
-    slider_int("Blend", &loop_blend_, 0, 15, loop_blend_ ? "%d frames" : "end key only");
-    ImGui::SetItemTooltip("Ease the last frames into the start pose instead of only changing the end key");
+    slider_int("Blend", &loop_blend_, kBlendWholeLoop, 15,
+               loop_blend_ == kBlendWholeLoop ? "whole loop" : loop_blend_ ? "%d frames" : "end key only");
+    ImGui::SetItemTooltip("Where the correction goes: spread over the whole loop (smoothest, best for motion capture),\n"
+                          "eased in over the last frames, or on the end key only");
     if (menu_item_icon(icon::kSeamless, "Make Loop Seamless")) {
         int n = 0;
         graph_.snapshot_curves(doc_.clip());  // PT-4
@@ -94,16 +96,35 @@ void App::draw_loop_tools_menu() {
     ImGui::SetItemTooltip("Every channel ends where it starts, with the same slope");
     ImGui::Separator();
     if (menu_item_icon(icon::kInPlace, "Remove Hip Travel (In Place)")) {
-        Travel t;
         graph_.snapshot_curves(doc_.clip());  // PT-4
-        edit("Remove Hip Travel", [&](Clip& c) { t = remove_travel(c); });
-        char buf[160];
-        auto shown = [](double v) { return std::fabs(v) < 0.005 ? 0.0 : v; };  // never "-0.00"
-        std::snprintf(buf, sizeof buf, "Removed hip travel: %.2f m/s forward, %.2f m/s sideways (%.2f m/s)", shown(t.vx),
-                      shown(t.vy), t.speed());
+        char buf[200];
+        if (doc_.clip().loop) {  // a cycle: a straight line, exact and seamless
+            Travel t;
+            edit("Remove Hip Travel", [&](Clip& c) { t = remove_travel(c); });
+            auto shown = [](double v) { return std::fabs(v) < 0.005 ? 0.0 : v; };  // never "-0.00"
+            std::snprintf(buf, sizeof buf, "Removed hip travel: %.2f m/s forward, %.2f m/s sideways (%.2f m/s)",
+                          shown(t.vx), shown(t.vy), t.speed());
+        } else {  // a whole take that may wander, turn or pace: follow its path
+            double v = 0;
+            edit("Remove Hip Travel", [&](Clip& c) { v = remove_path(c); });
+            std::snprintf(buf, sizeof buf, "Removed hip travel along its path: %.2f m/s on average; the sway stays", v);
+        }
         status(buf);
     }
-    ImGui::SetItemTooltip("Keeps the hips' sway and height; the walk speed is shown so an AO can match it");
+    ImGui::SetItemTooltip("Keeps the hips' sway and height; the walk speed is shown so an AO can match it.\n"
+                          "With Loop on, the travel over the loop comes out as a straight line; with Loop off, the whole\n"
+                          "take's path is followed, so a take that turns or paces back and forth stays in place too.\n"
+                          "Leg and arm IK targets move with the hips, so planted feet stay under the body");
+    if (menu_item_icon(icon::kInPlace, "Move to Origin")) {
+        Vec3 m;
+        graph_.snapshot_curves(doc_.clip());  // PT-4
+        edit("Move to Origin", [&](Clip& c) { m = center_on_origin(c); });
+        char buf[160];
+        std::snprintf(buf, sizeof buf, "Moved the hips %.2f m back and %.2f m right to stand over the origin", m.x, m.y);
+        status(buf);
+    }
+    ImGui::SetItemTooltip("Puts the hips' average position over the loop on the origin (motion capture is often\n"
+                          "recorded metres away from it); IK targets and held pins move with them");
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
     ImGui::DragFloat("##travel", &loop_travel_, 0.01f, -5.f, 5.f, "%.2f m/s");
     ImGui::SameLine();

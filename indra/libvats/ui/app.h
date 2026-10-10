@@ -1266,7 +1266,7 @@ private:
     void draw_ghost(const std::vector<Xform>& globals, const Rgb& colour, float alpha, bool bones);
     void draw_loop_tools_menu();
     void draw_loop_seam_mark(ImDrawList* dl, float x_out, float y, bool hovered);
-    int loop_blend_ = 0;
+    int loop_blend_ = kBlendWholeLoop;
     float loop_travel_ = 1.f;
     // --- Clean Up Foot Sliding (footlock_ui.cpp; spec 07 RT-9, 08 FC) ---
     void draw_foot_lock_window();

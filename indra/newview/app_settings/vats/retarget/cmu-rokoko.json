@@ -1,9 +1,14 @@
 {
 	"name": "CMU / Rokoko BVH",
+	"hint": "LHipJoint",
 	"mirror": [
 		[
 			"Left",
 			"Right"
+		],
+		[
+			"LThumb",
+			"RThumb"
 		]
 	],
 	"bones": {
@@ -53,7 +58,8 @@
 		],
 		"mHandThumb1Left": [
 			"LeftFinger11",
-			"Left1Proximal"
+			"Left1Proximal",
+			"LThumb"
 		],
 		"mHandThumb2Left": [
 			"LeftFinger12",
@@ -65,7 +71,8 @@
 		],
 		"mHandIndex1Left": [
 			"LeftFinger21",
-			"Left2Proximal"
+			"Left2Proximal",
+			"LeftHandIndex1"
 		],
 		"mHandIndex2Left": [
 			"LeftFinger22",

@@ -248,7 +248,10 @@ static BvhImportResult import_bvh_text(const Skeleton& skel, std::string_view te
             else res.report.push_back("\"" + j.name + "\" is not an SL joint; skipped");
         }
     }
-    if (joints.empty() || joints[0].node != 0) return fail("the root joint is not the hip (mPelvis)");
+    if (joints.empty() || joints[0].node != 0) {
+        res.foreign_rig = true;
+        return fail("the root joint is not the hip (mPelvis)");
+    }
 
     Clip& clip = res.clip;
     clip.fps = std::clamp(static_cast<int>(std::lround(1.0 / frame_time)), 1, 120);

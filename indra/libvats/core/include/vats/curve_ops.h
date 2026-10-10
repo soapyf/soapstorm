@@ -21,7 +21,9 @@ struct KeyRef {
 
 // Splits the curve at frame without changing its shape (AM-28, 02 section 3.4). If a key already
 // exists at the frame, returns it unchanged. Outside the keyed range or on a non-Bezier segment it
-// sets a key with the evaluated value. Returns the key's index.
+// sets a key with the evaluated value; either way the keys beside it get their automatic handles frozen
+// (Aligned, Vector -> Free), and outside the keyed range the end key's handle facing it goes flat, so the new
+// segment holds. Returns the key's index.
 int insert_on_curve(FCurve& curve, double frame);
 
 // Moves the selected keys (and their handles) by (dframe, dvalue) from their state in at_press,
