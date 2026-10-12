@@ -45,7 +45,7 @@ Backup Path:
     <layout_stack
      name="ls_account_specific_label"
      follows="all"
-     height="400"
+     height="440"
      orientation="vertical"
      top_pad="5"
      left="30"
@@ -82,7 +82,8 @@ You are currently logged out. Be aware that your account specific settings can o
      follows="all"
      left="1"
      right="-1"
-     height="250"
+     height="360"
+     min_dim="360"
      user_resize="false"
      auto_resize="true"
      layout="topleft">

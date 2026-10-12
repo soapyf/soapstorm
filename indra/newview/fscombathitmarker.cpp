@@ -593,12 +593,24 @@ LLVector3 FSCombatHitMarker::getOTSConvergenceTarget(const LLVector3& cam_origin
         world_dist = CONVERGE_RANGE;
     }
 
-    // Lean guard: a convergence point right on top of the camera makes the
-    // eye->target angle blow up (~atan(shoulder_offset / dist)), which IS the
-    // shoulder-dependent swing. Clamp the *world* distance only; genuine avatar
-    // hits below are trusted and exempt, so close targets still converge dead on.
-    static LLCachedControl<F32> min_dist(gSavedSettings, "FSOTSConvergeMinDistance", 2.0f);
-    F32 best_dist = llmax(world_dist, (F32)min_dist);
+    // The shot originates at the player's eye, but the convergence ray starts at
+    // the (pulled-back OTS) camera. Someone standing behind the player is still in
+    // front of the camera, so the crosshair ray can graze their hitbox or geometry and steal
+    // convergence. Require convergence to be at least as far as the eye along the ray
+    // so only targets genuinely in front of the shooter qualify. One dot product, computed once.
+    F32 eye_dist = 0.1f;
+    if (isAgentAvatarValid() && gAgentAvatarp->mHeadp)
+    {
+        const LLVector3 eye = gAgentAvatarp->mHeadp->getWorldPosition();
+        eye_dist = llmax(0.1f, (eye - cam_origin) * cam_at);
+    }
+
+    // Lean guard: a convergence point right on top of or behind the player's eye
+    // makes the eye->target angle blow up (~atan(shoulder_offset / dist)). Guard
+    // against world hits falling behind the eye or into the shoulder gap.
+    static LLCachedControl<F32> min_dist(gSavedSettings, "FSOTSConvergeMinDistance", 0.2f);
+    const F32 min_world_dist = eye_dist + llmax(0.05f, (F32)min_dist);
+    F32 best_dist = llmax(world_dist, min_world_dist);
 
     // Avatar convergence on the actual hitbox. We converge on the SAME oriented box
     // the Avatar Hitboxes debug draws (DebugRenderHitboxes, lldrawpoolavatar.cpp):
@@ -613,19 +625,6 @@ LLVector3 FSCombatHitMarker::getOTSConvergenceTarget(const LLVector3& cam_origin
     {
         static LLCachedControl<F32> av_inflate(gSavedSettings, "FSOTSAvatarConvergeRadius", 0.0f);
         const F32 inflate = llmax(0.f, (F32)av_inflate); // optional forgiveness; 0 = exact hitbox
-
-        // The shot originates at the player's eye, but the convergence ray starts at
-        // the (pulled-back OTS) camera. Someone standing behind the player is still in
-        // front of the camera, so the crosshair ray can graze their hitbox and steal
-        // convergence. Require an avatar box hit to be at least as far as the eye along
-        // the ray, so only targets genuinely in front of the shooter qualify. One dot
-        // product, computed once.
-        F32 eye_dist = 0.1f;
-        if (isAgentAvatarValid() && gAgentAvatarp->mHeadp)
-        {
-            const LLVector3 eye = gAgentAvatarp->mHeadp->getWorldPosition();
-            eye_dist = llmax(0.1f, (eye - cam_origin) * cam_at);
-        }
 
         for (LLCharacter* character : LLCharacter::sInstances)
         {

@@ -1791,16 +1791,16 @@ LLVector3d LLAgentCamera::calcFocusPositionTargetGlobal()
     }
     else if (mCameraMode == CAMERA_MODE_OTS)
     {
-        // Focus in front of avatar at aim height
+        // Focus in front of avatar at aim height, parallel to avatar frame
         static LLCachedControl<F32> ots_focus_dist(gSavedSettings, "OTSFocusDistance", 10.0f);
         static LLCachedControl<F32> ots_height(gSavedSettings,     "OTSCameraHeight",   0.5f);
         static LLCachedControl<F32> ots_side(gSavedSettings,       "OTSCameraSide",    -0.5f);
-        F32 focus_height = (F32)ots_height * 0.5f;
-        F32 focus_side = (F32)ots_side * 0.3f;
+        F32 focus_height = (F32)ots_height;
+        F32 focus_side = (F32)ots_side;
         if (isAgentAvatarValid() && gAgentAvatarp->isSitting() && mSitCameraEnabled)
         {
-            focus_height = mSitCameraPos.mV[VZ] * 0.5f;
-            focus_side = mSitCameraPos.mV[VY] * 0.3f;
+            focus_height = mSitCameraPos.mV[VZ];
+            focus_side = mSitCameraPos.mV[VY];
         }
         LLVector3 focus_local((F32)ots_focus_dist, focus_side, focus_height);
         LLQuaternion agent_rot = gAgent.getFrameAgent().getQuaternion();
