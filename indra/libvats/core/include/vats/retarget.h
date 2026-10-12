@@ -71,6 +71,7 @@ struct RetargetOptions {
     bool rest_from_frame0 = false;  // RT-7: override the file's bind pose
     int fps = 0;                    // 0 = the source rate, rounded, clamped to 1..60
     const Shape* shape = nullptr;   // SL body the rest pose is measured on
+    bool remove_spikes = true;      // capture glitches of a few frames rebuilt (curve_filter.h remove_spikes)
 };
 
 struct RetargetResult {

@@ -36,7 +36,7 @@ const std::vector<Group>& groups() {
           "copy", "paste", "save_clip", "mirror_l2r", "mirror_r2l", "flip_pose", "mirror_bone", "reverse", "shortcuts",
           "prefs"}},
         {"Edit > Time",
-         {"insert_frames", "remove_range", "stretch_range", "copy_range", "paste_range", "paste_range_insert",
+         {"insert_frames", "remove_range", "crop_to_range", "stretch_range", "copy_range", "paste_range", "paste_range_insert",
           "paste_range_mirrored"}},
         {"Playback", {"play", "next_frame", "prev_frame", "next_key", "prev_key", "start", "end"}},
         {"View",

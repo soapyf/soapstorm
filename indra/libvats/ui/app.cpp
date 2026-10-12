@@ -22,6 +22,7 @@
 #include "imgui_internal.h"
 #include "vats/anim_convert.h"
 #include "vats/bvh.h"
+#include "vats/curve_filter.h"
 #include "vats/clips.h"
 #include "vats/deformer.h"
 #include "vats/edit.h"
@@ -403,6 +404,7 @@ void App::import_file(const std::string& path) {
     } else {
         // IO-35: optional key reduction with the export defaults.
         auto r = import_bvh(skel_, text, settings_.bvh_reduce ? BvhImportOptions{0.05, 0.0005} : BvhImportOptions{});
+        if (r.foreign_rig) return open_retarget(path);  // another rig's BVH (CMU, Mixamo...): map it instead of failing
         if (!r.ok) {
             message("Import failed", file_name(path) + ": " + r.error);
             return;
@@ -1677,6 +1679,21 @@ void App::draw_menus() {
                               "\"Also export the other side (mirrored)\" writes the flipped copy beside the original");
         if (menu_item_icon(icon::kSimplify, "Simplify Curves...", nullptr, false, !doc_.history.is_open())) open_simplify();
         ImGui::SetItemTooltip("Fewer keys on the selected bones' curves (or all), within a tolerance");
+        if (menu_item_icon(icon::kFilter, "Remove Spikes", nullptr, false, !doc_.history.is_open())) {
+            SpikeReport sr;
+            graph_.snapshot_curves(doc_.clip());  // PT-4
+            edit("Remove Spikes", [&](Clip& c) { sr = remove_spikes(c, time_edit_tracks()); });
+            char buf[200];
+            if (sr.samples)
+                std::snprintf(buf, sizeof buf, "Removed %d spike%s on %d curve%s; the largest was %.1f on %s", sr.samples,
+                              sr.samples == 1 ? "" : "s", sr.channels, sr.channels == 1 ? "" : "s", sr.worst_size,
+                              sr.worst.c_str());
+            else
+                std::snprintf(buf, sizeof buf, "No spikes found (only curves with a key on nearly every frame are checked)");
+            status(buf);
+        }
+        ImGui::SetItemTooltip("Glitches of a frame or few in motion capture (a foot that flips for one frame) on the "
+                              "selected bones (or all), rebuilt from the frames around them");
         ImGui::Separator();
         menu_item("shortcuts");
         menu_item("prefs");

@@ -227,4 +227,111 @@ std::vector<JointShake> shake_scores(const Clip& clip, const std::vector<std::st
     return out;
 }
 
+namespace {
+
+double median_of(std::vector<double> v) {
+    if (v.empty()) return 0;
+    const size_t m = v.size() / 2;
+    std::nth_element(v.begin(), v.begin() + long(m), v.end());
+    return v[m];
+}
+
+}  // namespace
+
+SpikeReport remove_spikes(Clip& clip, const std::vector<std::string>& tracks, const SpikeSettings& s) {
+    SpikeReport rep;
+    for (auto& [name, track] : clip.curves) {
+        if (!tracks.empty() && std::find(tracks.begin(), tracks.end(), name) == tracks.end()) continue;
+        for (auto& [ch, c] : track) {
+            const bool rot = ch.rfind("rot_", 0) == 0, pos = ch.rfind("pos_", 0) == 0 || ch.rfind("pole_", 0) == 0;
+            const size_t n = c.keys.size();
+            const int hw = std::max(2, int(std::lround(s.half_window_s * std::max(clip.fps, 1))));
+            if ((!rot && !pos) || n < size_t(2 * hw + 3)) continue;
+            if ((c.keys.back().frame - c.keys.front().frame) / double(n - 1) > 1.5) continue;  // hand keys
+            // Rotations unwrapped (no 360-degree jumps between neighbours) so a wrap is never taken for a spike.
+            std::vector<double> u(n), off(n, 0.0);
+            u[0] = c.keys[0].value;
+            for (size_t i = 1; i < n; ++i) {
+                double d = c.keys[i].value - c.keys[i - 1].value;
+                if (rot) d -= 360 * std::round(d / 360);
+                u[i] = u[i - 1] + d;
+                off[i] = c.keys[i].value - u[i];
+            }
+            // Each key against two robust guesses from its neighbours, and a spike only when it is far from both:
+            // the median (exact on a corner, such as a punch that starts at once, but dragged along a steep slope,
+            // where a two-frame glitch would make the good frames beside it read as spikes too) and a Theil-Sen
+            // line (the median of the slopes between every pair, then the median intercept: exact on a slope,
+            // but it cuts corners).
+            std::vector<double> r(n), slopes, cuts;
+            for (size_t i = 0; i < n; ++i) {
+                // Near the ends the window runs one-sided, as long as a centred one (2 hw keys on the side there
+                // is); there a median would be dragged by the slope, so only the line judges.
+                size_t lo = i > size_t(hw) ? i - size_t(hw) : 0, hi = std::min(n - 1, i + size_t(hw));
+                if (lo == 0) hi = std::min(n - 1, size_t(2 * hw));
+                if (hi == n - 1) lo = n - 1 > size_t(2 * hw) ? n - 1 - size_t(2 * hw) : 0;
+                const bool centred = i - lo == hi - i;
+                slopes.clear(), cuts.clear();
+                for (size_t p = lo; p <= hi; ++p)
+                    for (size_t q = p + 1; q <= hi; ++q)
+                        slopes.push_back((u[q] - u[p]) / (c.keys[q].frame - c.keys[p].frame));
+                const double m = median_of(slopes);
+                for (size_t p = lo; p <= hi; ++p) cuts.push_back(u[p] - m * (c.keys[p].frame - c.keys[i].frame));
+                const double off_line = u[i] - median_of(cuts);
+                if (!centred) { r[i] = off_line; continue; }
+                const double off_median = u[i] - median_of(std::vector<double>(u.begin() + long(lo), u.begin() + long(hi) + 1));
+                r[i] = std::fabs(off_line) < std::fabs(off_median) ? off_line : off_median;
+            }
+            std::vector<double> absr(n);
+            for (size_t i = 0; i < n; ++i) absr[i] = std::fabs(r[i]);
+            const double sigma = 1.4826 * median_of(absr);
+            const double limit = std::max(s.threshold * sigma, rot ? s.floor_deg : s.floor_m);
+            std::vector<bool> bad(n);
+            for (size_t i = 0; i < n; ++i) bad[i] = absr[i] > limit;
+            int fixed = 0;
+            for (size_t i0 = 0; i0 < n;) {
+                if (!bad[i0]) { ++i0; continue; }
+                size_t i1 = i0;
+                while (i1 + 1 < n && bad[i1 + 1]) ++i1;
+                const size_t run = i1 - i0 + 1;
+                if (run <= size_t(std::max(1L, std::lround(s.max_run_s * std::max(clip.fps, 1))))) {
+                    // A cubic bridge from the good key before to the good key after, leaving each at its slope.
+                    const bool has_l = i0 > 0, has_r = i1 + 1 < n;
+                    const size_t L = has_l ? i0 - 1 : i1 + 1, R = has_r ? i1 + 1 : i0 - 1;
+                    const double f0 = c.keys[L].frame, f1 = c.keys[R].frame, p0 = u[L], p1 = u[R];
+                    const double chord = f1 > f0 ? (p1 - p0) / (f1 - f0) : 0;
+                    auto slope_at = [&](size_t k, int dir) {  // the good neighbours' own slope, else the chord
+                        const long j = long(k) + dir;
+                        if (j < 0 || j >= long(n) || bad[size_t(j)]) return chord;
+                        return (u[k] - u[size_t(j)]) / (c.keys[k].frame - c.keys[size_t(j)].frame);
+                    };
+                    const double m0 = has_l ? slope_at(L, -1) : 0, m1 = has_r ? slope_at(R, +1) : 0;
+                    for (size_t k = i0; k <= i1; ++k) {
+                        double v;
+                        if (has_l && has_r) {
+                            const double h = f1 - f0, t = (c.keys[k].frame - f0) / h, t2 = t * t, t3 = t2 * t;
+                            v = (2 * t3 - 3 * t2 + 1) * p0 + (t3 - 2 * t2 + t) * h * m0 + (-2 * t3 + 3 * t2) * p1 +
+                                (t3 - t2) * h * m1;
+                        } else {
+                            // At an end of the curve: carry on from the nearest good key at its own slope.
+                            v = has_l ? p0 + m0 * (c.keys[k].frame - f0) : p1 - m1 * (f1 - c.keys[k].frame);
+                        }
+                        if (absr[k] > rep.worst_size) rep.worst_size = absr[k], rep.worst = name + " " + ch;
+                        Key& key = c.keys[k];
+                        const double dv = v + off[L] - key.value;  // the good neighbour's turn, not the glitch's
+                        key.value += dv, key.ly += dv, key.ry += dv;
+                        ++fixed;
+                    }
+                }
+                i0 = i1 + 1;
+            }
+            if (fixed) {
+                c.recompute_handles();
+                rep.samples += fixed;
+                ++rep.channels;
+            }
+        }
+    }
+    return rep;
+}
+
 }  // namespace vats

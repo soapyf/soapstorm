@@ -9,6 +9,7 @@
 #include "app.h"
 #include "icon_button.h"
 #include "icons.h"
+#include "vats/clips.h"
 #include "vats/time_edit.h"
 #include "theme.h"
 #include "widgets.h"
@@ -196,6 +197,21 @@ void App::add_time_actions(const std::function<void(const char*, Action)>& add) 
                              range_a_ = range_b_ = -1;
                          },
                          no_range});
+    add("crop_to_range", {"Crop to Range", 0, 0, false,
+                          [this] {
+                              double a, b;
+                              if (!clip_range(a, b)) return;
+                              const int ia = int(std::lround(a)), ib = int(std::lround(b));
+                              if (ib <= ia || ia >= doc_.clip().end_frame) return status("The range is too short to crop to");
+                              // Every actor's take, as one step that undo restores for all of them.
+                              scene_edit("Crop to Range", [&](Project& p) {
+                                  for (int i = 0; i < std::max<int>(1, int(p.actors.size())); ++i) crop_time(take_clip(p, i, p.active_clip), ia, ib);
+                              });
+                              range_a_ = range_b_ = -1;
+                              frame_ = std::clamp(frame_ - ia, 0.0, double(doc_.clip().end_frame));
+                              status("Cropped to frames " + std::to_string(ia) + " to " + std::to_string(ib));
+                          },
+                          no_range});
     add("stretch_range", {"Stretch Range...", 0, 0, false,
                           [this] {
                               double a, b;
@@ -248,7 +264,7 @@ void App::draw_time_menu_items() {
     if (menu_item_icon(icon::kRetime, "Retime Markers", nullptr, retime_on_)) set_retime(!retime_on_);  // TE-5 (retime_ui.cpp)
     ImGui::SetItemTooltip("Double-click the ruler to drop a marker; drag a marker to retime the keys around it");
     ImGui::Separator();
-    for (const char* id : {"insert_frames", "remove_range", "stretch_range"}) menu_item(id);
+    for (const char* id : {"insert_frames", "remove_range", "crop_to_range", "stretch_range"}) menu_item(id);
     ImGui::Separator();
     for (const char* id : {"copy_range", "paste_range", "paste_range_insert", "paste_range_mirrored"}) menu_item(id);
 }

@@ -219,6 +219,20 @@ int insert_on_curve(FCurve& curve, double frame) {
     auto& keys = curve.keys;
     auto it = std::upper_bound(keys.begin(), keys.end(), frame, [](double v, const Key& k) { return v < k.frame; });
     if (it == keys.begin() || it == keys.end() || (it - 1)->interp != Interp::Bezier) {
+        // No Bezier to split. The keys either side keep their handles (a new neighbour would recompute automatic
+        // ones). Before the first key or after the last the curve held still: the end key's handle facing the new
+        // key goes flat (Free), so the new segment holds whatever its interpolation, and still eases if moved.
+        const size_t at = size_t(it - keys.begin());
+        auto freeze = [](Key& k) {
+            for (Handle* h : {&k.left, &k.right}) {
+                if (*h == Handle::Vector) *h = Handle::Free;
+                else if (automatic(*h)) *h = Handle::Aligned;
+            }
+        };
+        if (at > 0) freeze(keys[at - 1]);
+        if (at < keys.size()) freeze(keys[at]);
+        if (!keys.empty() && at == 0) keys[0].left = Handle::Free, keys[0].ly = keys[0].value;
+        if (!keys.empty() && at == keys.size()) keys.back().right = Handle::Free, keys.back().ry = keys.back().value;
         curve.set_key(frame, curve.evaluate(frame));
         return curve.find(frame);  // not set_key's result: its index is unreliable when the insert reallocates
     }

@@ -19,6 +19,9 @@ namespace vats {
 void insert_time(Clip& clip, int at, int frames, const std::vector<std::string>& tracks = {});
 // Deletes the frames a..b-1 and closes the gap: keys from b on move to a.
 void remove_time(Clip& clip, int a, int b, const std::vector<std::string>& tracks = {});
+// Keeps only the frames a..b (inclusive) of the whole animation: every curve gets a key at a and at b holding
+// the pose there, everything outside goes, and frame a becomes frame 0. Last frame, the loop points and pins follow.
+void crop_time(Clip& clip, int a, int b);
 // Stretches or squashes a..b to a..a+length; later keys move by the difference.
 void scale_time(Clip& clip, int a, int b, int length, const std::vector<std::string>& tracks = {});
 // The same on fractional frames: a..b becomes a..to, later keys move by to - b; the length rounds (TE-5).

@@ -1,6 +1,6 @@
 # Time editing
 
-Time editing changes when things happen rather than what the pose is: open empty frames, cut a stretch out, make a section faster or slower, retime by dragging markers, copy a section of keys to another point in time, or split a long dance into parts. The commands are in **Edit → Time** and in the timeline's right-click menu.
+Time editing changes when things happen rather than what the pose is: open empty frames, cut a stretch out, keep only one stretch, make a section faster or slower, retime by dragging markers, copy a section of keys to another point in time, or split a long dance into parts. The commands are in **Edit → Time** and in the timeline's right-click menu.
 
 > Related articles: [[Keys and timeline]], [[Graph editor]], [[Loop tools]], [[Couples and groups]]
 
@@ -29,6 +29,10 @@ The status bar ends with **(all bones)** or **(selected bones)** so you can tell
 ### Removing a range
 
 **Edit → Time → Remove Range** deletes the frames of the range and closes the gap: keys after the range move earlier. The range is cleared afterwards.
+
+### Cropping to a range
+
+**Edit → Time → Crop to Range** keeps only the frames of the range and deletes everything before and after it, for example to cut one move out of a long motion capture take. Every bone gets a key at both ends of the range holding the pose there, the first frame of the range becomes frame 0, and **Last frame** becomes the range's length. Loop points and pins move with the keys and are clipped to the range. It always works on the whole animation, whatever is selected. The status bar says, for example, "Cropped to frames 40 to 100".
 
 ### Stretching a range
 
