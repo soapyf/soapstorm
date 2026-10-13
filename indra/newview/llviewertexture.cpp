@@ -862,7 +862,13 @@ void LLViewerTexture::cleanup()
 {
     if (LLAppViewer::getTextureFetch())
     {
-        LLAppViewer::getTextureFetch()->updateRequestPriority(mID, 0.f);
+        try
+        {
+            LLAppViewer::getTextureFetch()->updateRequestPriority(mID, 0.f);
+        }
+        catch (...)
+        {
+        }
     }
 
     mFaceList[LLRender::DIFFUSE_MAP].clear();

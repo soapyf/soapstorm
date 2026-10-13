@@ -104,6 +104,7 @@
 #include "lldrawpoolbump.h"
 #include "lldrawpoolwater.h"
 #include "llmaniptranslate.h"
+#include "fsmaniptranslatejoint.h"
 #include "llface.h"
 #include "llfeaturemanager.h"
 #include "llfilepicker.h"
@@ -7233,6 +7234,7 @@ void LLViewerWindow::stopGL()
         stop_glerror();
 
         LLManipTranslate::destroyGL() ;
+        FSManipTranslateJoint::destroyGL();
         stop_glerror();
 
         FSVATsImGui::destroyGL(); // VATs ImGui UI
@@ -7307,6 +7309,7 @@ void LLViewerWindow::restoreGL(const std::string& progress_message)
         gSky.restoreGL();
         gPipeline.restoreGL();
         LLManipTranslate::restoreGL();
+        FSManipTranslateJoint::restoreGL();
 
         gBumpImageList.restoreGL();
         LLViewerDynamicTexture::restoreGL();

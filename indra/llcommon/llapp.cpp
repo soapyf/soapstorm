@@ -676,10 +676,8 @@ void default_unix_signal_handler(int signum, siginfo_t *info, void *)
                 signum = SIGABRT;
             }
 
-            if (LLApp::sLogInSignal)
-            {
-                LL_WARNS() << "Signal handler - Handling fatal signal!" << LL_ENDL;
-            }
+            LL_WARNS() << "Signal handler - Handling fatal signal " << signum
+                       << " (" << apr_signal_description_get(signum) << ")" << LL_ENDL;
 
             if (LLApp::isError())
             {

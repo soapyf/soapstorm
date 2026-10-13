@@ -106,9 +106,10 @@ static void exceptionTerminateHandler()
     // reinstall default terminate() handler in case we re-terminate.
     if (gOldTerminateHandler) std::set_terminate(gOldTerminateHandler);
     // treat this like a regular viewer crash, with nice stacktrace etc.
-    long *null_ptr;
-    null_ptr = 0;
-    *null_ptr = 0xDEADBEEF; //Force an exception that will trigger breakpad.
+    // Use volatile to prevent the compiler from optimizing away the null pointer dereference.
+    volatile long *null_ptr = nullptr;
+    *null_ptr = 0xDEADBEEF; // Force an exception that will trigger breakpad.
+    raise(SIGSEGV);
     // we've probably been killed-off before now, but...
     gOldTerminateHandler(); // call old terminate() handler
 }
@@ -147,15 +148,7 @@ int main( int argc, char **argv )
     while (! viewer_app_ptr->frame())
     {}
 
-    if (!LLApp::isError())
-    {
-        //
-        // We don't want to do cleanup here if the error handler got called -
-        // the assumption is that the error handler is responsible for doing
-        // app cleanup if there was a problem.
-        //
-        viewer_app_ptr->cleanup();
-    }
+    viewer_app_ptr->cleanup();
     delete viewer_app_ptr;
     viewer_app_ptr = NULL;
     return 0;

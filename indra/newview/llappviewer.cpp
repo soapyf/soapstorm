@@ -207,6 +207,8 @@
 #include "llkeyframemotion.h"
 #include "llworldmap.h"
 #include "llhudmanager.h"
+#include "llmaniptranslate.h"
+#include "fsmaniptranslatejoint.h"
 #include "lltoolmgr.h"
 #include "llassetstorage.h"
 #include "llpolymesh.h"
@@ -865,6 +867,9 @@ LLAppViewer::LLAppViewer()
 
 LLAppViewer::~LLAppViewer()
 {
+    LLManipTranslate::destroyGL();
+    FSManipTranslateJoint::destroyGL();
+
     delete mSettingsLocationList;
 
     destroyMainloopTimeout();
@@ -2554,6 +2559,8 @@ bool LLAppViewer::cleanup()
     //Note:
     //SUBSYSTEM_CLEANUP(LLViewerMedia) has to be put before gTextureList.shutdown()
     //because some new image might be generated during cleaning up media. --bao
+    LLManipTranslate::destroyGL();
+    FSManipTranslateJoint::destroyGL();
     gTextureList.shutdown(); // shutdown again in case a callback added something
     LLUIImageList::getInstance()->cleanUp();
 

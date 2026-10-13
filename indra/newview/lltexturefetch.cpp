@@ -3208,18 +3208,23 @@ bool LLTextureFetch::getRequestFinished(const LLUUID& id, S32& discard_level, S3
 bool LLTextureFetch::updateRequestPriority(const LLUUID& id, F32 priority)
 {
     LL_PROFILE_ZONE_SCOPED;
-    mRequestQueue.tryPost([=, this]()
-        {
-            LLTextureFetchWorker* worker = getWorker(id);
-            if (worker)
+    try
+    {
+        return mRequestQueue.tryPost([=, this]()
             {
-                worker->lockWorkMutex();                                        // +Mw
-                worker->setImagePriority(priority);
-                worker->unlockWorkMutex();                                      // -Mw
-            }
-        });
-
-    return true;
+                LLTextureFetchWorker* worker = getWorker(id);
+                if (worker)
+                {
+                    worker->lockWorkMutex();                                        // +Mw
+                    worker->setImagePriority(priority);
+                    worker->unlockWorkMutex();                                      // -Mw
+                }
+            });
+    }
+    catch (...)
+    {
+        return false;
+    }
 }
 
 // Replicates and expands upon the base class's

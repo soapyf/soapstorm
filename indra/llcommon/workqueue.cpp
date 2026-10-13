@@ -297,10 +297,23 @@ bool LL::WorkQueue::post(const Work& callable)
     {
         return mQueue.pushIfOpen(callable);
     }
+    catch (const boost::fibers::lock_error&)
+    {
+        return false;
+    }
+    catch (const Closed&)
+    {
+        return false;
+    }
     catch (std::bad_alloc&)
     {
         LLError::LLUserWarningMsg::showOutOfMemory();
         LL_ERRS("LLCoros") << "Bad memory allocation in WorkQueue::post" << LL_ENDL;
+        return false;
+    }
+    catch (const std::exception& e)
+    {
+        LL_WARNS("LLCoros") << "Exception in WorkQueue::post: " << e.what() << LL_ENDL;
         return false;
     }
 }
@@ -311,10 +324,23 @@ bool LL::WorkQueue::tryPost(const Work& callable)
     {
         return mQueue.tryPush(callable);
     }
+    catch (const boost::fibers::lock_error&)
+    {
+        return false;
+    }
+    catch (const Closed&)
+    {
+        return false;
+    }
     catch (std::bad_alloc&)
     {
         LLError::LLUserWarningMsg::showOutOfMemory();
         LL_ERRS("LLCoros") << "Bad memory allocation in WorkQueue::tryPost" << LL_ENDL;
+        return false;
+    }
+    catch (const std::exception& e)
+    {
+        LL_WARNS("LLCoros") << "Exception in WorkQueue::tryPost: " << e.what() << LL_ENDL;
         return false;
     }
 }

@@ -580,9 +580,8 @@ static void exceptionTerminateHandler()
     // reinstall default terminate() handler in case we re-terminate.
     if (gOldTerminateHandler) std::set_terminate(gOldTerminateHandler);
     // treat this like a regular viewer crash, with nice stacktrace etc.
-    long *null_ptr;
-    null_ptr = 0;
-    *null_ptr = 0xDEADBEEF; //Force an exception that will trigger breakpad.
+    volatile long *null_ptr = nullptr;
+    *null_ptr = 0xDEADBEEF; // Force an exception that will trigger breakpad.
 
     // we've probably been killed-off before now, but...
     gOldTerminateHandler(); // call old terminate() handler

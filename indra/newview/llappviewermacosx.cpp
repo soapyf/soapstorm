@@ -131,11 +131,8 @@ bool pumpMainLoop()
 
 void cleanupViewer()
 {
-    if(!LLApp::isError())
-    {
-        if (gViewerAppPtr)
-            gViewerAppPtr->cleanup();
-    }
+    if (gViewerAppPtr)
+        gViewerAppPtr->cleanup();
 
     delete gViewerAppPtr;
     gViewerAppPtr = NULL;
