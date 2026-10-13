@@ -33,7 +33,6 @@
 #include "lltrans.h"
 #include "lluuid.h"
 #include "llvorbisencode.h"
-#include "sslufs.h" // <SS:Nexii> upload loudness normalization
 #include "lluploaddialog.h"
 #include "llnotificationsutil.h"
 #include "llagent.h"
@@ -464,25 +463,9 @@ LLSD LLNewFileResourceUploadInfo::exportTempFile()
 
         LL_INFOS() << "Attempting to encode wav as an ogg file" << LL_ENDL;
 
-        // <SS:Nexii> loudness-normalize toward the target LUFS; explicit gain from the long-sound splitter wins so all parts share one whole-file gain
-        F32 gain = mSoundGain;
-        if (gain < 0.f)
-        {
-            gain = 1.f;
-            static LLCachedControl<bool> normalize(gSavedSettings, "FSNormalizeSoundUploads", true);
-            static LLCachedControl<F32> target_lufs(gSavedSettings, "FSSoundTargetLUFS", -23.f);
-            F32 lufs = SS_LUFS_SILENCE;
-            if (normalize && measure_wav_lufs(getFileName(), lufs) == LLVORBISENC_NOERR && lufs > SS_LUFS_SILENCE)
-            {
-                gain = ss_lufs_gain_for_target(lufs, (F32)target_lufs);
-                LL_INFOS() << "Sound upload measured " << lufs << " LUFS, normalizing with gain " << gain << LL_ENDL;
-            }
-        }
-        // </SS:Nexii>
-
         // <FS:Ansariel> FIRE-17812: Increase sounds length to 60s on OpenSim
         //encodeResult = encode_vorbis_file(getFileName(), filename);
-        encodeResult = encode_vorbis_file(getFileName(), filename, LLGridManager::instance().isInSecondLife(), gain); // <SS:Nexii> gain
+        encodeResult = encode_vorbis_file(getFileName(), filename, LLGridManager::instance().isInSecondLife());
         // </FS:Ansariel>
 
         if (LLVORBISENC_NOERR != encodeResult)

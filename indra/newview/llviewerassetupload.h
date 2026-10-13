@@ -166,8 +166,6 @@ public:
 
     void setMaxImageSize(U32 maxUploadSize) { mMaxImageSize = maxUploadSize; }
 
-    void setSoundGain(F32 gain) { mSoundGain = gain; } // <SS:Nexii> explicit normalization gain; negative means measure per settings at encode time
-
 protected:
 
     virtual LLSD        exportTempFile();
@@ -175,7 +173,6 @@ protected:
 private:
     std::string         mFileName;
     S32                 mMaxImageSize;
-    F32                 mSoundGain = -1.f; // <SS:Nexii>
 };
 
 //-------------------------------------------------------------------------

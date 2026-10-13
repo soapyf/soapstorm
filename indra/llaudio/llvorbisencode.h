@@ -62,12 +62,8 @@ const size_t LLVORBIS_CLIP_REJECT_SIZE                 = LLVORBIS_CLIP_MAX_SAMPL
 //S32 encode_vorbis_file(const std::string& in_fname, const std::string& out_fname);
 // <OTS> out_clip_length, when non-null, receives the clip length in seconds (used by the bulk sound->notecard upload)
 S32 check_for_invalid_wav_formats(const std::string& in_fname, std::string& error_msg, bool is_in_secondlife, F32* out_clip_length = nullptr);
-// <SS:Nexii> gain is a linear loudness-normalization factor applied to every sample before the edge fades
-S32 encode_vorbis_file(const std::string& in_fname, const std::string& out_fname, bool is_in_secondlife, F32 gain = 1.f);
+S32 encode_vorbis_file(const std::string& in_fname, const std::string& out_fname, bool is_in_secondlife);
 // </FS:Ansariel>
-
-// <SS:Nexii> integrated LUFS of the mono downmix the encoder will upload; same return codes as the wav checks
-S32 measure_wav_lufs(const std::string& in_fname, F32& out_lufs);
 
 // <SS:Nexii> splits an over-long PCM wav into temp wav segments no longer than max_clip_time each; equal_splits cuts near-equal parts instead of max-length parts with a shorter tail; encoder fades then de-click the cut points
 S32 split_wav_file(const std::string& in_fname, F32 max_clip_time, bool equal_splits, std::vector<std::string>& out_fnames);

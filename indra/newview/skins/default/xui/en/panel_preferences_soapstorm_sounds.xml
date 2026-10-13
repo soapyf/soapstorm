@@ -34,15 +34,28 @@
      tool_tip="Sounds over the clip limit upload as numbered parts. Unchecked: each part is max length with a shorter final part. Checked: all parts are cut to near-equal length."
      top_pad="8"
      width="500" />
-    <check_box
-     control_name="FSNormalizeSoundUploads"
+    <!-- ===== Downloaded sounds ===== -->
+    <text
+     type="string"
+     length="1"
      follows="left|top"
+     font="SansSerifSmallBold"
      height="16"
-     label="Normalize perceived loudness of uploads (like Audacity's Loudness Normalization)"
      layout="topleft"
      left="10"
-     name="normalize_sound_uploads_prefs"
-     tool_tip="Measure each upload's integrated loudness (ITU-R BS.1770 LUFS) and gain it onto the target before encoding. Long sounds are measured once as a whole so split parts stay level-matched."
+     top_pad="18"
+     width="520">
+        Downloaded Sounds
+    </text>
+    <check_box
+     control_name="FSNormalizeDownloadedSounds"
+     follows="left|top"
+     height="16"
+     label="Normalize loudness of downloaded sounds (background, patches playing sounds live)"
+     layout="topleft"
+     left="10"
+     name="normalize_downloaded_sounds_prefs"
+     tool_tip="Check downloaded sound assets against the target loudness on the thread pool. Sounds always play immediately; if one needed adjusting, it is hot-swapped mid-playback where it left off and the sound cache is updated. Viewer UI sounds are never processed."
      top_pad="8"
      width="500" />
     <text
@@ -88,30 +101,5 @@
      name="target_lufs_spinner"
      tool_tip="-23 LUFS matches the EBU R128 / games loudness standard"
      width="64" />
-
-    <!-- ===== Downloaded sounds ===== -->
-    <text
-     type="string"
-     length="1"
-     follows="left|top"
-     font="SansSerifSmallBold"
-     height="16"
-     layout="topleft"
-     left="10"
-     top_pad="18"
-     width="520">
-        Downloaded Sounds
-    </text>
-    <check_box
-     control_name="FSNormalizeDownloadedSounds"
-     follows="left|top"
-     height="16"
-     label="Normalize loudness of downloaded sounds (background, patches playing sounds live)"
-     layout="topleft"
-     left="10"
-     name="normalize_downloaded_sounds_prefs"
-     tool_tip="Check downloaded sound assets against the target loudness on the thread pool. Sounds always play immediately; if one needed adjusting, it is hot-swapped mid-playback where it left off and the sound cache is updated. Viewer UI sounds are never processed."
-     top_pad="8"
-     width="500" />
 
 </panel>

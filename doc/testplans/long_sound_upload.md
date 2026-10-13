@@ -8,16 +8,12 @@ Every encoded sound (split or not) gets a 10ms fade-in/out applied during vorbis
 
 `sslufs.cpp` implements ITU-R BS.1770-4 gated integrated loudness (K-weighting biquads with de-quantized coefficients so any sample rate works; 400ms blocks at 75% overlap; -70 LUFS absolute and -10 LU relative gates; clips under 400ms measure as a single block).
 
-**Uploads** (`FSNormalizeSoundUploads`, default on; target `FSSoundTargetLUFS`, default -23 like EBU R128 / the common games standard): the mono downmix the encoder will actually upload is measured, and a single linear gain moves it onto the target during encoding, before the edge fades, with samples clamped against clipping. Long sounds are measured once over the whole original so all split parts share the same gain and levels match across cuts. Silence (nothing above the absolute gate) is left untouched.
-
-**Downloaded sounds** (`FSNormalizeDownloadedSounds`, default off): fresh asset decodes are normalized on the General thread pool inside the decode worker, so the sound cache `.dsf` and the in-memory buffer are born normalized. Sounds already cached from before play immediately as-is while a background worker measures the cache file; if it is off-target by more than 0.5 LU the file is rewritten and the live sound is in-flight patched: `LLAudioEngine::reloadSoundBuffer` swaps the buffer under the existing `LLAudioSource` (so loop, trigger vs. attached, position, gain, and sync semantics are preserved untouched) and resumes each playing channel at its captured PCM byte position via FMOD `get/setPosition`. Viewer UI sounds (`UISnd*`) are exempt from all download processing. Each asset is checked at most once per session.
+**Downloaded sounds** (`FSNormalizeDownloadedSounds`, default off; target `FSSoundTargetLUFS`, default -23 like EBU R128 / the common games standard): fresh asset decodes are normalized on the General thread pool inside the decode worker, so the sound cache `.dsf` and the in-memory buffer are born normalized. Sounds already cached from before play immediately as-is while a background worker measures the cache file; if it is off-target by more than 0.5 LU the file is rewritten and the live sound is in-flight patched: `LLAudioEngine::reloadSoundBuffer` swaps the buffer under the existing `LLAudioSource` (so loop, trigger vs. attached, position, gain, and sync semantics are preserved untouched) and resumes each playing channel at its captured PCM byte position via FMOD `get/setPosition`. Viewer UI sounds (`UISnd*`) are exempt from all download processing. Each asset is checked at most once per session.
 
 ## Test plan (loudness)
 
-- Upload a quiet and a loud wav with normalization on: both come out at ~-23 LUFS integrated (verify in Audacity: Analyze > Measure loudness, or re-import the played sound).
-- Upload a long sound: all split parts have identical relative levels across the cut points.
-- Set the target slider to a different LUFS: next upload uses the new target; spinner and slider stay in sync.
 - Enable downloaded-sound normalization, play an old loud cached sound: it starts at original volume, then within a moment hot-swaps to normalized loudness *at the same playback position*; a looping sound keeps looping, an attached sound stays attached.
+- Set the target slider to a different LUFS: spinner and slider stay in sync.
 - UI sounds (clicks, alerts) are unaffected.
 - Disable the option: no cache rewrites occur.
 

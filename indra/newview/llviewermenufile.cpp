@@ -78,7 +78,6 @@
 #include "lltransactiontypes.h"
 #include "lluuid.h"
 #include "llvorbisencode.h"
-#include "sslufs.h" // <SS:Nexii> upload loudness normalization
 #include "message.h"
 
 // system libraries
@@ -523,17 +522,6 @@ static void upload_split_sound(const std::string& filename, const LLUUID& dest)
     LLStringUtil::stripNonprintable(asset_name);
     LLStringUtil::trim(asset_name);
 
-    // <SS:Nexii> measure loudness over the whole original once so every part gets the same gain and levels match across the cuts
-    F32 gain = 1.f;
-    static LLCachedControl<bool> normalize(gSavedSettings, "FSNormalizeSoundUploads", true);
-    static LLCachedControl<F32> target_lufs(gSavedSettings, "FSSoundTargetLUFS", -23.f);
-    F32 lufs = SS_LUFS_SILENCE;
-    if (normalize && measure_wav_lufs(filename, lufs) == LLVORBISENC_NOERR && lufs > SS_LUFS_SILENCE)
-    {
-        gain = ss_lufs_gain_for_target(lufs, (F32)target_lufs);
-    }
-    // </SS:Nexii>
-
     S32 cost = LLAgentBenefitsMgr::current().getSoundUploadCost();
     for (size_t i = 0; i < segments.size(); ++i)
     {
@@ -548,7 +536,6 @@ static void upload_split_sound(const std::string& filename, const LLUUID& dest)
             LLFloaterPerms::getEveryonePerms("Uploads"),
             cost,
             dest);
-        fileInfo->setSoundGain(gain); // <SS:Nexii> whole-file gain, skips per-part re-measure
         LLResourceUploadInfo::ptr_t uploadInfo = fileInfo; // upload_new_resource wants an lvalue of the base ptr type
         upload_new_resource(uploadInfo);
     }
