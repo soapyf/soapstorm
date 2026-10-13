@@ -476,10 +476,16 @@ jobs:
           fi
         shell: bash
 
+      - name: Configure BugSplat
+        if: ${{ secrets.BUGSPLAT_DATABASE != '' }}
+        run: |
+          echo "EXTRA_ARGS=${{ env.EXTRA_ARGS }} -DUSE_BUGSPLAT=ON -DBUGSPLAT_DB=${{ secrets.BUGSPLAT_DATABASE }}" >> $GITHUB_ENV
+          echo "BUGSPLAT_DB=${{ secrets.BUGSPLAT_DATABASE }}" >> $GITHUB_ENV
+        shell: bash
+
       - name: Configure
         run: |
           autobuild configure -c ReleaseFS -A${addrsize} -- --package --chan ${{env.FS_RELEASE_CHAN}} ${{env.EXTRA_ARGS}} ${{env.FS_GRID}}
-          echo "BUGSPLAT_DB=$BUGSPLAT_DB" >> $GITHUB_ENV
         shell: bash
       - name: Clean up packages to give more space
         run: rm -f *${{ env.fallback_platform }}*.bz2 *${{ env.fallback_platform }}*.tar.* 2>/dev/null || true
@@ -591,7 +597,20 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           find . -name '*.xcarchive.zip' -exec sh -c 'unzip -o "{}" -d "$(dirname "{}")"' \;
-      
+
+      - name: Post Bugsplat Symbols
+        continue-on-error: true
+        if: ${{ env.BUGSPLAT_DB != '' && secrets.BUGSPLAT_SYMBOL_UPLOAD_CLIENT_ID != '' && steps.build.outcome == 'success' }}
+        uses: BugSplat-Git/symbol-upload@v2
+        with:
+          clientId: ${{ secrets.BUGSPLAT_SYMBOL_UPLOAD_CLIENT_ID }}
+          clientSecret: ${{ secrets.BUGSPLAT_SYMBOL_UPLOAD_CLIENT_SECRET }}
+          database: ${{ env.BUGSPLAT_DB }}
+          application: ${{ steps.version.outputs.viewer_channel }}
+          version: "${{ steps.version.outputs.viewer_version }}.${{ steps.version.outputs.viewer_build }}"
+          files: |
+            build-*/newview/Release/*.pdb
+            build-darwin-*/newview/**/*.dSYM
 
       - name: Publish artifacts
         if: runner.os == 'Windows'
