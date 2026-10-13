@@ -608,17 +608,17 @@ jobs:
         continue-on-error: true
         env:
           BUGSPLAT_CLIENT_ID: ${{ secrets.BUGSPLAT_SYMBOL_UPLOAD_CLIENT_ID }}
-        if: env.BUGSPLAT_DB != '' && env.BUGSPLAT_CLIENT_ID != '' && steps.build.outcome == 'success'
-        uses: BugSplat-Git/symbol-upload@v2
+        if: runner.os != 'Linux' && env.BUGSPLAT_DB != '' && env.BUGSPLAT_CLIENT_ID != '' && steps.build.outcome == 'success'
+        uses: BugSplat-Git/symbol-upload@v11
         with:
           clientId: ${{ secrets.BUGSPLAT_SYMBOL_UPLOAD_CLIENT_ID }}
           clientSecret: ${{ secrets.BUGSPLAT_SYMBOL_UPLOAD_CLIENT_SECRET }}
           database: ${{ env.BUGSPLAT_DB }}
           application: ${{ steps.version.outputs.viewer_channel }}
           version: "${{ steps.version.outputs.viewer_version }}.${{ steps.version.outputs.viewer_build }}"
-          files: |
-            build-*/newview/Release/*.pdb
-            build-darwin-*/newview/**/*.dSYM
+          directory: "."
+          files: "build-*/**/*.{pdb,dSYM}"
+          dumpSyms: false
 
       - name: Publish artifacts
         if: runner.os == 'Windows'
