@@ -477,10 +477,16 @@ jobs:
         shell: bash
 
       - name: Configure BugSplat
-        if: ${{ secrets.BUGSPLAT_DATABASE != '' }}
+        env:
+          BUGSPLAT_DB_VAL: ${{ secrets.BUGSPLAT_DATABASE }}
         run: |
-          echo "EXTRA_ARGS=${{ env.EXTRA_ARGS }} -DUSE_BUGSPLAT=ON -DBUGSPLAT_DB=${{ secrets.BUGSPLAT_DATABASE }}" >> $GITHUB_ENV
-          echo "BUGSPLAT_DB=${{ secrets.BUGSPLAT_DATABASE }}" >> $GITHUB_ENV
+          if [ -n "${BUGSPLAT_DB_VAL}" ]; then
+            echo "EXTRA_ARGS=${{ env.EXTRA_ARGS }} -DUSE_BUGSPLAT=ON -DBUGSPLAT_DB=${BUGSPLAT_DB_VAL}" >> $GITHUB_ENV
+            echo "BUGSPLAT_DB=${BUGSPLAT_DB_VAL}" >> $GITHUB_ENV
+            echo "Building with BugSplat enabled (DB: ${BUGSPLAT_DB_VAL})."
+          else
+            echo "No BUGSPLAT_DATABASE secret provided. Building without BugSplat."
+          fi
         shell: bash
 
       - name: Configure
@@ -600,7 +606,9 @@ jobs:
 
       - name: Post Bugsplat Symbols
         continue-on-error: true
-        if: ${{ env.BUGSPLAT_DB != '' && secrets.BUGSPLAT_SYMBOL_UPLOAD_CLIENT_ID != '' && steps.build.outcome == 'success' }}
+        env:
+          BUGSPLAT_CLIENT_ID: ${{ secrets.BUGSPLAT_SYMBOL_UPLOAD_CLIENT_ID }}
+        if: env.BUGSPLAT_DB != '' && env.BUGSPLAT_CLIENT_ID != '' && steps.build.outcome == 'success'
         uses: BugSplat-Git/symbol-upload@v2
         with:
           clientId: ${{ secrets.BUGSPLAT_SYMBOL_UPLOAD_CLIENT_ID }}
