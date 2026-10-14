@@ -3,7 +3,7 @@
  positioning="cascading"
  can_minimize="false"
  can_resize="false"
- height="285"
+ height="260"
  layout="topleft"
  name="floater_fs_ots_options"
  save_rect="true"
@@ -100,17 +100,6 @@
      name="ots_camera_collision_prefs"
      tool_tip="Pull the camera in closer when world geometry is between you and it, instead of clipping through. Avatars and phantom objects never block the camera."
      top_pad="10"
-     width="406" />
-    <check_box
-     control_name="FSOTSReportEyeCamera"
-     follows="left|top"
-     height="16"
-     label="Convergence camera in OTS (scripts see your eye, not the shoulder camera)"
-     layout="topleft"
-     left="12"
-     name="ots_eye_camera_prefs"
-     tool_tip="While in OTS, report the mouselook-equivalent camera to the region so camera-position weapons fire from your avatar toward the crosshair instead of from the shoulder camera. Prevents shooting around cover your avatar is behind."
-     top_pad="8"
      width="406" />
     <check_box
      control_name="OTSRememberLastView"
