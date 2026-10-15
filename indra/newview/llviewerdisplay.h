@@ -42,6 +42,11 @@ extern bool         gForceRenderLandFence;
 extern bool gResizeScreenTexture;
 extern bool gResizeShadowTexture;
 extern bool gWindowResized;
+extern bool gSnapshot;
+extern bool gCubeSnapshot;
+extern bool gSnapshotNoPost;
+extern bool gSnapshotAvatarOnly;
+extern S32 gSnapshotLayerType;
 
 // <FS:Ansariel> Draw Distance stepping; originally based on SpeedRez by Henri Beauchamp, licensed under LGPL
 extern F32 gSavedDrawDistance;

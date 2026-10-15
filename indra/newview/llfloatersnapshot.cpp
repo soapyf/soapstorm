@@ -158,6 +158,12 @@ LLSnapshotModel::ESnapshotLayerType LLFloaterSnapshot::Impl::getLayerType(LLFloa
     else if (id == "depth24")
         type = LLSnapshotModel::SNAPSHOT_TYPE_DEPTH24;
     // </FS:Ansariel>
+    else if (id == "avatar_transparent")
+        type = LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_TRANSPARENT;
+    else if (id == "avatar_mask_black")
+        type = LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_BLACK;
+    else if (id == "avatar_mask_white")
+        type = LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_WHITE;
     return type;
 }
 
@@ -921,9 +927,23 @@ void LLFloaterSnapshot::Impl::onCommitLayerTypes(LLUICtrl* ctrl, void*data)
     if (view)
     {
         LLSnapshotLivePreview* previewp = view->getPreviewView();
+        LLSnapshotModel::ESnapshotLayerType layer_type = view->impl->getLayerType(view);
         if (previewp)
         {
-            previewp->setSnapshotBufferType((LLSnapshotModel::ESnapshotLayerType)combobox->getCurrentIndex());
+            previewp->setSnapshotBufferType(layer_type);
+        }
+        if (layer_type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_TRANSPARENT)
+        {
+            LLComboBox* format_combo = view->findChild<LLComboBox>("local_format_combo");
+            if (format_combo && format_combo->getCurrentIndex() != LLSnapshotModel::SNAPSHOT_FORMAT_PNG)
+            {
+                format_combo->selectNthItem(LLSnapshotModel::SNAPSHOT_FORMAT_PNG);
+                gSavedSettings.setS32("SnapshotFormat", LLSnapshotModel::SNAPSHOT_FORMAT_PNG);
+                if (previewp)
+                {
+                    previewp->setSnapshotFormat(LLSnapshotModel::SNAPSHOT_FORMAT_PNG);
+                }
+            }
         }
         view->impl->checkAutoSnapshot(previewp, true);
         previewp->updateSnapshot(true, true);

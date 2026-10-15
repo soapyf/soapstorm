@@ -185,6 +185,17 @@
      width="220"
      name="local_use_timestamp"
      control_name="FSSnapshotLocalNamesWithTimestamps"/>
+    <check_box
+     top_pad="6"
+     follows="left|top"
+     layout="topleft"
+     label_width="200"
+     label="Save holdout mattes with snapshot"
+     tool_tip="Automatically save avatar holdout alpha masks (black-on-white and white-on-black) alongside snapshot"
+     left="10"
+     width="220"
+     name="local_save_holdout_mattes"
+     control_name="FSSaveAvatarMasksWithSnapshot"/>
     <button
      follows="right|bottom"
      height="23"

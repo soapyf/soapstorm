@@ -42,6 +42,7 @@
 #include "llviewertexturelist.h"    // For debugging
 #include "llviewerobjectlist.h" // For debugging
 #include "llviewerwindow.h"
+#include "llviewerdisplay.h"
 #include "pipeline.h"
 #include "llviewershadermgr.h"
 #include "llviewerregion.h"
@@ -250,8 +251,16 @@ void LLDrawPoolAlpha::forwardRender(bool rigged)
 
     mColorSFactor = LLRender::BF_SOURCE_ALPHA;           // } regular alpha blend
     mColorDFactor = LLRender::BF_ONE_MINUS_SOURCE_ALPHA; // }
-    mAlphaSFactor = LLRender::BF_ZERO;                         // } glow suppression
-    mAlphaDFactor = LLRender::BF_ONE_MINUS_SOURCE_ALPHA;       // }
+    if (gSnapshotAvatarOnly)
+    {
+        mAlphaSFactor = LLRender::BF_ONE;
+        mAlphaDFactor = LLRender::BF_ONE_MINUS_SOURCE_ALPHA;
+    }
+    else
+    {
+        mAlphaSFactor = LLRender::BF_ZERO;                         // } glow suppression
+        mAlphaDFactor = LLRender::BF_ONE_MINUS_SOURCE_ALPHA;       // }
+    }
     gGL.blendFunc(mColorSFactor, mColorDFactor, mAlphaSFactor, mAlphaDFactor);
 
     if (rigged && mType == LLDrawPool::POOL_ALPHA_POST_WATER)

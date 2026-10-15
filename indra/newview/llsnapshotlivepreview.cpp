@@ -1009,6 +1009,10 @@ LLPointer<LLImageFormatted> LLSnapshotLivePreview::getFormattedImage()
 
         // Create the new formatted image of the appropriate format.
         LLSnapshotModel::ESnapshotFormat format = getSnapshotFormat();
+        if (mSnapshotBufferType == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_TRANSPARENT && format != LLSnapshotModel::SNAPSHOT_FORMAT_PNG)
+        {
+            format = LLSnapshotModel::SNAPSHOT_FORMAT_PNG;
+        }
         LL_DEBUGS("Snapshot") << "Encoding new image of format " << format << LL_ENDL;
 
         switch (format)

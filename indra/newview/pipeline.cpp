@@ -103,6 +103,8 @@
 #include "llviewerstats.h"
 #include "llviewerjoystick.h"
 #include "llviewerdisplay.h"
+#include "llsnapshotmodel.h"
+#include "llcontrolavatar.h"
 #include "sspreciprenderer.h"
 #include "ssvolcloud.h"
 #include "sslightningrender.h"
@@ -2697,6 +2699,39 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
     grabReferences(result);
 
     sCull->clear();
+
+    if (gSnapshotAvatarOnly && gAgentAvatarp && gAgentAvatarp->mDrawable)
+    {
+        markVisible(gAgentAvatarp->mDrawable, camera);
+        for (const auto& pair : gAgentAvatarp->mAttachmentPoints)
+        {
+            LLViewerJointAttachment* attachment = pair.second;
+            if (!attachment || attachment->getIsHUDAttachment()) continue;
+            for (const auto& attached_iter : attachment->mAttachedObjects)
+            {
+                LLViewerObject* attached_obj = attached_iter.get();
+                if (attached_obj)
+                {
+                    if (attached_obj->mDrawable)
+                    {
+                        if (attached_obj->mDrawable->getSpatialBridge())
+                        {
+                            markVisible(attached_obj->mDrawable->getSpatialBridge(), camera);
+                        }
+                        else
+                        {
+                            markVisible(attached_obj->mDrawable, camera);
+                        }
+                    }
+                    if (attached_obj->getControlAvatar() && attached_obj->getControlAvatar()->mDrawable)
+                    {
+                        markVisible(attached_obj->getControlAvatar()->mDrawable, camera);
+                    }
+                }
+            }
+        }
+        return;
+    }
 
     for (LLWorld::region_list_t::const_iterator iter = LLWorld::getInstance()->getRegionList().begin();
             iter != LLWorld::getInstance()->getRegionList().end(); ++iter)
@@ -9943,7 +9978,14 @@ void LLPipeline::renderDeferredLighting()
 
         screen_target->bindTarget();
         // clear color buffer here - zeroing alpha (glow) is important or it will accumulate against sky
-        glClearColor(0, 0, 0, 0);
+        if (gSnapshotAvatarOnly && gSnapshotLayerType == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_BLACK)
+        {
+            glClearColor(1, 1, 1, 1);
+        }
+        else
+        {
+            glClearColor(0, 0, 0, 0);
+        }
         screen_target->clear(GL_COLOR_BUFFER_BIT);
 
         if (RenderDeferredAtmospheric)
@@ -9973,6 +10015,9 @@ void LLPipeline::renderDeferredLighting()
             soften_shader.uniform3fv(LLShaderMgr::LIGHTNORM, 1, environment.getClampedLightNorm().mV);
 
             soften_shader.uniform4fv(LLShaderMgr::WATER_WATERPLANE, 1, LLDrawPoolAlpha::sWaterPlane.mV);
+
+            static LLStaticHashedString avatar_snapshot_str("avatar_snapshot");
+            soften_shader.uniform1i(avatar_snapshot_str, gSnapshotAvatarOnly ? 1 : 0);
 
             // <SS:Nexii> Atmo Magic: the volumetric deck's ground shadow - the baked transmittance map and its projection uniforms, gated to zero whenever there is nothing to cast. [interaction: SSVolCloud]
             SSVolCloud::getInstance()->bindGroundShadow(soften_shader);
@@ -10332,8 +10377,8 @@ void LLPipeline::doAtmospherics()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
 
-    if (sImpostorRender)
-    { // do not attempt atmospherics on impostors
+    if (sImpostorRender || gSnapshotAvatarOnly)
+    { // do not attempt atmospherics on impostors or avatar-only snapshot
         return;
     }
 
@@ -10401,8 +10446,8 @@ void LLPipeline::doAtmospherics()
 void LLPipeline::doWaterHaze()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
-    if (sImpostorRender)
-    { // do not attempt water haze on impostors
+    if (sImpostorRender || gSnapshotAvatarOnly)
+    { // do not attempt water haze on impostors or avatar-only snapshot
         return;
     }
 

@@ -149,6 +149,8 @@ bool gWindowResized = false;
 bool gSnapshot = false;
 bool gCubeSnapshot = false;
 bool gSnapshotNoPost = false;
+bool gSnapshotAvatarOnly = false;
+S32 gSnapshotLayerType = 0;
 bool gShaderProfileFrame = false;
 
 // This is how long the sim will try to teleport you before giving up.
@@ -954,6 +956,27 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
         static LLCullResult result;
         LLViewerCamera::sCurCameraID = LLViewerCamera::CAMERA_WORLD;
         LLPipeline::sUnderWaterRender = LLViewerCamera::getInstance()->cameraUnderWater();
+
+        if (gSnapshotAvatarOnly)
+        {
+            gPipeline.pushRenderTypeMask();
+            gPipeline.clearRenderTypeMask(
+                LLPipeline::RENDER_TYPE_SKY,
+                LLPipeline::RENDER_TYPE_WL_SKY,
+                LLPipeline::RENDER_TYPE_TERRAIN,
+                LLPipeline::RENDER_TYPE_GRASS,
+                LLPipeline::RENDER_TYPE_TREE,
+                LLPipeline::RENDER_TYPE_VOIDWATER,
+                LLPipeline::RENDER_TYPE_WATER,
+                LLPipeline::RENDER_TYPE_ALPHA_PRE_WATER,
+                LLPipeline::RENDER_TYPE_PASS_GRASS,
+                LLPipeline::RENDER_TYPE_HUD,
+                LLPipeline::RENDER_TYPE_HUD_PARTICLES,
+                LLPipeline::RENDER_TYPE_CLOUDS,
+                LLPipeline::END_RENDER_TYPES
+            );
+        }
+
         gPipeline.updateCull(*LLViewerCamera::getInstance(), result);
         stop_glerror();
 
@@ -1180,6 +1203,17 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
             constexpr F32 g = 0.5f;
             glClearColor(g, g, g, 1.f);
         }
+        else if (gSnapshotAvatarOnly)
+        {
+            if (gSnapshotLayerType == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_BLACK)
+            {
+                glClearColor(1.f, 1.f, 1.f, 1.f);
+            }
+            else
+            {
+                glClearColor(0.f, 0.f, 0.f, 0.f);
+            }
+        }
         else
         {
             glClearColor(1, 0, 1, 1);
@@ -1260,6 +1294,11 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
 
 
         LLSpatialGroup::sNoDelete = false;
+
+        if (gSnapshotAvatarOnly)
+        {
+            gPipeline.popRenderTypeMask();
+        }
 
         gPipeline.clearReferences();
     }

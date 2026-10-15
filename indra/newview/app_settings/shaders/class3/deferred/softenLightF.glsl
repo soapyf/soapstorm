@@ -81,6 +81,7 @@ vec3 srgb_to_linear(vec3 c);
 uniform vec4 waterPlane;
 
 uniform int cube_snapshot;
+uniform int avatar_snapshot;
 
 uniform float sky_hdr_scale;
 
@@ -324,5 +325,12 @@ void main()
         final_scale = 1.1;
 
     frag_color.rgb = clampHDRRange(color.rgb * final_scale); //output linear since local lights will be added to this shader's results
-    frag_color.a = 0.0;
+    if (avatar_snapshot > 0)
+    {
+        frag_color.a = (depth < 0.99999) ? 1.0 : 0.0;
+    }
+    else
+    {
+        frag_color.a = 0.0;
+    }
 }

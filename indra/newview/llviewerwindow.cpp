@@ -259,6 +259,8 @@ extern bool gDepthDirty;
 extern bool gResizeScreenTexture;
 extern bool gCubeSnapshot;
 extern bool gSnapshotNoPost;
+extern bool gSnapshotAvatarOnly;
+extern S32 gSnapshotLayerType;
 extern void send_chat_from_viewer(std::string utf8_out_text, EChatType type, S32 channel);
 
 LLViewerWindow  *gViewerWindow = NULL;
@@ -6174,6 +6176,43 @@ void LLViewerWindow::saveImageLocal(LLImageFormatted *image, const snapshot_save
 //                                  boost::bind(&LLViewerWindow::onSnapshotNotificationClick, _1, _2));
 // </FS:PP>
 
+        if (!gSnapshotAvatarOnly && gSavedSettings.getBOOL("FSSaveAvatarMasksWithSnapshot"))
+        {
+            std::string filepath_base = filepath.substr(0, filepath.length() - extension.length());
+            LLPointer<LLImageRaw> avatar_raw = new LLImageRaw;
+            if (rawSnapshot(avatar_raw, image->getWidth(), image->getHeight(), true, false, false, false, false, false, false, LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_TRANSPARENT))
+            {
+                LLPointer<LLImageRaw> matte_black = new LLImageRaw(avatar_raw->getWidth(), avatar_raw->getHeight(), 3);
+                LLPointer<LLImageRaw> matte_white = new LLImageRaw(avatar_raw->getWidth(), avatar_raw->getHeight(), 3);
+                const U8* src = avatar_raw->getData();
+                U8* dst_b = matte_black->getData();
+                U8* dst_w = matte_white->getData();
+                S32 num_pixels = avatar_raw->getWidth() * avatar_raw->getHeight();
+                for (S32 p = 0; p < num_pixels; ++p)
+                {
+                    U8 a = src[p * 4 + 3];
+                    U8 val_b = 255 - a;
+                    U8 val_w = a;
+                    dst_b[p * 3 + 0] = val_b;
+                    dst_b[p * 3 + 1] = val_b;
+                    dst_b[p * 3 + 2] = val_b;
+                    dst_w[p * 3 + 0] = val_w;
+                    dst_w[p * 3 + 1] = val_w;
+                    dst_w[p * 3 + 2] = val_w;
+                }
+                LLPointer<LLImageFormatted> form_b = LLImageFormatted::createFromType(image->getCodec());
+                if (form_b && form_b->encode(matte_black, 0))
+                {
+                    form_b->save(filepath_base + "_matte" + extension);
+                }
+                LLPointer<LLImageFormatted> form_w = LLImageFormatted::createFromType(image->getCodec());
+                if (form_w && form_w->encode(matte_white, 0))
+                {
+                    form_w->save(filepath_base + "_matte_inv" + extension);
+                }
+            }
+        }
+
         if (gSavedSettings.getBOOL("FSLogSnapshotsToLocal"))
         {
             LLStringUtil::format_map_t chatlog_args;
@@ -6233,7 +6272,7 @@ bool LLViewerWindow::saveSnapshot(const std::string& filepath, S32 image_width, 
     LL_INFOS() << "Saving snapshot to: " << filepath << LL_ENDL;
 
     LLPointer<LLImageRaw> raw = new LLImageRaw;
-    bool success = rawSnapshot(raw, image_width, image_height, true, false, show_ui, show_hud, do_rebuild, show_balance);
+    bool success = rawSnapshot(raw, image_width, image_height, true, false, show_ui, show_hud, do_rebuild, false, show_balance, type);
 
     if (success)
     {
@@ -6311,10 +6350,15 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
         return false;
     }
 
+    const bool is_avatar_snapshot = (type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_TRANSPARENT ||
+                                     type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_BLACK ||
+                                     type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_WHITE);
+    const S32 bytes_per_pixel = (type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_TRANSPARENT) ? 4 : 3;
+
     //check if there is enough memory for the snapshot image
     if(image_width * image_height > (1 << 22)) //if snapshot image is larger than 2K by 2K
     {
-        if(!LLMemory::tryToAlloc(NULL, image_width * image_height * 3))
+        if(!LLMemory::tryToAlloc(NULL, image_width * image_height * bytes_per_pixel))
         {
             LL_WARNS() << "No enough memory to take the snapshot with size (w : h): " << image_width << " : " << image_height << LL_ENDL ;
             return false ; //there is no enough memory for taking this snapshot.
@@ -6323,6 +6367,8 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
 
     // PRE SNAPSHOT
     gSnapshotNoPost = no_post;
+    gSnapshotAvatarOnly = is_avatar_snapshot;
+    gSnapshotLayerType = type;
     gDisplaySwapBuffers = false;
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT); // stencil buffer is deprecated | GL_STENCIL_BUFFER_BIT);
@@ -6376,6 +6422,8 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
     // Lambda to restore deferred if needed when finished or in the case of early return
     auto restore_deferred = [&]()
     {
+        gSnapshotAvatarOnly = false;
+        gSnapshotLayerType = 0;
         if (reset_deferred)
         {
             mWorldViewRectRaw = window_rect;
@@ -6464,7 +6512,7 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
 
     if ((image_buffer_x > 0) && (image_buffer_y > 0))
     {
-        raw->resize(image_buffer_x, image_buffer_y, 3);
+        raw->resize(image_buffer_x, image_buffer_y, bytes_per_pixel);
     }
     else
     {
@@ -6557,6 +6605,37 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
                                      raw->getData() + output_buffer_offset
                                      );
                         }
+                        else if (type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_TRANSPARENT)
+                        {
+                            glReadPixels(
+                                     subimage_x_offset, out_y + subimage_y_offset,
+                                     read_width, 1,
+                                     GL_RGBA, GL_UNSIGNED_BYTE,
+                                     raw->getData() + output_buffer_offset
+                                     );
+                        }
+                        else if (type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_BLACK ||
+                                 type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_WHITE)
+                        {
+                            LLPointer<LLImageRaw> line_buffer = new LLImageRaw(read_width, 1, 4);
+                            glReadPixels(
+                                         subimage_x_offset, out_y + subimage_y_offset,
+                                         read_width, 1,
+                                         GL_RGBA, GL_UNSIGNED_BYTE,
+                                         line_buffer->getData()
+                                         );
+                            const U8* src = line_buffer->getData();
+                            U8* dst = raw->getData() + output_buffer_offset;
+                            const bool invert = (type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_BLACK);
+                            for (S32 i = 0; i < (S32)read_width; i++)
+                            {
+                                U8 a = src[i * 4 + 3];
+                                U8 val = invert ? (255 - a) : a;
+                                dst[i * 3 + 0] = val;
+                                dst[i * 3 + 1] = val;
+                                dst[i * 3 + 2] = val;
+                            }
+                        }
                         // <FS:Ansariel> FIRE-15667: 24bit depth maps
                         else if (type == LLSnapshotModel::SNAPSHOT_TYPE_DEPTH24)
                         {
@@ -6589,7 +6668,7 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
                             }
                         }
                         // </FS:Ansariel>
-                        else // LLSnapshotModel::SNAPSHOT_TYPE_DEPTH
+                        else if (type == LLSnapshotModel::SNAPSHOT_TYPE_DEPTH)
                         {
                             // <FS> Fix buffer creation using the wrong type
                             //LLPointer<LLImageRaw> depth_line_buffer = new LLImageRaw(read_width, 1, sizeof(GL_FLOAT)); // need to store floating point values
@@ -6626,6 +6705,8 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
 
     gDisplaySwapBuffers = false;
     gSnapshotNoPost = false;
+    gSnapshotAvatarOnly = false;
+    gSnapshotLayerType = 0;
     gDepthDirty = true;
 
     // POST SNAPSHOT
