@@ -161,6 +161,11 @@ void main()
 {
     vec2  tc           = vary_fragcoord.xy;
     float depth        = getDepth(tc.xy);
+    if (avatar_snapshot > 0 && depth >= 0.99999)
+    {
+        frag_color = vec4(0.0);
+        return;
+    }
     vec4  pos          = getPositionWithDepth(tc, depth);
 
     GBufferInfo gb = getGBuffer(tc);
@@ -327,7 +332,7 @@ void main()
     frag_color.rgb = clampHDRRange(color.rgb * final_scale); //output linear since local lights will be added to this shader's results
     if (avatar_snapshot > 0)
     {
-        frag_color.a = (depth < 0.99999) ? 1.0 : 0.0;
+        frag_color.a = 1.0;
     }
     else
     {

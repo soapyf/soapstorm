@@ -6382,7 +6382,7 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
         LLPipeline::toggleRenderDebugFeature(LLPipeline::RENDER_DEBUG_FEATURE_UI);
     }
 
-    bool hide_hud = !show_hud && LLPipeline::sShowHUDAttachments;
+    bool hide_hud = (!show_hud || is_avatar_snapshot) && LLPipeline::sShowHUDAttachments;
     if (hide_hud)
     {
         LLPipeline::sShowHUDAttachments = false;
@@ -6613,6 +6613,16 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
                                      GL_RGBA, GL_UNSIGNED_BYTE,
                                      raw->getData() + output_buffer_offset
                                      );
+                            U8* dst = raw->getData() + output_buffer_offset;
+                            for (S32 i = 0; i < (S32)read_width; i++)
+                            {
+                                if (dst[i * 4 + 3] == 0)
+                                {
+                                    dst[i * 4 + 0] = 0;
+                                    dst[i * 4 + 1] = 0;
+                                    dst[i * 4 + 2] = 0;
+                                }
+                            }
                         }
                         else if (type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_BLACK ||
                                  type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_WHITE)

@@ -1205,14 +1205,7 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
         }
         else if (gSnapshotAvatarOnly)
         {
-            if (gSnapshotLayerType == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_BLACK)
-            {
-                glClearColor(1.f, 1.f, 1.f, 1.f);
-            }
-            else
-            {
-                glClearColor(0.f, 0.f, 0.f, 0.f);
-            }
+            glClearColor(0.f, 0.f, 0.f, 0.f);
         }
         else
         {
@@ -1769,18 +1762,21 @@ void render_ui(F32 zoom_factor, int subfield)
         LLGLState::checkStates();
 
 
-        LL_PROFILE_ZONE_NAMED_CATEGORY_UI("HUD");
-    render_hud_elements();
-// [RLVa:KB] - Checked: RLVa-2.2 (@setoverlay)
-        if (RlvActions::hasBehaviour(RLV_BHVR_SETOVERLAY))
+        if (!gSnapshotAvatarOnly)
         {
-            LLVfxManager::instance().runEffect(EVisualEffect::RlvOverlay);
-        }
+            LL_PROFILE_ZONE_NAMED_CATEGORY_UI("HUD");
+            render_hud_elements();
+// [RLVa:KB] - Checked: RLVa-2.2 (@setoverlay)
+            if (RlvActions::hasBehaviour(RLV_BHVR_SETOVERLAY))
+            {
+                LLVfxManager::instance().runEffect(EVisualEffect::RlvOverlay);
+            }
 // [/RLVa:KB]
-        LLGLState::checkStates();
-        render_hud_attachments();
+            LLGLState::checkStates();
+            render_hud_attachments();
 
-        LLGLState::checkStates();
+            LLGLState::checkStates();
+        }
 
         LLGLSDefault gls_default;
         LLGLSUIDefault gls_ui;

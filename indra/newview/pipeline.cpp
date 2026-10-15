@@ -9396,13 +9396,21 @@ void LLPipeline::renderFinalize()
 
     LLVertexBuffer::unbind();
 
-    generateGlow(&mPostPingMap);
-
     LLRenderTarget* sourceBuffer = &mPostPingMap;
     LLRenderTarget* targetBuffer = &mPostPongMap;
 
-    combineGlow(sourceBuffer, targetBuffer);
-    std::swap(sourceBuffer, targetBuffer);
+    if (!gSnapshotAvatarOnly)
+    {
+        generateGlow(&mPostPingMap);
+        combineGlow(sourceBuffer, targetBuffer);
+        std::swap(sourceBuffer, targetBuffer);
+    }
+    else
+    {
+        mGlow[1].bindTarget();
+        mGlow[1].clear();
+        mGlow[1].flush();
+    }
 
     gGLViewport[0] = gViewerWindow->getWorldViewRectRaw().mLeft;
     gGLViewport[1] = gViewerWindow->getWorldViewRectRaw().mBottom;
@@ -9412,29 +9420,33 @@ void LLPipeline::renderFinalize()
 
     if((RenderDepthOfFieldInEditMode || !LLToolMgr::getInstance()->inBuildMode()) &&
         RenderDepthOfField &&
-        !gCubeSnapshot)
+        !gCubeSnapshot &&
+        !gSnapshotAvatarOnly)
     {
         renderDoF(sourceBuffer, targetBuffer);
         std::swap(sourceBuffer, targetBuffer);
     }
 
-     if (RenderFSAAType == 1)
+    if (!gSnapshotAvatarOnly)
     {
-        applyFXAA(sourceBuffer, targetBuffer);
-        std::swap(sourceBuffer, targetBuffer);
-    }
-    else if (RenderFSAAType == 2)
-    {
-        generateSMAABuffers(sourceBuffer);
-        applySMAA(sourceBuffer, targetBuffer);
-        std::swap(sourceBuffer, targetBuffer);
+        if (RenderFSAAType == 1)
+        {
+            applyFXAA(sourceBuffer, targetBuffer);
+            std::swap(sourceBuffer, targetBuffer);
+        }
+        else if (RenderFSAAType == 2)
+        {
+            generateSMAABuffers(sourceBuffer);
+            applySMAA(sourceBuffer, targetBuffer);
+            std::swap(sourceBuffer, targetBuffer);
+        }
     }
 
     // <FS:Beq> Restore shader post proc for Vignette
     LLRenderTarget* auxActiveBuffer = sourceBuffer;
     LLRenderTarget* auxTargetBuffer = RenderFSAAType ? &mRT->screen : &mPostPingMap;
 // [RLVa:KB] - @setsphere
-    if (RlvActions::hasBehaviour(RLV_BHVR_SETSPHERE))
+    if (!gSnapshotAvatarOnly && RlvActions::hasBehaviour(RLV_BHVR_SETSPHERE))
     {
         LLShaderEffectParams params(auxActiveBuffer, auxTargetBuffer, false);
         LLVfxManager::instance().runEffect(EVisualEffect::RlvSphere, &params);
@@ -9444,13 +9456,13 @@ void LLPipeline::renderFinalize()
     }
 // [/RLVa:KB]
 
-    if (renderVignette(auxActiveBuffer, auxTargetBuffer))
+    if (!gSnapshotAvatarOnly && renderVignette(auxActiveBuffer, auxTargetBuffer))
     {
         std::swap(auxActiveBuffer, auxTargetBuffer);
     };
     // </FS:Beq>
     // <FS:Beq> new shader for snapshot frame helper
-    if (renderSnapshotFrame(auxActiveBuffer, auxTargetBuffer))
+    if (!gSnapshotAvatarOnly && renderSnapshotFrame(auxActiveBuffer, auxTargetBuffer))
     {
         std::swap(auxActiveBuffer, auxTargetBuffer);
     };
@@ -9511,12 +9523,15 @@ void LLPipeline::renderFinalize()
 
     gGL.setSceneBlendType(LLRender::BT_ALPHA);
 
-    renderSnapshotGuidesOverlay(); // <FS:Beq/> Render snapshot guides as part of UI
-    renderFocusPoint(); // <FS:Beq/> FIRE-32023 render focus point
-
-    if (hasRenderDebugMask(LLPipeline::RENDER_DEBUG_PHYSICS_SHAPES))
+    if (!gSnapshotAvatarOnly)
     {
-        renderPhysicsDisplay();
+        renderSnapshotGuidesOverlay(); // <FS:Beq/> Render snapshot guides as part of UI
+        renderFocusPoint(); // <FS:Beq/> FIRE-32023 render focus point
+
+        if (hasRenderDebugMask(LLPipeline::RENDER_DEBUG_PHYSICS_SHAPES))
+        {
+            renderPhysicsDisplay();
+        }
     }
 
     /*if (LLRenderTarget::sUseFBO && !gCubeSnapshot)
@@ -9978,14 +9993,7 @@ void LLPipeline::renderDeferredLighting()
 
         screen_target->bindTarget();
         // clear color buffer here - zeroing alpha (glow) is important or it will accumulate against sky
-        if (gSnapshotAvatarOnly && gSnapshotLayerType == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_BLACK)
-        {
-            glClearColor(1, 1, 1, 1);
-        }
-        else
-        {
-            glClearColor(0, 0, 0, 0);
-        }
+        glClearColor(0, 0, 0, 0);
         screen_target->clear(GL_COLOR_BUFFER_BIT);
 
         if (RenderDeferredAtmospheric)
