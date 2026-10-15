@@ -5,7 +5,7 @@
  can_minimize="true"
  can_resize="false"
  can_close="true"
- height="510"
+ height="560"
  layout="topleft"
  name="Snapshot"
  single_instance="true"
@@ -14,7 +14,7 @@
  save_visibility="false"
  title="Snapshot"
  width="624"
- min_height="475">
+ min_height="525">
     <floater.string
      name="unknown">
         unknown
@@ -309,7 +309,7 @@
     </panel>
 	<panel_container
      follows="left|top"
-     height="230"
+     height="280"
      layout="topleft"
      left="0"
      name="panel_container"

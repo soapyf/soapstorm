@@ -110,7 +110,7 @@
      top_delta="0"
      width="54" />
     <check_box
-     top_pad="12"
+     top_pad="8"
      follows="left|top"
      label="Constrain proportions"
      layout="topleft"
@@ -166,7 +166,7 @@
      top_pad="6"
      width="203" />
     <check_box
-     top_pad="8"
+     top_pad="6"
      follows="left|top"
      layout="topleft"
      label_width="200"
@@ -176,7 +176,7 @@
      name="local_remember_location_sessions"
      control_name="FSRememberSnapshotPathSessions"/>
     <check_box
-     top_pad="6"
+     top_pad="4"
      follows="left|top"
      layout="topleft"
      label_width="200"
@@ -186,7 +186,7 @@
      name="local_use_timestamp"
      control_name="FSSnapshotLocalNamesWithTimestamps"/>
     <check_box
-     top_pad="6"
+     top_pad="4"
      follows="left|top"
      layout="topleft"
      label_width="200"

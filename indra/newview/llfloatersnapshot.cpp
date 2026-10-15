@@ -229,7 +229,7 @@ void LLFloaterSnapshotBase::ImplBase::updateLayout(LLFloaterSnapshotBase* floate
     if (!mSkipReshaping && !floaterp->isMinimized())
     {
         LLView* controls_container = floaterp->getChild<LLView>("controls_container");
-        constexpr S32 THUMB_HEIGHT_LARGE = 420;
+        constexpr S32 THUMB_HEIGHT_LARGE = 470;
         constexpr S32 THUMB_HEIGHT_SMALL = 124;
         constexpr S32 THUMB_WIDTH_SMALL = 216;
         if (mAdvanced)
