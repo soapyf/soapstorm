@@ -364,7 +364,11 @@ static bool load_fbx(const std::vector<std::uint8_t>& bytes, const std::string& 
                         d.texture = p;
                         break;
                     }
-                if (d.texture.empty()) add_unique(rep.missing_textures, str(c.texture->filename));
+                if (d.texture.empty() && c.texture->content.size > 0) {  // embedded in the .fbx
+                    const auto* bytes = static_cast<const std::uint8_t*>(c.texture->content.data);
+                    d.image.assign(bytes, bytes + c.texture->content.size);
+                }
+                if (d.texture.empty() && d.image.empty()) add_unique(rep.missing_textures, str(c.texture->filename));
                 else d.rgba = {1, 1, 1, d.rgba[3]};
             }
         } else {

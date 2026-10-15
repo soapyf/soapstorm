@@ -8,6 +8,8 @@
 #include <array>
 #include <climits>
 #include <cmath>
+#include <fstream>
+#include <iterator>
 #include <unordered_map>
 
 namespace vats {
@@ -227,6 +229,43 @@ bool png_blank(const std::uint8_t* data, std::size_t size) {
     for (std::size_t i = 3; blank && i < std::size_t(w) * std::size_t(h) * 4; i += 4) blank = px[i] == 0;
     stbi_image_free(px);
     return blank;
+}
+
+bool read_picture(const std::uint8_t* data, std::size_t size, Picture& out, int max_side, bool flip) {
+    out = {};
+    if (!data || size == 0 || size > std::size_t(INT_MAX)) return false;
+    int w = 0, h = 0, comp = 0;
+    stbi_uc* px = stbi_load_from_memory(data, int(size), &w, &h, &comp, 4);
+    if (!px || w <= 0 || h <= 0) {
+        stbi_image_free(px);
+        return false;
+    }
+    std::vector<std::uint8_t> img(px, px + std::size_t(w) * std::size_t(h) * 4);
+    stbi_image_free(px);
+    while ((w > max_side || h > max_side) && w > 1 && h > 1) {  // halve: each pixel the mean of a 2x2 block
+        const int w2 = w / 2, h2 = h / 2;
+        std::vector<std::uint8_t> half(std::size_t(w2) * std::size_t(h2) * 4);
+        for (int y = 0; y < h2; ++y)
+            for (int x = 0; x < w2; ++x)
+                for (int c = 0; c < 4; ++c) {
+                    auto at = [&](int xx, int yy) { return int(img[(std::size_t(yy) * w + xx) * 4 + c]); };
+                    half[(std::size_t(y) * w2 + x) * 4 + c] =
+                        std::uint8_t((at(2 * x, 2 * y) + at(2 * x + 1, 2 * y) + at(2 * x, 2 * y + 1) + at(2 * x + 1, 2 * y + 1) + 2) / 4);
+                }
+        img.swap(half), w = w2, h = h2;
+    }
+    if (flip)
+        for (int y = 0; y < h / 2; ++y)
+            std::swap_ranges(img.begin() + long(std::size_t(y) * w * 4), img.begin() + long(std::size_t(y + 1) * w * 4),
+                             img.begin() + long(std::size_t(h - 1 - y) * w * 4));
+    out.width = w, out.height = h, out.rgba = std::move(img);
+    return true;
+}
+
+bool read_picture_file(const std::string& path, Picture& out, int max_side, bool flip) {
+    std::ifstream f(path, std::ios::binary);
+    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    return read_picture(bytes.data(), bytes.size(), out, max_side, flip);
 }
 
 }  // namespace vats

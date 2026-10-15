@@ -23,6 +23,7 @@
 #include "vats/anim_convert.h"
 #include "vats/bvh.h"
 #include "vats/curve_filter.h"
+#include "vats/wiki.h"
 #include "vats/clips.h"
 #include "vats/deformer.h"
 #include "vats/edit.h"
@@ -164,6 +165,7 @@ void App::shutdown() {
     host_.audio_stop();
     if (!keep_autosave_) clear_autosave();  // a clean exit: whatever was unsaved was discarded on purpose
     free_thumbnails();
+    free_mesh_textures(true);  // the models' textures, while the host's GL context still exists
     help_ui_.reset();  // frees the help's images while the host can still free textures
     reference_ui_.reset();  // and the reference picture's
 }
@@ -1363,6 +1365,8 @@ void App::build_actions() {
                       }});
     // RT-9 and 08 FC on the current clip (footlock_ui.cpp).
     add("foot_lock", {"Clean Up Foot Sliding...", 0, 0, false, [this] { show_foot_lock_ = true; }, {}});
+    add("hands_out", {"Push Hands Out of the Body...", 0, 0, false, [this] { show_hands_out_ = true; },
+                      [this]() -> const char* { return mesh_body() ? nullptr : "Show a mesh body first (View > Body)"; }});
     add("follow_target", {"Follow Target (Bake)...", 0, 0, false, [this] { show_follow_ = true; },
                           [this]() -> const char* {
                               return selection_.size() == 2 ? nullptr
@@ -1373,6 +1377,13 @@ void App::build_actions() {
     add("prefs", {"Preferences...", ctrl | ImGuiKey_Comma, 0, false, [this] { show_prefs_ = !show_prefs_; }, {}});
     add("help_contents", {"Help Contents", ImGuiKey_F1, 0, false, [this] { open_help(); }, {}});
     add("tutorials", {"Tutorials", 0, 0, false, [this] { open_help("tutorials"); }, {}});
+    add("online_manual", {"Online Manual", 0, 0, false, [this] { host_.open_url(wiki::kOnlineManual); }, {}});
+    add("download_manual", {"Download the Manual for Offline Reading", 0, 0, false, [this] { download_manual(); },
+                            [this]() -> const char* {
+                                return manual_downloaded() ? "Downloaded already: Help > Help Contents shows it" : nullptr;
+                            }});
+    add("remove_manual", {"Remove the Downloaded Manual", 0, 0, false, [this] { remove_manual(); },
+                          [this]() -> const char* { return manual_pages_kept() ? nullptr : "No pages are kept"; }});
     add("help", {"Controls", 0, 0, false, [this] { show_help_ = !show_help_; }, {}});
     add("welcome", {"Welcome", 0, 0, false, [this] { show_welcome_ = true; }, {}});
     add("zoom_in", {"Zoom In", 0, 0, true, [this] { cam_glide_.apply_input(camera_, [](Camera& c) { c.zoom(0.85); }); }, {}});
@@ -1884,7 +1895,7 @@ void App::draw_menus() {
                               "posing. Set them in the Rig menu.");
         ImGui::Separator();
         for (const char* id : {"ik_toggle", "follow_target", "pin_world", "bind_to", "pin_bone", "unpin", "delete_pin", "sit_on_seat",
-                               "foot_lock"})
+                               "foot_lock", "hands_out"})
             menu_item(id);
         if (begin_menu_icon(icon::kLoop, "Loop Tools")) {
             draw_loop_tools_menu();
@@ -1967,7 +1978,10 @@ void App::draw_menus() {
         }
     }
     if (begin_top_menu("Help")) {
-        for (const char* id : {"find_tool", "help_contents", "tutorials", "help", "welcome", "about"}) menu_item(id);
+        for (const char* id : {"find_tool", "help_contents", "tutorials", "online_manual"}) menu_item(id);
+        for (const char* id : {"download_manual", "remove_manual"}) menu_item(id);
+        ImGui::Separator();
+        for (const char* id : {"help", "welcome", "about"}) menu_item(id);
         ImGui::EndMenu();
     }
     draw_workspace_tabs();
@@ -2281,6 +2295,7 @@ bool App::frame() {
     draw_face_panel();
     draw_loop_assist_window();
     draw_foot_lock_window();
+    draw_hands_out_window();
     draw_actors_panel();
     draw_clips_panel();
     draw_mocap_panel();  // every frame: it polls the socket while listening

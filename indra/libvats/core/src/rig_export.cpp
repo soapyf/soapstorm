@@ -79,12 +79,21 @@ Quat bone_swing(const Skeleton& skel, const DaeModel& m, const std::vector<bool>
     return arc(want.normalized(), have.normalized());
 }
 
-// RG-9 "Stand it in SL's rest pose": every bound joint's bind turns by the swing from SL's rest direction of its bone
-// onto the file's, and a joint whose bone does not point at one weighted joint (a wrist, the chest, the head, a leaf)
-// turns with its nearest bound ancestor. The joint positions written then stand the bones along SL's rest directions
-// (a T-pose) at the file's lengths, and the inverse binds carry the pose it was modelled in (an A-pose), as for an
+// RG-9 "Stand it in SL's rest pose": the upper arms, forearms, thighs and shins turn by the swing from SL's rest
+// direction of their bone onto the file's; every other joint turns with its nearest turned ancestor (the hand with the
+// forearm, the foot with the shin) or not at all (the spine, neck, head and collars). The joint positions written then
+// stand the limbs along SL's rest directions (a T-pose) at the file's lengths, and the inverse binds carry the pose it was modelled in (an A-pose), as for an
 // SL-named body bound in an A-pose: SL skins the mesh into its own rest pose, and animations made for it fit.
 std::vector<Xform> rest_pose_binds(const Skeleton& skel, const DaeModel& m, const std::vector<Xform>& rest) {
+    // Only the long limb bones carry the pose an A-pose differs by. The rest keep the posture they were modelled in:
+    // SL's bone directions there are not the file's (a skeleton's neck leans forward, its head's only weighted child is
+    // the jaw, its clavicles and feet point their own way), and swinging them tipped the head back, the shoulder
+    // blades out and the feet up. Animations key those relative to rest.
+    auto limb = [](const std::string& n) {
+        for (const char* l : {"mShoulder", "mElbow", "mHip", "mKnee"})
+            if (n == std::string(l) + "Left" || n == std::string(l) + "Right") return true;
+        return false;
+    };
     std::vector<Xform> b = m.binds;
     const std::vector<bool> weighted = weighted_nodes(skel, m);
     auto bound = [&](int i) { return i < int(m.bound.size()) && m.bound[i]; };
@@ -93,7 +102,7 @@ std::vector<Xform> rest_pose_binds(const Skeleton& skel, const DaeModel& m, cons
         const int par = skel[j].parent;
         turn[j] = par >= 0 ? turn[par] : Quat{};
         if (!bound(j)) continue;
-        const Quat s = bone_swing(skel, m, weighted, rest, j);
+        const Quat s = limb(skel[j].name) ? bone_swing(skel, m, weighted, rest, j) : Quat{};
         if (s.angle() > 1e-9) turn[j] = m.binds[j].rot * s * m.binds[j].rot.conj();
         b[j].rot = (turn[j] * m.binds[j].rot).normalized();
     }
@@ -420,6 +429,7 @@ const std::vector<RigRule>& rig_export_rules() {
         {"scale_mismatch", "Rig scale differs from the measured one"},
         {"bind_pose", "Bound in another pose than SL's rest"},
         {"rest_pose", "Arms bound off SL's rest pose"},
+        {"comes_apart", "Parts come apart at the joints"},
         {"pelvis", "mPelvis position"},
         {"shared_positions", "Vertices sharing a position, weighted differently"},
         {"shape_proof", "Shape-proof"},
@@ -444,6 +454,21 @@ std::vector<RigFinding> check_rig_export(const Skeleton& skel, const std::vector
     const int root = dae_root(skel), count = dae_index_count(skel);
     long long triangles = 0;
     std::vector<std::string> volumes_weighted;
+    // RG-9 across the parts (a body may come as an upper and a lower file): both legs rigged, and where the hip sits.
+    bool legs = true;
+    double hip_z = 0;
+    for (const char* n : {"mHipLeft", "mKneeLeft", "mHipRight", "mKneeRight"}) {
+        const int j = skel.find(n);
+        bool rigged = false;
+        for (const RigPart& part : parts) {
+            const DaeModel* m = part.model;
+            if (!m || !m->rigged || m->binds.size() != size_t(count) || j < 0 || j >= int(m->bound.size()) || !m->bound[j]) continue;
+            if (!weighted_nodes(skel, *m)[j]) continue;
+            if (!rigged && j == skel.find("mHipLeft")) hip_z = m->binds[j].pos.z;
+            rigged = true;
+        }
+        legs = legs && rigged;
+    }
     for (int pi = 0; pi < int(parts.size()); ++pi) {
         const RigPart& part = parts[pi];
         const std::string label = part.name.empty() ? "mesh " + std::to_string(pi + 1) : part.name;
@@ -548,6 +573,36 @@ std::vector<RigFinding> check_rig_export(const Skeleton& skel, const std::vector
                     " degrees; an A-pose, say). The inverse binds carry that pose and SL skins the mesh back onto its rest skeleton" +
                     (opt.bind_pose_only ? ". Bind pose only: no joint positions are written"
                                         : "; joint positions keep each bone's length along SL's rest axes"));
+        // With no joint positions written: each weighted joint where its parent's bone skins it and where its own bone
+        // does, at SL's rest. Apart when the file's joints sit off SL's (a mapped rig of other proportions under Bind
+        // pose only): rigid parts, a skeleton's bones, then float apart. Written positions put both on the same point.
+        if (!opt.joint_positions || opt.bind_pose_only) {
+            auto bound_weighted = [&](int i, const std::vector<bool>& w) { return i < int(m->bound.size()) && m->bound[i] && w[i]; };
+            const std::vector<bool> w = weighted_nodes(skel, *m);
+            std::vector<std::string> torn;
+            double tear_worst = 0;
+            std::string at;
+            for (int j = 1; j < skel.joint_count(); ++j) {
+                if (!bound_weighted(j, w)) continue;
+                int a = skel[j].parent;
+                while (a >= 0 && !bound_weighted(a, w)) a = skel[a].parent;
+                if (a < 0) continue;
+                const double d = (p.g[a].apply(p.bind[a].inverse().apply(p.bind[j].pos)) - p.g[j].pos).length();
+                if (d <= 0.01) continue;
+                torn.push_back(skel[j].name);
+                if (d > tear_worst) tear_worst = d, at = skel[j].name;
+            }
+            if (!torn.empty()) {
+                RigFinding* f = add("comes_apart", RigSeverity::Error, pi,
+                                    label + " comes apart at " + std::to_string(torn.size()) + " joint" + (torn.size() == 1 ? "" : "s") +
+                                        " in Second Life, by up to " + num(tear_worst * 100, "%.1f") + " cm (at " + at + "): its joints sit off SL's, "
+                                        "and with no joint positions SL skins each bone's part onto its own joint. Write joint positions, "
+                                        "and upload with Include joint positions",
+                                    torn);
+                f->fix_label = "Write Joint Positions";
+                f->fix_options = [](RigExportOptions& o) { o.joint_positions = true, o.bind_pose_only = false; };
+            }
+        }
         // RG-9: arms bound hanging (an A-pose) on SL's unturned joints: SL animations, made for its T-pose rest, turn
         // them that much too far. Stand it in SL's rest pose writes the T-pose instead.
         if (opt.joint_positions && !opt.bind_pose_only && !opt.rest_pose) {
@@ -556,15 +611,24 @@ std::vector<RigFinding> check_rig_export(const Skeleton& skel, const std::vector
             for (const char* n : {"mShoulderLeft", "mShoulderRight"}) {
                 const int j = skel.find(n);
                 const std::vector<int> next = j >= 0 && m->bound[j] ? next_weighted(skel, *m, w, j) : std::vector<int>{};
-                // An arm still reaching out sideways (a quadruped's front leg on the arm points down: no hint).
-                if (next.size() == 1 && std::fabs((m->binds[next[0]].pos - m->binds[j].pos).normalized().y) > 0.35)
+                if (next.size() != 1) continue;
+                // An arm still reaching out sideways, or any arm of an upright body (shoulders well above the hips: an arm
+                // hanging straight down, an I-pose). A quadruped's front leg on the arm points down beside its hips: no hint.
+                const bool upright = legs && m->binds[j].pos.z - hip_z > 0.25;
+                if (upright || std::fabs((m->binds[next[0]].pos - m->binds[j].pos).normalized().y) > 0.35)
                     arms = std::max(arms, bone_swing(skel, *m, w, rest, j).angle() * kRadToDeg);
             }
-            if (arms > 20)
-                add("rest_pose", RigSeverity::Info, pi,
-                    label + "'s arms are bound " + num(arms, "%.0f") + " degrees off SL's rest pose (arms out level): SL animations are made "
-                            "for that rest and would turn them " + num(arms, "%.0f") + " degrees too far. For an upright humanoid, tick "
-                            "Stand it in SL's rest pose");
+            // Refused for an upright humanoid (both legs rigged, in any part); a creature with arms (wings bound drooping,
+            // say) may be animated for its own rest, so it only warns.
+            if (arms > 20) {
+                RigFinding* f = add("rest_pose", legs ? RigSeverity::Error : RigSeverity::Warning, pi,
+                                    label + "'s arms are bound " + num(arms, "%.0f") + " degrees off SL's rest pose (arms out level): SL animations "
+                                            "are made for that rest and would turn them " + num(arms, "%.0f") +
+                                            " degrees too far, through the body. Stand it in SL's rest pose" +
+                                            (legs ? "" : ", unless its animations are made for the pose it is bound in"));
+                f->fix_label = "Stand It in SL's Rest Pose";
+                f->fix_options = [](RigExportOptions& o) { o.rest_pose = true; };
+            }
         }
         // The pelvis: its position changes the avatar's height and hover.
         if (m->bound[0]) {

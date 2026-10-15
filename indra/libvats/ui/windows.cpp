@@ -1139,7 +1139,7 @@ bool App::show_window(const std::string& name) {
         {"hands", &App::show_hands_},       {"export", &App::show_export_dialog_}, {"controls", &App::show_help_},
         {"about", &App::show_about_},       {"quality", &App::show_quality_},
         {"split-dance", &App::show_split_dance_}, {"planner", &App::show_planner_},
-        {"batch-retarget", &App::show_batch_retarget_}, {"foot-lock", &App::show_foot_lock_},
+        {"batch-retarget", &App::show_batch_retarget_}, {"foot-lock", &App::show_foot_lock_}, {"hands-out", &App::show_hands_out_},
         {"auto-balance", &App::show_auto_balance_}, {"jump-arc", &App::show_jump_arc_},
         {"reference", &App::show_reference_}, {"listing-media", &App::show_listing_},
         {"face-cam", &App::face_cam_},      {"keys", &App::show_shortcuts_},

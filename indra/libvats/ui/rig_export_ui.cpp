@@ -77,6 +77,8 @@ std::string upload_steps(const RigExportUi& ui) {
 
 }  // namespace
 
+RigExportOptions App::rig_export_options() const { return rig_ui_ ? rig_ui_->opt : RigExportOptions{}; }
+
 // Rebuilds the parts, the findings and the joint tables from the body shown.
 void App::refresh_rig_check() {
     if (!rig_ui_) rig_ui_ = std::make_shared<RigExportUi>();
@@ -275,6 +277,14 @@ void App::draw_rig_export_window() {
                 status("Rig export: " + label + " on " + name);
             }
             ImGui::SetItemTooltip("%s", "Applied to the part as loaded, for this session; re-import the file to undo");
+            ImGui::SameLine();
+        }
+        if (f.fix_options) {
+            if (ImGui::Button(f.fix_label.c_str())) {
+                f.fix_options(ui.opt);
+                ui.due = true;
+                status("Rig export: " + f.fix_label);
+            }
             ImGui::SameLine();
         }
         std::vector<int> nodes;

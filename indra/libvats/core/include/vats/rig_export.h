@@ -97,6 +97,7 @@ struct RigFinding {
     std::string message;
     std::string fix_label;                             // "" = no automatic fix
     std::function<void(DaeModel&)> fix;                // applied to parts[part]'s model (the caller drops caches)
+    std::function<void(RigExportOptions&)> fix_options;  // or: the export options that fix it (fix_label names it)
 };
 
 struct RigRule {

@@ -47,6 +47,9 @@ struct DaeMaterial {
     std::string texture;  // resolved path of the diffuse texture; empty when none or not found
     bool blend = false;   // alpha-blended (transparency or diffuse alpha < 0.999)
     bool double_sided = false;  // only the default material
+    std::vector<std::uint8_t> image;  // the texture's encoded bytes (PNG, JPEG) when the file embeds it
+    int uv_set = 0;                   // which of the file's UV sets the texture reads (glTF texCoord)
+    float alpha_cutoff = -1;          // glTF MASK: pixels below this alpha are cut away; -1 = none
 };
 
 // The triangles of one material within one part. Its vertices are contiguous too.
@@ -84,7 +87,7 @@ struct MeshLook {
 
 struct DaeModel {
     std::vector<float> positions, normals;  // 3 per vertex, SL space; rigged vertices in bind pose
-    std::vector<float> uvs;                 // 2 per vertex, already flipped (v' = 1 - v)
+    std::vector<float> uvs;                 // 2 per vertex, v running down the image (0 = its top row), as glTF
     std::vector<std::uint32_t> indices;     // 3 per triangle, CCW front faces
     std::vector<DaeGroup> groups;           // per part, one per material in first-use order
     std::vector<DaeMaterial> materials;

@@ -46,6 +46,7 @@
 #include "vats/project.h"
 #include "vats/motion_quality.h"
 #include "vats/rig.h"
+#include "vats/rig_export.h"
 #include "vats/rig_map.h"
 #include "vats/simplify.h"
 #include "vats/skeleton.h"
@@ -94,6 +95,8 @@ struct Action {
     std::function<void()> run;
     std::function<const char*()> unavailable;  // why it can't run now, or nullptr
 };
+
+struct HelpUi;  // help_ui.cpp
 
 class App {
 public:
@@ -151,6 +154,12 @@ public:
     void goto_frame(double f) { set_frame(f); }
     // Opens the help browser at a page (title or file stem; "" = the front page, VATs) and heading.
     void open_help(const std::string& page = "", const std::string& anchor = "");
+    HelpUi& help();               // the help's state, made on first use (help_ui.cpp)
+    void download_manual();       // Help > Download the Manual: the online manual, for offline reading
+    void remove_manual();
+    void poll_manual_download();
+    bool manual_downloaded();
+    bool manual_pages_kept();  // the whole manual, or pages opened one by one
     void cli_import_prop(const std::string& path) { guarded(path, [&] { import_prop(path); }); }
     // --import-body: the files as one body, shown (headless runs: the report goes to stderr).
     void cli_import_body(const std::vector<std::string>& paths) { guarded(paths.empty() ? "" : paths[0], [&] { import_body(paths); }); }
@@ -639,6 +648,25 @@ private:
     int selected_prop_ = -1;  // a selected prop is exclusive with bones and handles (VP-27)
     // What each mesh shows (shown_model of its source under its look): everything draws, picks, stands and exports this.
     std::map<std::string, std::unique_ptr<DaeModel>> prop_models_;
+    // Model textures, one per picture (a file, or bytes a model packs: several materials, and a model read again,
+    // share it), 0 when unreadable; made on first draw, freed once no shown model uses them (free_mesh_textures).
+    std::map<std::string, ImTextureID> mesh_textures_;
+    struct MaterialKeys {  // a shown model's pictures by material, kept so the bytes are hashed once
+        std::vector<std::string> keys;
+        std::size_t made_from = 0;  // a signature of the materials' texture paths and image sizes, to tell a new model
+    };
+    std::map<const DaeModel*, MaterialKeys> material_keys_;
+    struct TexBatch {  // draw_prop's triangles of one texture, reused from draw to draw
+        std::vector<Vertex> verts;
+        std::vector<std::uint32_t> indices;
+    };
+    std::map<SurfaceTexture, TexBatch> tex_batches_;
+    TexBatch glow_;  // the weight glow over textured materials
+    TexBatch late_;  // see-through plain materials, drawn after the textured ones (a lens over a textured eye)
+    int textures_pruned_ = -1;  // the ImGui frame free_mesh_textures last ran in
+    const std::vector<std::string>& texture_keys(const DaeModel& m);
+    SurfaceTexture mesh_texture(const DaeModel& m, int material);
+    void free_mesh_textures(bool all);
     std::map<std::string, DaeReport> prop_reports_;  // each loaded mesh's import report (the rig export check reads it)
     // Spec 08 SK: each mesh as loaded, with all its parts and shape keys; the rig export's fixes and the soft-body share
     // edit this, and the shown model is rebuilt from it. prop_looks_: the look each shown model was built with.
@@ -1270,7 +1298,11 @@ private:
     float loop_travel_ = 1.f;
     // --- Clean Up Foot Sliding (footlock_ui.cpp; spec 07 RT-9, 08 FC) ---
     void draw_foot_lock_window();
+    void draw_hands_out_window();  // hands_out_ui.cpp
     bool show_foot_lock_ = false, foot_heel_toe_ = true, foot_to_ground_ = false;
+    bool show_hands_out_ = false;
+    int hands_out_state_ = 0;  // 1: show "Working..." this frame, 2: push next frame
+    std::string hands_out_report_;
     Clip foot_measured_;  // the clip foot_ground_ was measured on
     bool foot_measured_heel_toe_ = true;
     int foot_measured_legs_ = -1;
@@ -1484,12 +1516,12 @@ private:
     };
     std::vector<Triangles>* capture_triangles_ = nullptr;
     void scene_triangles(const std::vector<Vertex>& verts, const std::vector<std::uint32_t>& indices, bool depth_test,
-                         float gloss, bool translucent = false) {
-        if (capture_triangles_) {
+                         float gloss, bool translucent = false, const SurfaceTexture* texture = nullptr) {
+        if (capture_triangles_) {  // the Picker's thumbnails draw in the material colours
             if (!translucent) capture_triangles_->push_back({verts, indices, gloss});
             return;
         }
-        host_.scene_triangles(verts, indices, depth_test, gloss, translucent);
+        host_.scene_triangles(verts, indices, depth_test, gloss, translucent, texture);
     }
     // --- animation check (lint_ui.cpp; spec 08 CK) ---
     void update_check();       // re-runs the check once the clip is still after an edit (from draw_check_panel)
@@ -1505,6 +1537,7 @@ private:
     void draw_rig_export_window();  // File > Export Rigged Mesh for SL...
     void draw_joint_inspector();    // Rig > Joint Offset Inspector...
     void refresh_rig_check();       // the parts, findings and joint tables of the body shown
+    RigExportOptions rig_export_options() const;  // the export window's options (the defaults before it opens)
     // A fix on the body's part-th file, applied to its source (part_source); the body's shape cache dropped, re-checked.
     void rig_fix_applied(int part, const std::function<void(DaeModel&)>& fix);
     void rig_check_stale();         // a part's mesh changed: check again before the window draws
