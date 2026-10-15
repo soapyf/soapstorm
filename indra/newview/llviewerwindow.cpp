@@ -6290,6 +6290,11 @@ bool LLViewerWindow::saveSnapshot(const std::string& filepath, S32 image_width, 
             break;
         }
 
+        if (type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_TRANSPARENT)
+        {
+            image_codec = IMG_CODEC_PNG;
+        }
+
         LLPointer<LLImageFormatted> formated_image = LLImageFormatted::createFromType(image_codec);
         success = formated_image->encode(raw, 0.0f);
         if (success)
@@ -6578,6 +6583,17 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
                     swap();
                 }
 
+                GLint prev_read_fbo = 0;
+                GLint prev_read_buffer = GL_BACK;
+                const bool read_from_post_target = is_avatar_snapshot && LLPipeline::sRenderDeferred && gPipeline.mPostPingMap.isComplete();
+                if (read_from_post_target)
+                {
+                    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read_fbo);
+                    glGetIntegerv(GL_READ_BUFFER, &prev_read_buffer);
+                    glBindFramebuffer(GL_READ_FRAMEBUFFER, gPipeline.mPostPingMap.getFBO());
+                    glReadBuffer(GL_COLOR_ATTACHMENT0);
+                }
+
                 for (U32 out_y = 0; out_y < read_height ; out_y++)
                 {
                     S32 output_buffer_offset = (
@@ -6706,7 +6722,14 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
                         }
                     }
                 }
+
+                if (read_from_post_target)
+                {
+                    glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read_fbo);
+                    glReadBuffer(prev_read_buffer);
+                }
             }
+
             output_buffer_offset_x += subimage_x_offset;
             stop_glerror();
         }
@@ -6738,7 +6761,10 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
 
     // Pre-pad image to number of pixels such that the line length is a multiple of 4 bytes (for BMP encoding)
     // Note: this formula depends on the number of components being 3.  Not obvious, but it's correct.
-    image_width += (image_width * 3) % 4;
+    if (raw->getComponents() == 3)
+    {
+        image_width += (image_width * 3) % 4;
+    }
 
     bool ret = true ;
     // Resize image
