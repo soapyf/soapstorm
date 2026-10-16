@@ -847,6 +847,11 @@ void LLFloaterSnapshot::Impl::updateResolution(LLUICtrl* ctrl, void* data, bool 
     S32 width = sdres[0];
     S32 height = sdres[1];
 
+    if (width < -1 || height < -1)
+    {
+        return;
+    }
+
     // <FS:Ansariel> Store settings at logout
     bool is_custom_resolution = (width == -1 && height == -1);
 

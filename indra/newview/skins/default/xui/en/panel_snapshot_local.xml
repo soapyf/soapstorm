@@ -51,6 +51,48 @@
          name="CurrentWindow"
          value="[i0,i0]" />
         <combo_box.item
+         label="── 16:9 Widescreen ──"
+         name="header_16_9"
+         enabled="false"
+         value="[i-2,i-2]" />
+        <combo_box.item
+         label="1280x720 (720p HD)"
+         name="1280x720"
+         value="[i1280,i720]" />
+        <combo_box.item
+         label="1600x900 (900p HD+)"
+         name="1600x900"
+         value="[i1600,i900]" />
+        <combo_box.item
+         label="1920x1080 (1080p Full HD)"
+         name="1920x1080"
+         value="[i1920,i1080]" />
+        <combo_box.item
+         label="2560x1440 (1440p 2K QHD)"
+         name="2560x1440"
+         value="[i2560,i1440]" />
+        <combo_box.item
+         label="3200x1800 (QHD+)"
+         name="3200x1800"
+         value="[i3200,i1800]" />
+        <combo_box.item
+         label="3840x2160 (4K UHD)"
+         name="3840x2160"
+         value="[i3840,i2160]" />
+        <combo_box.item
+         label="5120x2880 (5K)"
+         name="5120x2880"
+         value="[i5120,i2880]" />
+        <combo_box.item
+         label="7680x4320 (8K UHD)"
+         name="7680x4320"
+         value="[i7680,i4320]" />
+        <combo_box.item
+         label="── 4:3 Legacy ──"
+         name="header_4_3"
+         enabled="false"
+         value="[i-2,i-2]" />
+        <combo_box.item
          label="320x240"
          name="320x240"
          value="[i320,i240]" />
@@ -67,13 +109,22 @@
          name="1024x768"
          value="[i1024,i768]" />
         <combo_box.item
-         label="1280x1024"
+         label="1280x960"
+         name="1280x960"
+         value="[i1280,i960]" />
+        <combo_box.item
+         label="1280x1024 (5:4)"
          name="1280x1024"
          value="[i1280,i1024]" />
         <combo_box.item
          label="1600x1200"
          name="1600x1200"
          value="[i1600,i1200]" />
+        <combo_box.item
+         label="── Other ──"
+         name="header_other"
+         enabled="false"
+         value="[i-2,i-2]" />
         <combo_box.item
          label="Custom"
          name="Custom"
@@ -89,7 +140,7 @@
      label_width="90"
      layout="topleft"
      left="10"
-     max_val="6016"
+     max_val="7680"
      min_val="32"
      name="local_snapshot_width"
      top_pad="7"
@@ -104,7 +155,7 @@
      label_width="0"
      layout="topleft"
      left_pad="0"
-     max_val="6016"
+     max_val="7680"
      min_val="32"
      name="local_snapshot_height"
      top_delta="0"
