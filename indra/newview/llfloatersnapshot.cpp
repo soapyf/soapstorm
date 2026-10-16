@@ -42,6 +42,7 @@
 #include "llspinctrl.h"
 #include "llviewercontrol.h"
 #include "lltoolfocus.h"
+#include "llagentcamera.h"
 #include "lltoolmgr.h"
 #include "llwebprofile.h"
 
@@ -600,6 +601,31 @@ void LLFloaterSnapshotBase::ImplBase::onClickNewSnapshot(void* data)
         floater->impl->setStatus(ImplBase::STATUS_READY);
         LL_DEBUGS() << "updating snapshot" << LL_ENDL;
         previewp->mForceUpdateSnapshot = true;
+    }
+}
+
+// static
+void LLFloaterSnapshotBase::ImplBase::onClickRotatePortrait(void* data)
+{
+    F32 current_roll = gAgentCamera.getRollAngle();
+    if (fabsf(current_roll - F_PI_BY_TWO) < 0.1f)
+    {
+        gAgentCamera.resetCameraRoll();
+    }
+    else
+    {
+        gAgentCamera.setRollAngle(F_PI_BY_TWO);
+    }
+
+    LLFloaterSnapshotBase* floater = (LLFloaterSnapshotBase*)data;
+    if (floater)
+    {
+        LLSnapshotLivePreview* previewp = floater->getPreviewView();
+        if (previewp)
+        {
+            floater->impl->setStatus(ImplBase::STATUS_READY);
+            previewp->mForceUpdateSnapshot = true;
+        }
     }
 }
 
@@ -1178,6 +1204,10 @@ bool LLFloaterSnapshot::postBuild()
 {
     mRefreshBtn = getChild<LLUICtrl>("new_snapshot_btn");
     childSetAction("new_snapshot_btn", ImplBase::onClickNewSnapshot, this);
+    if (hasChild("rotate_portrait_btn", true))
+    {
+        childSetAction("rotate_portrait_btn", ImplBase::onClickRotatePortrait, this);
+    }
     mRefreshLabel = getChild<LLUICtrl>("refresh_lbl");
     mSucceessLblPanel = getChild<LLUICtrl>("succeeded_panel");
     mFailureLblPanel = getChild<LLUICtrl>("failed_panel");

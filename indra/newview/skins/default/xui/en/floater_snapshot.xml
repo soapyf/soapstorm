@@ -92,7 +92,17 @@
 	 label="Refresh"
      name="new_snapshot_btn"
      top_pad="10"
-     width="167" />
+     width="135" />
+    <button
+     follows="left|top"
+     height="25"
+     layout="topleft"
+     left_pad="1"
+     top_delta="0"
+     width="31"
+     label="90°"
+     name="rotate_portrait_btn"
+     tool_tip="Rotate camera 90° (Portrait / Landscape)" />
 	<button
        follows="left|top"
 	   control_name="AdvanceSnapshot"

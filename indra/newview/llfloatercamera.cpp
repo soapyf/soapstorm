@@ -91,6 +91,8 @@ protected:
 // <FS:Chanayane> Camera roll (from Alchemy)
     void    onRollLeftHeldDown();
     void    onRollRightHeldDown();
+    void    onRollReset();
+    void    onRollPortrait();
 // </FS:Chanayane>
 
 private:
@@ -186,6 +188,8 @@ void LLPanelCameraZoom::onCreate()
 // <FS:Chanayane> Camera roll (from Alchemy)
     mCommitCallbackRegistrar.add("Camera.roll_left", boost::bind(&LLPanelCameraZoom::onRollLeftHeldDown, this));
     mCommitCallbackRegistrar.add("Camera.roll_right", boost::bind(&LLPanelCameraZoom::onRollRightHeldDown, this));
+    mCommitCallbackRegistrar.add("Camera.roll_reset", boost::bind(&LLPanelCameraZoom::onRollReset, this));
+    mCommitCallbackRegistrar.add("Camera.roll_portrait", boost::bind(&LLPanelCameraZoom::onRollPortrait, this));
 // </FS:Chanayane>
 }
 
@@ -240,6 +244,24 @@ void LLPanelCameraZoom::onRollRightHeldDown()
     F32 time = mRollRight->getHeldDownTime();
     gAgentCamera.unlockView();
     gAgentCamera.setRollRightKey(getOrbitRate(time));
+}
+
+void LLPanelCameraZoom::onRollReset()
+{
+    gAgentCamera.resetCameraRoll();
+}
+
+void LLPanelCameraZoom::onRollPortrait()
+{
+    F32 current_roll = gAgentCamera.getRollAngle();
+    if (fabsf(current_roll - F_PI_BY_TWO) < 0.1f)
+    {
+        gAgentCamera.resetCameraRoll();
+    }
+    else
+    {
+        gAgentCamera.setRollAngle(F_PI_BY_TWO);
+    }
 }
 // </FS:Chanayane>
 
