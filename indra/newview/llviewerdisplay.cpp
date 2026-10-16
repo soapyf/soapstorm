@@ -150,6 +150,7 @@ bool gSnapshot = false;
 bool gCubeSnapshot = false;
 bool gSnapshotNoPost = false;
 bool gSnapshotAvatarOnly = false;
+bool gSnapshotCaptureAllAvatars = false;
 S32 gSnapshotLayerType = 0;
 bool gShaderProfileFrame = false;
 

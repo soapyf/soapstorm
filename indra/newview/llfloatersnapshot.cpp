@@ -229,7 +229,7 @@ void LLFloaterSnapshotBase::ImplBase::updateLayout(LLFloaterSnapshotBase* floate
     if (!mSkipReshaping && !floaterp->isMinimized())
     {
         LLView* controls_container = floaterp->getChild<LLView>("controls_container");
-        constexpr S32 THUMB_HEIGHT_LARGE = 470;
+        constexpr S32 THUMB_HEIGHT_LARGE = 510;
         constexpr S32 THUMB_HEIGHT_SMALL = 124;
         constexpr S32 THUMB_WIDTH_SMALL = 216;
         if (mAdvanced)
@@ -346,6 +346,10 @@ void LLFloaterSnapshot::Impl::updateControls(LLFloaterSnapshotBase* floater)
 
     floater->getChild<LLComboBox>("local_format_combo")->selectNthItem(gSavedSettings.getS32("SnapshotFormat"));
     floater->getChildView("layer_types")->setEnabled(shot_type == LLSnapshotModel::SNAPSHOT_LOCAL);
+    if (floater->hasChild("capture_all_avatars_check", true))
+    {
+        floater->getChildView("capture_all_avatars_check")->setEnabled(shot_type == LLSnapshotModel::SNAPSHOT_LOCAL);
+    }
 
     LLPanelSnapshot* active_panel = getActivePanel(floater);
     // <FS:Ansariel> Fix XUI parser warning
@@ -1143,6 +1147,10 @@ bool LLFloaterSnapshot::postBuild()
     childSetCommitCallback("ui_check", ImplBase::onClickDisplaySetting, this);
     childSetCommitCallback("balance_check", ImplBase::onClickDisplaySetting, this);
     childSetCommitCallback("hud_check", ImplBase::onClickDisplaySetting, this);
+    if (hasChild("capture_all_avatars_check", true))
+    {
+        childSetCommitCallback("capture_all_avatars_check", ImplBase::onClickDisplaySetting, this);
+    }
 
     // <FS:Ansariel> FIRE-15853: HUDs, interface or L$ balance checkbox don't update actual screenshot image
     childSetCommitCallback("currency_check", ImplBase::onClickCurrencyCheck, this);

@@ -2700,35 +2700,58 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
 
     sCull->clear();
 
-    if (gSnapshotAvatarOnly && gAgentAvatarp && gAgentAvatarp->mDrawable)
+    if (gSnapshotAvatarOnly)
     {
-        markVisible(gAgentAvatarp->mDrawable, camera);
-        for (const auto& pair : gAgentAvatarp->mAttachmentPoints)
-        {
-            LLViewerJointAttachment* attachment = pair.second;
-            if (!attachment || attachment->getIsHUDAttachment()) continue;
-            for (const auto& attached_iter : attachment->mAttachedObjects)
+        auto markAvatarAndAttachmentsVisible = [&](LLVOAvatar* avp) {
+            if (!avp || avp->isDead() || !avp->mDrawable) return;
+            markVisible(avp->mDrawable, camera);
+            for (const auto& pair : avp->mAttachmentPoints)
             {
-                LLViewerObject* attached_obj = attached_iter.get();
-                if (attached_obj)
+                LLViewerJointAttachment* attachment = pair.second;
+                if (!attachment || attachment->getIsHUDAttachment()) continue;
+                for (const auto& attached_iter : attachment->mAttachedObjects)
                 {
-                    if (attached_obj->mDrawable)
+                    LLViewerObject* attached_obj = attached_iter.get();
+                    if (attached_obj)
                     {
-                        if (attached_obj->mDrawable->getSpatialBridge())
+                        if (attached_obj->mDrawable)
                         {
-                            markVisible(attached_obj->mDrawable->getSpatialBridge(), camera);
+                            if (attached_obj->mDrawable->getSpatialBridge())
+                            {
+                                markVisible(attached_obj->mDrawable->getSpatialBridge(), camera);
+                            }
+                            else
+                            {
+                                markVisible(attached_obj->mDrawable, camera);
+                            }
                         }
-                        else
+                        if (attached_obj->getControlAvatar() && attached_obj->getControlAvatar()->mDrawable)
                         {
-                            markVisible(attached_obj->mDrawable, camera);
+                            markVisible(attached_obj->getControlAvatar()->mDrawable, camera);
                         }
-                    }
-                    if (attached_obj->getControlAvatar() && attached_obj->getControlAvatar()->mDrawable)
-                    {
-                        markVisible(attached_obj->getControlAvatar()->mDrawable, camera);
                     }
                 }
             }
+        };
+
+        if (gSnapshotCaptureAllAvatars)
+        {
+            for (LLCharacter* character : LLCharacter::sInstances)
+            {
+                LLVOAvatar* avatar = (LLVOAvatar*)character;
+                if (avatar && !avatar->isDead() && !avatar->mIsDummy && !avatar->isOrphaned() && !avatar->isControlAvatar())
+                {
+                    markAvatarAndAttachmentsVisible(avatar);
+                }
+            }
+            if (gAgentAvatarp && gAgentAvatarp->mDrawable)
+            {
+                markAvatarAndAttachmentsVisible(gAgentAvatarp);
+            }
+        }
+        else if (gAgentAvatarp && gAgentAvatarp->mDrawable)
+        {
+            markAvatarAndAttachmentsVisible(gAgentAvatarp);
         }
         return;
     }

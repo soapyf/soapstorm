@@ -46,6 +46,7 @@ extern bool gSnapshot;
 extern bool gCubeSnapshot;
 extern bool gSnapshotNoPost;
 extern bool gSnapshotAvatarOnly;
+extern bool gSnapshotCaptureAllAvatars;
 extern S32 gSnapshotLayerType;
 
 // <FS:Ansariel> Draw Distance stepping; originally based on SpeedRez by Henri Beauchamp, licensed under LGPL
