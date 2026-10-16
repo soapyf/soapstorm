@@ -104,6 +104,16 @@ bool LLPanelSnapshotLocal::postBuild()
         });
     }
 
+    if (hasChild("local_save_holdout_mattes", true))
+    {
+        getChild<LLUICtrl>("local_save_holdout_mattes")->setCommitCallback([this](LLUICtrl*, const LLSD&) {
+            if (mSnapshotFloater && mSnapshotFloater->impl)
+            {
+                mSnapshotFloater->impl->updateControls(mSnapshotFloater);
+            }
+        });
+    }
+
     return LLPanelSnapshot::postBuild();
 }
 
@@ -121,6 +131,11 @@ void LLPanelSnapshotLocal::onOpen(const LLSD& key)
     // </FS:Ansariel>
 
     LLPanelSnapshot::onOpen(key);
+
+    if (mSnapshotFloater && mSnapshotFloater->impl)
+    {
+        mSnapshotFloater->impl->updateControls(mSnapshotFloater);
+    }
 }
 
 // virtual

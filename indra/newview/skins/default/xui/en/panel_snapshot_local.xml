@@ -197,6 +197,7 @@
      name="local_save_holdout_mattes"
      control_name="FSSaveAvatarMasksWithSnapshot"/>
     <check_box
+     enabled="false"
      top_pad="4"
      follows="left|top"
      layout="topleft"

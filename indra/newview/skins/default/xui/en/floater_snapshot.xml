@@ -188,6 +188,7 @@
              value="avatar_mask_white" />
         </combo_box>
         <check_box
+         enabled="false"
          label="Capture all avatars"
          tool_tip="Include all avatars in the scene for avatar snapshots and holdout mattes instead of only yourself"
          layout="topleft"

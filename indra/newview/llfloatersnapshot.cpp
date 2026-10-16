@@ -346,9 +346,20 @@ void LLFloaterSnapshot::Impl::updateControls(LLFloaterSnapshotBase* floater)
 
     floater->getChild<LLComboBox>("local_format_combo")->selectNthItem(gSavedSettings.getS32("SnapshotFormat"));
     floater->getChildView("layer_types")->setEnabled(shot_type == LLSnapshotModel::SNAPSHOT_LOCAL);
+
+    const bool is_avatar_layer = (layer_type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_TRANSPARENT ||
+                                  layer_type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_BLACK ||
+                                  layer_type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_WHITE);
+    const bool transparent_capture_enabled = (shot_type == LLSnapshotModel::SNAPSHOT_LOCAL) &&
+                                             (is_avatar_layer || gSavedSettings.getBOOL("FSSaveAvatarMasksWithSnapshot"));
+
     if (floater->hasChild("capture_all_avatars_check", true))
     {
-        floater->getChildView("capture_all_avatars_check")->setEnabled(shot_type == LLSnapshotModel::SNAPSHOT_LOCAL);
+        floater->getChildView("capture_all_avatars_check")->setEnabled(transparent_capture_enabled);
+    }
+    if (floater->hasChild("local_capture_all_avatars", true))
+    {
+        floater->getChildView("local_capture_all_avatars")->setEnabled(transparent_capture_enabled);
     }
 
     LLPanelSnapshot* active_panel = getActivePanel(floater);
@@ -951,6 +962,7 @@ void LLFloaterSnapshot::Impl::onCommitLayerTypes(LLUICtrl* ctrl, void*data)
         }
         view->impl->checkAutoSnapshot(previewp, true);
         previewp->updateSnapshot(true, true);
+        view->impl->updateControls(view);
     }
 }
 
