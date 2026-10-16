@@ -1517,6 +1517,81 @@ public:
     }
 };
 
+static bool isOtherAvatarOrAttachment(LLViewerObject* vobj)
+{
+    if (!vobj) return false;
+
+    if (vobj->isAvatar())
+    {
+        LLVOAvatar* av = (LLVOAvatar*)vobj;
+        if (av->isSelf())
+        {
+            return false;
+        }
+        if (av->isControlAvatar())
+        {
+            LLControlAvatar* cav = (LLControlAvatar*)av;
+            const LLVOAvatar* attached_to = cav->getAttachedAvatar();
+            if (attached_to && attached_to->isSelf())
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    LLVOAvatar* ancestor = vobj->getAvatarAncestor();
+    if (!ancestor && vobj->isAttachment())
+    {
+        ancestor = LLVOAvatar::findAvatarFromAttachment(vobj);
+    }
+    if (ancestor)
+    {
+        if (ancestor->isControlAvatar())
+        {
+            LLControlAvatar* cav = (LLControlAvatar*)ancestor;
+            const LLVOAvatar* attached_to = cav->getAttachedAvatar();
+            if (attached_to && attached_to->isSelf())
+            {
+                return false;
+            }
+        }
+        return !ancestor->isSelf();
+    }
+
+    LLControlAvatar* ca = vobj->getControlAvatar();
+    if (ca)
+    {
+        const LLVOAvatar* attached_to = ca->getAttachedAvatar();
+        if (attached_to && attached_to->isSelf())
+        {
+            return false;
+        }
+        return true;
+    }
+
+    LLVOAvatar* av = vobj->getAvatar();
+    if (av)
+    {
+        if (av->isSelf())
+        {
+            return false;
+        }
+        if (av->isControlAvatar())
+        {
+            LLControlAvatar* cav = (LLControlAvatar*)av;
+            const LLVOAvatar* attached_to = cav->getAttachedAvatar();
+            if (attached_to && attached_to->isSelf())
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    return false;
+}
+
 void LLSpatialBridge::setVisible(LLCamera& camera_in, std::vector<LLDrawable*>* results, bool for_select)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWABLE;
@@ -1529,7 +1604,7 @@ void LLSpatialBridge::setVisible(LLCamera& camera_in, std::vector<LLDrawable*>* 
     if (gSnapshot && !gSnapshotCaptureAllAvatars && mDrawable)
     {
         LLViewerObject *vobj = mDrawable->getVObj();
-        if (vobj && vobj->getAvatar() && !vobj->getAvatar()->isSelf())
+        if (isOtherAvatarOrAttachment(vobj))
         {
             return;
         }

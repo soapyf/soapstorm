@@ -2661,6 +2661,81 @@ bool LLPipeline::isWaterClip()
     return (gPipeline.mHeroProbeManager.isMirrorPass()) ? false : (!sRenderTransparentWater || gCubeSnapshot) && !sRenderingHUDs;
 }
 
+static bool isOtherAvatarOrAttachment(LLViewerObject* vobj)
+{
+    if (!vobj) return false;
+
+    if (vobj->isAvatar())
+    {
+        LLVOAvatar* av = (LLVOAvatar*)vobj;
+        if (av->isSelf())
+        {
+            return false;
+        }
+        if (av->isControlAvatar())
+        {
+            LLControlAvatar* cav = (LLControlAvatar*)av;
+            const LLVOAvatar* attached_to = cav->getAttachedAvatar();
+            if (attached_to && attached_to->isSelf())
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    LLVOAvatar* ancestor = vobj->getAvatarAncestor();
+    if (!ancestor && vobj->isAttachment())
+    {
+        ancestor = LLVOAvatar::findAvatarFromAttachment(vobj);
+    }
+    if (ancestor)
+    {
+        if (ancestor->isControlAvatar())
+        {
+            LLControlAvatar* cav = (LLControlAvatar*)ancestor;
+            const LLVOAvatar* attached_to = cav->getAttachedAvatar();
+            if (attached_to && attached_to->isSelf())
+            {
+                return false;
+            }
+        }
+        return !ancestor->isSelf();
+    }
+
+    LLControlAvatar* ca = vobj->getControlAvatar();
+    if (ca)
+    {
+        const LLVOAvatar* attached_to = ca->getAttachedAvatar();
+        if (attached_to && attached_to->isSelf())
+        {
+            return false;
+        }
+        return true;
+    }
+
+    LLVOAvatar* av = vobj->getAvatar();
+    if (av)
+    {
+        if (av->isSelf())
+        {
+            return false;
+        }
+        if (av->isControlAvatar())
+        {
+            LLControlAvatar* cav = (LLControlAvatar*)av;
+            const LLVOAvatar* attached_to = cav->getAttachedAvatar();
+            if (attached_to && attached_to->isSelf())
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    return false;
+}
+
 void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_attachments)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE; //LL_RECORD_BLOCK_TIME(FTM_CULL);
@@ -2727,6 +2802,27 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
                     {
                         markVisible(attached_obj->getControlAvatar()->mDrawable, camera);
                     }
+                    for (LLViewerObject* child : attached_obj->getChildren())
+                    {
+                        if (child)
+                        {
+                            if (child->mDrawable)
+                            {
+                                if (child->mDrawable->getSpatialBridge())
+                                {
+                                    markVisible(child->mDrawable->getSpatialBridge(), camera);
+                                }
+                                else
+                                {
+                                    markVisible(child->mDrawable, camera);
+                                }
+                            }
+                            if (child->getControlAvatar() && child->getControlAvatar()->mDrawable)
+                            {
+                                markVisible(child->getControlAvatar()->mDrawable, camera);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -2763,8 +2859,7 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
 
         for (U32 i = 0; i < LLViewerRegion::NUM_PARTITIONS; i++)
         {
-            if (gSnapshot && !gSnapshotCaptureAllAvatars &&
-                (i == LLViewerRegion::PARTITION_AVATAR || i == LLViewerRegion::PARTITION_CONTROL_AV))
+            if (gSnapshot && !gSnapshotCaptureAllAvatars && i == LLViewerRegion::PARTITION_AVATAR)
             {
                 continue;
             }
@@ -3461,7 +3556,7 @@ void LLPipeline::stateSort(LLCamera& camera, LLCullResult &result)
             if (gSnapshot && !gSnapshotCaptureAllAvatars && bridge && bridge->mDrawable)
             {
                 LLViewerObject* vobj = bridge->mDrawable->getVObj();
-                if (vobj && vobj->getAvatar() && !vobj->getAvatar()->isSelf())
+                if (isOtherAvatarOrAttachment(vobj))
                 {
                     continue;
                 }
@@ -3567,6 +3662,11 @@ void LLPipeline::stateSort(LLDrawable* drawablep, LLCamera& camera)
     if (!drawablep
         || drawablep->isDead()
         || !hasRenderType(drawablep->getRenderType()))
+    {
+        return;
+    }
+
+    if (gSnapshot && !gSnapshotCaptureAllAvatars && isOtherAvatarOrAttachment(drawablep->getVObj()))
     {
         return;
     }
