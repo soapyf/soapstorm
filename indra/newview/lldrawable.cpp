@@ -55,6 +55,9 @@
 #include "llcontrolavatar.h"
 #include "lldrawpoolavatar.h"
 
+extern bool gSnapshot;
+extern bool gSnapshotCaptureAllAvatars;
+
 // <FS:ND> Tentatively ignoring mismatched new/delete from the MemTrackableNonVirtual. I think according to the docs
 // they are properly matched
 #if LL_LINUX
@@ -1521,6 +1524,15 @@ void LLSpatialBridge::setVisible(LLCamera& camera_in, std::vector<LLDrawable*>* 
     if (!gPipeline.hasRenderType(mDrawableType))
     {
         return;
+    }
+
+    if (gSnapshot && !gSnapshotCaptureAllAvatars && mDrawable)
+    {
+        LLViewerObject *vobj = mDrawable->getVObj();
+        if (vobj && vobj->getAvatar() && !vobj->getAvatar()->isSelf())
+        {
+            return;
+        }
     }
 
 

@@ -6374,7 +6374,7 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
     // PRE SNAPSHOT
     gSnapshotNoPost = no_post;
     gSnapshotAvatarOnly = is_avatar_snapshot;
-    gSnapshotCaptureAllAvatars = is_avatar_snapshot && gSavedSettings.getBOOL("FSSnapshotCaptureAllAvatars");
+    gSnapshotCaptureAllAvatars = gSavedSettings.getBOOL("FSSnapshotCaptureAllAvatars");
     gSnapshotLayerType = type;
     gDisplaySwapBuffers = false;
 

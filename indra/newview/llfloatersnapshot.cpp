@@ -218,10 +218,15 @@ void LLFloaterSnapshotBase::ImplBase::updateLayout(LLFloaterSnapshotBase* floate
     //  }
     //}
 
-    previewp->setFixedThumbnailSize(panel_width, 420);
+    constexpr S32 THUMB_HEIGHT_LARGE = 470;
+    constexpr S32 THUMB_HEIGHT_SMALL = 124;
+    constexpr S32 THUMB_WIDTH_SMALL = 216;
+
+    previewp->setFixedThumbnailSize(panel_width, mAdvanced ? THUMB_HEIGHT_LARGE : THUMB_HEIGHT_SMALL);
     LLUICtrl* thumbnail_placeholder = floaterp->getChild<LLUICtrl>("thumbnail_placeholder");
     floaterp->getChild<LLUICtrl>("image_res_text")->setVisible(mAdvanced);
     floaterp->getChild<LLUICtrl>("file_size_label")->setVisible(mAdvanced);
+    floaterp->getChildView("img_info_border")->setVisible(mAdvanced);
     if (floaterp->hasChild("360_label", true))
     {
         floaterp->getChild<LLUICtrl>("360_label")->setVisible(mAdvanced);
@@ -229,9 +234,6 @@ void LLFloaterSnapshotBase::ImplBase::updateLayout(LLFloaterSnapshotBase* floate
     if (!mSkipReshaping && !floaterp->isMinimized())
     {
         LLView* controls_container = floaterp->getChild<LLView>("controls_container");
-        constexpr S32 THUMB_HEIGHT_LARGE = 510;
-        constexpr S32 THUMB_HEIGHT_SMALL = 124;
-        constexpr S32 THUMB_WIDTH_SMALL = 216;
         if (mAdvanced)
         {
             LLRect cc_rect = controls_container->getRect();
@@ -247,6 +249,38 @@ void LLFloaterSnapshotBase::ImplBase::updateLayout(LLFloaterSnapshotBase* floate
             tn_rect.setLeftTopAndSize(215, floaterp->getRect().getHeight() - 30, tn_rect.getWidth(), tn_rect.getHeight());
             thumbnail_placeholder->setRect(tn_rect);
             thumbnail_placeholder->updateBoundingRect();
+
+            LLView* info_border = floaterp->getChild<LLView>("img_info_border");
+            if (info_border)
+            {
+                LLRect ib_rect = info_border->getRect();
+                S32 border_h = ib_rect.getHeight();
+                S32 border_y = tn_rect.mBottom - 5 - border_h;
+                ib_rect.setLeftTopAndSize(ib_rect.mLeft, border_y + border_h, ib_rect.getWidth(), border_h);
+                info_border->setRect(ib_rect);
+
+                LLView* res_text = floaterp->getChild<LLView>("image_res_text");
+                if (res_text)
+                {
+                    LLRect rt_rect = res_text->getRect();
+                    rt_rect.setLeftTopAndSize(rt_rect.mLeft, border_y + border_h - 4, rt_rect.getWidth(), rt_rect.getHeight());
+                    res_text->setRect(rt_rect);
+                }
+                LLView* size_text = floaterp->getChild<LLView>("file_size_label");
+                if (size_text)
+                {
+                    LLRect st_rect = size_text->getRect();
+                    st_rect.setLeftTopAndSize(st_rect.mLeft, border_y + border_h - 4, st_rect.getWidth(), st_rect.getHeight());
+                    size_text->setRect(st_rect);
+                }
+                LLView* label_360 = floaterp->getChild<LLView>("360_label");
+                if (label_360)
+                {
+                    LLRect btn_rect = label_360->getRect();
+                    btn_rect.setLeftTopAndSize(btn_rect.mLeft, border_y + border_h + 1, btn_rect.getWidth(), btn_rect.getHeight());
+                    label_360->setRect(btn_rect);
+                }
+            }
 
             previewp->setThumbnailPlaceholderRect(floaterp->getThumbnailPlaceholderRect());
             previewp->setThumbnailImageSize();
@@ -347,20 +381,7 @@ void LLFloaterSnapshot::Impl::updateControls(LLFloaterSnapshotBase* floater)
     floater->getChild<LLComboBox>("local_format_combo")->selectNthItem(gSavedSettings.getS32("SnapshotFormat"));
     floater->getChildView("layer_types")->setEnabled(shot_type == LLSnapshotModel::SNAPSHOT_LOCAL);
 
-    const bool is_avatar_layer = (layer_type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_TRANSPARENT ||
-                                  layer_type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_BLACK ||
-                                  layer_type == LLSnapshotModel::SNAPSHOT_TYPE_AVATAR_MASK_WHITE);
-    const bool transparent_capture_enabled = (shot_type == LLSnapshotModel::SNAPSHOT_LOCAL) &&
-                                             (is_avatar_layer || gSavedSettings.getBOOL("FSSaveAvatarMasksWithSnapshot"));
 
-    if (floater->hasChild("capture_all_avatars_check", true))
-    {
-        floater->getChildView("capture_all_avatars_check")->setEnabled(transparent_capture_enabled);
-    }
-    if (floater->hasChild("local_capture_all_avatars", true))
-    {
-        floater->getChildView("local_capture_all_avatars")->setEnabled(transparent_capture_enabled);
-    }
 
     LLPanelSnapshot* active_panel = getActivePanel(floater);
     // <FS:Ansariel> Fix XUI parser warning

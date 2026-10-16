@@ -94,26 +94,6 @@ bool LLPanelSnapshotLocal::postBuild()
     getHeightSpinner()->setValue(gSavedSettings.getS32("LastSnapshotToDiskHeight"));
     // </FS:Ansariel>
 
-    if (hasChild("local_capture_all_avatars", true))
-    {
-        getChild<LLUICtrl>("local_capture_all_avatars")->setCommitCallback([this](LLUICtrl*, const LLSD&) {
-            if (mSnapshotFloater && mSnapshotFloater->getPreviewView())
-            {
-                mSnapshotFloater->getPreviewView()->updateSnapshot(true, true);
-            }
-        });
-    }
-
-    if (hasChild("local_save_holdout_mattes", true))
-    {
-        getChild<LLUICtrl>("local_save_holdout_mattes")->setCommitCallback([this](LLUICtrl*, const LLSD&) {
-            if (mSnapshotFloater && mSnapshotFloater->impl)
-            {
-                mSnapshotFloater->impl->updateControls(mSnapshotFloater);
-            }
-        });
-    }
-
     return LLPanelSnapshot::postBuild();
 }
 
@@ -131,11 +111,6 @@ void LLPanelSnapshotLocal::onOpen(const LLSD& key)
     // </FS:Ansariel>
 
     LLPanelSnapshot::onOpen(key);
-
-    if (mSnapshotFloater && mSnapshotFloater->impl)
-    {
-        mSnapshotFloater->impl->updateControls(mSnapshotFloater);
-    }
 }
 
 // virtual

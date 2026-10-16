@@ -196,18 +196,6 @@
      width="220"
      name="local_save_holdout_mattes"
      control_name="FSSaveAvatarMasksWithSnapshot"/>
-    <check_box
-     enabled="false"
-     top_pad="4"
-     follows="left|top"
-     layout="topleft"
-     label_width="200"
-     label="Capture all avatars in scene"
-     tool_tip="When taking avatar-only or holdout snapshots, include all nearby avatars instead of just your own"
-     left="10"
-     width="220"
-     name="local_capture_all_avatars"
-     control_name="FSSnapshotCaptureAllAvatars"/>
     <button
      follows="right|bottom"
      height="23"

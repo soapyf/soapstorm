@@ -2700,40 +2700,40 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
 
     sCull->clear();
 
-    if (gSnapshotAvatarOnly)
-    {
-        auto markAvatarAndAttachmentsVisible = [&](LLVOAvatar* avp) {
-            if (!avp || avp->isDead() || !avp->mDrawable) return;
-            markVisible(avp->mDrawable, camera);
-            for (const auto& pair : avp->mAttachmentPoints)
+    auto markAvatarAndAttachmentsVisible = [&](LLVOAvatar* avp) {
+        if (!avp || avp->isDead() || !avp->mDrawable) return;
+        markVisible(avp->mDrawable, camera);
+        for (const auto& pair : avp->mAttachmentPoints)
+        {
+            LLViewerJointAttachment* attachment = pair.second;
+            if (!attachment || attachment->getIsHUDAttachment()) continue;
+            for (const auto& attached_iter : attachment->mAttachedObjects)
             {
-                LLViewerJointAttachment* attachment = pair.second;
-                if (!attachment || attachment->getIsHUDAttachment()) continue;
-                for (const auto& attached_iter : attachment->mAttachedObjects)
+                LLViewerObject* attached_obj = attached_iter.get();
+                if (attached_obj)
                 {
-                    LLViewerObject* attached_obj = attached_iter.get();
-                    if (attached_obj)
+                    if (attached_obj->mDrawable)
                     {
-                        if (attached_obj->mDrawable)
+                        if (attached_obj->mDrawable->getSpatialBridge())
                         {
-                            if (attached_obj->mDrawable->getSpatialBridge())
-                            {
-                                markVisible(attached_obj->mDrawable->getSpatialBridge(), camera);
-                            }
-                            else
-                            {
-                                markVisible(attached_obj->mDrawable, camera);
-                            }
+                            markVisible(attached_obj->mDrawable->getSpatialBridge(), camera);
                         }
-                        if (attached_obj->getControlAvatar() && attached_obj->getControlAvatar()->mDrawable)
+                        else
                         {
-                            markVisible(attached_obj->getControlAvatar()->mDrawable, camera);
+                            markVisible(attached_obj->mDrawable, camera);
                         }
+                    }
+                    if (attached_obj->getControlAvatar() && attached_obj->getControlAvatar()->mDrawable)
+                    {
+                        markVisible(attached_obj->getControlAvatar()->mDrawable, camera);
                     }
                 }
             }
-        };
+        }
+    };
 
+    if (gSnapshotAvatarOnly)
+    {
         if (gSnapshotCaptureAllAvatars)
         {
             for (LLCharacter* character : LLCharacter::sInstances)
@@ -2763,6 +2763,12 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
 
         for (U32 i = 0; i < LLViewerRegion::NUM_PARTITIONS; i++)
         {
+            if (gSnapshot && !gSnapshotCaptureAllAvatars &&
+                (i == LLViewerRegion::PARTITION_AVATAR || i == LLViewerRegion::PARTITION_CONTROL_AV))
+            {
+                continue;
+            }
+
             LLSpatialPartition* part = region->getSpatialPartition(i);
             if (part)
             {
@@ -2781,6 +2787,11 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
             //vo_part->cull(camera, sUseOcclusion > 0);
             vo_part->cull(camera, sUseOcclusion > 0 && !gAgent.getFSAreaSearchActive());
         }
+    }
+
+    if (gSnapshot && !gSnapshotCaptureAllAvatars && gAgentAvatarp && gAgentAvatarp->mDrawable)
+    {
+        markAvatarAndAttachmentsVisible(gAgentAvatarp);
     }
 
     // Cull water for blocked/deactivated regions so they keep rendering their water plane
@@ -3447,6 +3458,14 @@ void LLPipeline::stateSort(LLCamera& camera, LLCullResult &result)
         {
             LLCullResult::bridge_iterator cur_iter = i;
             LLSpatialBridge* bridge = *cur_iter;
+            if (gSnapshot && !gSnapshotCaptureAllAvatars && bridge && bridge->mDrawable)
+            {
+                LLViewerObject* vobj = bridge->mDrawable->getVObj();
+                if (vobj && vobj->getAvatar() && !vobj->getAvatar()->isSelf())
+                {
+                    continue;
+                }
+            }
             LLSpatialGroup* group = bridge->getSpatialGroup();
 
             if (last_group == NULL)
