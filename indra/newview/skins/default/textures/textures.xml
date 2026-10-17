@@ -327,6 +327,8 @@ with the same filename but different name
   <texture name="Icon_Restore_Press" file_name="windows/Icon_Restore_Press.png" preload="false" />
 
   <texture name="Icon_Snapshot" file_name="icons/snapshot_icon.png" preload="true" />
+  <texture name="Icon_Orientation_Portrait" file_name="icons/icn_orientation_portrait.png" preload="true" />
+  <texture name="Icon_Orientation_Landscape" file_name="icons/icn_orientation_landscape.png" preload="true" />
   
   <texture name="Icon_Use_Texture" file_name="icons/texture_icon.png" preload="true" />
 

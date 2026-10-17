@@ -29,6 +29,7 @@
 
 // libs
 #include "llcombobox.h"
+#include "llbutton.h"
 #include "llfloater.h"
 #include "llfloatersnapshot.h"
 #include "llsliderctrl.h"
@@ -86,6 +87,11 @@ bool LLPanelSnapshot::postBuild()
     if (!getAspectRatioCBName().empty())
     {
         getChild<LLUICtrl>(getAspectRatioCBName())->setCommitCallback(boost::bind(&LLPanelSnapshot::onKeepAspectRatioCommit, this, _1));
+    }
+    LLButton* swap_btn = findChild<LLButton>("swap_resolution_btn");
+    if (swap_btn)
+    {
+        swap_btn->setCommitCallback(boost::bind(&LLPanelSnapshot::onSwapResolutionCommit, this));
     }
     updateControls(LLSD());
 
@@ -274,6 +280,14 @@ void LLPanelSnapshot::onResolutionComboCommit(LLUICtrl* ctrl)
 void LLPanelSnapshot::onKeepAspectRatioCommit(LLUICtrl* ctrl)
 {
     getParentByType<LLFloater>()->notify(LLSD().with("keep-aspect-change", ctrl->getValue().asBoolean()));
+}
+
+void LLPanelSnapshot::onSwapResolutionCommit()
+{
+    if (mSnapshotFloater)
+    {
+        LLFloaterSnapshotBase::ImplBase::onClickRotatePortrait(mSnapshotFloater);
+    }
 }
 
 LLSnapshotModel::ESnapshotType LLPanelSnapshot::getSnapshotType()

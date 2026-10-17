@@ -112,6 +112,32 @@ free_mode_title
          <mouse_held_callback function="Camera.roll_left" />
       </button>
       <button
+         follows="bottom|left"
+         width="18"
+         height="12"
+         layout="topleft"
+         top_delta="0"
+         left_delta="15"
+         name="roll_reset"
+         label="0°"
+         font="SansSerifSmall"
+         tool_tip="Reset camera roll to 0°">
+         <commit_callback function="Camera.roll_reset" />
+      </button>
+      <button
+         follows="bottom|left"
+         width="20"
+         height="12"
+         layout="topleft"
+         top_delta="0"
+         left_delta="19"
+         name="roll_portrait"
+         label="90°"
+         font="SansSerifSmall"
+         tool_tip="Toggle camera roll to 90° (Portrait)">
+         <commit_callback function="Camera.roll_portrait" />
+      </button>
+      <button
          follows="bottom|right"
          width="12"
          height="12"
@@ -119,7 +145,7 @@ free_mode_title
          image_unselected="VirtualTrackball_Rotate_Right"
          layout="topleft"
          top_delta="0"
-         left_delta="68"
+         left_delta="34"
          name="roll_right"
          tool_tip="Roll camera Right">
          <commit_callback function="Camera.roll_right" />

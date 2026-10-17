@@ -106,6 +106,7 @@ public:
     static void onClickNoPost(LLUICtrl *ctrl, void* data);
     static void onClickFilter(LLUICtrl *ctrl, void* data);
     static void onClickDisplaySetting(LLUICtrl *ctrl, void* data);
+    static void onClickAvatarScopePopout(void* data);
     // <FS:Ansariel> FIRE-15853: HUDs, interface or L$ balance checkbox don't update actual screenshot image
     static void onClickCurrencyCheck(LLUICtrl *ctrl, void* data);
     static void onCommitFreezeFrame(LLUICtrl* ctrl, void* data);
@@ -248,5 +249,44 @@ public:
 };
 
 extern LLSnapshotFloaterView* gSnapshotFloaterView;
+
+class LLScrollListCtrl;
+class LLFilterEditor;
+class LLAvatarName;
+
+class LLFloaterSnapshotAvatarSelect : public LLFloater
+{
+public:
+    LLFloaterSnapshotAvatarSelect(const LLSD& key);
+    virtual ~LLFloaterSnapshotAvatarSelect();
+
+    /*virtual*/ bool postBuild() override;
+    /*virtual*/ void onOpen(const LLSD& key) override;
+
+    void refreshList();
+    void updatePreview();
+    void positionBeside(LLFloater* parent_floater);
+
+private:
+    void onCheckItem(LLUICtrl* ctrl, const LLUUID& id);
+    void onSelectAll();
+    void onDeselectAll();
+    void onFilterEdit(const LLSD& value);
+    void onAvatarNameCache(const LLUUID& agent_id, const LLAvatarName& av_name);
+
+    struct NearbyAvatarInfo
+    {
+        LLUUID id;
+        std::string displayName;
+        std::string userName;
+        F32 distance;
+    };
+
+    LLScrollListCtrl* mAvatarList;
+    LLFilterEditor*   mFilterEditor;
+    std::string       mFilterString;
+    std::vector<NearbyAvatarInfo> mNearbyAvatars;
+    boost::signals2::connection   mNameCacheConnection;
+};
 
 #endif // LL_LLFLOATERSNAPSHOT_H

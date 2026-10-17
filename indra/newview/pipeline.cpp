@@ -2661,27 +2661,23 @@ bool LLPipeline::isWaterClip()
     return (gPipeline.mHeroProbeManager.isMirrorPass()) ? false : (!sRenderTransparentWater || gCubeSnapshot) && !sRenderingHUDs;
 }
 
-static bool isOtherAvatarOrAttachment(LLViewerObject* vobj)
+LLVOAvatar* getAvatarFromObject(LLViewerObject* vobj)
 {
-    if (!vobj) return false;
+    if (!vobj) return nullptr;
 
     if (vobj->isAvatar())
     {
-        LLVOAvatar* av = (LLVOAvatar*)vobj;
-        if (av->isSelf())
-        {
-            return false;
-        }
+        LLVOAvatar* av = static_cast<LLVOAvatar*>(vobj);
         if (av->isControlAvatar())
         {
-            LLControlAvatar* cav = (LLControlAvatar*)av;
+            LLControlAvatar* cav = static_cast<LLControlAvatar*>(av);
             const LLVOAvatar* attached_to = cav->getAttachedAvatar();
-            if (attached_to && attached_to->isSelf())
+            if (attached_to)
             {
-                return false;
+                return const_cast<LLVOAvatar*>(attached_to);
             }
         }
-        return true;
+        return av;
     }
 
     LLVOAvatar* ancestor = vobj->getAvatarAncestor();
@@ -2693,48 +2689,86 @@ static bool isOtherAvatarOrAttachment(LLViewerObject* vobj)
     {
         if (ancestor->isControlAvatar())
         {
-            LLControlAvatar* cav = (LLControlAvatar*)ancestor;
+            LLControlAvatar* cav = static_cast<LLControlAvatar*>(ancestor);
             const LLVOAvatar* attached_to = cav->getAttachedAvatar();
-            if (attached_to && attached_to->isSelf())
+            if (attached_to)
             {
-                return false;
+                return const_cast<LLVOAvatar*>(attached_to);
             }
         }
-        return !ancestor->isSelf();
+        return ancestor;
     }
 
     LLControlAvatar* ca = vobj->getControlAvatar();
     if (ca)
     {
         const LLVOAvatar* attached_to = ca->getAttachedAvatar();
-        if (attached_to && attached_to->isSelf())
+        if (attached_to)
         {
-            return false;
+            return const_cast<LLVOAvatar*>(attached_to);
         }
-        return true;
     }
 
     LLVOAvatar* av = vobj->getAvatar();
     if (av)
     {
-        if (av->isSelf())
+        if (av->isControlAvatar())
+        {
+            LLControlAvatar* cav = static_cast<LLControlAvatar*>(av);
+            const LLVOAvatar* attached_to = cav->getAttachedAvatar();
+            if (attached_to)
+            {
+                return const_cast<LLVOAvatar*>(attached_to);
+            }
+        }
+        return av;
+    }
+
+    return nullptr;
+}
+
+bool isAvatarOrAttachmentSelected(LLViewerObject* vobj)
+{
+    LLVOAvatar* target_avatar = getAvatarFromObject(vobj);
+    if (!target_avatar)
+    {
+        return false;
+    }
+
+    return (gSnapshotSelectedAvatars.count(target_avatar->getID()) > 0);
+}
+
+bool isOtherAvatarOrAttachment(LLViewerObject* vobj)
+{
+    if (!vobj) return false;
+
+    LLVOAvatar* av = getAvatarFromObject(vobj);
+    if (!av)
+    {
+        return false;
+    }
+
+    if (av->isSelf())
+    {
+        return false;
+    }
+
+    if (gSnapshotAvatarScope == SNAPSHOT_AVATARS_ALL)
+    {
+        return false;
+    }
+
+    if (gSnapshotAvatarScope == SNAPSHOT_AVATARS_SELECTED)
+    {
+        if (isAvatarOrAttachmentSelected(av))
         {
             return false;
         }
-        if (av->isControlAvatar())
-        {
-            LLControlAvatar* cav = (LLControlAvatar*)av;
-            const LLVOAvatar* attached_to = cav->getAttachedAvatar();
-            if (attached_to && attached_to->isSelf())
-            {
-                return false;
-            }
-        }
-        return true;
     }
 
-    return false;
+    return true;
 }
+
 
 void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_attachments)
 {
@@ -2830,7 +2864,7 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
 
     if (gSnapshotAvatarOnly)
     {
-        if (gSnapshotCaptureAllAvatars)
+        if (gSnapshotAvatarScope == SNAPSHOT_AVATARS_ALL)
         {
             for (LLCharacter* character : LLCharacter::sInstances)
             {
@@ -2843,6 +2877,24 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
             if (gAgentAvatarp && gAgentAvatarp->mDrawable)
             {
                 markAvatarAndAttachmentsVisible(gAgentAvatarp);
+            }
+        }
+        else if (gSnapshotAvatarScope == SNAPSHOT_AVATARS_SELECTED)
+        {
+            if (gAgentAvatarp && gAgentAvatarp->mDrawable)
+            {
+                markAvatarAndAttachmentsVisible(gAgentAvatarp);
+            }
+            for (LLCharacter* character : LLCharacter::sInstances)
+            {
+                LLVOAvatar* avatar = (LLVOAvatar*)character;
+                if (avatar && !avatar->isDead() && !avatar->mIsDummy && !avatar->isOrphaned() && !avatar->isControlAvatar() && !avatar->isSelf())
+                {
+                    if (isAvatarOrAttachmentSelected(avatar))
+                    {
+                        markAvatarAndAttachmentsVisible(avatar);
+                    }
+                }
             }
         }
         else if (gAgentAvatarp && gAgentAvatarp->mDrawable)
@@ -2884,9 +2936,26 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
         }
     }
 
-    if (gSnapshot && !gSnapshotCaptureAllAvatars && gAgentAvatarp && gAgentAvatarp->mDrawable)
+    if (gSnapshot && !gSnapshotCaptureAllAvatars)
     {
-        markAvatarAndAttachmentsVisible(gAgentAvatarp);
+        if (gAgentAvatarp && gAgentAvatarp->mDrawable)
+        {
+            markAvatarAndAttachmentsVisible(gAgentAvatarp);
+        }
+        if (gSnapshotAvatarScope == SNAPSHOT_AVATARS_SELECTED)
+        {
+            for (LLCharacter* character : LLCharacter::sInstances)
+            {
+                LLVOAvatar* avatar = (LLVOAvatar*)character;
+                if (avatar && !avatar->isDead() && !avatar->mIsDummy && !avatar->isOrphaned() && !avatar->isControlAvatar() && !avatar->isSelf())
+                {
+                    if (isAvatarOrAttachmentSelected(avatar))
+                    {
+                        markAvatarAndAttachmentsVisible(avatar);
+                    }
+                }
+            }
+        }
     }
 
     // Cull water for blocked/deactivated regions so they keep rendering their water plane

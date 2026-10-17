@@ -1212,4 +1212,10 @@ extern LLPipeline gPipeline;
 extern bool gDebugPipeline;
 extern const LLMatrix4* gGLLastMatrix;
 
+class LLViewerObject;
+class LLVOAvatar;
+LLVOAvatar* getAvatarFromObject(LLViewerObject* vobj);
+bool isAvatarOrAttachmentSelected(LLViewerObject* vobj);
+bool isOtherAvatarOrAttachment(LLViewerObject* vobj);
+
 #endif

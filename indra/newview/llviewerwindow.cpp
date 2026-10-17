@@ -260,6 +260,7 @@ extern bool gResizeScreenTexture;
 extern bool gCubeSnapshot;
 extern bool gSnapshotNoPost;
 extern bool gSnapshotAvatarOnly;
+extern U32  gSnapshotAvatarScope;
 extern bool gSnapshotCaptureAllAvatars;
 extern S32 gSnapshotLayerType;
 extern void send_chat_from_viewer(std::string utf8_out_text, EChatType type, S32 channel);
@@ -6374,7 +6375,8 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
     // PRE SNAPSHOT
     gSnapshotNoPost = no_post;
     gSnapshotAvatarOnly = is_avatar_snapshot;
-    gSnapshotCaptureAllAvatars = gSavedSettings.getBOOL("FSSnapshotCaptureAllAvatars");
+    gSnapshotAvatarScope = gSavedSettings.getU32("FSSnapshotAvatarScope");
+    gSnapshotCaptureAllAvatars = (gSnapshotAvatarScope == SNAPSHOT_AVATARS_ALL);
     gSnapshotLayerType = type;
     gDisplaySwapBuffers = false;
 
@@ -6430,6 +6432,7 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
     auto restore_deferred = [&]()
     {
         gSnapshotAvatarOnly = false;
+        gSnapshotAvatarScope = SNAPSHOT_AVATARS_ALL;
         gSnapshotCaptureAllAvatars = false;
         gSnapshotLayerType = 0;
         if (reset_deferred)
@@ -6742,6 +6745,7 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
     gDisplaySwapBuffers = false;
     gSnapshotNoPost = false;
     gSnapshotAvatarOnly = false;
+    gSnapshotAvatarScope = SNAPSHOT_AVATARS_ALL;
     gSnapshotCaptureAllAvatars = false;
     gSnapshotLayerType = 0;
     gDepthDirty = true;

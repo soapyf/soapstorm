@@ -88,6 +88,48 @@
          name="7680x4320"
          value="[i7680,i4320]" />
         <combo_box.item
+         label="── 9:16 Portrait ──"
+         name="header_9_16"
+         enabled="false"
+         value="[i-2,i-2]" />
+        <combo_box.item
+         label="720x1280 (720p HD Portrait)"
+         name="720x1280"
+         value="[i720,i1280]" />
+        <combo_box.item
+         label="1080x1920 (1080p FHD Portrait)"
+         name="1080x1920"
+         value="[i1080,i1920]" />
+        <combo_box.item
+         label="1440x2560 (1440p 2K Portrait)"
+         name="1440x2560"
+         value="[i1440,i2560]" />
+        <combo_box.item
+         label="2160x3840 (4K UHD Portrait)"
+         name="2160x3840"
+         value="[i2160,i3840]" />
+        <combo_box.item
+         label="4320x7680 (8K UHD Portrait)"
+         name="4320x7680"
+         value="[i4320,i7680]" />
+        <combo_box.item
+         label="── 1:1 Square ──"
+         name="header_1_1"
+         enabled="false"
+         value="[i-2,i-2]" />
+        <combo_box.item
+         label="1080x1080 (Square HD)"
+         name="1080x1080"
+         value="[i1080,i1080]" />
+        <combo_box.item
+         label="2048x2048 (Square 2K)"
+         name="2048x2048"
+         value="[i2048,i2048]" />
+        <combo_box.item
+         label="4096x4096 (Square 4K)"
+         name="4096x4096"
+         value="[i4096,i4096]" />
+        <combo_box.item
          label="── 4:3 Legacy ──"
          name="header_4_3"
          enabled="false"
@@ -137,14 +179,14 @@
      height="20"
      increment="32"
      label="Width x Height"
-     label_width="90"
+     label_width="86"
      layout="topleft"
      left="10"
      max_val="7680"
      min_val="32"
      name="local_snapshot_width"
      top_pad="7"
-     width="144" />
+     width="138" />
     <spinner
      allow_text_entry="false"
      decimal_digits="0"
@@ -159,7 +201,17 @@
      min_val="32"
      name="local_snapshot_height"
      top_delta="0"
-     width="54" />
+     width="48" />
+    <button
+     follows="left|top"
+     height="20"
+     layout="topleft"
+     left_pad="2"
+     top_delta="0"
+     width="22"
+     image_overlay="Icon_Orientation_Landscape"
+     name="swap_resolution_btn"
+     tool_tip="Orientation: Landscape (Click to switch to Portrait)" />
     <check_box
      top_pad="8"
      follows="left|top"

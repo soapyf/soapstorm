@@ -150,7 +150,9 @@ bool gSnapshot = false;
 bool gCubeSnapshot = false;
 bool gSnapshotNoPost = false;
 bool gSnapshotAvatarOnly = false;
+U32  gSnapshotAvatarScope = SNAPSHOT_AVATARS_ALL;
 bool gSnapshotCaptureAllAvatars = false;
+std::set<LLUUID> gSnapshotSelectedAvatars;
 S32 gSnapshotLayerType = 0;
 bool gShaderProfileFrame = false;
 

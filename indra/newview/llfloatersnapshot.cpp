@@ -45,6 +45,13 @@
 #include "llagentcamera.h"
 #include "lltoolmgr.h"
 #include "llwebprofile.h"
+#include "llviewerdisplay.h"
+#include "llfiltereditor.h"
+#include "llscrolllistctrl.h"
+#include "llavatarnamecache.h"
+#include "llcachename.h"
+#include "llcharacter.h"
+#include "llvoavatar.h"
 
 // <FS:CR> FIRE-9621 - Hide Profile panel on Snapshots on non-sl grids
 #ifdef OPENSIM
@@ -540,6 +547,66 @@ void LLFloaterSnapshot::Impl::updateControls(LLFloaterSnapshotBase* floater)
         info["have-snapshot"] = got_snap;
         current_panel->updateControls(info);
     }
+
+    // Dynamic Portrait / Landscape orientation button toggle
+    S32 cur_w = 0, cur_h = 0;
+    if (previewp)
+    {
+        previewp->getSize(cur_w, cur_h);
+    }
+    if (cur_w <= 0 || cur_h <= 0)
+    {
+        LLSpinCtrl* width_ctrl = getWidthSpinner(floater);
+        LLSpinCtrl* height_ctrl = getHeightSpinner(floater);
+        if (width_ctrl && height_ctrl)
+        {
+            cur_w = width_ctrl->getValue().asInteger();
+            cur_h = height_ctrl->getValue().asInteger();
+        }
+    }
+    if (cur_w <= 0 || cur_h <= 0)
+    {
+        cur_w = gViewerWindow->getWindowWidthRaw();
+        cur_h = gViewerWindow->getWindowHeightRaw();
+    }
+
+    bool is_portrait = (cur_h > cur_w);
+    // Display active orientation icon with tooltip explaining how to swap.
+    const std::string target_icon = is_portrait ? "Icon_Orientation_Portrait" : "Icon_Orientation_Landscape";
+    const std::string target_tooltip = is_portrait
+        ? "Orientation: Portrait (Click to switch to Landscape)"
+        : "Orientation: Landscape (Click to switch to Portrait)";
+
+    LLButton* portrait_btn = floater->findChild<LLButton>("rotate_portrait_btn");
+    if (!portrait_btn)
+    {
+        portrait_btn = floater->findChild<LLButton>("swap_portrait_btn");
+    }
+    if (portrait_btn)
+    {
+        portrait_btn->setLabel(LLStringUtil::null);
+        portrait_btn->setImageOverlay(target_icon, LLFontGL::HCENTER);
+        portrait_btn->setToolTip(target_tooltip);
+    }
+
+    if (current_panel)
+    {
+        LLButton* swap_res_btn = current_panel->findChild<LLButton>("swap_resolution_btn");
+        if (swap_res_btn)
+        {
+            swap_res_btn->setLabel(LLStringUtil::null);
+            swap_res_btn->setImageOverlay(target_icon, LLFontGL::HCENTER);
+            swap_res_btn->setToolTip(target_tooltip);
+        }
+    }
+
+    LLButton* popout_btn = floater->findChild<LLButton>("avatar_scope_popout_btn");
+    if (popout_btn)
+    {
+        U32 scope = gSavedSettings.getU32("FSSnapshotAvatarScope");
+        popout_btn->setEnabled(scope == SNAPSHOT_AVATARS_SELECTED);
+    }
+
     LL_DEBUGS() << "finished updating controls" << LL_ENDL;
 }
 
@@ -607,26 +674,67 @@ void LLFloaterSnapshotBase::ImplBase::onClickNewSnapshot(void* data)
 // static
 void LLFloaterSnapshotBase::ImplBase::onClickRotatePortrait(void* data)
 {
-    F32 current_roll = gAgentCamera.getRollAngle();
-    if (fabsf(current_roll - F_PI_BY_TWO) < 0.1f)
+    LLFloaterSnapshotBase* floater = (LLFloaterSnapshotBase*)data;
+    if (!floater || !floater->impl) return;
+
+    LLSnapshotLivePreview* previewp = floater->getPreviewView();
+    if (!previewp) return;
+
+    S32 cur_w = 0, cur_h = 0;
+    previewp->getSize(cur_w, cur_h);
+    if (cur_w <= 0 || cur_h <= 0)
     {
-        gAgentCamera.resetCameraRoll();
+        cur_w = gViewerWindow->getWindowWidthRaw();
+        cur_h = gViewerWindow->getWindowHeightRaw();
+    }
+
+    S32 new_w = cur_h;
+    S32 new_h = cur_w;
+
+    LLPanelSnapshot* active_panel = floater->impl->getActivePanel(floater);
+    if (active_panel)
+    {
+        LLComboBox* combo = active_panel->getImageSizeComboBox();
+        std::string target_val = llformat("[i%d,i%d]", new_w, new_h);
+        if (combo && combo->getItemByValue(target_val))
+        {
+            combo->setValue(target_val);
+            combo->onCommit();
+        }
+        else
+        {
+            if (combo)
+            {
+                combo->setValue("[i-1,i-1]");
+            }
+            active_panel->enableAspectRatioCheckbox(true);
+            if (active_panel->getWidthSpinner())
+            {
+                active_panel->getWidthSpinner()->setEnabled(true);
+                active_panel->getWidthSpinner()->setValue(new_w);
+            }
+            if (active_panel->getHeightSpinner())
+            {
+                active_panel->getHeightSpinner()->setEnabled(true);
+                active_panel->getHeightSpinner()->setValue(new_h);
+            }
+            gSavedSettings.setS32("LastSnapshotToDiskWidth", new_w);
+            gSavedSettings.setS32("LastSnapshotToDiskHeight", new_h);
+
+            LLSD info;
+            info["w"] = new_w;
+            info["h"] = new_h;
+            floater->notify(LLSD().with("custom-res-change", info));
+        }
     }
     else
     {
-        gAgentCamera.setRollAngle(F_PI_BY_TWO);
+        previewp->setSize(new_w, new_h);
+        floater->impl->setStatus(ImplBase::STATUS_READY);
+        previewp->mForceUpdateSnapshot = true;
+        previewp->updateSnapshot(true);
     }
-
-    LLFloaterSnapshotBase* floater = (LLFloaterSnapshotBase*)data;
-    if (floater)
-    {
-        LLSnapshotLivePreview* previewp = floater->getPreviewView();
-        if (previewp)
-        {
-            floater->impl->setStatus(ImplBase::STATUS_READY);
-            previewp->mForceUpdateSnapshot = true;
-        }
-    }
+    floater->impl->updateControls(floater);
 }
 
 // static
@@ -680,12 +788,49 @@ void LLFloaterSnapshotBase::ImplBase::onClickDisplaySetting(LLUICtrl* ctrl, void
     LLFloaterSnapshot* view = (LLFloaterSnapshot*)data;
     if (view)
     {
+        U32 scope = gSavedSettings.getU32("FSSnapshotAvatarScope");
+        gSavedSettings.setBOOL("FSSnapshotCaptureAllAvatars", (scope == SNAPSHOT_AVATARS_ALL));
+
+        if (scope == SNAPSHOT_AVATARS_SELECTED)
+        {
+            LLFloaterSnapshotAvatarSelect* picker = LLFloaterReg::showTypedInstance<LLFloaterSnapshotAvatarSelect>("snapshot_avatar_select");
+            if (picker)
+            {
+                picker->positionBeside(view);
+                view->addDependentFloater(picker);
+                picker->refreshList();
+            }
+        }
+        else
+        {
+            LLFloaterSnapshotAvatarSelect* picker = LLFloaterReg::findTypedInstance<LLFloaterSnapshotAvatarSelect>("snapshot_avatar_select");
+            if (picker && picker->isInVisibleChain())
+            {
+                picker->closeFloater();
+            }
+        }
+
         LLSnapshotLivePreview* previewp = view->getPreviewView();
         if (previewp)
         {
             previewp->updateSnapshot(true, true);
         }
         view->impl->updateControls(view);
+    }
+}
+
+// static
+void LLFloaterSnapshotBase::ImplBase::onClickAvatarScopePopout(void* data)
+{
+    LLFloaterSnapshot* view = (LLFloaterSnapshot*)data;
+    if (!view) return;
+
+    LLFloaterSnapshotAvatarSelect* picker = LLFloaterReg::showTypedInstance<LLFloaterSnapshotAvatarSelect>("snapshot_avatar_select");
+    if (picker)
+    {
+        picker->positionBeside(view);
+        view->addDependentFloater(picker);
+        picker->refreshList();
     }
 }
 
@@ -1138,6 +1283,7 @@ void LLFloaterSnapshot::Impl::applyCustomResolution(LLFloaterSnapshotBase* view,
             // </FS:Ansariel>
             LL_DEBUGS() << "applied custom resolution, updating thumbnail" << LL_ENDL;
             previewp->updateSnapshot(true);
+            updateControls(view);
         }
     }
 }
@@ -1208,6 +1354,10 @@ bool LLFloaterSnapshot::postBuild()
     {
         childSetAction("rotate_portrait_btn", ImplBase::onClickRotatePortrait, this);
     }
+    if (hasChild("swap_portrait_btn", true))
+    {
+        childSetAction("swap_portrait_btn", ImplBase::onClickRotatePortrait, this);
+    }
     mRefreshLabel = getChild<LLUICtrl>("refresh_lbl");
     mSucceessLblPanel = getChild<LLUICtrl>("succeeded_panel");
     mFailureLblPanel = getChild<LLUICtrl>("failed_panel");
@@ -1215,9 +1365,28 @@ bool LLFloaterSnapshot::postBuild()
     childSetCommitCallback("ui_check", ImplBase::onClickDisplaySetting, this);
     childSetCommitCallback("balance_check", ImplBase::onClickDisplaySetting, this);
     childSetCommitCallback("hud_check", ImplBase::onClickDisplaySetting, this);
+    if (hasChild("avatar_scope_combo", true))
+    {
+        childSetCommitCallback("avatar_scope_combo", ImplBase::onClickDisplaySetting, this);
+    }
+    if (hasChild("avatar_scope_popout_btn", true))
+    {
+        childSetAction("avatar_scope_popout_btn", ImplBase::onClickAvatarScopePopout, this);
+    }
     if (hasChild("capture_all_avatars_check", true))
     {
         childSetCommitCallback("capture_all_avatars_check", ImplBase::onClickDisplaySetting, this);
+    }
+
+    if (gSavedSettings.getU32("FSSnapshotAvatarScope") == SNAPSHOT_AVATARS_SELECTED)
+    {
+        LLFloaterSnapshotAvatarSelect* picker = LLFloaterReg::showTypedInstance<LLFloaterSnapshotAvatarSelect>("snapshot_avatar_select");
+        if (picker)
+        {
+            picker->positionBeside(this);
+            addDependentFloater(picker);
+            picker->refreshList();
+        }
     }
 
     // <FS:Ansariel> FIRE-15853: HUDs, interface or L$ balance checkbox don't update actual screenshot image
@@ -1813,4 +1982,248 @@ bool LLSnapshotFloaterView::handleHover(S32 x, S32 y, MASK mask)
         LLToolMgr::getInstance()->getCurrentTool()->handleHover( x, y, mask );
     }
     return true;
+}
+
+///----------------------------------------------------------------------------
+/// Class LLFloaterSnapshotAvatarSelect
+///----------------------------------------------------------------------------
+
+LLFloaterSnapshotAvatarSelect::LLFloaterSnapshotAvatarSelect(const LLSD& key)
+:   LLFloater(key),
+    mAvatarList(nullptr),
+    mFilterEditor(nullptr),
+    mFilterString()
+{
+}
+
+LLFloaterSnapshotAvatarSelect::~LLFloaterSnapshotAvatarSelect()
+{
+    if (mNameCacheConnection.connected())
+    {
+        mNameCacheConnection.disconnect();
+    }
+}
+
+bool LLFloaterSnapshotAvatarSelect::postBuild()
+{
+    mAvatarList = getChild<LLScrollListCtrl>("avatar_list");
+    mFilterEditor = getChild<LLFilterEditor>("avatar_filter");
+
+    if (mFilterEditor)
+    {
+        mFilterEditor->setCommitCallback(boost::bind(&LLFloaterSnapshotAvatarSelect::onFilterEdit, this, _2));
+    }
+
+    childSetAction("select_all_btn", boost::bind(&LLFloaterSnapshotAvatarSelect::onSelectAll, this));
+    childSetAction("clear_btn", boost::bind(&LLFloaterSnapshotAvatarSelect::onDeselectAll, this));
+    childSetAction("refresh_btn", boost::bind(&LLFloaterSnapshotAvatarSelect::refreshList, this));
+
+    return LLFloater::postBuild();
+}
+
+void LLFloaterSnapshotAvatarSelect::onOpen(const LLSD& key)
+{
+    refreshList();
+}
+
+void LLFloaterSnapshotAvatarSelect::refreshList()
+{
+    mNearbyAvatars.clear();
+    LLVector3d camera_pos = gAgentCamera.getCameraPositionGlobal();
+
+    std::set<LLUUID> seen_ids;
+    for (LLCharacter* character : LLCharacter::sInstances)
+    {
+        LLVOAvatar* avatar = (LLVOAvatar*)character;
+        if (avatar && !avatar->isDead() && !avatar->mIsDummy && !avatar->isOrphaned() && !avatar->isControlAvatar() && !avatar->isSelf())
+        {
+            LLUUID av_id = avatar->getID();
+            if (seen_ids.insert(av_id).second)
+            {
+                NearbyAvatarInfo info;
+                info.id = av_id;
+                info.distance = (F32)(avatar->getPositionGlobal() - camera_pos).magVec();
+
+                LLAvatarName av_name;
+                if (LLAvatarNameCache::get(av_id, &av_name))
+                {
+                    info.displayName = av_name.getDisplayName();
+                    info.userName = av_name.getUserName();
+                }
+                else
+                {
+                    info.displayName = gCacheName ? gCacheName->getDefaultName() : "Loading...";
+                    info.userName = "";
+                    LLAvatarNameCache::get(av_id, boost::bind(&LLFloaterSnapshotAvatarSelect::onAvatarNameCache, this, _1, _2));
+                }
+                mNearbyAvatars.push_back(info);
+            }
+        }
+    }
+
+    // Sort by distance (closest to camera first)
+    std::sort(mNearbyAvatars.begin(), mNearbyAvatars.end(), [](const NearbyAvatarInfo& a, const NearbyAvatarInfo& b) {
+        return a.distance < b.distance;
+    });
+
+    if (!mAvatarList) return;
+
+    mAvatarList->deleteAllItems();
+
+    std::string filter_lower = mFilterString;
+    LLStringUtil::toLower(filter_lower);
+
+    for (const auto& info : mNearbyAvatars)
+    {
+        if (!filter_lower.empty())
+        {
+            std::string disp_lower = info.displayName;
+            std::string user_lower = info.userName;
+            LLStringUtil::toLower(disp_lower);
+            LLStringUtil::toLower(user_lower);
+            if (disp_lower.find(filter_lower) == std::string::npos &&
+                user_lower.find(filter_lower) == std::string::npos)
+            {
+                continue;
+            }
+        }
+
+        LLSD row;
+        row["id"] = info.id;
+
+        bool is_checked = (gSnapshotSelectedAvatars.count(info.id) > 0);
+
+        LLSD& columns = row["columns"];
+        columns[0]["column"] = "check";
+        columns[0]["type"] = "checkbox";
+        columns[0]["value"] = is_checked;
+
+        std::string full_name = info.displayName;
+        if (!info.userName.empty() && info.userName != info.displayName)
+        {
+            full_name += " (" + info.userName + ")";
+        }
+        columns[1]["column"] = "name";
+        columns[1]["type"] = "text";
+        columns[1]["value"] = full_name;
+
+        columns[2]["column"] = "distance";
+        columns[2]["type"] = "text";
+        columns[2]["value"] = llformat("%.1fm", info.distance);
+
+        LLScrollListItem* item = mAvatarList->addElement(row);
+        if (item)
+        {
+            LLScrollListCheck* check_cell = dynamic_cast<LLScrollListCheck*>(item->getColumn(0));
+            if (check_cell && check_cell->getCheckBox())
+            {
+                check_cell->getCheckBox()->setCommitCallback(boost::bind(&LLFloaterSnapshotAvatarSelect::onCheckItem, this, _1, info.id));
+            }
+        }
+    }
+}
+
+void LLFloaterSnapshotAvatarSelect::onCheckItem(LLUICtrl* ctrl, const LLUUID& id)
+{
+    LLCheckBoxCtrl* checkbox = dynamic_cast<LLCheckBoxCtrl*>(ctrl);
+    if (checkbox)
+    {
+        if (checkbox->get())
+        {
+            gSnapshotSelectedAvatars.insert(id);
+        }
+        else
+        {
+            gSnapshotSelectedAvatars.erase(id);
+        }
+        updatePreview();
+    }
+}
+
+void LLFloaterSnapshotAvatarSelect::onSelectAll()
+{
+    for (const auto& info : mNearbyAvatars)
+    {
+        gSnapshotSelectedAvatars.insert(info.id);
+    }
+    refreshList();
+    updatePreview();
+}
+
+void LLFloaterSnapshotAvatarSelect::onDeselectAll()
+{
+    gSnapshotSelectedAvatars.clear();
+    refreshList();
+    updatePreview();
+}
+
+void LLFloaterSnapshotAvatarSelect::onFilterEdit(const LLSD& value)
+{
+    mFilterString = value.asString();
+    refreshList();
+}
+
+void LLFloaterSnapshotAvatarSelect::onAvatarNameCache(const LLUUID& agent_id, const LLAvatarName& av_name)
+{
+    for (auto& info : mNearbyAvatars)
+    {
+        if (info.id == agent_id)
+        {
+            info.displayName = av_name.getDisplayName();
+            info.userName = av_name.getUserName();
+            break;
+        }
+    }
+    if (mAvatarList)
+    {
+        LLScrollListItem* item = mAvatarList->getItem(agent_id);
+        if (item)
+        {
+            std::string full_name = av_name.getDisplayName();
+            if (!av_name.getUserName().empty() && av_name.getUserName() != av_name.getDisplayName())
+            {
+                full_name += " (" + av_name.getUserName() + ")";
+            }
+            item->getColumn(1)->setValue(full_name);
+        }
+    }
+}
+
+void LLFloaterSnapshotAvatarSelect::updatePreview()
+{
+    LLFloaterSnapshot* snap_floater = LLFloaterReg::findTypedInstance<LLFloaterSnapshot>("snapshot");
+    if (snap_floater)
+    {
+        LLSnapshotLivePreview* previewp = snap_floater->getPreviewView();
+        if (previewp)
+        {
+            previewp->updateSnapshot(true, true);
+        }
+    }
+}
+
+void LLFloaterSnapshotAvatarSelect::positionBeside(LLFloater* parent_floater)
+{
+    if (!parent_floater) return;
+
+    LLRect parent_rect = parent_floater->getRect();
+    LLRect my_rect = getRect();
+    S32 my_w = my_rect.getWidth();
+    S32 my_h = my_rect.getHeight();
+
+    S32 screen_w = gViewerWindow ? gViewerWindow->getWindowWidthRaw() : 1024;
+
+    S32 new_left = parent_rect.mRight + 2;
+    S32 new_top = parent_rect.mTop;
+
+    if (new_left + my_w > screen_w)
+    {
+        new_left = parent_rect.mLeft - my_w - 2;
+    }
+    if (new_left < 0)
+    {
+        new_left = 10;
+    }
+
+    setRect(LLRect(new_left, new_top, new_left + my_w, new_top - my_h));
 }

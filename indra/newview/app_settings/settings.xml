@@ -31273,6 +31273,17 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <integer>1</integer>
     </map>
+    <key>FSSnapshotAvatarScope</key>
+    <map>
+      <key>Comment</key>
+      <string>Avatar scope to include in snapshots: 0 = Self only, 1 = Self + Selected/Focused, 2 = All avatars</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>U32</string>
+      <key>Value</key>
+      <integer>2</integer>
+    </map>
     <key>FSRepeatedEnvTogglesShared</key>
     <map>
       <key>Comment</key>
