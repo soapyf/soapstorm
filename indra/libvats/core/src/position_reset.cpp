@@ -95,29 +95,31 @@ std::vector<std::string> other_clips_position_joints(const Skeleton& skel, const
     return std::vector<std::string>(names.begin(), names.end());
 }
 
-Vec3 rest_joint_position(const Skeleton& skel, int node, const Shape* shape) {
+Vec3 rest_joint_position(const Skeleton& skel, int node, const Shape* shape, double resize) {
     if (node <= 0 || node >= skel.size()) return {};
     Vec3 rest = skel[node].pos;
     if (shape && size_t(node) < shape->offset.size()) rest += shape->offset[node];
+    rest = rest * resize;
     for (int a = 0; a < 3; ++a) {
         rest[a] = std::clamp(rest[a], -double(kAnimMaxOffset), double(kAnimMaxOffset));
     }
     return rest;
 }
 
-std::vector<std::array<std::uint16_t, 4>> rest_position_keys(const Skeleton& skel, int node, const Shape* shape) {
-    const Vec3 rest = rest_joint_position(skel, node, shape);
+std::vector<std::array<std::uint16_t, 4>> rest_position_keys(const Skeleton& skel, int node, const Shape* shape,
+                                                             double resize) {
+    const Vec3 rest = rest_joint_position(skel, node, shape, resize);
     const auto c = encode_position(rest);
     return {{0, c[0], c[1], c[2]}, {65535, c[0], c[1], c[2]}};
 }
 
-AnimJoint make_rest_joint(const Skeleton& skel, const std::string& name, int priority, const Shape* shape) {
+AnimJoint make_rest_joint(const Skeleton& skel, const std::string& name, int priority, const Shape* shape, double resize) {
     AnimJoint r;
     r.name = name;
     r.priority = priority;
     const int n = skel.find_viewer(name);
     if (n > 0) {
-        r.pos = rest_position_keys(skel, n, shape);
+        r.pos = rest_position_keys(skel, n, shape, resize);
     }
     return r;
 }

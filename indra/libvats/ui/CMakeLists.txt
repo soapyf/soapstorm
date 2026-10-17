@@ -64,6 +64,7 @@ add_library(vats_ui STATIC
     loop_assist_ui.cpp
     footlock_ui.cpp
     hands_out_ui.cpp
+    resize_ui.cpp
     pinned_ghosts_ui.cpp
     pose_match_ui.cpp
     pose_tools_ui.cpp

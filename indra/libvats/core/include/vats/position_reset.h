@@ -41,14 +41,16 @@ std::vector<std::string> clip_rotated_joints(const Skeleton& skel, const Clip& c
 std::vector<std::string> other_clips_position_joints(const Skeleton& skel, const std::vector<const Clip*>& other_clips);
 
 // Rest position of joint `node` on `skel` taking into account joint offsets from `shape` (the bake shape or
-// export_positions; IO-11). Clamped to [-kAnimMaxOffset, kAnimMaxOffset].
-Vec3 rest_joint_position(const Skeleton& skel, int node, const Shape* shape = nullptr);
+// export_positions; IO-11), times resize (spec 08 RS-4). Clamped to [-kAnimMaxOffset, kAnimMaxOffset].
+Vec3 rest_joint_position(const Skeleton& skel, int node, const Shape* shape = nullptr, double resize = 1);
 
 // Two position keys (at normalized times 0 and 65535) holding joint `node` at rest_joint_position.
-std::vector<std::array<std::uint16_t, 4>> rest_position_keys(const Skeleton& skel, int node, const Shape* shape = nullptr);
+std::vector<std::array<std::uint16_t, 4>> rest_position_keys(const Skeleton& skel, int node, const Shape* shape = nullptr,
+                                                             double resize = 1);
 
 // Creates an AnimJoint with rest position keys at time 0 and 65535, with empty rotation.
-AnimJoint make_rest_joint(const Skeleton& skel, const std::string& name, int priority, const Shape* shape = nullptr);
+AnimJoint make_rest_joint(const Skeleton& skel, const std::string& name, int priority, const Shape* shape = nullptr,
+                          double resize = 1);
 
 // Resolves the list of joints to reset positions for based on export_settings:
 // - "rotated": joints this clip rotates (default)

@@ -58,12 +58,13 @@ LLMotion::LLMotionInitStatus VATsClipMotion::onInitialize(LLCharacter* character
             continue;
 
         LLPointer<LLJointState> state = new LLJointState(joint);
-        state->setUsage(j.position ? LLJointState::ROT | LLJointState::POS : LLJointState::ROT);
+        state->setUsage((j.position ? LLJointState::ROT | LLJointState::POS : LLJointState::ROT) |
+                        (j.scale ? LLJointState::SCALE : 0));
         // The editor's hold: above any animation, as Black Dragon's poser does. As it plays in-world: the priority the
         // uploaded animation gives this joint, so it blends with the AO and the rest as it will there.
         state->setPriority(LLJoint::JointPriority(j.priority));
         addJointState(state);
-        mBound.push_back({ node, state, j.position, j.base });
+        mBound.push_back({ node, state, j.position, j.base, j.scale, j.base_scale });
     }
     LL_INFOS("VATsAnimator") << mName << " bound " << mBound.size() << " of " << sEditor.joints.size() << " joints"
                               << LL_ENDL;
@@ -111,6 +112,9 @@ bool VATsClipMotion::onUpdate(F32, U8*)
         LLQuaternion rot(F32(q.x), F32(q.y), F32(q.z), F32(q.w));
         LLVector3 pos(F32(std::clamp(p.x, -MAX_OFFSET, MAX_OFFSET)), F32(std::clamp(p.y, -MAX_OFFSET, MAX_OFFSET)),
                       F32(std::clamp(p.z, -MAX_OFFSET, MAX_OFFSET)));
+        // RS-7: the resized body's own pelvis height, past the clamp (that is the animation's range, not the body's).
+        if (b.node == 0 && sEditor.resize != 1.0 && sEditor.pelvis_lift.isFinite())
+            pos += sEditor.pelvis_lift;
         if (pin && b.node == 0)
         {
             // Pelvis in the root's frame such that its world placement is the one it would have on the pinned root.
@@ -119,6 +123,8 @@ bool VATsClipMotion::onUpdate(F32, U8*)
             pos = (sEditor.pin_pos - root->getPosition() + pos * sEditor.pin_rot) * inv_root;
         }
         b.state->setRotation(rot);
+        if (b.scale)
+            b.state->setScale(b.base_scale * F32(std::isfinite(sEditor.resize) ? sEditor.resize : 1.0));
         if (b.position)
         {
             b.state->setPosition(pos);

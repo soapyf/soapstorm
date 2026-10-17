@@ -43,6 +43,9 @@ HoldResult hold_without_sinking(Clip& clip, const Skeleton& skel, const Shape* s
 // The body whose height SL takes, as the export knows it: the worn avatar's joints when the export writes positions
 // from them (Your avatar, with its scales), else the bake shape; null = the skeleton's defaults.
 inline const Shape* deformer_body(const AnimExportOptions& opt) { return opt.positions ? opt.positions : opt.shape; }
+// The same at the export's size (spec 08 RS-4): the worn avatar's joints resized as the bake shape already is. SL's
+// height then comes out as on a joint-position body that size, whose positions carry what these scales carry.
+Shape sized_deformer_body(const Skeleton& skel, const AnimExportOptions& opt);
 
 // The clip export_anim writes when opt asks for end_at_rest or hold_without_sinking: those applied to a copy. Their
 // notes (a refusal, the 5 m limit) are added to notes.
@@ -52,7 +55,7 @@ Clip with_deformer_options(const Skeleton& skel, const Clip& clip, const AnimExp
 // The undeformer: the deformer's position-keyed joints (the hip aside) at their rest positions, as its export writes
 // rest (the skeleton's, plus positions' offsets when given), at the same priorities, kUndeformSeconds long, no eases.
 // Playing it puts the joints back and SL's height with them when it stops.
-AnimFile make_undeformer(const Skeleton& skel, const AnimFile& deformer, const Shape* positions = nullptr);
+AnimFile make_undeformer(const Skeleton& skel, const AnimFile& deformer, const Shape* positions = nullptr, double resize = 1);
 
 // "<stem>_undeform": the undeformer's name for a deformer called stem (no extension).
 inline std::string undeformer_name(const std::string& stem) { return stem + "_undeform"; }

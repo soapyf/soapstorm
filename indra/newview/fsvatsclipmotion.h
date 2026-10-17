@@ -47,6 +47,9 @@ public:
         bool position = false;  // the pose sets its position too: base plus the pose's offset
         LLVector3 base;         // the joint's own position (the worn avatar's), in its parent's frame
         S32 priority = LLJoint::ADDITIVE_PRIORITY;  // the editor's hold: the top; as it plays in-world: the clip's
+        // VATs spec 08 RS-7: the joint is scaled to its own scale (base_scale, the worn avatar's) times Playback::resize.
+        bool scale = false;
+        LLVector3 base_scale{ 1.f, 1.f, 1.f };
     };
     struct Playback
     {
@@ -63,6 +66,11 @@ public:
         // Build 20 (spec 09 §0i, item 47): as it plays in-world, the motion's own priority is the clip's (each joint
         // state has its own anyway); the editor's hold keeps it at the top.
         S32 priority = LLJoint::ADDITIVE_PRIORITY;
+        // VATs spec 08 RS-7 (Resize Skeleton): your avatar drawn this many times its size on this screen only, every
+        // bone and collision volume scaled, the pelvis moved by pelvis_lift (on top of the pose) so the soles stay on
+        // the ground. Read every update; 1 = as it is.
+        double resize = 1.0;
+        LLVector3 pelvis_lift;
     };
     static Playback sEditor;
 
@@ -89,6 +97,8 @@ private:
         LLPointer<LLJointState> state;
         bool position;
         LLVector3 base;
+        bool scale;
+        LLVector3 base_scale;
     };
     std::vector<Bound> mBound;
     LLCharacter* mCharacter = nullptr;

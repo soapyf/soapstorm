@@ -82,6 +82,7 @@ void Settings::load(const std::string& file) {
     boolean("mirror_centre", mirror_centre);
     boolean("auto_ik", auto_ik);
     boolean("follow_through", follow_through);
+    boolean("resize_keys", resize_keys);
     boolean("show_weights", show_weights);
     boolean("avatar_physics", avatar_physics);
     if (const Json* v = j.find("physics"); v && v->is_object()) physics = *v;
@@ -167,6 +168,7 @@ void Settings::save(const std::string& file) const {
     j.set("mirror_centre", mirror_centre);
     j.set("auto_ik", auto_ik);
     j.set("follow_through", follow_through);
+    j.set("resize_keys", resize_keys);
     j.set("show_weights", show_weights);
     j.set("avatar_physics", avatar_physics);
     j.set("physics", physics);

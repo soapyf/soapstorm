@@ -50,6 +50,7 @@ projects-and-files	Projects and files	Getting started
 props	Props	Import and export
 ragdoll	Ragdoll	Motion
 reference-images	Reference images	Animating
+resize-skeleton	Resize skeleton	Animating
 retargeting	Retargeting	Import and export
 rig-any-model	Rig any model	Import and export
 rig-from-scratch	Rig a model from scratch	Import and export

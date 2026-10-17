@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <list>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -218,6 +219,9 @@ public:
         return true;
     }
     bool cli_select_group(const std::string& name);  // --select-group: a picker group by its name ("Right Arm")
+    // --resize <percent> [--resize-keys-off] (08 RS): View > Body > Resize Skeleton's Apply on the open project; false
+    // when the size is not a number in range. The checkbox stays as saved unless keys_off.
+    bool cli_resize(const std::string& percent, bool keys_off);
     // --light <noon|key|rim|dusk|night|studio> and --backdrop (08 LT): the Light menu from the command line.
     bool set_light(const std::string& id);
     void show_backdrop() { backdrop_ = true; }
@@ -485,7 +489,12 @@ private:
     // It shows now: always with View > Body > Keep in Real-Avatar Modes (build 34, the default), else not while a real-avatar
     // mode runs (your real avatar shows then, as in build 32). The app: always false.
     bool swap_shown() const { return swap_body() && (settings_.viewer_keep_swap || !real_avatar_mode()); }
-    const Shape* worn_shape() const { return swap_shown() ? nullptr : host_.body_shape(); }  // the worn avatar's, unless swapped
+    // The worn avatar's, unless swapped; resized (08 RS-7) while the host draws it at your actor's size.
+    const Shape* worn_shape() const;
+    void update_avatar_resize();  // once a frame in the world view: the host told your actor's size
+    bool host_resizes_ = false;   // the host draws your avatar resized this frame
+    mutable Shape worn_resized_, worn_resized_src_;  // updated in place, as the host's own worn shape is
+    mutable double worn_resized_s_ = 1;
     // Build 34: while it shows in a real-avatar mode, the body follows what your avatar does in the world (the region's and
     // your AO's animations, the walk, the sit), not the editor's pose: your avatar's live pose (Host::live_pose) on the
     // body's own joints, in your actor's space. Null otherwise, or when the host cannot say (the editor's pose then).
@@ -548,6 +557,25 @@ private:
     const Shape* shape() const;  // the view's body; a mesh body's own proportions when one is shown (BD-3)
     const Shape* view_body_shape() const;  // the app's own body (the Linden body or the mesh body shown)
     const Shape* export_shape() const;  // IK and pins bake against this, not the viewport body (IO-13)
+    const Shape* export_shape_base() const;  // the same before the skeleton's size (08 RS) is applied
+    // Spec 08 RS (resize_ui.cpp): the skeleton's size, the active clip's or actor i's (1 = as is), and a body's shape
+    // made that size, cached for the session so the pointer stays valid (and comparable) as long as the base's does.
+    double body_size() const;
+    double actor_size(int i) const;
+    bool any_resized() const;  // the active clip or any actor's not at 100%
+    std::vector<double> variant_heights(const Json& export_settings) const;  // HV heights, none while any_resized()
+    const Shape* resized(const Shape* base, double s) const;
+    struct ResizedEntry {
+        const Shape* base;
+        double s;
+        Shape base_copy, shape;  // base_copy: a base rebuilt at the same address is told apart by its contents
+    };
+    mutable std::list<ResizedEntry> resized_;  // a list: entries never move
+    void draw_resize_window();
+    void apply_resize(double size);  // one undo step; the keys too with settings_.resize_keys
+    bool show_resize_ = false;
+    double resize_pending_ = 1;  // the window's size, before Apply
+    bool resize_window_open_ = false;  // was shown last frame: the size is read from the clip again when it opens
     double face_move_scale() const;     // FaceSettings::scale for every face move, from the head the export plays on
     std::string current_body_id() const;
     const RigConstraints* constraints() const;

@@ -283,7 +283,7 @@ AnimExportResult export_anim(const Skeleton& skel, const Clip& clip, const AnimE
             if (opt.positions && i < int(opt.positions->offset.size())) base += opt.positions->offset[i];
             std::vector<Vec3> pos(n);
             for (int fr = 0; fr < n; ++fr) {
-                Vec3 p = frames[fr].offset[i] + (i == 0 ? Vec3{} : base);  // pelvis: offset only
+                Vec3 p = i == 0 ? frames[fr].offset[i] : (frames[fr].offset[i] + base) * opt.resize;  // pelvis: offset only
                 for (int a = 0; a < 3; ++a) {
                     if (std::fabs(p[a]) > kAnimMaxOffset) clamped = true;
                     p[a] = std::clamp(p[a], -double(kAnimMaxOffset), double(kAnimMaxOffset));
@@ -295,7 +295,8 @@ AnimExportResult export_anim(const Skeleton& skel, const Clip& clip, const AnimE
             if (world) {
                 const int p = node.parent;
                 const Vec3 s = opt.shape && p >= 0 && p < int(opt.shape->scale.size()) ? opt.shape->scale[p] : Vec3{1, 1, 1};
-                const double scale = std::max({std::fabs(s.x), std::fabs(s.y), std::fabs(s.z)});
+                // RS-4: the written positions are resize times the moves the parent's scale (resize in it) carries.
+                const double scale = std::max({std::fabs(s.x), std::fabs(s.y), std::fabs(s.z)}) / (i == 0 ? 1 : opt.resize);
                 pos_keys = reduce_position_keys_world(pos, scale, budget[i], opt.max_gap, anchors);
             } else {
                 pos_keys = reduce_position_keys(pos, opt.reduce_pos_m, opt.max_gap, anchors);
@@ -305,7 +306,7 @@ AnimExportResult export_anim(const Skeleton& skel, const Clip& clip, const AnimE
                 j.pos.push_back({time_code(k, fps, f.duration), c[0], c[1], c[2]});
             }
         } else if (i > 0 && opt.reset_positions && reset_joints.count(node.name)) {
-            j.pos = rest_position_keys(skel, i, opt.reset_shape ? opt.reset_shape : opt.positions);
+            j.pos = rest_position_keys(skel, i, opt.reset_shape ? opt.reset_shape : opt.positions, opt.resize);
         }
         f.joints.push_back(std::move(j));
     }

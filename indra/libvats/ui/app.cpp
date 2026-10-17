@@ -506,6 +506,7 @@ AnimExportOptions App::anim_export_options() {
     // Suggest Limits never reach a file.
     opt.constraints = settings_.respect_joint_limits ? doc_.project.body_constraints(current_body_id()) : nullptr;
     opt.positions = export_positions();
+    opt.resize = body_size();  // 08 RS-4
     opt.worn_overrides = host_.joint_overrides();  // the viewer: warns when face positions would pin a mesh head
     if (const Json* v = export_home_settings().find("leave_static"); v && v->is_bool()) opt.leave_out_static_rotations = v->b;  // IO-11b
     if (multi_actor()) opt.external = actor_resolver(doc_.project.active);
@@ -525,7 +526,7 @@ AnimExportOptions App::anim_export_options() {
     if (opt.reset_positions) opt.reset_position_joints = reset_position_joints();
     // Reset keys hold the body's rest: a mesh body bake shape's own joints, which positions (IO-11) leaves null.
     if (bake_shape_key(ex, exporting_yours()).rfind("mesh:", 0) == 0) opt.reset_shape = opt.shape;
-    if (height_shape_) opt.shape = height_shape_, opt.positions = nullptr;  // HV: a height variant bakes on its body
+    if (height_shape_) opt.shape = height_shape_, opt.positions = nullptr, opt.resize = 1;  // HV: a height variant bakes on its body
     return opt;
 }
 
@@ -557,7 +558,7 @@ int App::export_in_memory(AnimExportResult& r, std::vector<std::uint8_t>& bytes)
     const AnimExportOptions opt = anim_export_options();
     // The deformer options change the file, so an unedited import is exported through them too (09 0l).
     if (raw_import_ && !doc_.clip().mirror_export && !height_shape_ && !opt.end_at_rest && !opt.hold_without_sinking &&
-        !opt.reset_positions)
+        !opt.reset_positions && opt.resize == 1)  // 08 RS-4: a resized skeleton rewrites the positions
         if (const AnimFile* same = raw_reexport(*raw_import_, doc_.clip())) {
             r.file = *same;
             bytes = write_anim(*same);
@@ -572,7 +573,8 @@ int App::export_in_memory(AnimExportResult& r, std::vector<std::uint8_t>& bytes)
 // when it does not, or the file has no position-keyed bone to put back.
 std::vector<std::uint8_t> App::undeformer_bytes(const AnimExportResult& r) {
     if (!export_flag(doc_.clip().export_settings, "undeformer")) return {};
-    const AnimFile u = make_undeformer(skel_, r.file, anim_export_options().positions);
+    const AnimExportOptions opt = anim_export_options();
+    const AnimFile u = make_undeformer(skel_, r.file, opt.positions, opt.resize);
     return u.joints.empty() ? std::vector<std::uint8_t>{} : write_anim(u);
 }
 
@@ -686,6 +688,7 @@ bool App::export_bvh(const std::string& path, bool all_bones) {
     opt.joint_positions = positions && positions->is_bool() && positions->b;
     opt.shape = export_shape();
     opt.positions = export_positions();
+    opt.resize = body_size();  // 08 RS-4
     if (multi_actor()) opt.external = actor_resolver(doc_.project.active);
     Clip clip = doc_.clip().mirror_export ? mirrored_clip(skel_, doc_.clip()) : doc_.clip();
     auto r = vats::export_bvh(skel_, clip, opt);
@@ -1129,9 +1132,11 @@ void App::build_actions() {
     add("frame_all", {"Frame All", ImGuiKey_A, 0, false,
                       [this] {
                           if (keys_hovered()) return (void)with_graph([&](GraphContext& g) { graph_.frame_all(g); });
-                          cam_glide_.apply_input(camera_, [](Camera& c) {
-                              c.target = {0, 0, 1.0};
-                              c.distance = Camera::kDefaultDistance;
+                          // 08 RS: a resized body is framed the same way (not your worn avatar, which keeps its size)
+                          const double s = host_.world_view() && !host_resizes_ && worn_shape() && !editing_other() ? 1 : body_size();
+                          cam_glide_.apply_input(camera_, [s](Camera& c) {
+                              c.target = {0, 0, 1.0 * s};
+                              c.distance = Camera::kDefaultDistance * s;
                           });
                       },
                       {}});
@@ -1367,6 +1372,7 @@ void App::build_actions() {
     add("foot_lock", {"Clean Up Foot Sliding...", 0, 0, false, [this] { show_foot_lock_ = true; }, {}});
     add("hands_out", {"Push Hands Out of the Body...", 0, 0, false, [this] { show_hands_out_ = true; },
                       [this]() -> const char* { return mesh_body() ? nullptr : "Show a mesh body first (View > Body)"; }});
+    add("resize_skeleton", {"Resize Skeleton...", 0, 0, false, [this] { show_resize_ = true; }, {}});  // 08 RS-6
     add("follow_target", {"Follow Target (Bake)...", 0, 0, false, [this] { show_follow_ = true; },
                           [this]() -> const char* {
                               return selection_.size() == 2 ? nullptr
@@ -1848,6 +1854,10 @@ void App::draw_menus() {
                 ImGui::TextDisabled("Import a mesh body in Inventory > Bodies");
             }
             draw_body_parts_menu();  // the shown body's clothes and other parts, on and off
+            ImGui::Separator();
+            menu_item("resize_skeleton");
+            ImGui::SetItemTooltip("Makes the whole skeleton bigger or smaller, the body with it, and scales the keys to fit "
+                                  "if you like (the Scale tool scales props only)");
             if (host_.world_view()) {  // spec 09 build 34
                 ImGui::Separator();
                 if (menu_item_icon(nullptr, "Keep in Real-Avatar Modes", nullptr, settings_.viewer_keep_swap)) {
@@ -2296,6 +2306,7 @@ bool App::frame() {
     draw_loop_assist_window();
     draw_foot_lock_window();
     draw_hands_out_window();
+    draw_resize_window();
     draw_actors_panel();
     draw_clips_panel();
     draw_mocap_panel();  // every frame: it polls the socket while listening
@@ -2467,6 +2478,7 @@ void App::evaluate() {
         rig_->external = ours;
     }
     if (host_.world_view()) host_.hide_avatar(swap_shown());  // spec 09 build 32: the body swap
+    if (host_.world_view()) update_avatar_resize();           // 08 RS-7: your avatar at your actor's size
     if (host_.world_view() && editing_other()) {
         // The worn avatar is your actor (the first): it plays its own animation while another is edited.
         const Project& p = doc_.project;

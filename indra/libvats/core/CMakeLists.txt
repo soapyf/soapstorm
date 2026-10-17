@@ -33,6 +33,7 @@ add_library(vats_core STATIC
     src/sit_export.cpp
     src/world_reduce.cpp
     src/height_variant.cpp
+    src/resize.cpp
     src/clips.cpp
     src/ao_notecard.cpp
     src/file_library.cpp

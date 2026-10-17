@@ -47,7 +47,7 @@ struct Hasher {
 
 }  // namespace
 
-Pose anim_pose(const Skeleton& skel, const AnimFile& f, double seconds, const Shape* positions) {
+Pose anim_pose(const Skeleton& skel, const AnimFile& f, double seconds, const Shape* positions, double resize) {
     Pose pose(skel.size());
     if (f.legacy()) return pose;  // ponytail: v0.1 files play at rest here; export only writes v1.0
     for (const AnimJoint& j : f.joints) {
@@ -63,7 +63,7 @@ Pose anim_pose(const Skeleton& skel, const AnimFile& f, double seconds, const Sh
             Vec3 p = sample<Vec3>(j.pos, f.duration, seconds, decode_position,
                                   [](const Vec3& a, const Vec3& b, double u) { return a + (b - a) * u; });
             if (i != 0) {  // the file holds absolute local positions except for the pelvis (export_anim)
-                p = p - node.pos;
+                p = p * (1 / resize) - node.pos;
                 if (positions && i < int(positions->offset.size())) p = p - positions->offset[i];
             }
             pose.offset[i] = p;
@@ -73,14 +73,14 @@ Pose anim_pose(const Skeleton& skel, const AnimFile& f, double seconds, const Sh
 }
 
 std::vector<BoneDeviation> anim_deviation(const Rig& rig, const Clip& clip, const AnimFile& f, const Shape* shape,
-                                          const Shape* positions) {
+                                          const Shape* positions, double resize) {
     const Skeleton& skel = rig.skeleton();
     const int fps = std::clamp(clip.fps, 1, 120), last = std::max(clip.end_frame, 1);
     std::vector<BoneDeviation> out(skel.volume_start());
     for (int i = 0; i < int(out.size()); ++i) out[i].node = i;
     for (int fr = 0; fr <= last; ++fr) {
         const std::vector<Xform> a = evaluate(rig, clip, fr, shape).globals;
-        const std::vector<Xform> b = skel.global_pose(anim_pose(skel, f, double(fr) / fps, positions), shape);
+        const std::vector<Xform> b = skel.global_pose(anim_pose(skel, f, double(fr) / fps, positions, resize), shape);
         for (BoneDeviation& d : out) {
             const double mm = (a[d.node].pos - b[d.node].pos).length() * 1000;
             const double deg = (a[d.node].rot.conj() * b[d.node].rot).angle() * kRadToDeg;
@@ -145,7 +145,7 @@ BudgetFit fit_anim_budget(const Rig& rig, const Clip& clip, AnimExportOptions op
     fit.rot_deg = opt.reduce_rot_deg, fit.pos_m = opt.reduce_pos_m, fit.world_m = opt.reduce_world_m;
     fit.fits = fit.bytes < kAnimMaxUploadBytes && !r.file.joints.empty();
     if (!fit.fits) return fit;
-    for (const BoneDeviation& d : anim_deviation(rig, clip, r.file, opt.shape, opt.positions)) {
+    for (const BoneDeviation& d : anim_deviation(rig, clip, r.file, opt.shape, opt.positions, opt.resize)) {
         if (d.mm > fit.max_mm) fit.max_mm = d.mm, fit.worst_mm = skel[d.node].name;
         if (d.deg > fit.max_deg) fit.max_deg = d.deg, fit.worst_deg = skel[d.node].name;
     }

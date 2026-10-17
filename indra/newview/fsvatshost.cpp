@@ -115,7 +115,8 @@ namespace
     bool sameJoints(const std::vector<VATsClipMotion::Joint>& a, const std::vector<VATsClipMotion::Joint>& b)
     {
         return std::equal(a.begin(), a.end(), b.begin(), b.end(), [](const auto& x, const auto& y)
-                          { return x.name == y.name && x.position == y.position && x.base == y.base && x.priority == y.priority; });
+                          { return x.name == y.name && x.position == y.position && x.base == y.base && x.priority == y.priority &&
+                                   x.scale == y.scale && x.base_scale == y.base_scale; });
     }
 
     // Build 19 (spec 09 §0e): View > Orthographic as a telephoto near-ortho. The narrowest lens the viewer allows
@@ -524,6 +525,13 @@ namespace
         // Build 32: View > Body swaps a mesh body in, drawn by the UI through scene_triangles; your avatar and its
         // attachments are hidden on this screen meanwhile (LLVOAvatar::isVisible), nothing is sent.
         void hide_avatar(bool hide) override;
+        // VATs spec 08 RS-7: drawn through VATsClipMotion's joint scales while the editor holds your avatar.
+        bool resize_avatar(double size, const vats::Vec3& pelvis_lift) override
+        {
+            mResize = std::isfinite(size) && size > 0 ? size : 1.0;
+            mLift = LLVector3(F32(pelvis_lift.x), F32(pelvis_lift.y), F32(pelvis_lift.z));
+            return true;
+        }
         bool hidesYours() const { return mHideYours && holdsAvatar(); }
         // Build 34: your avatar as the world poses it now, for the swapped body in the modes that play your real avatar.
         bool live_pose(const vats::Skeleton& skel, vats::Pose& pose) override;
@@ -682,6 +690,10 @@ namespace
         // Each position-driven joint's own position before the editor drove it (the worn avatar's: sliders and
         // mesh joint offsets). The editor's offsets are added to it, and it is put back when the editor lets go.
         std::map<std::string, LLVector3> mBase;
+        // RS-7: each scaled joint's own scale before the editor scaled it, put back when it lets go; and the size.
+        std::map<std::string, LLVector3> mBaseScale;
+        double mResize = 1.0;
+        LLVector3 mLift;
         LLUUID mMotionID;
         const LLVOAvatarSelf* mMotionOn = nullptr;
         std::vector<LLJoint*> mJointCache;
@@ -839,6 +851,8 @@ namespace
         // Build 20, item 47: as it plays in-world, only the joints the upload keys, each at its priority there (as the
         // 6b preview played the clip); the world's own motions keep the rest.
         const bool in_world = mMode != Mode::Hold && mOwnPlan;
+        // RS-7: the editor's hold shows the resized body; as it plays in-world shows your avatar as the world will.
+        const bool resizing = !in_world && mResize != 1.0;
         std::vector<VATsClipMotion::Joint> joints;
         std::vector<bool> drives_pos(skel.size(), false);
         for (int i = 0; i < skel.size() && i < (int)pose.rot.size(); ++i)
@@ -849,6 +863,8 @@ namespace
             const bool moved = pose.offset[i].length() > 1e-6;
             const bool turned = 1.0 - std::fabs(pose.rot[i].w) > 1e-9;
             const bool bone = i < skel.joint_count() && !n.attachment;
+            const bool volume = n.volume;  // fitted mesh follows these: they scale with the body
+            const bool scaled = resizing && (bone || volume);
             S32 priority = LLJoint::ADDITIVE_PRIORITY;
             if (in_world)
             {
@@ -857,7 +873,7 @@ namespace
                     continue;
                 priority = llclamp(claim->second, 0, (S32)LLJoint::ADDITIVE_PRIORITY - 1);
             }
-            else if ((!bone && !keyed && !moved && !turned) || !avatarJoint(i))
+            else if ((!bone && !scaled && !keyed && !moved && !turned) || !avatarJoint(i))
                 continue;
             // The pelvis rests on the editor's frame while it holds the avatar; in-world only a keyed or moved one is set.
             drives_pos[i] = (i == 0 && !in_world) || moved || (keyed && clip.has_channels(n.name, vats::kPosChannels));
@@ -877,16 +893,27 @@ namespace
                 else if (!mBase.count(n.name))
                     mBase[n.name] = avatarJoint(i)->getPosition();
             }
-            joints.push_back({ n.name, drives_pos[i], drives_pos[i] ? mBase[n.name] : LLVector3::zero, priority });
+            LLVector3 base_scale(1.f, 1.f, 1.f);
+            if (scaled)
+            {
+                if (!mBaseScale.count(n.name))
+                    mBaseScale[n.name] = avatarJoint(i)->getScale();
+                base_scale = mBaseScale[n.name];
+            }
+            joints.push_back({ n.name, drives_pos[i], drives_pos[i] ? mBase[n.name] : LLVector3::zero, priority, scaled, base_scale });
         }
         VATsClipMotion::Playback& pb = VATsClipMotion::sEditor;
         pb.skeleton = &skel;
         pb.pose = &mPose;
         pb.priority = in_world ? llclamp(clip.priority, 0, (S32)LLJoint::ADDITIVE_PRIORITY - 1) : (S32)LLJoint::ADDITIVE_PRIORITY;
+        pb.resize = resizing ? mResize : 1.0;
+        pb.pelvis_lift = resizing ? mLift : LLVector3::zero;
         const bool active = mMotionID.notNull() && mMotionOn == gAgentAvatarp.get() && gAgentAvatarp->isMotionActive(mMotionID);
         if (sameJoints(joints, mJoints) && active)
             return;
         stopMotion();
+        if (!resizing)
+            mBaseScale.clear();  // RS-7: stopMotion put them back; taken again if the size changes
         mJoints = joints;
         mDrivesPos = std::move(drives_pos);
         pb.joints = std::move(joints);
@@ -911,9 +938,13 @@ namespace
             gAgentAvatarp->removeMotion(mMotionID);
             // A stopped motion leaves its positions behind: the joints it moved go back to their own.
             for (const VATsClipMotion::Joint& j : mJoints)
-                if (j.position)
-                    if (LLJoint* joint = gAgentAvatarp->getJoint(j.name))
+                if (LLJoint* joint = (j.position || j.scale) ? gAgentAvatarp->getJoint(j.name) : nullptr)
+                {
+                    if (j.position)
                         joint->setPosition(j.base);
+                    if (j.scale)  // RS-7: and the scales it set, back to the avatar's own
+                        joint->setScale(j.base_scale);
+                }
         }
         mMotionID.setNull();
         mMotionOn = nullptr;
@@ -1178,7 +1209,8 @@ namespace
             LLJoint* joint = avatarJoint(i);
             if (!joint)
                 continue;
-            mShape.scale[i] = toVATs(joint->getScale());
+            const auto own_scale = mBaseScale.find(skel[i].name);  // RS-7: a joint the editor scales: its own scale
+            mShape.scale[i] = toVATs(own_scale != mBaseScale.end() ? own_scale->second : joint->getScale());
             if (i == 0)
                 continue;
             const auto base = mBase.find(skel[i].name);  // a joint the editor drives: its own position
@@ -1248,6 +1280,7 @@ namespace
                 avatar->mPelvisp->setPosition(LLVector3::zero);
             mCacheFor = nullptr;
             mBase.clear();  // taken again from the reset skeleton
+            mBaseScale.clear();
             LL_INFOS("VATsEditor") << "skeleton reset locally as the editor opens" << LL_ENDL;
         }
         // Seated on an object, it goes where the object goes; walking (build 20), where you walk it.
@@ -3123,6 +3156,8 @@ namespace
         step("editor motion");
         stopMotion();
         mBase.clear();
+        mBaseScale.clear();
+        mResize = 1.0;
         step("avatar hand-back");
         restore();
         step("sound");

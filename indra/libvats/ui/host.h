@@ -177,6 +177,11 @@ public:
     // a mesh body; spec 09 build 32). The host then hides your avatar and its attachments on this screen only (nothing
     // goes to the region) and shows them again with false, and when the editor closes.
     virtual void hide_avatar(bool hide) { (void)hide; }
+    // With world_view, once a frame (spec 08 RS-7): your avatar drawn size times as big on this screen only (nothing goes
+    // to the region), every bone and collision volume scaled and the pelvis moved by pelvis_lift (your actor's space)
+    // so the soles stay on the ground; 1 = as it is. True when the host shows it: the UI then poses on the resized
+    // worn shape.
+    virtual bool resize_avatar(double size, const Vec3& pelvis_lift) { (void)size, (void)pelvis_lift; return false; }
     // With world_view (spec 09 build 34): your own avatar's pose as the world shows it now, whatever plays it (the region's
     // and your AO's animations, the walk, the sit, the editor's own motion), read back from its joints as
     // Skeleton::pose_from_live makes it: each node's rotation from rest, and the pelvis's offset from rest in your actor's

@@ -42,7 +42,7 @@ void App::draw_hands_out_window() {
         std::vector<const DaeModel*> parts;
         for (const std::string& path : b->parts) parts.push_back(prop_model(path));
         PushOutReport r;
-        edit("Push Hands Out of the Body", [&](Clip& c) { r = push_hands_out(c, *rig_, parts, view_body_shape(), from, to, constraints()); });
+        edit("Push Hands Out of the Body", [&](Clip& c) { r = push_hands_out(c, *rig_, parts, resized(view_body_shape(), body_size()), from, to, constraints()); });
         char buf[240];
         if (r.deepest_frame < 0)
             std::snprintf(buf, sizeof buf, "The hands stay out of the body on every frame");

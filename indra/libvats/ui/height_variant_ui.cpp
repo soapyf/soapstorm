@@ -40,6 +40,15 @@ void App::draw_height_variants(float label_w) {
     };
     bool on = !heights.empty();
     ImGui::SetCursorPosX(label_w);
+    if (any_resized()) {  // 08 RS-4: the keys fit the resized body, not SL shapes at 100%
+        ImGui::BeginDisabled();
+        bool off = false;
+        ImGui::Checkbox("Also export for heights", &off);
+        ImGui::EndDisabled();
+        ImGui::SetCursorPosX(label_w);
+        hint("Off while the skeleton is resized (View > Body > Resize Skeleton): its keys fit that size.");
+        return;
+    }
     if (ImGui::Checkbox("Also export for heights", &on))
         store(on ? std::vector<double>(std::begin(kHeightPresets), std::end(kHeightPresets)) : std::vector<double>{});
     ImGui::SetItemTooltip("Writes the animation again for each height, baked on SL Default made that tall (the male one "

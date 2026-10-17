@@ -164,10 +164,10 @@ const App::MeshBody* App::swap_body() const {
 
 const Shape* App::shape() const {
     if (const Shape* worn = worn_shape()) {  // the viewer: your actor is the avatar in the world (unless swapped)
-        if (!editing_other()) return worn;
+        if (!editing_other()) return worn;  // 08 RS-7: drawn by the world at its own size, so not resized
         return actor_shape(doc_.project.active);  // another actor: the proportions of the body it is drawn with
     }
-    return view_body_shape();
+    return resized(view_body_shape(), body_size());  // 08 RS-3
 }
 
 const Shape* App::view_body_shape() const {
