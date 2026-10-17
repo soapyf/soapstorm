@@ -1526,18 +1526,13 @@ void LLSpatialBridge::setVisible(LLCamera& camera_in, std::vector<LLDrawable*>* 
         return;
     }
 
-    if (gSnapshot && !gSnapshotCaptureAllAvatars && mDrawable)
+    LLViewerObject *vobj = mDrawable ? mDrawable->getVObj() : nullptr;
+    if (gSnapshot && !gSnapshotCaptureAllAvatars && isOtherAvatarOrAttachment(vobj))
     {
-        LLViewerObject *vobj = mDrawable->getVObj();
-        if (isOtherAvatarOrAttachment(vobj))
-        {
-            return;
-        }
+        return;
     }
 
-
     //HACK don't draw attachments for avatars that haven't been visible in more than a frame
-    LLViewerObject *vobj = mDrawable->getVObj();
     if (vobj && vobj->isAttachment() && !vobj->isHUDAttachment())
     {
         LLDrawable* av;

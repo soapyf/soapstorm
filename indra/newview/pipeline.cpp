@@ -2663,16 +2663,17 @@ bool LLPipeline::isWaterClip()
 
 LLVOAvatar* getAvatarFromObject(LLViewerObject* vobj)
 {
-    if (!vobj) return nullptr;
+    if (!vobj || vobj->isDead()) return nullptr;
 
     if (vobj->isAvatar())
     {
         LLVOAvatar* av = static_cast<LLVOAvatar*>(vobj);
+        if (av->isDead()) return nullptr;
         if (av->isControlAvatar())
         {
             LLControlAvatar* cav = static_cast<LLControlAvatar*>(av);
             const LLVOAvatar* attached_to = cav->getAttachedAvatar();
-            if (attached_to)
+            if (attached_to && !attached_to->isDead())
             {
                 return const_cast<LLVOAvatar*>(attached_to);
             }
@@ -2685,13 +2686,13 @@ LLVOAvatar* getAvatarFromObject(LLViewerObject* vobj)
     {
         ancestor = LLVOAvatar::findAvatarFromAttachment(vobj);
     }
-    if (ancestor)
+    if (ancestor && !ancestor->isDead())
     {
         if (ancestor->isControlAvatar())
         {
             LLControlAvatar* cav = static_cast<LLControlAvatar*>(ancestor);
             const LLVOAvatar* attached_to = cav->getAttachedAvatar();
-            if (attached_to)
+            if (attached_to && !attached_to->isDead())
             {
                 return const_cast<LLVOAvatar*>(attached_to);
             }
@@ -2700,23 +2701,23 @@ LLVOAvatar* getAvatarFromObject(LLViewerObject* vobj)
     }
 
     LLControlAvatar* ca = vobj->getControlAvatar();
-    if (ca)
+    if (ca && !ca->isDead())
     {
         const LLVOAvatar* attached_to = ca->getAttachedAvatar();
-        if (attached_to)
+        if (attached_to && !attached_to->isDead())
         {
             return const_cast<LLVOAvatar*>(attached_to);
         }
     }
 
     LLVOAvatar* av = vobj->getAvatar();
-    if (av)
+    if (av && !av->isDead())
     {
         if (av->isControlAvatar())
         {
             LLControlAvatar* cav = static_cast<LLControlAvatar*>(av);
             const LLVOAvatar* attached_to = cav->getAttachedAvatar();
-            if (attached_to)
+            if (attached_to && !attached_to->isDead())
             {
                 return const_cast<LLVOAvatar*>(attached_to);
             }
@@ -2730,7 +2731,7 @@ LLVOAvatar* getAvatarFromObject(LLViewerObject* vobj)
 bool isAvatarOrAttachmentSelected(LLViewerObject* vobj)
 {
     LLVOAvatar* target_avatar = getAvatarFromObject(vobj);
-    if (!target_avatar)
+    if (!target_avatar || target_avatar->isDead())
     {
         return false;
     }
@@ -2740,10 +2741,10 @@ bool isAvatarOrAttachmentSelected(LLViewerObject* vobj)
 
 bool isOtherAvatarOrAttachment(LLViewerObject* vobj)
 {
-    if (!vobj) return false;
+    if (!vobj || vobj->isDead()) return false;
 
     LLVOAvatar* av = getAvatarFromObject(vobj);
-    if (!av)
+    if (!av || av->isDead())
     {
         return false;
     }
@@ -2819,7 +2820,7 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
             for (const auto& attached_iter : attachment->mAttachedObjects)
             {
                 LLViewerObject* attached_obj = attached_iter.get();
-                if (attached_obj)
+                if (attached_obj && !attached_obj->isDead())
                 {
                     if (attached_obj->mDrawable)
                     {
@@ -2838,7 +2839,7 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
                     }
                     for (LLViewerObject* child : attached_obj->getChildren())
                     {
-                        if (child)
+                        if (child && !child->isDead() && !child->isAvatar())
                         {
                             if (child->mDrawable)
                             {

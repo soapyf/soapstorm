@@ -121,7 +121,7 @@ void LLViewerCamera::setOrtho(bool ortho)
             }
         }
         mOrthoFocusDist = llclamp(focus_dist, 0.5f, 5000.f);
-        mOrthoFrameCountdown = 2;
+        mOrthoFrameCountdown = 6;
     }
 
     if (gSavedSettings.controlExists("FSCameraOrtho") && gSavedSettings.getBOOL("FSCameraOrtho") != mIsOrtho)
@@ -222,7 +222,7 @@ bool LLViewerCamera::updateCameraLocation(const LLVector3 &center, const LLVecto
         else
         {
             static LLCachedControl<bool> auto_perspective(gSavedSettings, "FSAutoPerspectiveOnCameraMove", true);
-            if (auto_perspective() && (dpos > 0.005f || drot > 0.002f))
+            if (auto_perspective() && ((std::isfinite(dpos) && dpos > 0.005f) || (std::isfinite(drot) && drot > 0.002f)))
             {
                 setOrtho(false);
             }
@@ -260,15 +260,28 @@ void LLViewerCamera::calcProjection(const F32 far_distance) const
 
     if (mIsOrtho)
     {
-        F32 focus_dist = mOrthoFocusDist > 0.1f ? mOrthoFocusDist : 3.5f;
+        F32 focus_dist = (mOrthoFocusDist > 0.1f && std::isfinite(mOrthoFocusDist)) ? mOrthoFocusDist : 3.5f;
         F32 half_height = focus_dist * tanf(fov_y * 0.5f);
+        if (half_height < 0.001f || !std::isfinite(half_height))
+        {
+            half_height = 0.001f;
+        }
         F32 half_width = half_height * aspect;
+        if (half_width < 0.001f || !std::isfinite(half_width))
+        {
+            half_width = 0.001f;
+        }
+        F32 depth_range = z_far - z_near;
+        if (depth_range < 0.1f || !std::isfinite(depth_range))
+        {
+            depth_range = 0.1f;
+        }
 
         mProjectionMatrix.setZero();
         mProjectionMatrix.mMatrix[0][0] = 1.0f / half_width;
         mProjectionMatrix.mMatrix[1][1] = 1.0f / half_height;
-        mProjectionMatrix.mMatrix[2][2] = -2.0f / (z_far - z_near);
-        mProjectionMatrix.mMatrix[3][2] = -(z_far + z_near) / (z_far - z_near);
+        mProjectionMatrix.mMatrix[2][2] = -2.0f / depth_range;
+        mProjectionMatrix.mMatrix[3][2] = -(z_far + z_near) / depth_range;
         mProjectionMatrix.mMatrix[3][3] = 1.0f;
     }
     else
@@ -468,9 +481,17 @@ void LLViewerCamera::setPerspective(bool for_selection,
 
     if (mIsOrtho)
     {
-        F32 focus_dist = mOrthoFocusDist > 0.1f ? mOrthoFocusDist : 3.5f;
+        F32 focus_dist = (mOrthoFocusDist > 0.1f && std::isfinite(mOrthoFocusDist)) ? mOrthoFocusDist : 3.5f;
         F32 half_height = focus_dist * tanf(fov_y * 0.5f);
+        if (half_height < 0.001f || !std::isfinite(half_height))
+        {
+            half_height = 0.001f;
+        }
         F32 half_width = half_height * aspect;
+        if (half_width < 0.001f || !std::isfinite(half_width))
+        {
+            half_width = 0.001f;
+        }
         proj_mat *= glm::ortho(-half_width, half_width, -half_height, half_height, z_near, z_far);
     }
     else

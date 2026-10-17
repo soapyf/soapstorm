@@ -684,8 +684,16 @@ void LLFloaterSnapshotBase::ImplBase::onClickRotatePortrait(void* data)
     previewp->getSize(cur_w, cur_h);
     if (cur_w <= 0 || cur_h <= 0)
     {
-        cur_w = gViewerWindow->getWindowWidthRaw();
-        cur_h = gViewerWindow->getWindowHeightRaw();
+        if (gViewerWindow)
+        {
+            cur_w = gViewerWindow->getWindowWidthRaw();
+            cur_h = gViewerWindow->getWindowHeightRaw();
+        }
+        else
+        {
+            cur_w = 1024;
+            cur_h = 768;
+        }
     }
 
     S32 new_w = cur_h;
@@ -1998,9 +2006,25 @@ LLFloaterSnapshotAvatarSelect::LLFloaterSnapshotAvatarSelect(const LLSD& key)
 
 LLFloaterSnapshotAvatarSelect::~LLFloaterSnapshotAvatarSelect()
 {
-    if (mNameCacheConnection.connected())
+}
+
+// static
+void LLFloaterSnapshotAvatarSelect::onAvatarNameCacheCallback(LLHandle<LLFloaterSnapshotAvatarSelect> handle, const LLUUID& agent_id, const LLAvatarName& av_name)
+{
+    LLFloaterSnapshotAvatarSelect* floater = handle.get();
+    if (floater)
     {
-        mNameCacheConnection.disconnect();
+        floater->onAvatarNameCache(agent_id, av_name);
+    }
+}
+
+// static
+void LLFloaterSnapshotAvatarSelect::onCheckItemCallback(LLHandle<LLFloaterSnapshotAvatarSelect> handle, LLUICtrl* ctrl, const LLUUID& id)
+{
+    LLFloaterSnapshotAvatarSelect* floater = handle.get();
+    if (floater)
+    {
+        floater->onCheckItem(ctrl, id);
     }
 }
 
@@ -2054,7 +2078,7 @@ void LLFloaterSnapshotAvatarSelect::refreshList()
                 {
                     info.displayName = gCacheName ? gCacheName->getDefaultName() : "Loading...";
                     info.userName = "";
-                    LLAvatarNameCache::get(av_id, boost::bind(&LLFloaterSnapshotAvatarSelect::onAvatarNameCache, this, _1, _2));
+                    LLAvatarNameCache::get(av_id, boost::bind(&LLFloaterSnapshotAvatarSelect::onAvatarNameCacheCallback, getDerivedHandle<LLFloaterSnapshotAvatarSelect>(), _1, _2));
                 }
                 mNearbyAvatars.push_back(info);
             }
@@ -2117,7 +2141,7 @@ void LLFloaterSnapshotAvatarSelect::refreshList()
             LLScrollListCheck* check_cell = dynamic_cast<LLScrollListCheck*>(item->getColumn(0));
             if (check_cell && check_cell->getCheckBox())
             {
-                check_cell->getCheckBox()->setCommitCallback(boost::bind(&LLFloaterSnapshotAvatarSelect::onCheckItem, this, _1, info.id));
+                check_cell->getCheckBox()->setCommitCallback(boost::bind(&LLFloaterSnapshotAvatarSelect::onCheckItemCallback, getDerivedHandle<LLFloaterSnapshotAvatarSelect>(), _1, info.id));
             }
         }
     }
@@ -2184,7 +2208,11 @@ void LLFloaterSnapshotAvatarSelect::onAvatarNameCache(const LLUUID& agent_id, co
             {
                 full_name += " (" + av_name.getUserName() + ")";
             }
-            item->getColumn(1)->setValue(full_name);
+            LLScrollListCell* name_cell = item->getColumn(1);
+            if (name_cell)
+            {
+                name_cell->setValue(full_name);
+            }
         }
     }
 }

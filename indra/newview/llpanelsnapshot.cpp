@@ -284,9 +284,10 @@ void LLPanelSnapshot::onKeepAspectRatioCommit(LLUICtrl* ctrl)
 
 void LLPanelSnapshot::onSwapResolutionCommit()
 {
-    if (mSnapshotFloater)
+    LLFloaterSnapshotBase* floater = mSnapshotFloater ? mSnapshotFloater : getParentByType<LLFloaterSnapshotBase>();
+    if (floater)
     {
-        LLFloaterSnapshotBase::ImplBase::onClickRotatePortrait(mSnapshotFloater);
+        LLFloaterSnapshotBase::ImplBase::onClickRotatePortrait(floater);
     }
 }
 

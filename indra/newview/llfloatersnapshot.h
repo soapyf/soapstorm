@@ -274,6 +274,9 @@ private:
     void onFilterEdit(const LLSD& value);
     void onAvatarNameCache(const LLUUID& agent_id, const LLAvatarName& av_name);
 
+    static void onAvatarNameCacheCallback(LLHandle<LLFloaterSnapshotAvatarSelect> handle, const LLUUID& agent_id, const LLAvatarName& av_name);
+    static void onCheckItemCallback(LLHandle<LLFloaterSnapshotAvatarSelect> handle, LLUICtrl* ctrl, const LLUUID& id);
+
     struct NearbyAvatarInfo
     {
         LLUUID id;
@@ -286,7 +289,6 @@ private:
     LLFilterEditor*   mFilterEditor;
     std::string       mFilterString;
     std::vector<NearbyAvatarInfo> mNearbyAvatars;
-    boost::signals2::connection   mNameCacheConnection;
 };
 
 #endif // LL_LLFLOATERSNAPSHOT_H

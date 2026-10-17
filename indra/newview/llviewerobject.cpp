@@ -4127,14 +4127,14 @@ void LLViewerObject::setPixelAreaAndAngle(LLAgent &agent)
     F32 range = sqrt(dx*dx + dy*dy + dz*dz) - min_scale/2;
 
     LLViewerCamera* camera = LLViewerCamera::getInstance();
-    if (camera->getOrtho())
+    if (camera && camera->getOrtho())
     {
         range = camera->getOrthoFocusDist();
     }
     if (range < 0.001f || isHUDAttachment())        // range == zero
     {
         mAppAngle = 180.f;
-        mPixelArea = (F32)camera->getScreenPixelArea();
+        mPixelArea = (F32)(camera ? camera->getScreenPixelArea() : 0);
     }
     else
     {
