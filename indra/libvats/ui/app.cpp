@@ -1133,7 +1133,7 @@ void App::build_actions() {
                       [this] {
                           if (keys_hovered()) return (void)with_graph([&](GraphContext& g) { graph_.frame_all(g); });
                           // 08 RS: a resized body is framed the same way (not your worn avatar, which keeps its size)
-                          const double s = host_.world_view() && !host_resizes_ && worn_shape() && !editing_other() ? 1 : body_size();
+                          const double s = host_.world_view() && !host_can_resize_ && worn_shape() && !editing_other() ? 1 : body_size();
                           cam_glide_.apply_input(camera_, [s](Camera& c) {
                               c.target = {0, 0, 1.0 * s};
                               c.distance = Camera::kDefaultDistance * s;
@@ -2442,6 +2442,7 @@ void App::evaluate() {
     rig_->external = multi_actor() ? actor_resolver(doc_.project.active) : ExternalTarget{};
     evaluated_frame_ = frame_;
     invalidate_floor_cache();
+    if (host_.world_view()) update_avatar_resize();  // 08 RS-7: before posing on the worn shape it decides
     Evaluation e = [&] { VATS_PROFILE("eval rig"); return vats::evaluate(*rig_, doc_.clip(), frame_, shape(), constraints()); }();
     VATS_PROFILE("eval previews");
     apply_ragdoll_preview(e);
@@ -2478,7 +2479,6 @@ void App::evaluate() {
         rig_->external = ours;
     }
     if (host_.world_view()) host_.hide_avatar(swap_shown());  // spec 09 build 32: the body swap
-    if (host_.world_view()) update_avatar_resize();           // 08 RS-7: your avatar at your actor's size
     if (host_.world_view() && editing_other()) {
         // The worn avatar is your actor (the first): it plays its own animation while another is edited.
         const Project& p = doc_.project;

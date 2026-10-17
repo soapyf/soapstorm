@@ -71,6 +71,7 @@ public:
         // the ground. Read every update; 1 = as it is.
         double resize = 1.0;
         LLVector3 pelvis_lift;
+        std::vector<LLVector3> base_scales;  // by node: each scaled joint's own scale, kept current by the host
     };
     static Playback sEditor;
 

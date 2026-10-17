@@ -49,7 +49,8 @@ void App::update_avatar_resize() {
     if (s != 1)
         if (const Shape* r = worn_shape(); r && !r->offset.empty())
             lift = r->offset[0] - (w->offset.empty() ? Vec3{} : w->offset[0]);
-    host_resizes_ = host_.resize_avatar(s, lift) && s != 1;
+    host_can_resize_ = host_.resize_avatar(s, lift);
+    host_resizes_ = host_can_resize_ && s != 1;
 }
 
 bool App::any_resized() const {
@@ -99,7 +100,7 @@ void App::apply_resize(double size) {
         if (keys) n = scale_position_keys(skel_, c, size / from);
     });
     // The camera keeps the same framing of the body, unless the world draws it at its own size (RS-7).
-    if (!(host_.world_view() && !host_resizes_ && worn_shape() && !editing_other()))
+    if (!(host_.world_view() && !host_can_resize_ && worn_shape() && !editing_other()))
         cam_glide_.apply_input(camera_, [&](Camera& c) {
             c.target = c.target * (size / from);
             c.distance *= size / from;
@@ -165,10 +166,10 @@ void App::draw_resize_window() {
                           "smaller one.\nOther bones' position keys always grow with the body.");
     if (worn_shape() && !editing_other()) {
         ImGui::Spacing();
-        hint(host_resizes_ || resize_pending_ == 1
+        hint(host_can_resize_
                  ? "Your avatar is drawn at this size on your screen only: nothing is sent, and others see it as it is."
-                 : "In the world your avatar keeps its own size here: this viewer can't resize it. Exports, Animation "
-                   "Check and the other actors use the new size.");
+                 : "Your avatar keeps its own size on screen here (as it plays in-world, the walk test, or a viewer that "
+                   "can't resize it). Exports, Animation Check and the other actors use the new size.");
     }
 
     ImGui::Spacing();

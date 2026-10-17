@@ -7386,7 +7386,8 @@ bool LLVOAvatar::processSingleAnimationStateChange( const LLUUID& anim_id, bool 
     // keep appearances in sync, but not so often that animations
     // cause constant jiggling of the body or camera. Possible
     // compromise is to do it on animation changes:
-    computeBodySize();
+    if (!(isSelf() && FSVATsEditor::resizesYourAvatar())) // VATs editor: not from the joints it scales on this screen
+        computeBodySize();
 
     bool result = false;
 
@@ -8023,6 +8024,7 @@ void LLVOAvatar::notifyAttachmentMeshLoaded()
 //-----------------------------------------------------------------------------
 void LLVOAvatar::addAttachmentOverridesForObject(LLViewerObject *vo, std::set<LLUUID>* meshes_seen, bool recursive)
 {
+    FSVATsEditor::AvatarScaleChange vats_scales(isSelf()); // VATs editor: a lock-scale mesh keeps the scale it finds
     if (vo->getAvatar() != this && vo->getAvatarAncestor() != this)
     {
         LL_WARNS("Avatar") << "called with invalid avatar" << LL_ENDL;
@@ -8305,6 +8307,7 @@ void LLVOAvatar::removeAttachmentOverridesForObject(LLViewerObject *vo)
 //-----------------------------------------------------------------------------
 void LLVOAvatar::removeAttachmentOverridesForObject(const LLUUID& mesh_id)
 {
+    FSVATsEditor::AvatarScaleChange vats_scales(isSelf()); // VATs editor: the joints' own scales come back
     LLJoint* pJointPelvis = getJoint( "mPelvis" );
 
     const std::string av_string = avString();
@@ -8551,6 +8554,7 @@ void LLVOAvatar::initAttachmentPoints(bool ignore_hud_joints)
 //-----------------------------------------------------------------------------
 void LLVOAvatar::updateVisualParams()
 {
+    FSVATsEditor::AvatarScaleChange vats_scales(isSelf()); // VATs editor: shape params add to the joints' own scales
     ESex avatar_sex = (getVisualParamWeight("male") > 0.5f) ? SEX_MALE : SEX_FEMALE;
     if (getSex() != avatar_sex)
     {
@@ -8576,7 +8580,8 @@ void LLVOAvatar::updateVisualParams()
 
     if (mLastSkeletonSerialNum != mSkeletonSerialNum)
     {
-        computeBodySize();
+        if (!(isSelf() && FSVATsEditor::resizesYourAvatar())) // VATs editor: not from the joints it scales
+            computeBodySize();
         mLastSkeletonSerialNum = mSkeletonSerialNum;
         mRoot->updateWorldMatrixChildren();
     }

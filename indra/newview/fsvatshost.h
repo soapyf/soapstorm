@@ -51,6 +51,21 @@ namespace FSVATsEditor
     // Build 32: true while View > Body shows a mesh body in your avatar's place (the editor holds your avatar):
     // LLVOAvatar::isVisible hides your own avatar and, with it, its attachments, on this screen only.
     bool hidesYourAvatar();
+    // VATs spec 08 RS-7: true while the editor draws your avatar resized (joint scales on your screen only).
+    // LLVOAvatar then takes no new body size from the scaled joints, so none is sent to the region
+    // (bodySizeChanged -> sendAgentSetAppearance); the size is measured again once the scales are put back.
+    bool resizesYourAvatar();
+    // Around LLVOAvatar writing your avatar's joint scales (shape params and avatar physics, which add to the scale
+    // they find; a mesh's lock-scale overrides, which keep the scale they find): while the editor resizes your avatar
+    // its joints hold their own scales for the change, and the editor takes them again after it.
+    struct AvatarScaleChange
+    {
+        explicit AvatarScaleChange(bool self);
+        ~AvatarScaleChange();
+        AvatarScaleChange(const AvatarScaleChange&) = delete;
+        AvatarScaleChange& operator=(const AvatarScaleChange&) = delete;
+        bool mSelf;
+    };
     // True while the editor hides every other avatar (spec 09 U5): it turns on the viewer's Render Only Friends
     // (RenderAvatarFriendsOnly) and LLVOAvatar::isBuddy answers false, so friends are hidden too; never your own.
     bool hidesOtherAvatars();

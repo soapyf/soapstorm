@@ -116,7 +116,7 @@ namespace
     {
         return std::equal(a.begin(), a.end(), b.begin(), b.end(), [](const auto& x, const auto& y)
                           { return x.name == y.name && x.position == y.position && x.base == y.base && x.priority == y.priority &&
-                                   x.scale == y.scale && x.base_scale == y.base_scale; });
+                                   x.scale == y.scale; });  // base_scale is read live (Playback::base_scales)
     }
 
     // Build 19 (spec 09 §0e): View > Orthographic as a telephoto near-ortho. The narrowest lens the viewer allows
@@ -530,7 +530,37 @@ namespace
         {
             mResize = std::isfinite(size) && size > 0 ? size : 1.0;
             mLift = LLVector3(F32(pelvis_lift.x), F32(pelvis_lift.y), F32(pelvis_lift.z));
-            return true;
+            // Only the editor's hold draws it resized: as it plays in-world and the walk test show your avatar as the
+            // world will (and the walk test stops the motion while you stand).
+            return mMode == Mode::Hold;
+        }
+        bool resizesYours() const
+        {
+            return mMotionOn && VATsClipMotion::sEditor.resize != 1.0 &&
+                   std::any_of(mJoints.begin(), mJoints.end(), [](const VATsClipMotion::Joint& j) { return j.scale; });
+        }
+        // before: each scaled joint back on its own scale; after: its own scale taken again (and shown times the size).
+        void holdScales(bool before)
+        {
+            if (!resizesYours() || !isAgentAvatarValid())
+                return;
+            VATsClipMotion::Playback& pb = VATsClipMotion::sEditor;
+            for (const VATsClipMotion::Joint& j : mJoints)
+            {
+                LLJoint* joint = j.scale ? gAgentAvatarp->getJoint(j.name) : nullptr;
+                const auto own = joint ? mBaseScale.find(j.name) : mBaseScale.end();
+                if (own == mBaseScale.end())
+                    continue;
+                if (before)
+                    joint->setScale(own->second);
+                else
+                {
+                    own->second = joint->getScale();
+                    const S32 node = pb.skeleton ? pb.skeleton->find(j.name) : -1;
+                    if (node >= 0 && node < (S32)pb.base_scales.size())
+                        pb.base_scales[node] = own->second;
+                }
+            }
         }
         bool hidesYours() const { return mHideYours && holdsAvatar(); }
         // Build 34: your avatar as the world poses it now, for the swapped body in the modes that play your real avatar.
@@ -827,6 +857,11 @@ namespace
             return nullptr;
         if (mCacheFor != gAgentAvatarp.get() || mJointCache.size() != (size_t)mSkel->size())
         {
+            if (mCacheFor && mCacheFor != gAgentAvatarp.get())
+            {
+                mBase.clear();  // another avatar (relog): its own positions and scales are taken again
+                mBaseScale.clear();
+            }
             mCacheFor = gAgentAvatarp.get();
             mJointCache.assign(mSkel->size(), nullptr);
             for (int i = 0; i < mSkel->size(); ++i)
@@ -852,7 +887,7 @@ namespace
         // 6b preview played the clip); the world's own motions keep the rest.
         const bool in_world = mMode != Mode::Hold && mOwnPlan;
         // RS-7: the editor's hold shows the resized body; as it plays in-world shows your avatar as the world will.
-        const bool resizing = !in_world && mResize != 1.0;
+        const bool resizing = mMode == Mode::Hold && mResize != 1.0;
         std::vector<VATsClipMotion::Joint> joints;
         std::vector<bool> drives_pos(skel.size(), false);
         for (int i = 0; i < skel.size() && i < (int)pose.rot.size(); ++i)
@@ -896,6 +931,7 @@ namespace
             LLVector3 base_scale(1.f, 1.f, 1.f);
             if (scaled)
             {
+                // Taken once; FSVATsEditor::AvatarScaleChange keeps it current when the viewer writes the joint's scale.
                 if (!mBaseScale.count(n.name))
                     mBaseScale[n.name] = avatarJoint(i)->getScale();
                 base_scale = mBaseScale[n.name];
@@ -908,6 +944,11 @@ namespace
         pb.priority = in_world ? llclamp(clip.priority, 0, (S32)LLJoint::ADDITIVE_PRIORITY - 1) : (S32)LLJoint::ADDITIVE_PRIORITY;
         pb.resize = resizing ? mResize : 1.0;
         pb.pelvis_lift = resizing ? mLift : LLVector3::zero;
+        pb.base_scales.assign(resizing ? skel.size() : 0, LLVector3(1.f, 1.f, 1.f));
+        for (const VATsClipMotion::Joint& j : joints)
+            if (const auto own = j.scale ? mBaseScale.find(j.name) : mBaseScale.end(); own != mBaseScale.end())
+                if (const S32 node = skel.find(j.name); node >= 0)
+                    pb.base_scales[node] = own->second;
         const bool active = mMotionID.notNull() && mMotionOn == gAgentAvatarp.get() && gAgentAvatarp->isMotionActive(mMotionID);
         if (sameJoints(joints, mJoints) && active)
             return;
@@ -932,8 +973,10 @@ namespace
 
     void ViewerHost::stopMotion()
     {
-        if (mMotionID.notNull() && isAgentAvatarValid() && mMotionOn == gAgentAvatarp.get())
+        // The avatar may fail isValid() for a moment (no region): the motion is still on it, so it is stopped anyway.
+        if (mMotionID.notNull() && gAgentAvatarp.notNull() && !gAgentAvatarp->isDead() && mMotionOn == gAgentAvatarp.get())
         {
+            bool scaled = false;
             gAgentAvatarp->getMotionController().stopMotionLocally(mMotionID, true);
             gAgentAvatarp->removeMotion(mMotionID);
             // A stopped motion leaves its positions behind: the joints it moved go back to their own.
@@ -942,9 +985,15 @@ namespace
                 {
                     if (j.position)
                         joint->setPosition(j.base);
-                    if (j.scale)  // RS-7: and the scales it set, back to the avatar's own
-                        joint->setScale(j.base_scale);
+                    if (j.scale)  // RS-7: and the scales it set, back to the avatar's own (as kept current)
+                    {
+                        const auto own = mBaseScale.find(j.name);
+                        joint->setScale(own != mBaseScale.end() ? own->second : j.base_scale);
+                        scaled = true;
+                    }
                 }
+            if (scaled)  // the size LLVOAvatar skipped while resized (FSVATsEditor::resizesYourAvatar)
+                gAgentAvatarp->computeBodySize();
         }
         mMotionID.setNull();
         mMotionOn = nullptr;
@@ -3375,6 +3424,23 @@ bool FSVATsEditor::hidesOtherAvatars()
 bool FSVATsEditor::hidesYourAvatar()
 {
     return sHost && sApp && sHost->hidesYours();
+}
+
+bool FSVATsEditor::resizesYourAvatar()
+{
+    return sHost && sHost->resizesYours();
+}
+
+FSVATsEditor::AvatarScaleChange::AvatarScaleChange(bool self) : mSelf(self && sHost)
+{
+    if (mSelf)
+        sHost->holdScales(true);
+}
+
+FSVATsEditor::AvatarScaleChange::~AvatarScaleChange()
+{
+    if (mSelf && sHost)
+        sHost->holdScales(false);
 }
 
 bool FSVATsEditor::bodyUnderPointer(S32 x, S32 y, LLVector3d& out)

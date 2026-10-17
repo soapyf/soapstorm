@@ -493,6 +493,7 @@ private:
     const Shape* worn_shape() const;
     void update_avatar_resize();  // once a frame in the world view: the host told your actor's size
     bool host_resizes_ = false;   // the host draws your avatar resized this frame
+    bool host_can_resize_ = false;  // the host's last answer, whatever the size (the camera reframes on it)
     mutable Shape worn_resized_, worn_resized_src_;  // updated in place, as the host's own worn shape is
     mutable double worn_resized_s_ = 1;
     // Build 34: while it shows in a real-avatar mode, the body follows what your avatar does in the world (the region's and

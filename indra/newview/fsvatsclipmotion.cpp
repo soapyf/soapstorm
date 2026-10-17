@@ -124,7 +124,10 @@ bool VATsClipMotion::onUpdate(F32, U8*)
         }
         b.state->setRotation(rot);
         if (b.scale)
-            b.state->setScale(b.base_scale * F32(std::isfinite(sEditor.resize) ? sEditor.resize : 1.0));
+        {
+            const LLVector3& own = b.node < (S32)sEditor.base_scales.size() ? sEditor.base_scales[b.node] : b.base_scale;
+            b.state->setScale(own * F32(std::isfinite(sEditor.resize) ? sEditor.resize : 1.0));
+        }
         if (b.position)
         {
             b.state->setPosition(pos);
