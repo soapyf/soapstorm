@@ -457,10 +457,61 @@ int Library::load_dir(const std::string& dir) {
         ss << f.rdbuf();
         Page page = parse_page(ss.str(), stem);
         if (page.title.empty()) page.title = stem;
+        page.folder = dir;
+        if (find(stem)) continue;  // a later folder (the downloaded manual) never replaces a page
         add(std::move(page));
         ++n;
     }
+    std::ifstream index(fs::path(dir) / "online-pages.tsv", std::ios::binary);
+    for (std::string line; std::getline(index, line);) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        const size_t a = line.find('\t'), b = a == std::string::npos ? a : line.find('\t', a + 1);
+        if (a == std::string::npos || a == 0) continue;
+        OnlinePage o{line.substr(0, a), line.substr(a + 1, b == std::string::npos ? std::string::npos : b - a - 1),
+                     b == std::string::npos ? "" : line.substr(b + 1)};
+        if (o.file.find_first_of("/\\.") != std::string::npos || find_online(o.file)) continue;  // a page name, once
+        if (o.title.empty()) o.title = o.file;
+        online_.push_back(std::move(o));
+    }
     return n;
+}
+
+const OnlinePage* Library::find_online(std::string_view title_or_file) const {
+    const std::string key = lower(trim(title_or_file));
+    for (const OnlinePage& p : online_)
+        if (lower(p.title) == key || lower(p.file) == key) return &p;
+    return nullptr;
+}
+
+std::string Library::online_url(const OnlinePage& page, std::string_view anchor) {
+    std::string url = std::string(kOnlineManual) + "/" + (page.file == "vats" ? "Home" : page.file);  // the front page
+    if (!anchor.empty()) url += "#" + github_anchor(anchor);
+    return url;
+}
+
+std::vector<const OnlinePage*> Library::search_online(std::string_view query) const {
+    std::vector<std::string> words;
+    {
+        std::istringstream in(lower(query));
+        for (std::string w; in >> w;) words.push_back(w);
+    }
+    std::vector<const OnlinePage*> out;
+    if (words.empty()) return out;
+    for (const OnlinePage& p : online_) {
+        const std::string title = lower(p.title);
+        if (!find(p.file) && std::all_of(words.begin(), words.end(), [&](const std::string& w) { return title.find(w) != std::string::npos; }))
+            out.push_back(&p);
+    }
+    return out;
+}
+
+std::string github_anchor(std::string_view heading) {
+    std::string out;
+    for (unsigned char c : lower(trim(heading))) {
+        if (std::isalnum(c) || c == '-' || c == '_' || c >= 0x80) out += char(c);  // letters of any script stay
+        else if (c == ' ') out += '-';
+    }
+    return out;
 }
 
 void Library::add(Page page) { pages_.push_back(std::move(page)); }

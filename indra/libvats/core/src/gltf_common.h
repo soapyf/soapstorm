@@ -84,6 +84,18 @@ struct Reader {
 
     // count elements of width components of type ct from a bufferView, at acc_off into it, into out. strided: the
     // view's byteStride applies (sparse indices and values are always tightly packed).
+    // A bufferView's raw bytes (an embedded image); false when it does not fit its buffer.
+    bool view_bytes(int vi, std::vector<std::uint8_t>& out) {
+        const Json* views = doc.find("bufferViews");
+        if (!views || vi < 0 || vi >= int(views->arr.size())) return err = "bad bufferView", false;
+        const Json& v = views->arr[vi];
+        const int bi = inum(v.find("buffer"));
+        if (bi < 0 || bi >= int(buffers.size())) return err = "bad buffer", false;
+        const double off = num(v.find("byteOffset")), len = num(v.find("byteLength"), -1);
+        if (!(off >= 0) || !(len >= 0) || off + len > double(buffers[bi].size())) return err = "bufferView out of range", false;
+        out.assign(buffers[bi].begin() + long(off), buffers[bi].begin() + long(off + len));
+        return true;
+    }
     bool read_view(int vi, double acc_off, int ct, int width, int count, bool normalized, bool strided, float* out) {
         const Json* views = doc.find("bufferViews");
         if (!views || vi < 0 || vi >= int(views->arr.size())) return err = "bad bufferView", false;

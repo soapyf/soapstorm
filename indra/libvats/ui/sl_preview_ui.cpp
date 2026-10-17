@@ -29,6 +29,7 @@ struct SlExport {
     AnimCost cost;
     Clip clip;  // what it was exported from (mirrored with Export mirrored), for the deviation table
     std::optional<Shape> shape, positions;  // the bake shape and joint positions it used
+    double resize = 1;                      // and the skeleton's size (08 RS-4)
     double seconds = 0;
     std::vector<BoneDeviation> dev;  // made when the preview window first needs it
     bool dev_done = false;
@@ -97,6 +98,7 @@ void App::sl_export_tick() {
     fresh.clip = anim_export_clip();
     if (opt.shape) fresh.shape = *opt.shape;
     if (opt.positions) fresh.positions = *opt.positions;
+    fresh.resize = opt.resize;
     fresh.seconds = double(std::max(doc_.clip().end_frame, 1)) / std::max(doc_.clip().fps, 1);
     if (x.keep_fit) fresh.fit = x.fit;
     fresh.confirm_split = x.confirm_split;
@@ -115,7 +117,7 @@ void App::apply_sl_preview(Evaluation& e) {
                                                ImGui::IsMouseClicked(ImGuiMouseButton_Middle));
     if (doc_.history.is_open() || dragging_gizmo_ || modal_ != Modal::None || pressed) return;
     const SlExport& x = *sl_export_;
-    Pose p = anim_pose(skel_, x.played, frame_ / std::max(x.clip.fps, 1), x.positions ? &*x.positions : nullptr);
+    Pose p = anim_pose(skel_, x.played, frame_ / std::max(x.clip.fps, 1), x.positions ? &*x.positions : nullptr, x.resize);
     sl_ghost_ = std::move(e.globals);
     e.globals = skel_.global_pose(p, shape());
     sl_pose_ = std::move(p);
@@ -145,7 +147,7 @@ void App::draw_sl_preview_window() {
 
     if (!x->dev_done) {  // once per export; rig_ carries this actor's cross-actor pin targets (evaluate())
         x->dev = anim_deviation(*rig_, x->clip, x->played, x->shape ? &*x->shape : nullptr,
-                                x->positions ? &*x->positions : nullptr);
+                                x->positions ? &*x->positions : nullptr, x->resize);
         x->dev_done = true;
     }
     subheading("Largest difference per bone");

@@ -115,7 +115,8 @@ namespace
     bool sameJoints(const std::vector<VATsClipMotion::Joint>& a, const std::vector<VATsClipMotion::Joint>& b)
     {
         return std::equal(a.begin(), a.end(), b.begin(), b.end(), [](const auto& x, const auto& y)
-                          { return x.name == y.name && x.position == y.position && x.base == y.base && x.priority == y.priority; });
+                          { return x.name == y.name && x.position == y.position && x.base == y.base && x.priority == y.priority &&
+                                   x.scale == y.scale; });  // base_scale is read live (Playback::base_scales)
     }
 
     // Build 19 (spec 09 §0e): View > Orthographic as a telephoto near-ortho. The narrowest lens the viewer allows
@@ -433,13 +434,14 @@ namespace
                          const vats::Mat4*) override;
         void scene_ground(const Vec3&) override {}
         void scene_triangles(const std::vector<vats::Vertex>& verts, const std::vector<std::uint32_t>& indices, bool, float,
-                             bool translucent) override;
+                             bool translucent, const vats::SurfaceTexture* texture) override;
         ImTextureID scene_end() override;
         bool save_thumbnail_png(const std::string& png) override;
         bool thumbnail_pixels(std::vector<std::uint8_t>& rgba, int& width, int& height) override;
         bool scene_image(ImTextureID texture, const std::array<Vec3, 4>& corners, float opacity, bool backdrop) override;
         ImTextureID load_texture(const std::string& png) override;
         ImTextureID make_texture(const std::uint8_t* rgba, int width, int height) override;
+        ImTextureID make_mesh_texture(const std::uint8_t* rgba, int width, int height) override;
         bool update_texture(ImTextureID texture, const std::uint8_t* rgba, int width, int height) override;
         void free_texture(ImTextureID texture) override;
         void set_light(const vats::LightPreset* preset) override;
@@ -523,6 +525,43 @@ namespace
         // Build 32: View > Body swaps a mesh body in, drawn by the UI through scene_triangles; your avatar and its
         // attachments are hidden on this screen meanwhile (LLVOAvatar::isVisible), nothing is sent.
         void hide_avatar(bool hide) override;
+        // VATs spec 08 RS-7: drawn through VATsClipMotion's joint scales while the editor holds your avatar.
+        bool resize_avatar(double size, const vats::Vec3& pelvis_lift) override
+        {
+            mResize = std::isfinite(size) && size > 0 ? size : 1.0;
+            mLift = LLVector3(F32(pelvis_lift.x), F32(pelvis_lift.y), F32(pelvis_lift.z));
+            // Only the editor's hold draws it resized: as it plays in-world and the walk test show your avatar as the
+            // world will (and the walk test stops the motion while you stand).
+            return mMode == Mode::Hold;
+        }
+        bool resizesYours() const
+        {
+            return mMotionOn && VATsClipMotion::sEditor.resize != 1.0 &&
+                   std::any_of(mJoints.begin(), mJoints.end(), [](const VATsClipMotion::Joint& j) { return j.scale; });
+        }
+        // before: each scaled joint back on its own scale; after: its own scale taken again (and shown times the size).
+        void holdScales(bool before)
+        {
+            if (!resizesYours() || !isAgentAvatarValid())
+                return;
+            VATsClipMotion::Playback& pb = VATsClipMotion::sEditor;
+            for (const VATsClipMotion::Joint& j : mJoints)
+            {
+                LLJoint* joint = j.scale ? gAgentAvatarp->getJoint(j.name) : nullptr;
+                const auto own = joint ? mBaseScale.find(j.name) : mBaseScale.end();
+                if (own == mBaseScale.end())
+                    continue;
+                if (before)
+                    joint->setScale(own->second);
+                else
+                {
+                    own->second = joint->getScale();
+                    const S32 node = pb.skeleton ? pb.skeleton->find(j.name) : -1;
+                    if (node >= 0 && node < (S32)pb.base_scales.size())
+                        pb.base_scales[node] = own->second;
+                }
+            }
+        }
         bool hidesYours() const { return mHideYours && holdsAvatar(); }
         // Build 34: your avatar as the world poses it now, for the swapped body in the modes that play your real avatar.
         bool live_pose(const vats::Skeleton& skel, vats::Pose& pose) override;
@@ -681,6 +720,10 @@ namespace
         // Each position-driven joint's own position before the editor drove it (the worn avatar's: sliders and
         // mesh joint offsets). The editor's offsets are added to it, and it is put back when the editor lets go.
         std::map<std::string, LLVector3> mBase;
+        // RS-7: each scaled joint's own scale before the editor scaled it, put back when it lets go; and the size.
+        std::map<std::string, LLVector3> mBaseScale;
+        double mResize = 1.0;
+        LLVector3 mLift;
         LLUUID mMotionID;
         const LLVOAvatarSelf* mMotionOn = nullptr;
         std::vector<LLJoint*> mJointCache;
@@ -729,13 +772,16 @@ namespace
             bool visible = false, drag = true, close = true, resize = true, minimize = true, minimized = false, docked = false;
         } mPane;                         // the conversations floater as it was before it filled the Chat pane
 
-        // The world layer's triangles (spec 09 U5): x y z, normal, rgba, gloss per vertex, in the agent frame; opaque, then translucent.
+        // The world layer's triangles (spec 09 U5): x y z, normal, rgba, gloss, u v per vertex (kStride floats), in the
+        // agent frame; opaque, then translucent.
+        static constexpr U32 kStride = 13;
         struct SceneBatch
         {
             std::vector<F32> verts;
             std::vector<U32> indices;
         };
         SceneBatch mScene[2];
+        std::map<vats::SurfaceTexture, SceneBatch> mTexScene;  // the world's textured triangles, one batch per texture
         SceneBatch mOver[2];             // depth_test false (the bone glyphs): over the world, drawn last, back faces culled
         SceneBatch mOff[2];              // the face cam's or a thumbnail's, in the UI's space
         bool mOffOpen = false;
@@ -757,6 +803,8 @@ namespace
         Offscreen mFace, mThumb, mPicker;
         Offscreen* mOffTarget = &mFace;
         void drawBatches(const SceneBatch (&batches)[2]);  // program, VAO and buffers bound: opaque, then translucent
+        void drawBatch(const SceneBatch& b);                // one batch with the attribute pointers drawBatches sets
+        void drawTextured();                                // mTexScene, after drawBatches(mScene)
         struct SceneImage  // a reference picture's plane (scene_image): corners in the agent frame, bottom-left first
         {
             GLuint texture = 0;
@@ -769,6 +817,7 @@ namespace
         S32 mImgMvpLoc = -1, mImgRectLoc = -1, mImgUseDepthLoc = -1, mImgDepthLoc = -1, mImgTexLoc = -1, mImgOpacityLoc = -1;
         bool mSceneOpen = false;
         U32 mProgram = 0, mVao = 0, mVbo = 0, mEbo = 0;
+        GLint mTexLoc = -1, mAlphaModeLoc = -1, mCutLoc = -1;
         S32 mMvpLoc = -1, mLightLoc = -1, mRectLoc = -1, mUseDepthLoc = -1, mDepthLoc = -1;
         bool mProgramFailed = false;
         std::set<GLuint> mTextures;      // the help's pictures (load_texture), until freed or the context goes
@@ -808,6 +857,11 @@ namespace
             return nullptr;
         if (mCacheFor != gAgentAvatarp.get() || mJointCache.size() != (size_t)mSkel->size())
         {
+            if (mCacheFor && mCacheFor != gAgentAvatarp.get())
+            {
+                mBase.clear();  // another avatar (relog): its own positions and scales are taken again
+                mBaseScale.clear();
+            }
             mCacheFor = gAgentAvatarp.get();
             mJointCache.assign(mSkel->size(), nullptr);
             for (int i = 0; i < mSkel->size(); ++i)
@@ -832,6 +886,8 @@ namespace
         // Build 20, item 47: as it plays in-world, only the joints the upload keys, each at its priority there (as the
         // 6b preview played the clip); the world's own motions keep the rest.
         const bool in_world = mMode != Mode::Hold && mOwnPlan;
+        // RS-7: the editor's hold shows the resized body; as it plays in-world shows your avatar as the world will.
+        const bool resizing = mMode == Mode::Hold && mResize != 1.0;
         std::vector<VATsClipMotion::Joint> joints;
         std::vector<bool> drives_pos(skel.size(), false);
         for (int i = 0; i < skel.size() && i < (int)pose.rot.size(); ++i)
@@ -842,6 +898,8 @@ namespace
             const bool moved = pose.offset[i].length() > 1e-6;
             const bool turned = 1.0 - std::fabs(pose.rot[i].w) > 1e-9;
             const bool bone = i < skel.joint_count() && !n.attachment;
+            const bool volume = n.volume;  // fitted mesh follows these: they scale with the body
+            const bool scaled = resizing && (bone || volume);
             S32 priority = LLJoint::ADDITIVE_PRIORITY;
             if (in_world)
             {
@@ -850,7 +908,7 @@ namespace
                     continue;
                 priority = llclamp(claim->second, 0, (S32)LLJoint::ADDITIVE_PRIORITY - 1);
             }
-            else if ((!bone && !keyed && !moved && !turned) || !avatarJoint(i))
+            else if ((!bone && !scaled && !keyed && !moved && !turned) || !avatarJoint(i))
                 continue;
             // The pelvis rests on the editor's frame while it holds the avatar; in-world only a keyed or moved one is set.
             drives_pos[i] = (i == 0 && !in_world) || moved || (keyed && clip.has_channels(n.name, vats::kPosChannels));
@@ -870,16 +928,33 @@ namespace
                 else if (!mBase.count(n.name))
                     mBase[n.name] = avatarJoint(i)->getPosition();
             }
-            joints.push_back({ n.name, drives_pos[i], drives_pos[i] ? mBase[n.name] : LLVector3::zero, priority });
+            LLVector3 base_scale(1.f, 1.f, 1.f);
+            if (scaled)
+            {
+                // Taken once; FSVATsEditor::AvatarScaleChange keeps it current when the viewer writes the joint's scale.
+                if (!mBaseScale.count(n.name))
+                    mBaseScale[n.name] = avatarJoint(i)->getScale();
+                base_scale = mBaseScale[n.name];
+            }
+            joints.push_back({ n.name, drives_pos[i], drives_pos[i] ? mBase[n.name] : LLVector3::zero, priority, scaled, base_scale });
         }
         VATsClipMotion::Playback& pb = VATsClipMotion::sEditor;
         pb.skeleton = &skel;
         pb.pose = &mPose;
         pb.priority = in_world ? llclamp(clip.priority, 0, (S32)LLJoint::ADDITIVE_PRIORITY - 1) : (S32)LLJoint::ADDITIVE_PRIORITY;
+        pb.resize = resizing ? mResize : 1.0;
+        pb.pelvis_lift = resizing ? mLift : LLVector3::zero;
+        pb.base_scales.assign(resizing ? skel.size() : 0, LLVector3(1.f, 1.f, 1.f));
+        for (const VATsClipMotion::Joint& j : joints)
+            if (const auto own = j.scale ? mBaseScale.find(j.name) : mBaseScale.end(); own != mBaseScale.end())
+                if (const S32 node = skel.find(j.name); node >= 0)
+                    pb.base_scales[node] = own->second;
         const bool active = mMotionID.notNull() && mMotionOn == gAgentAvatarp.get() && gAgentAvatarp->isMotionActive(mMotionID);
         if (sameJoints(joints, mJoints) && active)
             return;
         stopMotion();
+        if (!resizing)
+            mBaseScale.clear();  // RS-7: stopMotion put them back; taken again if the size changes
         mJoints = joints;
         mDrivesPos = std::move(drives_pos);
         pb.joints = std::move(joints);
@@ -898,15 +973,27 @@ namespace
 
     void ViewerHost::stopMotion()
     {
-        if (mMotionID.notNull() && isAgentAvatarValid() && mMotionOn == gAgentAvatarp.get())
+        // The avatar may fail isValid() for a moment (no region): the motion is still on it, so it is stopped anyway.
+        if (mMotionID.notNull() && gAgentAvatarp.notNull() && !gAgentAvatarp->isDead() && mMotionOn == gAgentAvatarp.get())
         {
+            bool scaled = false;
             gAgentAvatarp->getMotionController().stopMotionLocally(mMotionID, true);
             gAgentAvatarp->removeMotion(mMotionID);
             // A stopped motion leaves its positions behind: the joints it moved go back to their own.
             for (const VATsClipMotion::Joint& j : mJoints)
-                if (j.position)
-                    if (LLJoint* joint = gAgentAvatarp->getJoint(j.name))
+                if (LLJoint* joint = (j.position || j.scale) ? gAgentAvatarp->getJoint(j.name) : nullptr)
+                {
+                    if (j.position)
                         joint->setPosition(j.base);
+                    if (j.scale)  // RS-7: and the scales it set, back to the avatar's own (as kept current)
+                    {
+                        const auto own = mBaseScale.find(j.name);
+                        joint->setScale(own != mBaseScale.end() ? own->second : j.base_scale);
+                        scaled = true;
+                    }
+                }
+            if (scaled)  // the size LLVOAvatar skipped while resized (FSVATsEditor::resizesYourAvatar)
+                gAgentAvatarp->computeBodySize();
         }
         mMotionID.setNull();
         mMotionOn = nullptr;
@@ -1171,7 +1258,8 @@ namespace
             LLJoint* joint = avatarJoint(i);
             if (!joint)
                 continue;
-            mShape.scale[i] = toVATs(joint->getScale());
+            const auto own_scale = mBaseScale.find(skel[i].name);  // RS-7: a joint the editor scales: its own scale
+            mShape.scale[i] = toVATs(own_scale != mBaseScale.end() ? own_scale->second : joint->getScale());
             if (i == 0)
                 continue;
             const auto base = mBase.find(skel[i].name);  // a joint the editor drives: its own position
@@ -1241,6 +1329,7 @@ namespace
                 avatar->mPelvisp->setPosition(LLVector3::zero);
             mCacheFor = nullptr;
             mBase.clear();  // taken again from the reset skeleton
+            mBaseScale.clear();
             LL_INFOS("VATsEditor") << "skeleton reset locally as the editor opens" << LL_ENDL;
         }
         // Seated on an object, it goes where the object goes; walking (build 20), where you walk it.
@@ -2025,6 +2114,11 @@ namespace
         }
         mScene[0].verts.clear(), mScene[0].indices.clear();
         mScene[1].verts.clear(), mScene[1].indices.clear();
+        for (auto it = mTexScene.begin(); it != mTexScene.end();)  // kept for their capacity; unused last frame: gone
+            if (it->second.indices.empty())
+                it = mTexScene.erase(it);
+            else
+                it->second.verts.clear(), it->second.indices.clear(), ++it;
         mOver[0].verts.clear(), mOver[0].indices.clear();
         mOver[1].verts.clear(), mOver[1].indices.clear();
         mImages.clear();
@@ -2034,15 +2128,16 @@ namespace
     }
 
     void ViewerHost::scene_triangles(const std::vector<vats::Vertex>& verts, const std::vector<std::uint32_t>& indices,
-                                     bool depth_test, float gloss, bool translucent)
+                                     bool depth_test, float gloss, bool translucent, const vats::SurfaceTexture* texture)
     {
         if (mOffOpen && !verts.empty())  // the face cam's: kept in the UI's space
         {
-            SceneBatch& b = mOff[translucent ? 1 : 0];
-            const U32 base = U32(b.verts.size() / 11);
-            b.verts.reserve(b.verts.size() + verts.size() * 11);
+            SceneBatch& b = mOff[translucent ? 1 : 0];  // thumbnails and the face cam: the material colours
+            const U32 base = U32(b.verts.size() / kStride);
+            b.verts.reserve(b.verts.size() + verts.size() * kStride);
             for (const vats::Vertex& v : verts)
-                b.verts.insert(b.verts.end(), { v.p[0], v.p[1], v.p[2], v.n[0], v.n[1], v.n[2], v.c[0], v.c[1], v.c[2], v.c[3], gloss });
+                b.verts.insert(b.verts.end(), { v.p[0], v.p[1], v.p[2], v.n[0], v.n[1], v.n[2], v.c[0], v.c[1], v.c[2], v.c[3], gloss,
+                                                v.uv[0], v.uv[1] });
             if (indices.empty())
                 for (U32 i = 0; i < U32(verts.size()); ++i)
                     b.indices.push_back(base + i);
@@ -2054,9 +2149,11 @@ namespace
         if (!mSceneOpen || verts.empty())
             return;
         // Not depth tested (App::draw_bones over the world): kept apart, drawn after the world's triangles.
-        SceneBatch& b = (depth_test ? mScene : mOver)[translucent ? 1 : 0];
-        const U32 base = U32(b.verts.size() / 11);
-        b.verts.reserve(b.verts.size() + verts.size() * 11);
+        // Textured triangles (a model's materials) get a batch of their own in the world; elsewhere they draw plain.
+        const bool textured = texture && texture->id && depth_test && !translucent;
+        SceneBatch& b = textured ? mTexScene[*texture] : (depth_test ? mScene : mOver)[translucent ? 1 : 0];
+        const U32 base = U32(b.verts.size() / kStride);
+        b.verts.reserve(b.verts.size() + verts.size() * kStride);
         // toAgent per vertex, its pelvis rest worked out once: with a body swapped in it measures the skeleton's body
         // size by name, and per vertex that cost 50 ms a frame on a 179k-vertex body.
         const Vec3 rest = pelvisRest();
@@ -2064,7 +2161,8 @@ namespace
         {
             const LLVector3 p = toLL(mView.apply(Vec3{ v.p[0], v.p[1], v.p[2] }) - rest) * mRot + mPos;
             const LLVector3 n = toLL(mView.rot.rotate(Vec3{ v.n[0], v.n[1], v.n[2] })) * mRot;
-            b.verts.insert(b.verts.end(), { p.mV[VX], p.mV[VY], p.mV[VZ], n.mV[VX], n.mV[VY], n.mV[VZ], v.c[0], v.c[1], v.c[2], v.c[3], gloss });
+            b.verts.insert(b.verts.end(), { p.mV[VX], p.mV[VY], p.mV[VZ], n.mV[VX], n.mV[VY], n.mV[VZ], v.c[0], v.c[1], v.c[2], v.c[3], gloss,
+                                            v.uv[0], v.uv[1] });
         }
         if (indices.empty())
             for (U32 i = 0; i < U32(verts.size()); ++i)
@@ -2161,6 +2259,7 @@ namespace
         glBindBuffer(GL_ARRAY_BUFFER, mImageVbo);
         glDisableVertexAttribArray(2);
         glDisableVertexAttribArray(3);
+        glDisableVertexAttribArray(4);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(F32), (void*)0);
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(F32), (void*)(3 * sizeof(F32)));
         glDepthMask(GL_FALSE);
@@ -2195,19 +2294,29 @@ namespace
         if (!mProgram && !mProgramFailed)
         {
             static const char* vs = "#version 150\n"
-                "uniform mat4 u_mvp; in vec3 a_pos; in vec3 a_nrm; in vec4 a_col; out vec3 v_nrm; out vec4 v_col;\n"
-                "void main() { gl_Position = u_mvp * vec4(a_pos, 1.0); v_nrm = a_nrm; v_col = a_col; }\n";
+                "uniform mat4 u_mvp; in vec3 a_pos; in vec3 a_nrm; in vec4 a_col; in vec2 a_uv;\n"
+                "out vec3 v_nrm; out vec4 v_col; out vec2 v_uv;\n"
+                "void main() { gl_Position = u_mvp * vec4(a_pos, 1.0); v_nrm = a_nrm; v_col = a_col; v_uv = a_uv; }\n";
             static const char* fs = "#version 150\n"
                 "uniform sampler2D u_depth; uniform vec4 u_rect; uniform int u_use_depth; uniform vec3 u_light;\n"
-                "in vec3 v_nrm; in vec4 v_col; out vec4 o_col;\n"
+                // vats::SurfaceTexture: 0 none, 1 opaque (its alpha ignored), 2 mask (u_cut), 3 blend; on unit 1
+                "uniform sampler2D u_tex; uniform int u_alpha_mode; uniform float u_cut;\n"
+                "in vec3 v_nrm; in vec4 v_col; in vec2 v_uv; out vec4 o_col;\n"
                 "void main() {\n"
                 "  if (u_use_depth != 0) {\n"
                 "    ivec2 size = textureSize(u_depth, 0);\n"
                 "    ivec2 at = clamp(ivec2((gl_FragCoord.xy - u_rect.xy) / u_rect.zw * vec2(size)), ivec2(0), size - 1);\n"
                 "    if (gl_FragCoord.z > texelFetch(u_depth, at, 0).r) discard;\n"
                 "  }\n"
+                "  vec4 c = v_col;\n"
+                "  if (u_alpha_mode != 0) {\n"
+                "    vec4 t = texture(u_tex, v_uv);\n"
+                "    c.rgb *= t.rgb;\n"
+                "    if (u_alpha_mode == 2 && t.a < u_cut) discard;\n"
+                "    if (u_alpha_mode == 3) c.a *= t.a;\n"
+                "  }\n"
                 "  float lit = 0.35 + 0.65 * abs(dot(normalize(v_nrm), u_light));\n"
-                "  o_col = vec4(v_col.rgb * lit, v_col.a);\n"
+                "  o_col = vec4(c.rgb * lit, c.a);\n"
                 "}\n";
             auto compile = [](GLenum kind, const char* src) {
                 const GLuint sh = glCreateShader(kind);
@@ -2230,6 +2339,7 @@ namespace
             glBindAttribLocation(mProgram, 0, "a_pos");
             glBindAttribLocation(mProgram, 1, "a_nrm");
             glBindAttribLocation(mProgram, 2, "a_col");
+            glBindAttribLocation(mProgram, 4, "a_uv");
             glBindFragDataLocation(mProgram, 0, "o_col");
             glLinkProgram(mProgram);
             glDeleteShader(v);
@@ -2249,6 +2359,9 @@ namespace
             mRectLoc = glGetUniformLocation(mProgram, "u_rect");
             mUseDepthLoc = glGetUniformLocation(mProgram, "u_use_depth");
             mDepthLoc = glGetUniformLocation(mProgram, "u_depth");
+            mTexLoc = glGetUniformLocation(mProgram, "u_tex");
+            mAlphaModeLoc = glGetUniformLocation(mProgram, "u_alpha_mode");
+            mCutLoc = glGetUniformLocation(mProgram, "u_cut");
             glGenVertexArrays(1, &mVao);
             glGenBuffers(1, &mVbo);
             glGenBuffers(1, &mEbo);
@@ -2317,7 +2430,10 @@ namespace
 
     void ViewerHost::drawScene()
     {
-        if (mScene[0].indices.empty() && mScene[1].indices.empty() && mOver[0].indices.empty() && mOver[1].indices.empty() &&
+        bool textured = false;
+        for (const auto& [tex, b] : mTexScene)
+            textured = textured || !b.indices.empty();
+        if (!textured && mScene[0].indices.empty() && mScene[1].indices.empty() && mOver[0].indices.empty() && mOver[1].indices.empty() &&
             mImages.empty())
             return;
         if (!ensureProgram())
@@ -2346,7 +2462,10 @@ namespace
         glClear(GL_DEPTH_BUFFER_BIT);  // the window's own depth holds nothing of the world any more (renderFinalize)
         glEnable(GL_BLEND);
         glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        glUniform1i(mAlphaModeLoc, 0);
+        glUniform1i(mTexLoc, 1);
         drawBatches(mScene);
+        drawTextured();
         drawImages(mvp, world_depth, world);
         if (!mOver[0].indices.empty() || !mOver[1].indices.empty())
         {
@@ -2373,20 +2492,56 @@ namespace
         glEnableVertexAttribArray(1);
         glEnableVertexAttribArray(2);
         glEnableVertexAttribArray(3);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 11 * sizeof(F32), (void*)0);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 11 * sizeof(F32), (void*)(3 * sizeof(F32)));
-        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 11 * sizeof(F32), (void*)(6 * sizeof(F32)));
-        glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 11 * sizeof(F32), (void*)(10 * sizeof(F32)));  // gloss
+        glEnableVertexAttribArray(4);
+        const GLsizei stride = kStride * sizeof(F32);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(F32)));
+        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, stride, (void*)(6 * sizeof(F32)));
+        glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, stride, (void*)(10 * sizeof(F32)));  // gloss
+        glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, stride, (void*)(11 * sizeof(F32)));  // uv
         for (int pass = 0; pass < 2; ++pass)
         {
             const SceneBatch& b = batches[pass];
             if (b.indices.empty())
                 continue;
             glDepthMask(pass == 0 ? GL_TRUE : GL_FALSE);  // translucent: seen through, writes no depth
-            glBufferData(GL_ARRAY_BUFFER, b.verts.size() * sizeof(F32), b.verts.data(), GL_STREAM_DRAW);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, b.indices.size() * sizeof(U32), b.indices.data(), GL_STREAM_DRAW);
-            glDrawElements(GL_TRIANGLES, GLsizei(b.indices.size()), GL_UNSIGNED_INT, nullptr);
+            drawBatch(b);
         }
+    }
+
+    // A model's textured materials (drawBatches' program and pointers still set): each batch with its texture on unit 1,
+    // which is put back. See-through (Blend) ones write no depth.
+    void ViewerHost::drawTextured()
+    {
+        bool any = false;
+        for (const auto& [tex, b] : mTexScene)
+            any = any || !b.indices.empty();
+        if (!any)
+            return;
+        GLint unit1 = 0;
+        glActiveTexture(GL_TEXTURE1);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &unit1);
+        for (const auto& [tex, b] : mTexScene)
+        {
+            if (b.indices.empty() || !mTextures.count(GLuint(tex.id)))
+                continue;
+            glBindTexture(GL_TEXTURE_2D, GLuint(tex.id));
+            glUniform1i(mAlphaModeLoc, 1 + int(tex.alpha));
+            glUniform1f(mCutLoc, tex.cut);
+            glDepthMask(tex.alpha == vats::SurfaceTexture::Alpha::Blend ? GL_FALSE : GL_TRUE);
+            drawBatch(b);
+        }
+        glUniform1i(mAlphaModeLoc, 0);
+        glDepthMask(GL_TRUE);
+        glBindTexture(GL_TEXTURE_2D, unit1);
+        glActiveTexture(GL_TEXTURE0);
+    }
+
+    void ViewerHost::drawBatch(const SceneBatch& b)
+    {
+        glBufferData(GL_ARRAY_BUFFER, b.verts.size() * sizeof(F32), b.verts.data(), GL_STREAM_DRAW);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, b.indices.size() * sizeof(U32), b.indices.data(), GL_STREAM_DRAW);
+        glDrawElements(GL_TRIANGLES, GLsizei(b.indices.size()), GL_UNSIGNED_INT, nullptr);
     }
 
     ImTextureID ViewerHost::scene_end()
@@ -2658,6 +2813,26 @@ namespace
         glActiveTexture(active);
         mTextures.insert(tex);
         return ImTextureID(tex);
+    }
+
+    // A model's texture (scene_triangles): as make_texture, but mipmapped and repeating, as a model's UVs expect.
+    ImTextureID ViewerHost::make_mesh_texture(const std::uint8_t* rgba, int width, int height)
+    {
+        const ImTextureID id = make_texture(rgba, width, height);
+        if (!id)
+            return id;
+        GLint active = 0, bound = 0;
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &active);
+        glActiveTexture(GL_TEXTURE0);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound);
+        glBindTexture(GL_TEXTURE_2D, GLuint(id));
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, bound);
+        glActiveTexture(active);
+        return id;
     }
 
     // The next frame of a help GIF, into the texture make_texture made for it (same size).
@@ -3030,6 +3205,8 @@ namespace
         step("editor motion");
         stopMotion();
         mBase.clear();
+        mBaseScale.clear();
+        mResize = 1.0;
         step("avatar hand-back");
         restore();
         step("sound");
@@ -3247,6 +3424,23 @@ bool FSVATsEditor::hidesOtherAvatars()
 bool FSVATsEditor::hidesYourAvatar()
 {
     return sHost && sApp && sHost->hidesYours();
+}
+
+bool FSVATsEditor::resizesYourAvatar()
+{
+    return sHost && sHost->resizesYours();
+}
+
+FSVATsEditor::AvatarScaleChange::AvatarScaleChange(bool self) : mSelf(self && sHost)
+{
+    if (mSelf)
+        sHost->holdScales(true);
+}
+
+FSVATsEditor::AvatarScaleChange::~AvatarScaleChange()
+{
+    if (mSelf && sHost)
+        sHost->holdScales(false);
 }
 
 bool FSVATsEditor::bodyUnderPointer(S32 x, S32 y, LLVector3d& out)

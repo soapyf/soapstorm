@@ -1,5 +1,8 @@
 // Viewport Avatar Toolset - the help browser: the shipped wiki (docs/wiki, vats/wiki.h) drawn with ImGui.
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
+#include <filesystem>
+#include <sstream>
+#include <set>
 #include <algorithm>
 #include <cfloat>
 #include <cstring>
@@ -20,9 +23,21 @@ namespace vats {
 struct HelpUi {
     wiki::Library lib;
     std::string dir;
+    std::string manual_dir;  // the manual downloaded for offline reading (Help > Download the Manual), if any
+    std::shared_ptr<ui::Download> download;  // while it downloads
+    std::string download_note;              // how the last download went
+    // An online page fetched to be shown here (its source from wiki::kOnlineSource, then its pictures) into
+    // manual_dir, where it stays: one page at a time, as it is opened; refreshed once a session when opened again.
+    std::string fetch_file, fetch_anchor, fetch_note;
+    bool fetch_show = false;  // opened (show it when it arrives), not only refreshed
+    bool fetch_pictures = false;  // the page has arrived; its pictures are coming
+    std::vector<std::shared_ptr<ui::Download>> fetches;
+    std::pair<std::string, std::string> queued;  // a page opened while another was being fetched
+    std::set<std::string> refreshed;
     ui::Host* host = nullptr;  // opens web links, loads images
     std::function<void(const std::string&)> open_example;  // an example link's project file, in <dir>/examples
     std::function<void(const std::string&)> show_target;   // a target link's: shown as the target ghost
+    std::function<void()> download_manual;                  // null when the host cannot download
     bool loaded = false, open = false, focus = false;
     bool modal = false;  // opened from a modal dialog: drawn as a nested modal there, not as a window
     bool pages = false;  // docked narrow: the contents list shows in place of the page
@@ -80,16 +95,114 @@ struct HelpUi {
     void load() {
         if (loaded) return;
         loaded = true;
-        lib.load_dir(dir);
+        lib.load_dir(dir);  // the tutorials, shipped
+        if (!manual_dir.empty()) lib.load_dir(manual_dir);  // the rest, when downloaded
     }
+    void reload() {
+        lib = wiki::Library{};
+        loaded = false;
+        searched = "\x01";  // search again
+        load();
+    }
+    // The whole manual was downloaded (a mark the download leaves), not only pages opened one by one.
+    bool has_manual() const {
+        std::error_code ec;
+        return !manual_dir.empty() && std::filesystem::exists(manual_dir + "/.whole-manual", ec);
+    }
+    bool has_kept_pages() const {
+        std::error_code ec;
+        return !manual_dir.empty() && std::filesystem::exists(manual_dir, ec) && !std::filesystem::is_empty(manual_dir, ec);
+    }
+    bool showing_fetch() const { return fetch_show && !fetch_file.empty() && fetch_at == at; }
+
+    // A page by title or file, from a link, the contents or a "?" button: shown here; an online page not here yet is
+    // fetched first (Loading... in the meantime).
+    void show_page(const std::string& target, const std::string& anchor) {
+        const wiki::Page* p = lib.find(target);
+        const wiki::OnlinePage* o = lib.find_online(target);
+        if (p) {
+            go(p->file, anchor);
+            if (o && p->folder == manual_dir && !refreshed.count(o->file)) fetch(o->file, anchor, false);  // up to date
+        } else if (o) {
+            fetch(o->file, anchor, true);
+        }
+    }
+    void fetch(const std::string& file, const std::string& anchor, bool show) {
+        if (!fetches.empty() || (download && download->state == ui::Download::Running)) {  // one at a time: this next
+            if (show) queued = {file, anchor};
+            return;
+        }
+        fetch_file = file, fetch_anchor = anchor, fetch_show = show, fetch_pictures = false, fetch_note.clear();
+        if (show) fetch_at = at;
+        refreshed.insert(file);
+        auto d = manual_dir.empty() ? nullptr
+                                    : host->download_file(std::string(wiki::kOnlineSource) + "/" + file + ".md",
+                                                          manual_dir + "/" + file + ".md");
+        if (!d) fetch_note = "This copy of VATs cannot fetch pages, or has nowhere to keep them.";
+        else fetches.push_back(std::move(d));
+    }
+    // Once a frame: moves a fetch on, and shows the page when it is all here.
+    void poll_fetch() {
+        if (fetches.empty()) return;
+        for (auto& d : fetches)
+            if (d->state == ui::Download::Running) return host->wake(0.2);
+        if (!fetch_pictures) {
+            if (fetches.front()->state == ui::Download::Failed) {
+                const wiki::OnlinePage* o = lib.find_online(fetch_file);
+                fetch_note = (o ? o->title : fetch_file) + " could not be fetched: " + fetches.front()->message + ".";
+                fetches.clear();
+                if (!fetch_show) fetch_file.clear();  // a refresh that failed: the kept copy stays
+                return;
+            }
+            // The page is here: its pictures (images/<file>/<name>, nothing else) that are not, next.
+            fetches.clear();
+            fetch_pictures = true;
+            std::ifstream f(manual_dir + "/" + fetch_file + ".md", std::ios::binary);
+            std::ostringstream ss;
+            ss << f.rdbuf();
+            const wiki::Page page = wiki::parse_page(ss.str(), fetch_file);
+            const std::string prefix = "images/" + fetch_file + "/";
+            std::set<std::string> asked;  // a picture shown twice is fetched once
+            for (const wiki::Block& b : page.blocks) {
+                if (b.kind != wiki::Block::Image || b.image.rfind(prefix, 0) != 0 || !asked.insert(b.image).second) continue;
+                const std::string name = b.image.substr(prefix.size());
+                if (name.empty() || name.find_first_of("/\\") != std::string::npos || name.find("..") != std::string::npos) continue;
+                std::error_code ec;
+                if (std::filesystem::exists(manual_dir + "/" + b.image, ec) && !fetch_show) continue;
+                if (auto d = host->download_file(std::string(wiki::kOnlineSource) + "/" + b.image, manual_dir + "/" + b.image))
+                    fetches.push_back(std::move(d));
+            }
+            if (!fetches.empty()) return host->wake(0.2);
+        }
+        // All here (a picture that failed shows its caption): read the folder again and show the page.
+        fetches.clear();
+        const std::string file = std::exchange(fetch_file, std::string()), anchor = fetch_anchor;
+        const bool show = fetch_show && fetch_at == at;  // not if the reader has gone elsewhere meanwhile
+        reload();
+        free_images();
+        if (show && lib.find(file)) go(file, anchor);
+        if (!queued.first.empty()) {
+            const auto next = std::exchange(queued, {});
+            show_page(next.first, next.second);
+        }
+    }
+    // Where a page that is not here is read: its address in the online manual, "" when it is not there either.
+    std::string online(const std::string& target, const std::string& anchor = {}) const {
+        const wiki::OnlinePage* o = lib.find(target) ? nullptr : lib.find_online(target);
+        return o ? wiki::Library::online_url(*o, anchor) : std::string();
+    }
+    // The history position a fetch to be shown was asked from: the page shows when it arrives only if the reader is
+    // still there, and Loading... or the error shows only there (Back, Contents or another page leave it).
+    int fetch_at = -2;
     void go(const std::string& file, const std::string& anchor) {
         history.resize(size_t(at + 1));
         history.emplace_back(file, anchor);
         at = int(history.size()) - 1;
         scroll = true, pages = false;
     }
-    const wiki::Page* home() const {
-        if (const wiki::Page* p = lib.find("vats")) return p;
+    const wiki::Page* home() const {  // the manual's front page when downloaded, else the tutorials
+        for (const char* p : {"vats", "tutorials"})
+            if (const wiki::Page* page = lib.find(p)) return page;
         return lib.pages().empty() ? nullptr : &lib.pages()[0];
     }
     const wiki::Page* page() const { return at >= 0 ? lib.find(history[size_t(at)].first) : home(); }
@@ -159,7 +272,8 @@ const wiki::Span* draw_spans(HelpUi& ui, const std::vector<wiki::Span>& spans, f
             else if (hov) ImGui::SetTooltip("Opens %s as a new, untitled project", s.target.c_str());
             continue;
         }
-        const bool broken = s.link && !s.external && !s.target.empty() && !ui.lib.find(s.target);
+        const bool web = s.link && !s.external && !s.target.empty() && !ui.lib.find(s.target) && ui.lib.find_online(s.target);
+        const bool broken = s.link && !s.external && !s.target.empty() && !ui.lib.find(s.target) && !web;
         const ImU32 col = s.link ? (broken ? kBroken : ImGui::GetColorU32(ImGuiCol_TextLink))
                         : s.italic ? ImGui::GetColorU32(ImGuiCol_TextDisabled) : text;
         const ImVec2 a(x, y + text_dy), b(x + pc.width, a.y + size);
@@ -173,6 +287,7 @@ const wiki::Span* draw_spans(HelpUi& ui, const std::vector<wiki::Span>& spans, f
                 ui.hovering = &s;
                 ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
                 if (s.external) ImGui::SetTooltip("%s", s.target.c_str());
+                else if (web) ImGui::SetTooltip("In the online manual: fetched and shown here");
                 else if (broken) ImGui::SetTooltip("No help page named \"%s\"", s.target.c_str());
             }
             if (ui.hovered == &s) dl->AddLine(ImVec2(a.x, b.y), b, col);
@@ -253,7 +368,7 @@ const wiki::Span* draw_image(HelpUi& ui, const wiki::Page& page, const wiki::Blo
     auto [it, fresh] = ui.images.try_emplace(b.image);
     HelpUi::Image& im = it->second;
     const bool inside = !b.image.empty() && b.image[0] != '/' && b.image.find("..") == std::string::npos;
-    const std::string path = ui.dir + "/" + b.image;
+    const std::string path = (page.folder.empty() ? ui.dir : page.folder) + "/" + b.image;
     if (fresh && inside) {
         im.gif = b.image.size() > 4 && b.image.compare(b.image.size() - 4, 4, ".gif") == 0;
         if (im.gif) wiki::gif_size(path, im.w, im.h);
@@ -418,8 +533,10 @@ void draw_page(HelpUi& ui, const wiki::Page& page) {
             // Only web pages leave the app, never file: or other schemes.
             if (clicked->target.rfind("https://", 0) == 0 || clicked->target.rfind("http://", 0) == 0)
                 ui.host->open_url(clicked->target);
-        } else if (const wiki::Page* to = clicked->target.empty() ? &page : ui.lib.find(clicked->target)) {
-            ui.go(to->file, clicked->anchor);
+        } else if (clicked->target.empty()) {
+            ui.go(page.file, clicked->anchor);
+        } else {
+            ui.show_page(clicked->target, clicked->anchor);  // here, or fetched (an online page, or a kept one refreshed)
         }
     }
 }
@@ -462,28 +579,71 @@ void draw_help(HelpUi& ui) {
         filter_input("##search", "Search help", ui.query, sizeof ui.query);
         if (ui.searched != ui.query) ui.searched = ui.query, ui.hits = ui.lib.search(ui.query);
         ImGui::BeginChild("list");
+        // The pages that are not here, by title: each opens in the browser.
+        auto web_list = [&](const std::vector<const wiki::OnlinePage*>& pages) {
+            for (const wiki::OnlinePage* o : pages) {
+                ImGui::PushID(o->file.c_str());
+                ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetColorU32(ImGuiCol_TextLink));
+                if (ImGui::Selectable(o->title.c_str())) ui.show_page(o->file, "");
+                ImGui::PopStyleColor();
+                ImGui::SetItemTooltip("Fetched from the online manual when opened (a few KB), then kept");
+                ImGui::PopID();
+            }
+        };
         if (ui.query[0]) {
-            if (ui.hits.empty()) ImGui::TextDisabled("No pages match.");
+            const std::vector<const wiki::OnlinePage*> web = ui.lib.search_online(ui.query);
+            if (ui.hits.empty() && web.empty()) ImGui::TextDisabled("No pages match.");
             for (size_t i = 0; i < ui.hits.size(); ++i) {
                 const wiki::Hit& h = ui.hits[i];
                 ImGui::PushID(int(i));
                 std::string label = h.page->title + (h.heading.empty() ? "" : "  \xE2\x80\xBA  " + h.heading);
-                if (ImGui::Selectable(label.c_str(), page == h.page)) ui.go(h.page->file, h.heading);
+                if (ImGui::Selectable(label.c_str(), page == h.page)) ui.show_page(h.page->file, h.heading);
                 if (!h.snippet.empty()) hint(h.snippet.c_str());
                 ImGui::PopID();
+            }
+            if (!web.empty()) {
+                subheading("Online manual (titles only)");
+                web_list(web);
             }
         } else {
             for (auto& [category, pages] : ui.lib.contents()) {
                 subheading(category.empty() ? "Other" : category.c_str());
                 for (const wiki::Page* p : pages)
-                    if (ImGui::Selectable(p->title.c_str(), page == p)) ui.go(p->file, "");
+                    if (ImGui::Selectable(p->title.c_str(), page == p)) ui.show_page(p->file, "");
+            }
+            if (!ui.lib.online().empty()) {
+                subheading("Online manual");
+                hint("Fetched into VATs as you open them, then kept for offline reading.");
+                if (!ui.download_note.empty()) hint(ui.download_note.c_str());
+                std::vector<const wiki::OnlinePage*> all;
+                for (const wiki::OnlinePage& o : ui.lib.online())
+                    if (!ui.lib.find(o.file)) all.push_back(&o);
+                if (all.empty()) hint("All of it is here.");
+                web_list(all);
             }
         }
         ImGui::EndChild();
     };
     auto page_view = [&] {
         ImGui::BeginChild("page", ImVec2(0, 0), 0, ImGuiWindowFlags_NoSavedSettings);
-        if (page) draw_page(ui, *page);
+        const wiki::OnlinePage* coming = ui.showing_fetch() ? ui.lib.find_online(ui.fetch_file) : nullptr;
+        if (coming) {  // an online page on its way, or that could not come
+            ImGui::PushFont(nullptr, fs * 1.6f);
+            ImGui::TextUnformatted(coming->title.c_str());
+            ImGui::PopFont();
+            if (ui.fetch_note.empty()) {
+                ImGui::TextDisabled("Loading from the online manual...");
+            } else {
+                ImGui::TextWrapped("%s", ui.fetch_note.c_str());
+                if (ImGui::Button("Try Again")) {
+                    const std::string file = coming->file, anchor = ui.fetch_anchor;
+                    ui.refreshed.erase(file), ui.fetch(file, anchor, true);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Open in Browser")) ui.host->open_url(wiki::Library::online_url(*coming, ui.fetch_anchor));
+                ImGui::SetItemTooltip("Only if you want it there: the page opens in your web browser");
+            }
+        } else if (page) draw_page(ui, *page);
         else hint(("No help pages were found in " + ui.dir + ".").c_str());
         // The mouse's back and forward buttons.
         if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
@@ -514,9 +674,75 @@ void draw_help(HelpUi& ui) {
 
 }  // namespace
 
-void App::open_help(const std::string& page, const std::string& anchor) {
-    if (!help_ui_) help_ui_ = std::make_shared<HelpUi>(), help_ui_->dir = host_.paths().help, help_ui_->host = &host_;
+// The downloaded manual's folder: <user>manual, or "" where there is nowhere to keep it.
+static std::string manual_dir_of(const ui::Host& host) { return host.paths().user.empty() ? "" : host.paths().user + "manual"; }
+
+// The address of the manual for offline reading: the newest release's.
+static constexpr const char* kManualDownload =
+    "https://github.com/squeedledorf/viewport-avatar-toolset/releases/latest/download/vats-manual.tar.gz";
+
+HelpUi& App::help() {
+    if (!help_ui_) {
+        help_ui_ = std::make_shared<HelpUi>();
+        help_ui_->dir = host_.paths().help, help_ui_->host = &host_, help_ui_->manual_dir = manual_dir_of(host_);
+        help_ui_->download_manual = [this] { download_manual(); };
+    }
+    return *help_ui_;
+}
+
+void App::download_manual() {
+    HelpUi& ui = help();
+    if (ui.manual_dir.empty()) return status("There is no folder to keep the manual in");
+    if (ui.download && ui.download->state == ui::Download::Running) return;
+    if (!ui.fetches.empty()) return status("A page is still being fetched; try again in a moment");
+    ui.download = host_.download_unpack(kManualDownload, ui.manual_dir);
+    ui.download_note.clear();
+    if (!ui.download) {
+        ui.download_note = "This copy of VATs cannot download; the pages open in your browser instead.";
+        return status(ui.download_note);
+    }
+    status("Downloading the manual...");
+}
+
+bool App::manual_downloaded() {
+    HelpUi& ui = help();
+    ui.load();
+    return ui.has_manual();
+}
+
+bool App::manual_pages_kept() { return help().has_kept_pages(); }
+
+void App::remove_manual() {
+    HelpUi& ui = help();
+    std::error_code ec;
+    if (!ui.manual_dir.empty()) std::filesystem::remove_all(ui.manual_dir, ec);
+    ui.download_note.clear();
+    ui.reload();
+    if (ui.at >= 0 && !ui.lib.find(ui.history[size_t(ui.at)].first)) ui.history.clear(), ui.at = -1;
+    status(ec ? "The downloaded manual could not be removed: " + ec.message() : "Removed the downloaded manual");
+}
+
+// Once a frame: a finished download is read in (or why it failed is said).
+void App::poll_manual_download() {
+    if (help_ui_) help_ui_->poll_fetch();
+    if (!help_ui_ || !help_ui_->download) return;
     HelpUi& ui = *help_ui_;
+    const int state = ui.download->state;
+    if (state == ui::Download::Running) return host_.wake(0.25);
+    if (state == ui::Download::Done) {
+        std::ofstream(ui.manual_dir + "/.whole-manual") << "Help > Download the Manual for Offline Reading\n";
+        ui.refreshed.clear();
+        ui.reload();
+        ui.download_note = "Downloaded: " + std::to_string(ui.lib.pages().size()) + " pages, readable offline.";
+    } else {
+        ui.download_note = "The manual was not downloaded: " + ui.download->message + ".";
+    }
+    status(ui.download_note);
+    ui.download.reset();
+}
+
+void App::open_help(const std::string& page, const std::string& anchor) {
+    HelpUi& ui = help();
     // An example opens as File > Open would, as an untitled copy: Save asks for a new name, so the shipped file
     // is never written.
     ui.open_example = [this](const std::string& file) {
@@ -530,6 +756,13 @@ void App::open_help(const std::string& page, const std::string& anchor) {
         cli_target(host_.paths().help + "/examples/" + file);
     };
     ui.load();
+    // A page of the online manual is shown through show_page: fetched if not here yet, refreshed if kept.
+    if (!page.empty() && ui.lib.find_online(page)) {
+        ui.show_page(page, anchor);
+        ui.open = ui.focus = true;
+        ui.modal = false;
+        return;
+    }
     const wiki::Page* p = page.empty() ? ui.home() : ui.lib.find(page);
     if (!p) p = ui.home();
     if (p && (ui.at < 0 || ui.history[size_t(ui.at)] != std::make_pair(p->file, anchor))) ui.go(p->file, anchor);
@@ -538,6 +771,7 @@ void App::open_help(const std::string& page, const std::string& anchor) {
 }
 
 void App::draw_help_browser() {
+    poll_manual_download();
     if (help_ui_) help_ui_->release_idle_gifs();
     if (!help_ui_ || !help_ui_->open || help_ui_->modal) return;
     HelpUi& ui = *help_ui_;

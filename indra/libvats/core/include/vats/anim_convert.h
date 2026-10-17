@@ -45,6 +45,10 @@ struct AnimExportOptions {
     std::vector<std::string> reset_position_joints;
     // The body whose rest the reset keys hold: a mesh body bake shape's own joints; null = positions' (above).
     const Shape* reset_shape = nullptr;
+    // Spec 08 RS-4: the skeleton's size (resize.h). Non-hip positions (rest, fitted offsets and the move) and the reset
+    // keys are written this many times as far from their parent, as a joint-position body that size holds them; the
+    // hip's offset is written as keyed. shape is the resized bake shape already.
+    double resize = 1;
 };
 
 struct AnimExportResult {

@@ -21,9 +21,11 @@ namespace vats {
 // SP-1: the pose SL plays from a .anim at a time in seconds, as LLKeyframeMotion interpolates it: rotation keys
 // by nlerp, position keys linearly, the first and last key held outside them. Joints without a record stay at
 // rest; records of joints not in the skeleton are ignored. positions: the joint positions the export wrote
-// non-pelvis position keys from (AnimExportOptions::positions), so they come back as the same offsets.
+// non-pelvis position keys from (AnimExportOptions::positions), so they come back as the same offsets; resize: the
+// export's (AnimExportOptions::resize, 08 RS-4), divided back out of them.
 // ponytail: ease in/out and priorities are not applied (they blend with other animations, of which there are none).
-Pose anim_pose(const Skeleton& skel, const AnimFile& f, double seconds, const Shape* positions = nullptr);
+Pose anim_pose(const Skeleton& skel, const AnimFile& f, double seconds, const Shape* positions = nullptr,
+               double resize = 1);
 
 // SP-2: how far SL's playback of a bone departs from the clip's own, in the world (avatar space).
 struct BoneDeviation {
@@ -35,7 +37,7 @@ struct BoneDeviation {
 // evaluation (IK and pins, rig.external included) against anim_pose, both on shape. Worst first: by mm, then degrees.
 // clip must be the clip f was exported from (mirrored when the export was).
 std::vector<BoneDeviation> anim_deviation(const Rig& rig, const Clip& clip, const AnimFile& f, const Shape* shape,
-                                          const Shape* positions = nullptr);
+                                          const Shape* positions = nullptr, double resize = 1);
 
 // UM-1/UM-2: where a .anim's bytes go.
 struct AnimCost {

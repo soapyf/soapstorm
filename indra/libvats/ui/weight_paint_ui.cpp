@@ -451,7 +451,14 @@ void App::end_paint_stroke() {
             if (const DaeModel* m = prop_model(path)) rp.push_back({m, stem_of(path), {}, 0, 1});
         std::string dae, why;
         const std::string file = library_dir() + "paint-preview.dae";
-        if (write_rig_dae(skel_, rp, {}, dae, why) && write_text(file, dae, false, why) && host_.local_mesh_preview(file, why)) {
+        RigExportOptions opt = rig_export_options();
+        for (int pass = 0; pass < 3; ++pass) {  // each fix can bring out the next (joint positions, then the rest pose)
+            bool fixed = false;
+            for (const RigFinding& f : check_rig_export(skel_, rp, opt))  // only what refuses: the preview shows the export
+                if (f.fix_options && f.severity == RigSeverity::Error) f.fix_options(opt), fixed = true;
+            if (!fixed) break;
+        }
+        if (write_rig_dae(skel_, rp, opt, dae, why) && write_text(file, dae, false, why) && host_.local_mesh_preview(file, why)) {
             ui.note += "; shown on your avatar through Local Mesh";
         } else {
             ui.local_mesh = false;

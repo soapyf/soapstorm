@@ -23,6 +23,7 @@
 #include "vats/anim_convert.h"
 #include "vats/bvh.h"
 #include "vats/curve_filter.h"
+#include "vats/wiki.h"
 #include "vats/clips.h"
 #include "vats/deformer.h"
 #include "vats/edit.h"
@@ -164,6 +165,7 @@ void App::shutdown() {
     host_.audio_stop();
     if (!keep_autosave_) clear_autosave();  // a clean exit: whatever was unsaved was discarded on purpose
     free_thumbnails();
+    free_mesh_textures(true);  // the models' textures, while the host's GL context still exists
     help_ui_.reset();  // frees the help's images while the host can still free textures
     reference_ui_.reset();  // and the reference picture's
 }
@@ -504,6 +506,7 @@ AnimExportOptions App::anim_export_options() {
     // Suggest Limits never reach a file.
     opt.constraints = settings_.respect_joint_limits ? doc_.project.body_constraints(current_body_id()) : nullptr;
     opt.positions = export_positions();
+    opt.resize = body_size();  // 08 RS-4
     opt.worn_overrides = host_.joint_overrides();  // the viewer: warns when face positions would pin a mesh head
     if (const Json* v = export_home_settings().find("leave_static"); v && v->is_bool()) opt.leave_out_static_rotations = v->b;  // IO-11b
     if (multi_actor()) opt.external = actor_resolver(doc_.project.active);
@@ -523,7 +526,7 @@ AnimExportOptions App::anim_export_options() {
     if (opt.reset_positions) opt.reset_position_joints = reset_position_joints();
     // Reset keys hold the body's rest: a mesh body bake shape's own joints, which positions (IO-11) leaves null.
     if (bake_shape_key(ex, exporting_yours()).rfind("mesh:", 0) == 0) opt.reset_shape = opt.shape;
-    if (height_shape_) opt.shape = height_shape_, opt.positions = nullptr;  // HV: a height variant bakes on its body
+    if (height_shape_) opt.shape = height_shape_, opt.positions = nullptr, opt.resize = 1;  // HV: a height variant bakes on its body
     return opt;
 }
 
@@ -555,7 +558,7 @@ int App::export_in_memory(AnimExportResult& r, std::vector<std::uint8_t>& bytes)
     const AnimExportOptions opt = anim_export_options();
     // The deformer options change the file, so an unedited import is exported through them too (09 0l).
     if (raw_import_ && !doc_.clip().mirror_export && !height_shape_ && !opt.end_at_rest && !opt.hold_without_sinking &&
-        !opt.reset_positions)
+        !opt.reset_positions && opt.resize == 1)  // 08 RS-4: a resized skeleton rewrites the positions
         if (const AnimFile* same = raw_reexport(*raw_import_, doc_.clip())) {
             r.file = *same;
             bytes = write_anim(*same);
@@ -570,7 +573,8 @@ int App::export_in_memory(AnimExportResult& r, std::vector<std::uint8_t>& bytes)
 // when it does not, or the file has no position-keyed bone to put back.
 std::vector<std::uint8_t> App::undeformer_bytes(const AnimExportResult& r) {
     if (!export_flag(doc_.clip().export_settings, "undeformer")) return {};
-    const AnimFile u = make_undeformer(skel_, r.file, anim_export_options().positions);
+    const AnimExportOptions opt = anim_export_options();
+    const AnimFile u = make_undeformer(skel_, r.file, opt.positions, opt.resize);
     return u.joints.empty() ? std::vector<std::uint8_t>{} : write_anim(u);
 }
 
@@ -684,6 +688,7 @@ bool App::export_bvh(const std::string& path, bool all_bones) {
     opt.joint_positions = positions && positions->is_bool() && positions->b;
     opt.shape = export_shape();
     opt.positions = export_positions();
+    opt.resize = body_size();  // 08 RS-4
     if (multi_actor()) opt.external = actor_resolver(doc_.project.active);
     Clip clip = doc_.clip().mirror_export ? mirrored_clip(skel_, doc_.clip()) : doc_.clip();
     auto r = vats::export_bvh(skel_, clip, opt);
@@ -1127,9 +1132,11 @@ void App::build_actions() {
     add("frame_all", {"Frame All", ImGuiKey_A, 0, false,
                       [this] {
                           if (keys_hovered()) return (void)with_graph([&](GraphContext& g) { graph_.frame_all(g); });
-                          cam_glide_.apply_input(camera_, [](Camera& c) {
-                              c.target = {0, 0, 1.0};
-                              c.distance = Camera::kDefaultDistance;
+                          // 08 RS: a resized body is framed the same way (not your worn avatar, which keeps its size)
+                          const double s = host_.world_view() && !host_can_resize_ && worn_shape() && !editing_other() ? 1 : body_size();
+                          cam_glide_.apply_input(camera_, [s](Camera& c) {
+                              c.target = {0, 0, 1.0 * s};
+                              c.distance = Camera::kDefaultDistance * s;
                           });
                       },
                       {}});
@@ -1363,6 +1370,9 @@ void App::build_actions() {
                       }});
     // RT-9 and 08 FC on the current clip (footlock_ui.cpp).
     add("foot_lock", {"Clean Up Foot Sliding...", 0, 0, false, [this] { show_foot_lock_ = true; }, {}});
+    add("hands_out", {"Push Hands Out of the Body...", 0, 0, false, [this] { show_hands_out_ = true; },
+                      [this]() -> const char* { return mesh_body() ? nullptr : "Show a mesh body first (View > Body)"; }});
+    add("resize_skeleton", {"Resize Skeleton...", 0, 0, false, [this] { show_resize_ = true; }, {}});  // 08 RS-6
     add("follow_target", {"Follow Target (Bake)...", 0, 0, false, [this] { show_follow_ = true; },
                           [this]() -> const char* {
                               return selection_.size() == 2 ? nullptr
@@ -1373,6 +1383,13 @@ void App::build_actions() {
     add("prefs", {"Preferences...", ctrl | ImGuiKey_Comma, 0, false, [this] { show_prefs_ = !show_prefs_; }, {}});
     add("help_contents", {"Help Contents", ImGuiKey_F1, 0, false, [this] { open_help(); }, {}});
     add("tutorials", {"Tutorials", 0, 0, false, [this] { open_help("tutorials"); }, {}});
+    add("online_manual", {"Online Manual", 0, 0, false, [this] { host_.open_url(wiki::kOnlineManual); }, {}});
+    add("download_manual", {"Download the Manual for Offline Reading", 0, 0, false, [this] { download_manual(); },
+                            [this]() -> const char* {
+                                return manual_downloaded() ? "Downloaded already: Help > Help Contents shows it" : nullptr;
+                            }});
+    add("remove_manual", {"Remove the Downloaded Manual", 0, 0, false, [this] { remove_manual(); },
+                          [this]() -> const char* { return manual_pages_kept() ? nullptr : "No pages are kept"; }});
     add("help", {"Controls", 0, 0, false, [this] { show_help_ = !show_help_; }, {}});
     add("welcome", {"Welcome", 0, 0, false, [this] { show_welcome_ = true; }, {}});
     add("zoom_in", {"Zoom In", 0, 0, true, [this] { cam_glide_.apply_input(camera_, [](Camera& c) { c.zoom(0.85); }); }, {}});
@@ -1837,6 +1854,10 @@ void App::draw_menus() {
                 ImGui::TextDisabled("Import a mesh body in Inventory > Bodies");
             }
             draw_body_parts_menu();  // the shown body's clothes and other parts, on and off
+            ImGui::Separator();
+            menu_item("resize_skeleton");
+            ImGui::SetItemTooltip("Makes the whole skeleton bigger or smaller, the body with it, and scales the keys to fit "
+                                  "if you like (the Scale tool scales props only)");
             if (host_.world_view()) {  // spec 09 build 34
                 ImGui::Separator();
                 if (menu_item_icon(nullptr, "Keep in Real-Avatar Modes", nullptr, settings_.viewer_keep_swap)) {
@@ -1884,7 +1905,7 @@ void App::draw_menus() {
                               "posing. Set them in the Rig menu.");
         ImGui::Separator();
         for (const char* id : {"ik_toggle", "follow_target", "pin_world", "bind_to", "pin_bone", "unpin", "delete_pin", "sit_on_seat",
-                               "foot_lock"})
+                               "foot_lock", "hands_out"})
             menu_item(id);
         if (begin_menu_icon(icon::kLoop, "Loop Tools")) {
             draw_loop_tools_menu();
@@ -1967,7 +1988,10 @@ void App::draw_menus() {
         }
     }
     if (begin_top_menu("Help")) {
-        for (const char* id : {"find_tool", "help_contents", "tutorials", "help", "welcome", "about"}) menu_item(id);
+        for (const char* id : {"find_tool", "help_contents", "tutorials", "online_manual"}) menu_item(id);
+        for (const char* id : {"download_manual", "remove_manual"}) menu_item(id);
+        ImGui::Separator();
+        for (const char* id : {"help", "welcome", "about"}) menu_item(id);
         ImGui::EndMenu();
     }
     draw_workspace_tabs();
@@ -2281,6 +2305,8 @@ bool App::frame() {
     draw_face_panel();
     draw_loop_assist_window();
     draw_foot_lock_window();
+    draw_hands_out_window();
+    draw_resize_window();
     draw_actors_panel();
     draw_clips_panel();
     draw_mocap_panel();  // every frame: it polls the socket while listening
@@ -2416,6 +2442,7 @@ void App::evaluate() {
     rig_->external = multi_actor() ? actor_resolver(doc_.project.active) : ExternalTarget{};
     evaluated_frame_ = frame_;
     invalidate_floor_cache();
+    if (host_.world_view()) update_avatar_resize();  // 08 RS-7: before posing on the worn shape it decides
     Evaluation e = [&] { VATS_PROFILE("eval rig"); return vats::evaluate(*rig_, doc_.clip(), frame_, shape(), constraints()); }();
     VATS_PROFILE("eval previews");
     apply_ragdoll_preview(e);

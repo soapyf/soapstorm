@@ -8,7 +8,9 @@
 #include <fstream>
 #include <functional>
 #include <iterator>
+#include <set>
 #include <sstream>
+#include <string_view>
 
 #include "app.h"
 #include "profile.h"
@@ -126,6 +128,80 @@ void App::import_prop(const std::string& path, bool as_prop) {
     message("Imported " + p.name, text);
 }
 
+// Each material's picture as a cache key: its file, or a hash of the bytes the model packs (hashed once per model).
+const std::vector<std::string>& App::texture_keys(const DaeModel& m) {
+    MaterialKeys& mk = material_keys_[&m];
+    std::size_t from = m.materials.size();  // cheap, every frame: no strings copied
+    for (const DaeMaterial& mat : m.materials)
+        from = from * 1000003u ^ std::hash<std::string>{}(mat.texture) ^ (mat.image.size() * 31u);
+    if (mk.made_from != from || mk.keys.size() != m.materials.size()) {  // a new model (or one at a freed one's address)
+        mk.made_from = from;
+        mk.keys.clear();
+        for (const DaeMaterial& mat : m.materials) {
+            std::error_code ec;  // a file's key carries its time, so a picture edited and imported again is read again
+            const auto when = mat.texture.empty() ? std::filesystem::file_time_type{}
+                                                  : std::filesystem::last_write_time(mat.texture, ec);
+            if (!mat.texture.empty())
+                mk.keys.push_back("file:" + mat.texture + "@" + std::to_string(when.time_since_epoch().count()));
+            else if (!mat.image.empty())
+                mk.keys.push_back("bytes:" + std::to_string(mat.image.size()) + ":" +
+                                  std::to_string(std::hash<std::string_view>{}(std::string_view(
+                                      reinterpret_cast<const char*>(mat.image.data()), mat.image.size()))));
+            else mk.keys.emplace_back();
+        }
+    }
+    return mk.keys;
+}
+
+// A material's texture: made once per picture (read at most 2048 pixels a side), id 0 when it has none, it cannot be
+// read or the host cannot texture. Alpha as the material says: BLEND, MASK (its cut-off) or opaque.
+SurfaceTexture App::mesh_texture(const DaeModel& m, int material) {
+    SurfaceTexture st;
+    if (material < 0 || material >= int(m.materials.size())) return st;
+    const std::string& key = texture_keys(m)[size_t(material)];
+    if (key.empty()) return st;
+    auto [it, fresh] = mesh_textures_.try_emplace(key, ImTextureID{});
+    if (fresh) {
+        const DaeMaterial& mat = m.materials[size_t(material)];
+        Picture pic;
+        const bool ok = !mat.image.empty() ? read_picture(mat.image.data(), mat.image.size(), pic, 2048)
+                                           : read_picture_file(mat.texture, pic, 2048);
+        if (ok) it->second = host_.make_mesh_texture(pic.rgba.data(), pic.width, pic.height);
+    }
+    const DaeMaterial& mat = m.materials[size_t(material)];
+    st.id = it->second;
+    st.alpha = mat.alpha_cutoff >= 0 ? SurfaceTexture::Alpha::Mask
+               : mat.blend          ? SurfaceTexture::Alpha::Blend
+                                    : SurfaceTexture::Alpha::Opaque;
+    st.cut = mat.alpha_cutoff >= 0 ? mat.alpha_cutoff : 0.5f;
+    return st;
+}
+
+// Textures no shown model uses any more are freed; all: every one (the App shutting down).
+void App::free_mesh_textures(bool all) {
+    std::set<std::string> live;
+    if (!all) {
+        std::set<const DaeModel*> shown;
+        for (auto& [path, model] : prop_models_)
+            if (model) {
+                shown.insert(model.get());
+                for (const std::string& k : texture_keys(*model)) live.insert(k);
+            }
+        for (auto it = material_keys_.begin(); it != material_keys_.end();)  // dropped models' entries go too
+            it = shown.count(it->first) ? std::next(it) : material_keys_.erase(it);
+    } else {
+        material_keys_.clear();
+    }
+    for (auto it = mesh_textures_.begin(); it != mesh_textures_.end();) {
+        if (live.count(it->first)) {
+            ++it;
+            continue;
+        }
+        if (it->second) host_.free_texture(it->second);
+        it = mesh_textures_.erase(it);
+    }
+}
+
 void App::draw_props(std::vector<Vertex>& verts, std::vector<std::uint32_t>& indices) {
     for (const Prop& p : doc_.clip().props)
         if (p.visible) draw_prop(p, verts, indices);
@@ -134,6 +210,10 @@ void App::draw_props(std::vector<Vertex>& verts, std::vector<std::uint32_t>& ind
 void App::draw_prop(const Prop& p, std::vector<Vertex>& verts, std::vector<std::uint32_t>& indices,
                     const std::vector<Xform>* globals, const Shape* shape_override, float dim, const Xform& world,
                     const float* tint, const std::vector<float>* heat) {
+    if (const int frame = ImGui::GetFrameCount(); frame != textures_pruned_) {  // once a frame: unused textures go
+        textures_pruned_ = frame;
+        free_mesh_textures(false);
+    }
     const DaeModel* m = prop_model(p.path);
     if (!m) return;
     verts.clear();
@@ -154,31 +234,58 @@ void App::draw_prop(const Prop& p, std::vector<Vertex>& verts, std::vector<std::
     indices.reserve(m->indices.size());
     {
     VATS_PROFILE("prop vertices");
+    // Textured materials go in batches of their own (one draw each, with their texture), and the weight glow lies
+    // over them as a see-through layer; plain materials take the glow into their colour. A tint draws plain.
+    // Material colours already turn white where there is a texture.
+    for (auto& [tex, b] : tex_batches_) b.verts.clear(), b.indices.clear();
+    glow_.verts.clear(), glow_.indices.clear();
+    late_.verts.clear(), late_.indices.clear();
+    const bool textured = !tint;
     for (const DaeGroup& g : m->groups) {
         const DaeMaterial& mat = m->materials[g.material];
+        const SurfaceTexture st = textured ? mesh_texture(*m, g.material) : SurfaceTexture{};
+        TexBatch* tb = st.id ? &tex_batches_[st] : nullptr;
+        TexBatch* late = !tb && !tint && mat.blend ? &late_ : nullptr;  // after the textured surfaces it may cover
+        std::vector<Vertex>& out = tb ? tb->verts : late ? late->verts : verts;
+        const std::uint32_t base = std::uint32_t(out.size()), glow_base = std::uint32_t(glow_.verts.size());
         for (std::uint32_t v = g.first_vertex; v < g.first_vertex + g.vertex_count; ++v) {
             Vec3 x{(*pos)[v * 3], (*pos)[v * 3 + 1], (*pos)[v * 3 + 2]}, n{(*nrm)[v * 3], (*nrm)[v * 3 + 1], (*nrm)[v * 3 + 2]};
             if (!p.rigged) {  // re-centred on the bounding box, scaled, then placed (VP-81)
                 x = frame.apply(prop_local(p, *m, x));
                 n = frame.rot.rotate(Vec3{n.x / p.scale.x, n.y / p.scale.y, n.z / p.scale.z}).normalized();
             }
+            const float u = m->uvs.size() >= (v + 1) * 2 ? m->uvs[v * 2] : 0.f;
+            const float w = m->uvs.size() >= (v + 1) * 2 ? m->uvs[v * 2 + 1] : 0.f;
             if (tint)
-                verts.push_back({{float(x.x), float(x.y), float(x.z)}, {float(n.x), float(n.y), float(n.z)},
-                                 {tint[0], tint[1], tint[2], tint[3]}});
+                out.push_back({{float(x.x), float(x.y), float(x.z)}, {float(n.x), float(n.y), float(n.z)},
+                               {tint[0], tint[1], tint[2], tint[3]}, {u, w}});
             else {
                 float c[3] = {mat.rgba[0] * dim, mat.rgba[1] * dim, mat.rgba[2] * dim};
-                if (heat && heat->size() >= (v + 1) * 4)
+                const bool glows = heat && heat->size() >= (v + 1) * 4;
+                if (glows && !tb)
                     for (int k = 0; k < 3; ++k) c[k] += ((*heat)[v * 4 + k] - c[k]) * (*heat)[v * 4 + 3];
-                verts.push_back({{float(x.x), float(x.y), float(x.z)}, {float(n.x), float(n.y), float(n.z)},
-                                 {c[0], c[1], c[2], mat.blend ? mat.rgba[3] : 1.f}});
+                if (glows && tb)
+                    glow_.verts.push_back({{float(x.x), float(x.y), float(x.z)}, {float(n.x), float(n.y), float(n.z)},
+                                           {(*heat)[v * 4], (*heat)[v * 4 + 1], (*heat)[v * 4 + 2], (*heat)[v * 4 + 3]}});
+                out.push_back({{float(x.x), float(x.y), float(x.z)}, {float(n.x), float(n.y), float(n.z)},
+                               {c[0], c[1], c[2], mat.blend ? mat.rgba[3] : 1.f}, {u, w}});
             }
         }
-        indices.insert(indices.end(), m->indices.begin() + g.first_index,
-                       m->indices.begin() + g.first_index + g.index_count);
+        std::vector<std::uint32_t>& idx = tb ? tb->indices : late ? late->indices : indices;
+        const bool glow_whole = glow_.verts.size() == size_t(glow_base) + g.vertex_count;
+        if (!glow_whole) glow_.verts.resize(glow_base);  // a heat map that does not cover the group: none on it
+        for (std::uint32_t i = g.first_index; i < g.first_index + g.index_count; ++i) {
+            idx.push_back(m->indices[i] - g.first_vertex + base);  // the group's vertices sit at base in its batch
+            if (glow_whole && glow_.verts.size() > glow_base) glow_.indices.push_back(m->indices[i] - g.first_vertex + glow_base);
+        }
     }
     }
     VATS_PROFILE("prop submit");
     scene_triangles(verts, indices, true, 0.15f, tint != nullptr);  // gathered by the Picker's render
+    for (auto& [tex, b] : tex_batches_)
+        if (!b.indices.empty()) scene_triangles(b.verts, b.indices, true, 0.15f, false, &tex);
+    if (!late_.indices.empty()) scene_triangles(late_.verts, late_.indices, true, 0.15f);
+    if (!glow_.indices.empty()) scene_triangles(glow_.verts, glow_.indices, true, 0.f, true);  // over the textures
 }
 
 // The nearest static prop under the cursor: the ray against each mesh's box in prop space (VP-22).

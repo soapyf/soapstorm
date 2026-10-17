@@ -115,7 +115,7 @@ BvhExportResult export_bvh(const Skeleton& skel, const Clip& clip, const BvhExpo
     std::function<void(int, int)> write = [&](int i, int depth) {
         std::string ind(depth, '\t');
         s += ind + (i == 0 ? "ROOT " : "JOINT ") + skel[i].name + "\n" + ind + "{\n";
-        Vec3 off = sl_to_bvh(skel[i].pos) * kInchesPerMetre;
+        Vec3 off = sl_to_bvh(skel[i].pos) * (kInchesPerMetre * opt.resize);
         appendf(s, (ind + "\tOFFSET %.6f %.6f %.6f\n").c_str(), off.x, off.y, off.z);
         s += ind + (six(i) ? "\tCHANNELS 6 Xposition Yposition Zposition Zrotation Xrotation Yrotation\n"
                            : "\tCHANNELS 3 Zrotation Xrotation Yrotation\n");
@@ -127,7 +127,7 @@ BvhExportResult export_bvh(const Skeleton& skel, const Clip& clip, const BvhExpo
                 write(c, depth + 1);
             }
         if (leaf) {
-            Vec3 e = sl_to_bvh(skel[i].end) * kInchesPerMetre;
+            Vec3 e = sl_to_bvh(skel[i].end) * (kInchesPerMetre * opt.resize);
             s += ind + "\tEnd Site\n" + ind + "\t{\n";
             appendf(s, (ind + "\t\tOFFSET %.6f %.6f %.6f\n").c_str(), e.x, e.y, e.z);
             s += ind + "\t}\n";
@@ -149,7 +149,8 @@ BvhExportResult export_bvh(const Skeleton& skel, const Clip& clip, const BvhExpo
             if (six(i)) {
                 Vec3 base = skel[i].pos;
                 if (i != 0 && opt.positions && i < int(opt.positions->offset.size())) base += opt.positions->offset[i];
-                Vec3 p = sl_to_bvh(base + pose.offset[i]) * kInchesPerMetre;
+                const Vec3 at = i == 0 ? base * opt.resize + pose.offset[i] : (base + pose.offset[i]) * opt.resize;
+                Vec3 p = sl_to_bvh(at) * kInchesPerMetre;
                 appendf(line, "%.6f %.6f %.6f ", p.x, p.y, p.z);
             }
             Vec3 r = decompose_zxy(sl_to_bvh(pose.rot[i]));

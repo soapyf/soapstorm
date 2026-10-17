@@ -53,7 +53,8 @@ constexpr std::pair<const char*, const char*> kGroups[] = {{"Eyes", "eye"},  {"B
 // scale, so keys made by one read back in another.
 double App::face_move_scale() const {
     const Shape* worn = export_positions();
-    return vats::face_scale(skel_, worn ? worn : export_shape());
+    // Before the skeleton's size (08 RS): face moves already grow with their resized parents.
+    return vats::face_scale(skel_, worn ? worn : export_shape_base());
 }
 
 std::string App::face_heads_dir() const {

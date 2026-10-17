@@ -100,6 +100,7 @@ void App::run_check() {
     AnimExportOptions opt;  // as anim_bytes builds them; the clip's own reduce and leave_static are read by lint_clip
     opt.shape = export_shape();
     opt.positions = export_positions();
+    opt.resize = body_size();  // 08 RS-4
     opt.worn_overrides = host_.joint_overrides();
     if (multi_actor()) opt.external = actor_resolver(doc_.project.active);
     ui.ao_state = active_ao_state();
@@ -125,7 +126,7 @@ void App::run_check() {
             other_clips.push_back(&active_actor_clip(k));
         }
     }
-    ui.findings = lint_clip(skel_, clip, opt, settings_.check_off, mesh_body() ? view_body_shape() : nullptr, ui.ao_state,
+    ui.findings = lint_clip(skel_, clip, opt, settings_.check_off, mesh_body() ? resized(view_body_shape(), body_size()) : nullptr, ui.ao_state,
                             partners, other_clips);
 }
 

@@ -91,7 +91,7 @@ void App::draw_batch_retarget() {
 
     ImGui::BeginDisabled(ui.folder.empty());
     if (primary_button("Retarget All", "", 0, icon::kBatch) || std::exchange(ui.run, false)) guarded(ui.folder, [&] {
-        ui.opt.retarget.shape = ui.opt.fit.shape = export_shape();
+        ui.opt.retarget.shape = ui.opt.fit.shape = export_shape_base();  // the files are written at 100% (08 RS)
         // ponytail: runs on the UI thread, one file after another; a worker and a progress bar when folders get big.
         ui.report = batch_retarget(skel_, *rig_, ui.folder, ui.opt, [](const std::string& path, const std::string& data, std::string& why) {
             return write_text(path, data, true, why);

@@ -64,11 +64,12 @@ const Shape* App::actor_shape(int i) const {
     if (p.actors.size() < 2) return shape();
     if (const Shape* worn = worn_shape(); worn && i == 0) return worn;  // the viewer: your actor is the worn avatar
     const std::string b = actor_body_key(i);
+    const double s = actor_size(i);  // 08 RS-3: each actor at its own clip's size
     for (int k = 0; k < kBodyCount; ++k)
-        if (b == kBodyIds[k]) return mesh_.shape(Body(k));
+        if (b == kBodyIds[k]) return resized(mesh_.shape(Body(k)), s);
     if (b.rfind("mesh:", 0) == 0)  // BD-3: the body's own joints over the view's Linden shape
-        if (const MeshBody* mb = find_mesh_body(b.substr(5))) return mesh_body_shape(*mb, mesh_.shape(body_));
-    return view_body_shape();
+        if (const MeshBody* mb = find_mesh_body(b.substr(5))) return resized(mesh_body_shape(*mb, mesh_.shape(body_)), s);
+    return resized(view_body_shape(), s);
 }
 
 ExternalTarget App::actor_resolver(int self) {

@@ -32,7 +32,7 @@ constexpr ToolWindow kWindows[] = {
     {"Motion Capture", "mocap"},         {"Face", "face"},                       {"Face Cam", "face-cam"},
     {"Hand Poser", "hands"},             {"Dynamics", "dynamics"},               {"Ragdoll", "ragdoll"},
     {"Idle Layer", "idle"},              {"Overlap", "overlap"},                 {"Auto-Balance", "auto-balance"},
-    {"Jump Arc", "jump-arc"},            {"Clean Up Foot Sliding", "foot-lock"},             {"Loop Assist", "loop-assist"},
+    {"Jump Arc", "jump-arc"},            {"Clean Up Foot Sliding", "foot-lock"}, {"Push Hands Out of the Body", "hands-out"},             {"Loop Assist", "loop-assist"},
     {"Make Transition", "transition"},   {"Simplify Curves", "simplify"},        {"Reference", "reference"},
     {"Actors (Couples and Groups)", "actors"}, {"Clips (AO Sets)", "clips"},     {"Split Dance at Beats", "split-dance"},
     {"Priority Planner", "planner"},     {"Batch Retarget", "batch-retarget"},   {"Animation Check", "check"},

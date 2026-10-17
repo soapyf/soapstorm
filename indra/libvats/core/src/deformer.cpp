@@ -10,6 +10,7 @@
 #include "vats/dynamics.h"
 #include "vats/edit.h"
 #include "vats/position_reset.h"
+#include "vats/resize.h"
 
 namespace vats {
 namespace {
@@ -91,6 +92,10 @@ HoldResult hold_without_sinking(Clip& clip, const Skeleton& skel, const Shape* s
     return r;
 }
 
+Shape sized_deformer_body(const Skeleton& skel, const AnimExportOptions& opt) {
+    return resized_shape(skel, deformer_body(opt), opt.positions ? opt.resize : 1);
+}
+
 Clip with_deformer_options(const Skeleton& skel, const Clip& clip, const AnimExportOptions& opt,
                            std::vector<std::string>* notes) {
     Clip c = clip;
@@ -101,7 +106,8 @@ Clip with_deformer_options(const Skeleton& skel, const Clip& clip, const AnimExp
         note("End at rest: this animation loops, so it stops wherever it is when it is stopped and the bones keep those "
              "positions; the rest key plays only if it runs to its last frame. Export an undeformer to put them back");
     if (opt.hold_without_sinking) {
-        const HoldResult h = hold_without_sinking(c, skel, deformer_body(opt));
+        const Shape body = sized_deformer_body(skel, opt);
+        const HoldResult h = hold_without_sinking(c, skel, deformer_body(opt) ? &body : nullptr);  // null: head scale assumed
         if (!h.refused.empty()) note("Hold without sinking: nothing done: " + h.refused);
         if (!h.short_frames.empty()) {
             char buf[300];
@@ -115,7 +121,7 @@ Clip with_deformer_options(const Skeleton& skel, const Clip& clip, const AnimExp
     return c;
 }
 
-AnimFile make_undeformer(const Skeleton& skel, const AnimFile& d, const Shape* positions) {
+AnimFile make_undeformer(const Skeleton& skel, const AnimFile& d, const Shape* positions, double resize) {
     AnimFile u;
     u.base_priority = d.base_priority;
     u.duration = kUndeformSeconds;
@@ -125,7 +131,7 @@ AnimFile make_undeformer(const Skeleton& skel, const AnimFile& d, const Shape* p
         if (j.pos.empty() && j.pos_legacy.empty()) continue;
         const int n = skel.find_viewer(j.name);
         if (n <= 0) continue;  // the hip (pelvis_fix takes it back), or a joint this skeleton does not know
-        u.joints.push_back(make_rest_joint(skel, j.name, j.priority, positions));
+        u.joints.push_back(make_rest_joint(skel, j.name, j.priority, positions, resize));
     }
     return u;
 }

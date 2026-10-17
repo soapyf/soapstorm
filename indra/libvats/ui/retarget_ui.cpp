@@ -280,7 +280,7 @@ void App::draw_retarget_dialog() {
 
     ImGui::BeginDisabled(!usable);
     if (primary_button(ui.imported ? "Import Again" : "Import", "", 0, icon::kImport)) guarded(ui.path, [&] {
-        ui.opt.shape = ui.fit.shape = export_shape();
+        ui.opt.shape = ui.fit.shape = export_shape_base();  // the new document is at 100% (08 RS)
         RetargetResult r = retarget(skel_, ui.src, ui.map, ui.opt);
         if (ui.lock_feet) {
             FootLockOptions fl;
