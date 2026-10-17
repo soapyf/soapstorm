@@ -20,8 +20,8 @@
  save_visibility="true"
  save_dock_state="false"
  single_instance="true"
- width="165"
- min_width="165">
+ width="168"
+ min_width="168">
     <floater.string
      name="rotate_tooltip">
         Rotate Camera Around Focus
@@ -395,7 +395,7 @@ free_mode_title
      left_pad="4"
      top="0"
      name="buttons"
-     width="58">
+     width="78">
         <panel_camera_item
           name="object_view"
           tool_tip="Object view"
@@ -498,6 +498,41 @@ free_mode_title
             <panel_camera_item.text
             width="0"
             name="reset_view_text">
+            ""
+            </panel_camera_item.text>
+        </panel_camera_item>
+        <panel_camera_item
+          name="ortho_view"
+          tool_tip="Toggle Orthographic View (Blender style, returns to 3D on camera movement)"
+          width="18"
+          height="18"
+          layout="topleft"
+          left_delta="20"
+          top_delta="0">
+            <panel_camera_item.mousedown_callback
+            function="CameraPresets.ChangeView"
+            parameter="ortho_view" />
+            <panel_camera_item.icon_over
+            top="18"
+            height="18"
+            width="18" />
+            <panel_camera_item.icon_selected
+            top="18"
+            height="18"
+            width="18" />
+            <panel_camera_item.picture
+            top="18"
+            height="18"
+            width="18"
+            image_name="Cam_Ortho_Off" />
+            <panel_camera_item.selected_picture
+            top="18"
+            height="18"
+            width="18"
+            image_name="Cam_Ortho_On" />
+            <panel_camera_item.text
+            width="0"
+            name="ortho_view_text">
             ""
             </panel_camera_item.text>
         </panel_camera_item>

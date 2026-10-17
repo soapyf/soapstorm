@@ -49,6 +49,7 @@
 #include "llviewerwindow.h"
 #include "llvoavatarself.h"
 #include "llfloatercamera.h"
+#include "llviewercamera.h"
 #include "llinitparam.h"
 #include "llselectmgr.h"
 #include "llfloaterwebcontent.h"
@@ -617,6 +618,15 @@ bool camera_roll_right( EKeystate s )
 }
 // </FS:Chanayane>
 
+bool camera_toggle_ortho( EKeystate s )
+{
+    if (KEYSTATE_DOWN == s)
+    {
+        LLViewerCamera::getInstance()->toggleOrtho();
+    }
+    return true;
+}
+
 bool camera_move_forward_fast( EKeystate s )
 {
     if( KEYSTATE_UP == s  ) return true;
@@ -1111,6 +1121,7 @@ REGISTER_KEYBOARD_ACTION("pan_out", camera_pan_out);
 REGISTER_KEYBOARD_ACTION("roll_left", camera_roll_left);
 REGISTER_KEYBOARD_ACTION("roll_right", camera_roll_right);
 // </FS:Chanayane>
+REGISTER_KEYBOARD_ACTION("toggle_ortho", camera_toggle_ortho);
 REGISTER_KEYBOARD_ACTION("move_forward_fast", camera_move_forward_fast);
 REGISTER_KEYBOARD_ACTION("move_backward_fast", camera_move_backward_fast);
 REGISTER_KEYBOARD_ACTION("edit_avatar_spin_ccw", edit_avatar_spin_ccw);

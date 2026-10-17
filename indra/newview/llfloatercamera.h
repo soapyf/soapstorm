@@ -61,6 +61,9 @@ public:
     /** resets current camera mode to orbit mode */
     static void resetCameraMode();
 
+    /** Updates selection state of all camera floater items across instances */
+    static void updateAllItemsSelection();
+
     /** Called when Avatar is entered/exited editing appearance mode */
     static void onAvatarEditingAppearance(bool editing);
 

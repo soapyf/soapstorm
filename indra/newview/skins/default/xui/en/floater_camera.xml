@@ -43,7 +43,7 @@
       layout="topleft"
       left="2"
       name="buttons_panel"
-      width="140"
+      width="160"
       top_pad="-5">
     <panel_camera_item
         name="front_view"
@@ -121,6 +121,17 @@
           parameter="reset_view" />
       <panel_camera_item.picture image_name="Refresh_Off" />
       <panel_camera_item.selected_picture image_name="Refresh_Over" />
+    </panel_camera_item>
+    <panel_camera_item
+        name="ortho_view"
+        tool_tip="Toggle Orthographic View (Blender style, returns to 3D on camera movement)"
+        width="18"
+        left_pad="2">
+      <panel_camera_item.mousedown_callback
+          function="CameraPresets.ChangeView"
+          parameter="ortho_view" />
+      <panel_camera_item.picture image_name="Cam_Ortho_Off" />
+      <panel_camera_item.selected_picture image_name="Cam_Ortho_On" />
     </panel_camera_item>
   </panel>
   <panel

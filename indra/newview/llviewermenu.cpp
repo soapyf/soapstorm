@@ -56,6 +56,7 @@
 #include "llagentui.h"
 #include "llagentwearables.h"
 #include "llagentpilot.h"
+#include "llviewercamera.h"
 // [SL:KB] - Patch: Appearance-PhantomAttach | Checked: Catznip-5.0
 #include "llattachmentsmgr.h"
 // [/SL:KB]
@@ -6150,6 +6151,23 @@ class LLViewResetCameraAngles : public view_listener_t
     }
 };
 // </FS:Zi>
+
+class LLViewToggleOrthoView : public view_listener_t
+{
+    bool handleEvent(const LLSD& userdata) override
+    {
+        LLViewerCamera::getInstance()->toggleOrtho();
+        return true;
+    }
+};
+
+class LLViewCheckOrthoView : public view_listener_t
+{
+    bool handleEvent(const LLSD& userdata) override
+    {
+        return LLViewerCamera::getInstance()->getOrtho();
+    }
+};
 
 // Note: extra parameters allow this function to be called from dialog.
 void reset_view_final(bool proceed)
@@ -13133,6 +13151,8 @@ void initialize_menus()
     view_listener_t::addMenu(new LLViewMouselook(), "View.Mouselook");
     view_listener_t::addMenu(new LLViewJoystickFlycam(), "View.JoystickFlycam");
     view_listener_t::addMenu(new LLViewResetView(), "View.ResetView");
+    view_listener_t::addMenu(new LLViewToggleOrthoView(), "View.ToggleOrthoView");
+    view_listener_t::addMenu(new LLViewCheckOrthoView(), "View.CheckOrthoView");
     view_listener_t::addMenu(new LLViewLookAtLastChatter(), "View.LookAtLastChatter");
     view_listener_t::addMenu(new LLViewShowHoverTips(), "View.ShowHoverTips");
     view_listener_t::addMenu(new LLViewHighlightTransparent(), "View.HighlightTransparent");

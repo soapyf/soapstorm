@@ -784,6 +784,33 @@ void LLFloaterCamera::updateItemsSelection()
     getChild<LLPanelCameraItem>("mouselook_view")->setValue(argument);
     argument["selected"] = mCurrMode == CAMERA_CTRL_MODE_FREE_CAMERA;
     getChild<LLPanelCameraItem>("object_view")->setValue(argument);
+
+    LLPanelCameraItem* ortho_item = findChild<LLPanelCameraItem>("ortho_view");
+    if (ortho_item)
+    {
+        argument["selected"] = LLViewerCamera::getInstance()->getOrtho();
+        ortho_item->setValue(argument);
+    }
+}
+
+// static
+void LLFloaterCamera::updateAllItemsSelection()
+{
+    LLFloaterCamera* camera_floater = LLFloaterCamera::findInstance();
+    if (camera_floater)
+    {
+        camera_floater->updateItemsSelection();
+    }
+    camera_floater = LLFloaterCamera::findPhototoolsInstance();
+    if (camera_floater)
+    {
+        camera_floater->updateItemsSelection();
+    }
+    camera_floater = LLFloaterCamera::findSmallInstance();
+    if (camera_floater)
+    {
+        camera_floater->updateItemsSelection();
+    }
 }
 
 // static
@@ -794,6 +821,10 @@ void LLFloaterCamera::onClickCameraItem(const LLSD& param)
     if ("mouselook_view" == name)
     {
         gAgentCamera.changeCameraToMouselook();
+    }
+    else if ("ortho_view" == name)
+    {
+        LLViewerCamera::getInstance()->toggleOrtho();
     }
     else if ("object_view" == name)
     {

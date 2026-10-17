@@ -708,6 +708,8 @@ with the same filename but different name
 
 
   <texture name="Refresh_Off" file_name="icons/Refresh_Off.png" preload="true" />
+  <texture name="Cam_Ortho_Off" file_name="icons/Cam_Ortho_Off.png" preload="true" />
+  <texture name="Cam_Ortho_On" file_name="icons/Cam_Ortho_On.png" preload="true" />
 
   <texture name="Resize_Corner" file_name="windows/Resize_Corner.png" preload="true" />
 

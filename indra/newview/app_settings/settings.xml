@@ -311,6 +311,28 @@
     <key>Value</key>
     <integer>1</integer>
   </map>
+  <key>FSCameraOrtho</key>
+  <map>
+    <key>Comment</key>
+    <string>Render the 3D scene with an orthographic (2D parallel) projection.</string>
+    <key>Persist</key>
+    <integer>0</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
+  <key>FSAutoPerspectiveOnCameraMove</key>
+  <map>
+    <key>Comment</key>
+    <string>Automatically switch from orthographic view back to 3D perspective when the camera moves (Blender-style Auto Perspective).</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>1</integer>
+  </map>
   <key>FSShowIMInChatHistory</key>
   <map>
     <key>Comment</key>
