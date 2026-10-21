@@ -54,6 +54,7 @@
 #include "llchiclet.h"
 #include "llfloater.h"
 #include "llfloaterreg.h"
+#include "llfloatertools.h"
 #include "llmodaldialog.h"
 #include "llfloaterperms.h"
 #include "llinventoryfunctions.h"
@@ -83,6 +84,8 @@
 #include "llkeyframemotion.h"
 #include "fsexportperms.h"
 #include "llselectmgr.h"
+#include "lltoolcomp.h"
+#include "lltoolmgr.h"
 #include "llviewerobjectlist.h"
 #include "llviewervisualparam.h"
 #include "llwearabletype.h"
@@ -601,6 +604,13 @@ namespace
         // Viewer > Inventory: the viewer's own inventory window over the editor, to wear and take off (spec 09).
         const char* inventory_label() const override { return "Inventory"; }
         void toggle_inventory() override { LLFloaterReg::toggleInstanceOrBringToFront("inventory"); }
+        // Viewer > Edit Objects in World (Ctrl+B, spec 09 §0m): the viewer's Build window on its Edit tool, over the editor,
+        // with the world's clicks, hover and keys the viewer's again (FSVATsImGui); the editor keeps holding your avatar.
+        // The mode is the Build window showing, so closing it ends the mode too.
+        const char* edit_objects_label() const override { return "Edit Objects in World"; }
+        const char* edit_objects_shortcut() const override { return "Ctrl+B"; }
+        bool editing_objects() const override { return holdsAvatar() && LLFloaterReg::instanceVisible("build"); }
+        void edit_objects(bool on) override;
         const char* reveal_label() const override { return "Show SoapStorm UI"; }
         const char* reveal_shortcut() const override { return "Alt+Shift+U"; }
         bool revealed() const override { return mRevealed; }
@@ -1337,9 +1347,10 @@ namespace
         pollSeatCheck();
         if (mChromeHidden)
             hideStand();
-        if (mChromeHidden && gFloaterView)
+        if (mChromeHidden && gFloaterView && !editing_objects())
         {
-            // A floater that opens meanwhile (a script's map, a new window) stays hidden unless allowed.
+            // A floater that opens meanwhile (a script's map, a new window) stays hidden unless allowed. Not while editing
+            // objects: the Build window and what it opens (texture and colour pickers) show, and are hidden once it ends.
             const LLView::child_list_t children = *gFloaterView->getChildList();
             for (LLView* view : children)
             {
@@ -3001,6 +3012,25 @@ namespace
         LL_INFOS("VATsEditor") << (hide ? "other avatars hidden on this screen" : "other avatars shown as before") << LL_ENDL;
     }
 
+    // As the viewer's Edit does (handle_object_edit), without its camera moves: the editor's view stays where it is.
+    void ViewerHost::edit_objects(bool on)
+    {
+        if (on == editing_objects() || (on && !holdsAvatar()))
+            return;
+        if (on)
+        {
+            LLFloaterReg::showInstance("build");
+            LLToolMgr::getInstance()->setCurrentToolset(gBasicToolset);
+            if (gFloaterTools)
+                gFloaterTools->setEditTool(LLToolCompTranslate::getInstance());
+        }
+        else
+        {
+            LLFloaterReg::hideInstance("build");
+        }
+        LL_INFOS("VATsEditor") << "Edit Objects in World " << (on ? "on" : "off") << LL_ENDL;
+    }
+
     // The editor's Viewer menu, the Avatar menu's item or Alt+Shift+U (both through the setting VATsShowViewerUI).
     void ViewerHost::reveal(bool on)
     {
@@ -3472,6 +3502,17 @@ bool FSVATsEditor::hidesWorldTips()
 bool FSVATsEditor::ownsWorld()
 {
     return sOpen;
+}
+
+bool FSVATsEditor::editingObjects()
+{
+    return sOpen && sHost && sHost->editing_objects();
+}
+
+void FSVATsEditor::toggleEditObjects()
+{
+    if (sOpen && sHost)
+        sHost->edit_objects(!sHost->editing_objects());
 }
 
 U32 FSVATsEditor::filterControls(U32 flags)

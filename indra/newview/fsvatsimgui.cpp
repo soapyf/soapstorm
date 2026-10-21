@@ -456,7 +456,7 @@ namespace
         {
             return false;
         }
-        return io.WantCaptureKeyboard || FSVATsEditor::ownsWorld();
+        return io.WantCaptureKeyboard || (FSVATsEditor::ownsWorld() && !FSVATsEditor::editingObjects());
     }
 
 #if LL_SDL2
@@ -821,10 +821,11 @@ bool FSVATsImGui::worldClick(LLCoordGL pos, MASK mask, EMouseClickType click, bo
         return false;
     }
     // Over an ImGui window, or anywhere while an ImGui popup is open (clicking away closes it): ImGui's. On the
-    // world: the editor's, except Alt presses, which are the viewer's camera (Alt-cam, Ctrl+Alt orbit, pan).
+    // world: the editor's, except Alt presses, which are the viewer's camera (Alt-cam, Ctrl+Alt orbit, pan), and every
+    // press while Edit Objects in World gives the world to the viewer's Build tools.
     const ImGuiContext& g = *ImGui::GetCurrentContext();
     const bool panels = g.HoveredWindow != nullptr || g.OpenPopupStack.Size > 0;
-    if (!panels && ((mask & MASK_ALT) || !FSVATsEditor::ownsWorld()))
+    if (!panels && ((mask & MASK_ALT) || !FSVATsEditor::ownsWorld() || FSVATsEditor::editingObjects()))
     {
         ImGui::FocusWindow(nullptr);  // the world's: a VATs window stops holding the keyboard
         return false;
@@ -836,7 +837,7 @@ bool FSVATsImGui::worldClick(LLCoordGL pos, MASK mask, EMouseClickType click, bo
 bool FSVATsImGui::worldHover(MASK mask)
 {
     sWorldHoverFrame = LLFrameTimer::getFrameCount();
-    if (!sCtx || (mask & MASK_ALT) || !FSVATsEditor::ownsWorld())
+    if (!sCtx || (mask & MASK_ALT) || !FSVATsEditor::ownsWorld() || FSVATsEditor::editingObjects())
     {
         return false;
     }
@@ -875,6 +876,12 @@ bool FSVATsImGui::keyDown(KEY key, MASK mask)
     if (sCtx && FSVATsEditor::ownsWorld() && key == 'U' && (mask & MASK_NORMALKEYS) == (MASK_ALT | MASK_SHIFT))
     {
         gSavedSettings.setBOOL("VATsShowViewerUI", !gSavedSettings.getBOOL("VATsShowViewerUI"));
+        return true;
+    }
+    // Ctrl+B, the viewer's own Build key: Edit Objects in World on or off (spec 09 §0m), also while the viewer has the keys.
+    if (sCtx && FSVATsEditor::ownsWorld() && key == 'B' && (mask & MASK_NORMALKEYS) == MASK_CONTROL && !ImGui::GetIO().WantTextInput)
+    {
+        FSVATsEditor::toggleEditObjects();
         return true;
     }
     if (!imguiGetsKeys(key, mask))

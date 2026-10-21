@@ -1981,7 +1981,13 @@ void App::draw_menus() {
             if (const char* inv = h->inventory_label()) {
                 if (ImGui::MenuItem(inv)) h->toggle_inventory();
                 ImGui::SetItemTooltip("Your inventory, to wear and take off attachments and clothes while you animate (a "
-                                      "prop to hold, a weapon for a stance). Edit them in the viewer, not here");
+                                      "prop to hold, a weapon for a stance). Move them with Edit Objects in World");
+            }
+            if (const char* edit = h->edit_objects_label()) {
+                if (ImGui::MenuItem(edit, h->edit_objects_shortcut(), h->editing_objects())) h->edit_objects(!h->editing_objects());
+                ImGui::SetItemTooltip("The viewer's Build window: click a worn object to move, turn or resize it on your posed "
+                                      "avatar, as the viewer's Edit does. The world's clicks and keys are the viewer's until "
+                                      "you turn it off (Done in the status bar) or close the Build window");
             }
             if (ImGui::MenuItem(h->reveal_label(), h->reveal_shortcut(), h->revealed())) h->reveal(!h->revealed());
             ImGui::Separator();

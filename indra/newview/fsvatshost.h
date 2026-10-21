@@ -79,6 +79,11 @@ namespace FSVATsEditor
     bool hidesWorldTips();
     // True while the editor is open: the world's clicks and the keys are the editor's (FSVATsImGui).
     bool ownsWorld();
+    // Spec 09 §0m, Viewer > Edit Objects in World: true while the viewer's Build window edits objects over the open editor;
+    // the world's clicks, hover and keys are then the viewer's again (FSVATsImGui), the editor still holds your avatar.
+    // toggleEditObjects: Ctrl+B while the editor is open.
+    bool editingObjects();
+    void toggleEditObjects();
     // From LLAgent::setControlFlags (spec 09 U4b): the flags that may reach the avatar. While the editor holds it,
     // no movement input does (only the editor's own return autopilot), and neither does Stand Up while the
     // editor has sat it down (with a "Close the editor to stand up" tip).

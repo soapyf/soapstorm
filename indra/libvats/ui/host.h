@@ -285,6 +285,14 @@ public:
         // its menu label, or nullptr when the host has none.
         virtual const char* inventory_label() const { return nullptr; }
         virtual void toggle_inventory() {}
+        // The host's own object editor (the viewer's Build window): while it is on, the world's clicks, hover and keys
+        // are the host's tools again, to move, turn and resize worn objects on the posed avatar; the editor keeps
+        // holding the avatar. Its menu label, or nullptr when the host has none; the host may end it by itself (the
+        // Build window closed), so ask editing_objects every frame.
+        virtual const char* edit_objects_label() const { return nullptr; }
+        virtual const char* edit_objects_shortcut() const { return nullptr; }
+        virtual bool editing_objects() const { return false; }
+        virtual void edit_objects(bool on) { (void)on; }
         // The host's full UI, shown over the editor until turned off again (the viewer).
         virtual const char* reveal_label() const = 0;
         virtual const char* reveal_shortcut() const { return nullptr; }  // shown beside it in the menu
