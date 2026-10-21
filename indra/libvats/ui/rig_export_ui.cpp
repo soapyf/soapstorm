@@ -36,6 +36,10 @@ struct RigExportUi {
     std::string last_export;  // the file written last, for Local Mesh
     RigHeight height;         // where SL will stand it (RG-8)
     bool show_ground = true;  // draw SL's ground under the body while the window is open
+    // RS-8: Resize Skeleton's size. Not 1: the parts are checked and written as copies at that size (scaled), and
+    // a fix found on a copy is carried back to the part at its own size.
+    double size = 1;
+    std::vector<DaeModel> scaled;
 };
 
 namespace {
@@ -93,10 +97,15 @@ void App::refresh_rig_check() {
     const MeshBody* b = mesh_body();
     ui.body_id = b ? b->id : "";
     ui.height = {};
+    ui.size = body_size();
+    ui.scaled.clear();
     if (!b) return;
+    harmonize_body(*b);  // as the view shows it (an A-pose body stood in SL's rest pose), drawn yet or not (--export-rig)
+    ui.scaled.reserve(b->parts.size());  // parts point into it
     for (const std::string& path : b->parts) {
         RigPart p;
         p.model = prop_model(path);
+        if (p.model && ui.size != 1) p.model = &ui.scaled.emplace_back(scaled_model(*p.model, ui.size));
         p.name = stem_of(path);
         if (auto it = prop_reports_.find(path); it != prop_reports_.end()) {
             p.unmapped_joints = it->second.unmapped_joints;
@@ -127,8 +136,9 @@ void App::rig_fix_applied(int part, const std::function<void(DaeModel&)>& fix) {
     DaeModel* src = part_source(path);
     const DaeModel* shown = prop_model(path);
     if (src && shown) {
-        DaeModel after = *shown;
+        DaeModel after = ui.size != 1 ? scaled_model(*shown, ui.size) : *shown;
         fix(after);
+        if (ui.size != 1) after = scaled_model(after, 1 / ui.size);
         src->binds = after.binds, src->bound = after.bound, src->rig_axes = after.rig_axes;
         const std::vector<std::uint32_t> from = shown_vertex_sources(*src, prop_looks_[path]);
         for (size_t v = 0; v < from.size() && v < size_t(after.vertex_count()); ++v) {
@@ -163,7 +173,8 @@ void App::export_rig(const std::string& path) {
         for (const RigJoint& j : ui.tables[i]) listed += j.listed, positions += j.uploads;
         if (ui.parts[i].model) tris += ui.parts[i].model->triangle_count();
     }
-    std::string summary = std::to_string(ui.parts.size()) + (ui.parts.size() == 1 ? " mesh, " : " meshes, ") + std::to_string(tris) +
+    std::string summary = (ui.size != 1 ? "At " + std::to_string(int(std::lround(ui.size * 100))) + "% size, " : std::string()) +
+                          std::to_string(ui.parts.size()) + (ui.parts.size() == 1 ? " mesh, " : " meshes, ") + std::to_string(tris) +
                           " triangles, " + std::to_string(listed) + " joints listed";
     if (ui.opt.joint_positions && !ui.opt.bind_pose_only)
         summary += ", " + std::to_string(positions) + " joint position" + (positions == 1 ? "" : "s") +
@@ -197,7 +208,7 @@ void App::draw_rig_export_window() {
     if (!rig_ui_) rig_ui_ = std::make_shared<RigExportUi>();
     RigExportUi& ui = *rig_ui_;
     const MeshBody* b = mesh_body();
-    if (ui.due || (b ? b->id : "") != ui.body_id) refresh_rig_check();
+    if (ui.due || (b ? b->id : "") != ui.body_id || body_size() != ui.size) refresh_rig_check();
     place_tool_window("Export Rigged Mesh for SL", 36, 38);
     if (!ImGui::Begin("Export Rigged Mesh for SL", &show_rig_export_)) return ImGui::End();
     help_button("rigging-for-sl-without-add-ons");
@@ -216,6 +227,15 @@ void App::draw_rig_export_window() {
         ImGui::SetTooltip("%s", tip.c_str());
     }
     hint("A rigged .dae the SL mesh uploader takes, checked against its rules.");
+    if (ui.size != 1) {  // RS-8: the avatar for animations made at this size
+        double top = 0;
+        for (const RigPart& p : ui.parts)
+            if (p.model) top = std::max(top, double(p.model->bounds_max.z));
+        ImGui::Text("Written at Resize Skeleton's size: %.0f%%, %.2f m tall.", ui.size * 100, top);
+        ImGui::SetItemTooltip("The mesh and its joint positions are scaled with the skeleton (View > Resize Skeleton), so\n"
+                              "animations exported at that size fit the avatar this file makes. Set the size to 100%% to\n"
+                              "write the body as imported.");
+    }
     ImGui::Separator();
     bool changed = false;
     changed |= ImGui::Checkbox("Joint positions", &ui.opt.joint_positions);

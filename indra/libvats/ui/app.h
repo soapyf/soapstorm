@@ -365,6 +365,8 @@ private:
     void draw_shortcut_table(bool editable, const char* search, float height);  // its table; Help > Controls shows it too
     void set_action_keys(const std::string& id, const KeyPair& keys);  // records an override, saved at once
     void draw_welcome();
+    void draw_update();                     // update_ui.cpp: the first-run question and Help > Check for Updates...
+    void check_for_updates(bool asked);     // asked: from the menu, so "up to date" and failures are said too
     void draw_help_browser();
     void help_button(const char* page);  // "?" in a tool window's title bar, opens its help page
     void draw_export_section(float body_h = 0);  // windows.cpp: 0 inline, < 0 fills a panel, > 0 a dialog's most
@@ -1574,6 +1576,9 @@ private:
     double ground_shown() const;    // the ground grid: rest_floor(), or SL's ground under the body while the export shows it
     bool show_rig_export_ = false, show_joint_inspector_ = false;
     std::shared_ptr<struct RigExportUi> rig_ui_;
+    std::shared_ptr<struct UpdateUi> update_ui_;
+    bool version_seen_ = false;  // draw_welcome compared this version with the one that ran last
+    bool first_run_ = false;     // no settings file yet: a new user, not an update
     // --- rig mapping (rig_map_ui.cpp; spec 08 RM): any rigged model's own bones onto SL's skeleton ---
 public:
     void open_rig_map(const std::string& path);  // Rig > Map Rig to Second Life... on a model; --map-rig

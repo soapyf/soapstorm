@@ -139,6 +139,7 @@ bool App::init(float display_scale, std::string& err) {
     display_scale_ = display_scale;
     std::error_code ec;
     const bool first_run = !std::filesystem::exists(u8path(host_.paths().settings), ec);
+    first_run_ = first_run;
     settings_.load(host_.paths().settings);
     apply_look();
     // Scripted runs on a fresh data folder (docs screenshots) keep the full layout unless --workspace asks.
@@ -1379,6 +1380,7 @@ void App::build_actions() {
                                                             : "Select the bone to follow, then Shift-click the bone or point that follows it";
                           }});
     add("about", {"About Viewport Avatar Toolset", 0, 0, false, [this] { show_about_ = true; }, {}});
+    if (host_.can_update()) add("check_updates", {"Check for Updates...", 0, 0, false, [this] { check_for_updates(true); }, {}});
     add("shortcuts", {"Keyboard Shortcuts...", 0, 0, false, [this] { show_shortcuts_ = !show_shortcuts_; }, {}});
     add("prefs", {"Preferences...", ctrl | ImGuiKey_Comma, 0, false, [this] { show_prefs_ = !show_prefs_; }, {}});
     add("help_contents", {"Help Contents", ImGuiKey_F1, 0, false, [this] { open_help(); }, {}});
@@ -1991,7 +1993,9 @@ void App::draw_menus() {
         for (const char* id : {"find_tool", "help_contents", "tutorials", "online_manual"}) menu_item(id);
         for (const char* id : {"download_manual", "remove_manual"}) menu_item(id);
         ImGui::Separator();
-        for (const char* id : {"help", "welcome", "about"}) menu_item(id);
+        for (const char* id : {"help", "welcome"}) menu_item(id);
+        if (host_.can_update()) menu_item("check_updates");  // an installed release, not the viewer
+        menu_item("about");
         ImGui::EndMenu();
     }
     draw_workspace_tabs();
@@ -2362,6 +2366,7 @@ bool App::frame() {
     draw_controls_help();
     draw_shortcuts();
     draw_welcome();
+    draw_update();
     draw_help_browser();
     draw_recovery();
     draw_pie_menu();  // over everything, after the 3D view has said what is under the pointer

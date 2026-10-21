@@ -102,6 +102,9 @@ void Settings::load(const std::string& file) {
     boolean("show_graph", show_graph);
     str("theme", theme);
     boolean("show_welcome", show_welcome);
+    str("update_check", update_check);
+    str("update_skip", update_skip);
+    str("last_version", last_version);
 #ifdef VATS_LEGACY_IMPORT
     boolean("migration_offered", migration_offered);
 #endif
@@ -183,6 +186,9 @@ void Settings::save(const std::string& file) const {
     j.set("show_graph", show_graph);
     j.set("theme", theme);
     j.set("show_welcome", show_welcome);
+    if (!update_check.empty()) j.set("update_check", update_check);
+    if (!update_skip.empty()) j.set("update_skip", update_skip);
+    j.set("last_version", last_version);
 #ifdef VATS_LEGACY_IMPORT
     j.set("migration_offered", migration_offered);
 #endif

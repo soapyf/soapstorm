@@ -87,6 +87,15 @@ bool snap_joint_to_default(const Skeleton& skel, DaeModel& model, int node, cons
 // Its vertices are untouched. False for mRoot or an index out of range.
 bool set_written_local(const Skeleton& skel, DaeModel& model, int node, const Vec3& local, const RigExportOptions& opt = {});
 
+// RG-9 for showing a body: each part the export refuses without "Stand it in SL's rest pose" (an upright humanoid
+// bound in an A-pose, legs judged across the parts) is made the way SL shows it after that export: its vertices
+// skinned into SL's rest pose at the joint positions the file would write, its binds there. Posed in VATs it then moves
+// as in SL, where animations made for SL's rest (a retarget, a stand) would otherwise turn its arms through the body.
+// The export of a stood part writes the same in-world result. Pass every part of the body (the legs may be in another
+// file); each is judged once (DaeModel::rest_pose_checked), so call it on the models as loaded, before any copy is
+// made of them, and edits made afterwards stay in the stood frame. Shape key offsets turn with their vertices. False
+// when no part was stood.
+bool stand_in_rest_pose(const Skeleton& skel, const std::vector<DaeModel*>& parts);
 enum class RigSeverity { Error, Warning, Info };  // Error: the uploader refuses or breaks it; export is refused
 
 struct RigFinding {

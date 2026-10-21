@@ -7,6 +7,7 @@ add_library(vats_core STATIC
     src/audio_decoders.c
     src/image_decoders.c
     src/anim_file.cpp
+    src/changelog.cpp
     src/avatar_mesh.cpp
     src/bone_heat.cpp
     src/auto_rig.cpp

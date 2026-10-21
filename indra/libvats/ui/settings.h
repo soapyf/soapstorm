@@ -45,6 +45,9 @@ struct Settings {
     bool show_graph = true;
     std::string theme = "Dusk";
     bool show_welcome = true;
+    std::string update_check;  // "" = ask on the first run, "on" = look for a new version at startup, "off" = only when asked
+    std::string update_skip;   // a version the user chose to skip
+    std::string last_version;  // the version that ran last: a newer one shows What's New once
 #ifdef VATS_LEGACY_IMPORT
     bool migration_offered = false;  // IO-54: the first-run legacy import is offered once
 #endif

@@ -57,6 +57,7 @@ add_library(vats_ui STATIC
     listing_media_ui.cpp
     lint_ui.cpp
     rig_export_ui.cpp
+    update_ui.cpp
     rig_map_ui.cpp
     rig_scratch_ui.cpp
     weight_paint_ui.cpp

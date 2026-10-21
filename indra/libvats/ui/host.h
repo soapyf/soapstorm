@@ -39,6 +39,7 @@ struct Paths {
     std::string data;       // Linden character data (<data>/character) and rig tables (<data>/retarget)
     std::string assets;     // fonts, starter props (<assets>/props), welcome.md
     std::string help;       // the wiki pages the Help window shows
+    std::string changelog;  // CHANGELOG.md, whose newest releases the Welcome window shows; "" = <assets>/welcome.md
     std::string user;       // libraries, autosaves, window layout; ends with a separator; "" = nowhere to keep them
     std::string library;    // pose, prop and body libraries; ends with a separator; "" = <user>library/
     std::string settings;   // the settings.json file
@@ -50,6 +51,17 @@ struct Paths {
 struct Download {
     enum State { Running, Done, Failed };
     std::atomic<int> state{Running};
+    std::string message;  // why it failed
+};
+
+// An update check or download running on another thread (Host::check_for_update): state goes from Running to Done or
+// Failed once, everything else set before; the UI polls it.
+struct UpdateJob {
+    enum State { Running, Done, Failed };
+    std::atomic<int> state{Running};
+    std::atomic<int> percent{0};
+    std::string version;  // a check's: the newer version, "" when there is none
+    std::string notes;    // its release notes (Markdown)
     std::string message;  // why it failed
 };
 
@@ -343,6 +355,16 @@ public:
         (void)url, (void)path;
         return nullptr;
     }
+    // Updates of the standalone app (Velopack): only an installed release can (not the viewer, not a build folder).
+    virtual bool can_update() { return false; }
+    // Asks for a newer release, on another thread: Done with version and notes set, or version "" when this one is
+    // the latest. One update job at a time.
+    virtual std::shared_ptr<UpdateJob> check_for_update() { return nullptr; }
+    // Downloads what the last check found, on another thread, setting percent as it goes.
+    virtual std::shared_ptr<UpdateJob> download_update() { return nullptr; }
+    // Puts the downloaded update in place once this program has quit, then starts VATs again; the caller quits next.
+    // An update downloaded and not applied this way is put in place at the next start.
+    virtual bool apply_update_on_exit() { return false; }
     virtual void set_title(const std::string& title) = 0;
     // Runs shell commands for the firewall helper (firewall.h), possibly on another thread.
     virtual CommandRunner command_runner() = 0;

@@ -79,6 +79,45 @@ Quat bone_swing(const Skeleton& skel, const DaeModel& m, const std::vector<bool>
     return arc(want.normalized(), have.normalized());
 }
 
+// RG-9 across the parts (a body may come as an upper and a lower file): both legs rigged, and where the hip sits.
+struct Legs {
+    bool rigged = true;
+    double hip_z = 0;
+};
+Legs legs_of(const Skeleton& skel, const std::vector<const DaeModel*>& parts) {
+    Legs out;
+    const int count = dae_index_count(skel);
+    for (const char* n : {"mHipLeft", "mKneeLeft", "mHipRight", "mKneeRight"}) {
+        const int j = skel.find(n);
+        bool rigged = false;
+        for (const DaeModel* m : parts) {
+            if (!m || !m->rigged || m->binds.size() != size_t(count) || j < 0 || j >= int(m->bound.size()) || !m->bound[j]) continue;
+            if (!weighted_nodes(skel, *m)[j]) continue;
+            if (!rigged && j == skel.find("mHipLeft")) out.hip_z = m->binds[j].pos.z;
+            rigged = true;
+        }
+        out.rigged = out.rigged && rigged;
+    }
+    return out;
+}
+
+// RG-9: how far, in degrees, a part's arms are bound off SL's rest (arms out level); 0 where it cannot tell.
+double arms_off_rest(const Skeleton& skel, const DaeModel& m, const std::vector<Xform>& rest, const Legs& legs) {
+    const std::vector<bool> w = weighted_nodes(skel, m);
+    double arms = 0;
+    for (const char* n : {"mShoulderLeft", "mShoulderRight"}) {
+        const int j = skel.find(n);
+        const std::vector<int> next = j >= 0 && m.bound[j] ? next_weighted(skel, m, w, j) : std::vector<int>{};
+        if (next.size() != 1) continue;
+        // An arm still reaching out sideways, or any arm of an upright body (shoulders well above the hips: an arm
+        // hanging straight down, an I-pose). A quadruped's front leg on the arm points down beside its hips: no hint.
+        const bool upright = legs.rigged && m.binds[j].pos.z - legs.hip_z > 0.25;
+        if (upright || std::fabs((m.binds[next[0]].pos - m.binds[j].pos).normalized().y) > 0.35)
+            arms = std::max(arms, bone_swing(skel, m, w, rest, j).angle() * kRadToDeg);
+    }
+    return arms;
+}
+
 // RG-9 "Stand it in SL's rest pose": the upper arms, forearms, thighs and shins turn by the swing from SL's rest
 // direction of their bone onto the file's; every other joint turns with its nearest turned ancestor (the hand with the
 // forearm, the foot with the shin) or not at all (the spine, neck, head and collars). The joint positions written then
@@ -353,6 +392,57 @@ std::string join(const std::vector<std::string>& v, size_t max = 6) {
 
 }  // namespace
 
+bool stand_in_rest_pose(const Skeleton& skel, const std::vector<DaeModel*>& parts) {
+    const std::vector<const DaeModel*> models(parts.begin(), parts.end());
+    const Legs legs = legs_of(skel, models);
+    std::vector<DaeModel*> judged;
+    for (DaeModel* m : parts)
+        if (m && !m->rest_pose_checked) judged.push_back(m), m->rest_pose_checked = true;
+    if (!legs.rigged) return false;  // a creature may be animated for the pose it is bound in (the export only warns)
+    const std::vector<Xform> rest = skel.global_pose(Pose(skel.size()));
+    const int n = skel.size(), root = dae_root(skel), count = dae_index_count(skel);
+    bool any = false;
+    for (DaeModel* m : judged) {
+        if (!m->rigged || m->binds.size() != size_t(count) || arms_off_rest(skel, *m, rest, legs) <= 20) continue;
+        RigExportOptions opt;
+        opt.rest_pose = true;
+        const Placement p = place(skel, *m, opt);
+        // Skinned from the binds the export writes (the A-pose they carry) to the joints it writes (SL's rest pose).
+        std::vector<Xform> globals(p.g.begin(), p.g.begin() + n);
+        for (size_t v = 0; v < skel.volumes().size(); ++v)
+            if (const int node = skel.volumes()[v].node; node >= 0) globals[node] = p.g[dae_volume(skel, int(v))];
+        DaeModel posed = *m;
+        posed.binds = p.bind;
+        skin_prop(posed, skel, globals, nullptr, m->positions, m->normals);
+        // Shape key offsets turn with their vertices: the skin's linear part, as the difference of two skinned points
+        // (normal offsets shortened first, so a long one never trips skin_prop's guard against flung vertices).
+        const std::vector<float> bind_positions = posed.positions;
+        for (DaeShapeKey& k : m->shape_keys)
+            for (std::vector<float>* d : {&k.dpos, &k.dnrm}) {
+                if (d->size() < k.vertices.size() * 3) continue;
+                const float f = d == &k.dpos ? 1.f : 0.01f;
+                posed.positions = bind_positions;
+                for (size_t i = 0; i < k.vertices.size(); ++i)
+                    for (int c = 0; c < 3; ++c) posed.positions[k.vertices[i] * 3 + c] += f * (*d)[i * 3 + c];
+                std::vector<float> at, unused;
+                skin_prop(posed, skel, globals, nullptr, at, unused);
+                for (size_t i = 0; i < k.vertices.size(); ++i)
+                    for (int c = 0; c < 3; ++c) (*d)[i * 3 + c] = (at[k.vertices[i] * 3 + c] - m->positions[k.vertices[i] * 3 + c]) / f;
+            }
+        Vec3 lo{1e300, 1e300, 1e300}, hi{-1e300, -1e300, -1e300};
+        for (size_t v = 0; v * 3 + 2 < m->positions.size(); ++v)
+            for (int c = 0; c < 3; ++c) lo[c] = std::min(lo[c], double(m->positions[v * 3 + c])), hi[c] = std::max(hi[c], double(m->positions[v * 3 + c]));
+        if (!m->positions.empty()) m->bounds_min = lo, m->bounds_max = hi;
+        for (int i = 0; i < count; ++i) {
+            if (i == root || i >= int(m->bound.size()) || !m->bound[i]) continue;
+            if (i < int(m->rig_axes.size())) m->rig_axes[i] = (p.g[i].rot * p.bind[i].rot.conj() * m->rig_axes[i]).normalized();
+            m->binds[i] = p.g[i];
+        }
+        any = true;
+    }
+    return any;
+}
+
 std::vector<RigJoint> rig_joints(const Skeleton& skel, const DaeModel& model, const RigExportOptions& opt) {
     return joints_of(skel, model, place(skel, model, opt));
 }
@@ -454,21 +544,10 @@ std::vector<RigFinding> check_rig_export(const Skeleton& skel, const std::vector
     const int root = dae_root(skel), count = dae_index_count(skel);
     long long triangles = 0;
     std::vector<std::string> volumes_weighted;
-    // RG-9 across the parts (a body may come as an upper and a lower file): both legs rigged, and where the hip sits.
-    bool legs = true;
-    double hip_z = 0;
-    for (const char* n : {"mHipLeft", "mKneeLeft", "mHipRight", "mKneeRight"}) {
-        const int j = skel.find(n);
-        bool rigged = false;
-        for (const RigPart& part : parts) {
-            const DaeModel* m = part.model;
-            if (!m || !m->rigged || m->binds.size() != size_t(count) || j < 0 || j >= int(m->bound.size()) || !m->bound[j]) continue;
-            if (!weighted_nodes(skel, *m)[j]) continue;
-            if (!rigged && j == skel.find("mHipLeft")) hip_z = m->binds[j].pos.z;
-            rigged = true;
-        }
-        legs = legs && rigged;
-    }
+    std::vector<const DaeModel*> models;
+    for (const RigPart& part : parts) models.push_back(part.model);
+    const Legs body = legs_of(skel, models);
+    const bool legs = body.rigged;
     for (int pi = 0; pi < int(parts.size()); ++pi) {
         const RigPart& part = parts[pi];
         const std::string label = part.name.empty() ? "mesh " + std::to_string(pi + 1) : part.name;
@@ -606,18 +685,7 @@ std::vector<RigFinding> check_rig_export(const Skeleton& skel, const std::vector
         // RG-9: arms bound hanging (an A-pose) on SL's unturned joints: SL animations, made for its T-pose rest, turn
         // them that much too far. Stand it in SL's rest pose writes the T-pose instead.
         if (opt.joint_positions && !opt.bind_pose_only && !opt.rest_pose) {
-            const std::vector<bool> w = weighted_nodes(skel, *m);
-            double arms = 0;
-            for (const char* n : {"mShoulderLeft", "mShoulderRight"}) {
-                const int j = skel.find(n);
-                const std::vector<int> next = j >= 0 && m->bound[j] ? next_weighted(skel, *m, w, j) : std::vector<int>{};
-                if (next.size() != 1) continue;
-                // An arm still reaching out sideways, or any arm of an upright body (shoulders well above the hips: an arm
-                // hanging straight down, an I-pose). A quadruped's front leg on the arm points down beside its hips: no hint.
-                const bool upright = legs && m->binds[j].pos.z - hip_z > 0.25;
-                if (upright || std::fabs((m->binds[next[0]].pos - m->binds[j].pos).normalized().y) > 0.35)
-                    arms = std::max(arms, bone_swing(skel, *m, w, rest, j).angle() * kRadToDeg);
-            }
+            const double arms = arms_off_rest(skel, *m, rest, body);
             // Refused for an upright humanoid (both legs rigged, in any part); a creature with arms (wings bound drooping,
             // say) may be animated for its own rest, so it only warns.
             if (arms > 20) {

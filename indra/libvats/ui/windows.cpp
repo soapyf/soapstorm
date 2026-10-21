@@ -8,6 +8,7 @@
 #include <map>
 #include <sstream>
 
+#include "vats/changelog.h"
 #include "vats_version.h"
 #include "app.h"
 #include "icons.h"
@@ -241,6 +242,13 @@ void App::draw_preferences() {
         host_.associate_file_types(false, msg);
         status(msg);
     }
+    if (host_.can_update()) {  // an installed release (not the viewer, not a build folder)
+        row("Updates");
+        bool on = settings_.update_check == "on";
+        if (ImGui::Checkbox("Check for a new version at startup", &on)) settings_.update_check = on ? "on" : "off", save_settings();
+        ImGui::SetItemTooltip("Asks GitHub for the latest release each time VATs starts, and offers it when it is newer.\n"
+                              "Nothing installs without your click. Help > Check for Updates... works either way.");
+    }
 
     if (host_.world_view()) {  // settings only the viewer uses (spec 09 U4b)
         subheading("In the viewer");
@@ -279,13 +287,22 @@ void App::draw_controls_help() {
 }
 
 void App::draw_welcome() {
+    if (!version_seen_) {  // the first run of a newer version (an update) shows what changed, once
+        version_seen_ = true;
+        if (!headless_ && settings_.last_version != kVersion) {
+            if (!settings_.last_version.empty() || !first_run_) show_welcome_ = true;  // 0.4.x kept no last_version
+            settings_.last_version = kVersion;
+            save_settings();
+        }
+    }
     if (!show_welcome_) return;
     static std::string text;
-    if (text.empty()) {
-        std::ifstream f(assets_dir_ + "/welcome.md");
+    if (text.empty()) {  // the newest five releases of the changelog; a host without one shows its welcome.md
+        const std::string& changelog = host_.paths().changelog;
+        std::ifstream f(changelog.empty() ? assets_dir_ + "/welcome.md" : changelog);
         std::ostringstream ss;
         ss << f.rdbuf();
-        text = ss.str();
+        text = changelog.empty() ? ss.str() : recent_changes(ss.str(), 5);
     }
     ImGui::SetNextWindowSize(window_size(43, 35), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
