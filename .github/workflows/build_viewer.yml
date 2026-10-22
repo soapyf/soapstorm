@@ -27,8 +27,8 @@ on:
       - "*alpha"
       - "*nightly"
       - "*preview"
-  schedule:
-    # - cron: '30 04 * * *' # Run every day at 4:30am UTC
+  # schedule:
+  #   - cron: '30 04 * * *' # Run every day at 4:30am UTC
 env:
   AUTOBUILD_VARIABLES_FILE: ${{github.workspace}}/build-variables/variables
   EXTRA_ARGS: -DUSE_FMODSTUDIO=ON -DUSE_KDU=OFF --lto
