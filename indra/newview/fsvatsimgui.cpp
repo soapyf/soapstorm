@@ -35,7 +35,9 @@
 #include "lluictrl.h"
 #include "llgl.h"
 #include "llglslshader.h"
+#include "llfloatertools.h"
 #include "llkeyboard.h"
+#include "llmodaldialog.h"
 #include "llmoveview.h"
 #include "llrender.h"
 #include "llrootview.h"
@@ -827,7 +829,7 @@ bool FSVATsImGui::worldClick(LLCoordGL pos, MASK mask, EMouseClickType click, bo
     // Detach stay out of reach while the editor holds the avatar).
     const ImGuiContext& g = *ImGui::GetCurrentContext();
     const bool panels = g.HoveredWindow != nullptr || g.OpenPopupStack.Size > 0;
-    if (!panels && ((mask & MASK_ALT) || !FSVATsEditor::ownsWorld() || (FSVATsEditor::editingObjects() && click == CLICK_LEFT)))
+    if (!panels && ((mask & MASK_ALT) || !FSVATsEditor::ownsWorld() || (FSVATsEditor::editingObjects() && (click == CLICK_LEFT || click == CLICK_DOUBLELEFT))))
     {
         ImGui::FocusWindow(nullptr);  // the world's: a VATs window stops holding the keyboard
         return false;
@@ -882,22 +884,22 @@ bool FSVATsImGui::keyDown(KEY key, MASK mask)
     }
     // Edit Objects in World (spec 09 §0m): Ctrl+B, the viewer's own Build key, turns it on or off, also while the viewer
     // has the keys; while it is on, Esc ends it (not the viewer's Reset View, which would move the editor's camera) and
-    // M is not the viewer's mouselook. Not while a text field has the keys, and once per press (a held key repeats).
+    // M is not the viewer's mouselook. Not while a text field has the keys, and once per press (a held key repeats). Esc
+    // only when nothing else would take it: no question up, no ImGui popup, the keys with the world or the Build window.
     if (sCtx && FSVATsEditor::ownsWorld() && !ImGui::GetIO().WantTextInput)
     {
-        const LLUICtrl* focus = dynamic_cast<const LLUICtrl*>(gFocusMgr.getKeyboardFocus());
-        const bool typing = focus && focus->acceptsTextInput();
+        LLFocusableElement* focus = gFocusMgr.getKeyboardFocus();
+        const LLUICtrl* ctrl = dynamic_cast<const LLUICtrl*>(focus);
+        const bool typing = ctrl && ctrl->acceptsTextInput();
         const MASK mods = mask & MASK_NORMALKEYS;
-        static LLFrameTimer since_toggle;
-        const bool toggle = (key == 'B' && mods == MASK_CONTROL) || (key == KEY_ESCAPE && mods == MASK_NONE && FSVATsEditor::editingObjects());
-        if (!typing && toggle)
-        {
-            if (since_toggle.getElapsedTimeF32() < 0.3f)
-                return true;  // the key's repeat
-            since_toggle.reset();
-            if (FSVATsEditor::toggleEditObjects())
-                return true;
-        }
+        const bool repeated = gKeyboard && gKeyboard->getKeyRepeated(key);
+        const LLView* focus_view = dynamic_cast<const LLView*>(focus);
+        const bool esc_free = LLModalDialog::activeCount() == 0 && ImGui::GetCurrentContext()->OpenPopupStack.Size == 0 &&
+                              (!focus_view || (gFloaterTools && (focus_view == gFloaterTools || focus_view->hasAncestor(gFloaterTools))));
+        const bool toggle = (key == 'B' && mods == MASK_CONTROL) ||
+                            (key == KEY_ESCAPE && mods == MASK_NONE && FSVATsEditor::editingObjects() && esc_free);
+        if (!typing && toggle && (repeated || FSVATsEditor::toggleEditObjects()))
+            return true;  // a held key's repeat is swallowed
         if (!typing && FSVATsEditor::editingObjects() && key == 'M' && mods == MASK_NONE)
             return true;
     }
