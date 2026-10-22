@@ -1049,22 +1049,34 @@ std::vector<std::pair<std::string, Vec3>> uploader_joint_translations(std::strin
     return out;
 }
 
-DaeModel silent_rig(const Skeleton& skel, const Pose& pose, const Shape* positions, double head_scale) {
-    const int root = dae_root(skel), pelvis = skel.find("mPelvis"), skull = skel.find("mSkull");
+DaeModel silent_rig(const Skeleton& skel, const Pose& pose, const Shape* positions, const Shape* body, bool hold_height,
+                    SilentRigInfo* info) {
+    const int root = dae_root(skel), pelvis = skel.find("mPelvis"), skull = skel.find("mSkull"), head = skel.find("mHead");
+    SilentRigInfo out;
     Pose p(skel.size()), base(skel.size());  // the rig's joints, and the body's own (positions alone)
     for (size_t i = 0; i < p.offset.size(); ++i) {
         if (int(i) == pelvis) continue;  // the hip's travel is an animation's, and mPelvis's position moves the wearer
         if (positions && i < positions->offset.size()) base.offset[i] = positions->offset[i];
-        p.offset[i] = base.offset[i] + (i < pose.offset.size() ? pose.offset[i] : Vec3{});
+        const Vec3 moved = i < pose.offset.size() ? pose.offset[i] : Vec3{};
+        if (moved.length() > 1e-4) ++out.moved;
+        p.offset[i] = base.offset[i] + moved;
     }
-    if (head_scale > 0 && skull >= 0)
-        p.offset[size_t(skull)].z -= (sl_body_size(skel, &p).height - sl_body_size(skel, &base).height) / (std::sqrt(2.0) * head_scale);
+    if (hold_height && skull >= 0) {
+        // SL's height from the joints, on the body's scales (each joint's height counts at its parent's scale); the
+        // body's own offsets are in both, so only the pose's growth is left in the difference.
+        double head_scale = body && head >= 0 && size_t(head) < body->scale.size() ? body->scale[size_t(head)].z : 1;
+        if (!(head_scale > 1e-6)) head_scale = 1;
+        out.skull_counter = -(sl_body_size(skel, &p, body).height - sl_body_size(skel, &base, body).height) / (std::sqrt(2.0) * head_scale);
+        p.offset[size_t(skull)].z += out.skull_counter;
+    }
+    if (info) *info = out;
     DaeModel m;
     m.rigged = true;
-    m.binds = skel.global_pose(p);  // SL joints rest unturned: positions only
-    m.binds.resize(size_t(root));
+    const std::vector<Xform> g = skel.global_pose(p);  // SL joints rest unturned: positions only
+    m.binds = g;
     m.binds.push_back({});  // mRoot
-    for (const auto& v : skel.volumes()) m.binds.push_back(m.binds[size_t(v.joint)] * Xform{v.rot, v.pos});
+    for (const auto& v : skel.volumes())  // a volume the Move tool moved moves with its node
+        m.binds.push_back(v.node >= 0 && size_t(v.node) < g.size() ? g[size_t(v.node)] : g[size_t(v.joint)] * Xform{v.rot, v.pos});
     m.bound.assign(m.binds.size(), true);
     m.bound[size_t(root)] = false;
     m.materials.push_back({"Silent", {0.5f, 0.5f, 0.5f, 1.f}, "", false, false});

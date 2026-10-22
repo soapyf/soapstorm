@@ -32,6 +32,7 @@
 #include "llfloater.h"
 #include "llfocusmgr.h"
 #include "llframetimer.h"
+#include "lluictrl.h"
 #include "llgl.h"
 #include "llglslshader.h"
 #include "llkeyboard.h"
@@ -821,11 +822,12 @@ bool FSVATsImGui::worldClick(LLCoordGL pos, MASK mask, EMouseClickType click, bo
         return false;
     }
     // Over an ImGui window, or anywhere while an ImGui popup is open (clicking away closes it): ImGui's. On the
-    // world: the editor's, except Alt presses, which are the viewer's camera (Alt-cam, Ctrl+Alt orbit, pan), and every
-    // press while Edit Objects in World gives the world to the viewer's Build tools.
+    // world: the editor's, except Alt presses, which are the viewer's camera (Alt-cam, Ctrl+Alt orbit, pan), and left
+    // presses while Edit Objects in World gives the world to the viewer's Build tools (no context menu: Sit, Touch and
+    // Detach stay out of reach while the editor holds the avatar).
     const ImGuiContext& g = *ImGui::GetCurrentContext();
     const bool panels = g.HoveredWindow != nullptr || g.OpenPopupStack.Size > 0;
-    if (!panels && ((mask & MASK_ALT) || !FSVATsEditor::ownsWorld() || FSVATsEditor::editingObjects()))
+    if (!panels && ((mask & MASK_ALT) || !FSVATsEditor::ownsWorld() || (FSVATsEditor::editingObjects() && click == CLICK_LEFT)))
     {
         ImGui::FocusWindow(nullptr);  // the world's: a VATs window stops holding the keyboard
         return false;
@@ -878,11 +880,26 @@ bool FSVATsImGui::keyDown(KEY key, MASK mask)
         gSavedSettings.setBOOL("VATsShowViewerUI", !gSavedSettings.getBOOL("VATsShowViewerUI"));
         return true;
     }
-    // Ctrl+B, the viewer's own Build key: Edit Objects in World on or off (spec 09 §0m), also while the viewer has the keys.
-    if (sCtx && FSVATsEditor::ownsWorld() && key == 'B' && (mask & MASK_NORMALKEYS) == MASK_CONTROL && !ImGui::GetIO().WantTextInput)
+    // Edit Objects in World (spec 09 §0m): Ctrl+B, the viewer's own Build key, turns it on or off, also while the viewer
+    // has the keys; while it is on, Esc ends it (not the viewer's Reset View, which would move the editor's camera) and
+    // M is not the viewer's mouselook. Not while a text field has the keys, and once per press (a held key repeats).
+    if (sCtx && FSVATsEditor::ownsWorld() && !ImGui::GetIO().WantTextInput)
     {
-        FSVATsEditor::toggleEditObjects();
-        return true;
+        const LLUICtrl* focus = dynamic_cast<const LLUICtrl*>(gFocusMgr.getKeyboardFocus());
+        const bool typing = focus && focus->acceptsTextInput();
+        const MASK mods = mask & MASK_NORMALKEYS;
+        static LLFrameTimer since_toggle;
+        const bool toggle = (key == 'B' && mods == MASK_CONTROL) || (key == KEY_ESCAPE && mods == MASK_NONE && FSVATsEditor::editingObjects());
+        if (!typing && toggle)
+        {
+            if (since_toggle.getElapsedTimeF32() < 0.3f)
+                return true;  // the key's repeat
+            since_toggle.reset();
+            if (FSVATsEditor::toggleEditObjects())
+                return true;
+        }
+        if (!typing && FSVATsEditor::editingObjects() && key == 'M' && mods == MASK_NONE)
+            return true;
     }
     if (!imguiGetsKeys(key, mask))
     {

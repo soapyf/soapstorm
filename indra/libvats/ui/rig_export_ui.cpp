@@ -164,30 +164,27 @@ double App::ground_shown() const {
 
 // RG-13: the pose at this frame, its joint positions only (on the bake shape's: Your avatar's mesh joint positions
 // stay), the hip's travel left out, as a rigged mesh with one hidden triangle; mSkull holds the height on the bake
-// shape's head scale, as Hold without sinking does.
+// shape's scales, as Hold without sinking does.
 void App::export_silent_rig(const std::string& path) {
-    const Shape* body = deformer_body(anim_export_options());
-    const int head = skel_.find("mHead"), skull = skel_.find("mSkull");
-    double head_scale = body && head >= 0 && size_t(head) < body->scale.size() ? body->scale[size_t(head)].z : 1;
-    if (!(head_scale > 1e-6)) head_scale = 1;
-    const DaeModel m = silent_rig(skel_, pose_, export_positions(), head_scale);
+    SilentRigInfo info;
+    const DaeModel m = silent_rig(skel_, pose_, export_positions(), deformer_body(anim_export_options()), true, &info);
+    if (info.moved == 0)
+        return message("Silent rig not exported", "No joint is moved at this frame: move joints with the Move tool first (their positions are what the rig carries)");
+    int uploads = 0;
+    for (const RigJoint& j : rig_joints(skel_, m, {})) uploads += j.uploads;
+    if (uploads == 0)
+        return message("Silent rig not exported", "The moves at this frame only change mSkull's height, which holding the wearer on the ground takes back");
     RigPart part;
     part.model = &m;
     part.name = stem_of(path);
     std::string text, why;
     if (!write_rig_dae(skel_, {part}, {}, text, why)) return message("Silent rig not exported", why);
-    int moved = 0;
-    double skull_cm = 0;
-    for (const RigJoint& j : rig_joints(skel_, m, {}))
-        if (j.uploads) {
-            if (j.node == skull) skull_cm = -j.offset.z * 100;
-            else ++moved;
-        }
-    if (moved == 0) return message("Silent rig not exported", "No joint is moved at this frame: move joints with the Move tool first (their positions are what the rig carries)");
     if (!write_text(path, text, false, why)) return message("Could not write " + stem_of(path) + ".dae", why);
     char held[96] = "";
-    if (std::fabs(skull_cm) >= 0.05) std::snprintf(held, sizeof held, ", mSkull %.1f cm %s so you neither sink nor float", std::fabs(skull_cm), skull_cm > 0 ? "lower" : "higher");
-    status("Exported " + stem_of(path) + ".dae: " + std::to_string(moved) + " joint position" + (moved == 1 ? "" : "s") + " from frame " +
+    if (std::fabs(info.skull_counter) >= 0.0005)
+        std::snprintf(held, sizeof held, ", mSkull %.1f cm %s so you neither sink nor float", std::fabs(info.skull_counter) * 100,
+                      info.skull_counter < 0 ? "lower" : "higher");
+    status("Exported " + stem_of(path) + ".dae: " + std::to_string(info.moved) + " moved joint" + (info.moved == 1 ? "" : "s") + " from frame " +
            std::to_string(int(std::lround(frame_))) + held + ". Upload with Include skin weight and Include joint positions ticked");
 }
 

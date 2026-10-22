@@ -2936,8 +2936,9 @@ namespace
             return;
         std::vector<LLHandle<LLFloater>> keep;
         for (LLView* view : *gFloaterView->getChildList())
-            if (LLFloater* floater = dynamic_cast<LLFloater*>(view); floater && floater->getVisible() && shownOverEditor(floater))
-                keep.push_back(floater->getHandle());
+            if (LLFloater* floater = dynamic_cast<LLFloater*>(view);
+                floater && floater->getVisible() && (shownOverEditor(floater) || (floater == gFloaterTools && editing_objects())))
+                keep.push_back(floater->getHandle());  // Edit Objects in World (§0m) keeps its Build window
         mUiWasVisible = gViewerWindow->getUIVisibility();
         if (mUiWasVisible)
             gViewerWindow->setUIVisibility(false);
@@ -3207,7 +3208,8 @@ namespace
     {
         // Build 27: each step logged, so a hang after closing shows where it stopped.
         auto step = [](const char* what) { LL_DEBUGS("VATsEditor") << "close: " << what << LL_ENDL; };
-        step("plan, walk test and seat selection");
+        step("edit objects, plan, walk test and seat selection");
+        edit_objects(false);  // spec 09 §0m: the Build window goes with the editor, while it still holds the avatar
         mMode = Mode::Hold;  // build 20: the in-world play and the walk test end with the editor (restore below)
         mAlive = std::make_shared<bool>(true);  // pickers still open answer nobody
         mOwnPlan.reset();
@@ -3509,10 +3511,13 @@ bool FSVATsEditor::editingObjects()
     return sOpen && sHost && sHost->editing_objects();
 }
 
-void FSVATsEditor::toggleEditObjects()
+bool FSVATsEditor::toggleEditObjects()
 {
-    if (sOpen && sHost)
-        sHost->edit_objects(!sHost->editing_objects());
+    if (!sOpen || !sHost)
+        return false;
+    const bool was = sHost->editing_objects();
+    sHost->edit_objects(!was);
+    return sHost->editing_objects() != was;
 }
 
 U32 FSVATsEditor::filterControls(U32 flags)
