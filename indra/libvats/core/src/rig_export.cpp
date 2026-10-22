@@ -1049,4 +1049,39 @@ std::vector<std::pair<std::string, Vec3>> uploader_joint_translations(std::strin
     return out;
 }
 
+DaeModel silent_rig(const Skeleton& skel, const Pose& pose, const Shape* positions, double head_scale) {
+    const int root = dae_root(skel), pelvis = skel.find("mPelvis"), skull = skel.find("mSkull");
+    Pose p(skel.size()), base(skel.size());  // the rig's joints, and the body's own (positions alone)
+    for (size_t i = 0; i < p.offset.size(); ++i) {
+        if (int(i) == pelvis) continue;  // the hip's travel is an animation's, and mPelvis's position moves the wearer
+        if (positions && i < positions->offset.size()) base.offset[i] = positions->offset[i];
+        p.offset[i] = base.offset[i] + (i < pose.offset.size() ? pose.offset[i] : Vec3{});
+    }
+    if (head_scale > 0 && skull >= 0)
+        p.offset[size_t(skull)].z -= (sl_body_size(skel, &p).height - sl_body_size(skel, &base).height) / (std::sqrt(2.0) * head_scale);
+    DaeModel m;
+    m.rigged = true;
+    m.binds = skel.global_pose(p);  // SL joints rest unturned: positions only
+    m.binds.resize(size_t(root));
+    m.binds.push_back({});  // mRoot
+    for (const auto& v : skel.volumes()) m.binds.push_back(m.binds[size_t(v.joint)] * Xform{v.rot, v.pos});
+    m.bound.assign(m.binds.size(), true);
+    m.bound[size_t(root)] = false;
+    m.materials.push_back({"Silent", {0.5f, 0.5f, 0.5f, 1.f}, "", false, false});
+    const Vec3 at = pelvis >= 0 ? m.binds[size_t(pelvis)].pos : Vec3{};
+    for (const Vec3& c : {Vec3{0, 0, 0}, Vec3{0.004, 0, 0}, Vec3{0, 0.004, 0}}) {
+        const Vec3 v = at + c;
+        m.positions.insert(m.positions.end(), {float(v.x), float(v.y), float(v.z)});
+        m.normals.insert(m.normals.end(), {0, 0, 1});
+        m.uvs.insert(m.uvs.end(), {0.5f, 0.5f});
+        m.joints.insert(m.joints.end(), {std::max(pelvis, 0), root, root, root});
+        m.weights.insert(m.weights.end(), {1, 0, 0, 0});
+    }
+    m.indices = {0, 1, 2};
+    m.groups.push_back({0, 0, 3, 0, 3});
+    m.bounds_min = m.bounds_max = at;
+    m.bounds_max = at + Vec3{0.004, 0.004, 0};
+    return m;
+}
+
 }  // namespace vats

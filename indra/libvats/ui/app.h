@@ -278,7 +278,7 @@ private:
     // File dialogs run asynchronously; results come back through this queue.
     enum class Dialog { Open, SaveAs, ImportAnim, ImportBvh, ImportProp, ImportBody, ImportRetarget, LoadAudio, ExportFolder,
                         LoadActor, SaveActor, ExportActor, SitLines, AoNotecard, ExpressionPack, Rhubarb, LoadReference,
-                        ListingMedia, LoadTarget, ExportFile, ExportRig, MapRig, RigScratch };
+                        ListingMedia, LoadTarget, ExportFile, ExportRig, ExportSilentRig, MapRig, RigScratch };
     // the *Actor ones act on file_actor_; SitLines on sit_format_, AoNotecard on ao_format_
     // A dialog's answer, queued for the next frame (hosts may answer on another thread). Several files
     // (body parts) arrive joined with newlines; "" = cancelled.
@@ -1573,6 +1573,7 @@ private:
     void rig_fix_applied(int part, const std::function<void(DaeModel&)>& fix);
     void rig_check_stale();         // a part's mesh changed: check again before the window draws
     void export_rig(const std::string& path);
+    void export_silent_rig(const std::string& path);  // RG-13: the pose's joint positions as a rigged mesh with nothing to see
     double ground_shown() const;    // the ground grid: rest_floor(), or SL's ground under the body while the export shows it
     bool show_rig_export_ = false, show_joint_inspector_ = false;
     std::shared_ptr<struct RigExportUi> rig_ui_;

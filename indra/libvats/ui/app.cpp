@@ -793,6 +793,9 @@ void App::show_dialog(Dialog kind, std::function<void()> after_save) {
             host_.save_file_dialog({{"COLLADA rigged mesh", "dae"}}, dir + (b ? b->name : "rigged") + ".dae", dialog_result(kind));
             break;
         }
+        case Dialog::ExportSilentRig:
+            host_.save_file_dialog({{"COLLADA rigged mesh", "dae"}}, dir + stem + "_silent_rig.dae", dialog_result(kind));
+            break;
         case Dialog::LoadActor:
             host_.open_file_dialog({{"Animation", animations}}, false, dialog_result(kind));
             break;
@@ -1666,6 +1669,9 @@ void App::draw_menus() {
         if (host_.can_upload()) menu_item("upload"), menu_item("upload_all_clips");
         if (menu_item_icon(icon::kIkFk, "Export Rigged Mesh for SL...", nullptr, show_rig_export_)) show_rig_export_ = !show_rig_export_;  // 08 RG-5
         ImGui::SetItemTooltip("The mesh body shown as an uploadable rigged .dae, with joint positions, checked against the uploader's rules");
+        if (menu_item_icon(icon::kIkFk, "Export Silent Rig for SL...")) show_dialog(Dialog::ExportSilentRig);  // 08 RG-13
+        ImGui::SetItemTooltip("The joint positions of the pose at this frame as a rigged .dae with nothing to see (one hidden "
+                              "triangle): worn, it reshapes your skeleton like a deformer, through Reset Skeleton, without sinking you");
         ImGui::Separator();
         menu_item("quit");
         ImGui::EndMenu();
@@ -2245,6 +2251,7 @@ bool App::frame() {
                 case Dialog::AoNotecard: save_ao_notecard(with_extension(path, "txt")); break;
                 case Dialog::ExpressionPack: export_expression_pack(path); break;
                 case Dialog::ExportRig: export_rig(with_extension(path, "dae")); break;
+                case Dialog::ExportSilentRig: export_silent_rig(with_extension(path, "dae")); break;
                 case Dialog::MapRig: guarded(path, [&] { open_rig_map(path); }); break;
                 case Dialog::RigScratch: guarded(path, [&] { open_rig_scratch(path); }); break;
                 case Dialog::Rhubarb: guarded(path, [&] { import_rhubarb(path); }); break;

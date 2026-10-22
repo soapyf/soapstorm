@@ -87,6 +87,16 @@ bool snap_joint_to_default(const Skeleton& skel, DaeModel& model, int node, cons
 // Its vertices are untouched. False for mRoot or an index out of range.
 bool set_written_local(const Skeleton& skel, DaeModel& model, int node, const Vec3& local, const RigExportOptions& opt = {});
 
+// RG-13, a silent rig: the joint positions of a pose (each joint's rest, plus positions' offsets when given (the
+// worn avatar's, "Your avatar"), plus the pose's offsets; the hip's own offset left out) as a rigged mesh with
+// nothing to see, one 4 mm triangle inside the pelvis weighted to mPelvis. Worn in SL with "Include joint positions"
+// it moves those joints for as long as it is worn, through Reset Skeleton, with no undeformer and no animation slot;
+// rotation-only animations keep the shape. Every joint is bound, so only moved ones are listed. head_scale > 0 holds
+// the height: SL takes the avatar's height from the joint positions (sl_body_size) and stands a taller one half the
+// growth into the ground, so mSkull (unweighted, listed) comes down by the growth / (sqrt 2 * head_scale), as Hold
+// without sinking does in an animation (deformer.h); the wearer's mHead scale, SL Default's 0.925. 0: no hold.
+DaeModel silent_rig(const Skeleton& skel, const Pose& pose, const Shape* positions = nullptr, double head_scale = 1);
+
 // RG-9 for showing a body: each part the export refuses without "Stand it in SL's rest pose" (an upright humanoid
 // bound in an A-pose, legs judged across the parts) is made the way SL shows it after that export: its vertices
 // skinned into SL's rest pose at the joint positions the file would write, its binds there. Posed in VATs it then moves
