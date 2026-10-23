@@ -57,12 +57,15 @@ add_library(vats_ui STATIC
     listing_media_ui.cpp
     lint_ui.cpp
     rig_export_ui.cpp
+    update_ui.cpp
     rig_map_ui.cpp
     rig_scratch_ui.cpp
     weight_paint_ui.cpp
     loop_ui.cpp
     loop_assist_ui.cpp
     footlock_ui.cpp
+    hands_out_ui.cpp
+    resize_ui.cpp
     pinned_ghosts_ui.cpp
     pose_match_ui.cpp
     pose_tools_ui.cpp

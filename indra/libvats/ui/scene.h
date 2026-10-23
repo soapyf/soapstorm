@@ -2,12 +2,27 @@
 // Copyright (C) 2026 Viewport Avatar Toolset contributors. LGPL-2.1, see LICENSE.
 #pragma once
 
+#include "imgui.h"  // ImTextureID
+
 namespace vats {
 
 struct Vertex {
     float p[3];
     float n[3];
     float c[4];
+    float uv[2] = {0, 0};  // texture coordinates, v up (only read when the triangles are drawn with a texture)
+};
+
+// A material's texture for Host::scene_triangles. Opaque: the texture's alpha is ignored (an opaque glTF material, or
+// an SL diffuse whose alpha holds something else); Mask: texels whose alpha is below cut are dropped, the rest solid
+// (fur cards, leaves); Blend: the texture's alpha is the surface's.
+struct SurfaceTexture {
+    ImTextureID id{};
+    enum class Alpha { Opaque, Mask, Blend } alpha = Alpha::Opaque;
+    float cut = 0.5f;
+    bool operator<(const SurfaceTexture& o) const {
+        return id != o.id ? id < o.id : alpha != o.alpha ? alpha < o.alpha : cut < o.cut;
+    }
 };
 
 struct Rgb {

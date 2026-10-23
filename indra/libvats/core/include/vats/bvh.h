@@ -19,6 +19,9 @@ struct BvhExportOptions {
     const Shape* shape = nullptr;  // body IK and pins are baked against (IO-13); null = no shape
     ExternalTarget external;       // cross-actor pin targets (GR-4); empty = those pins are skipped
     const Shape* positions = nullptr;  // as AnimExportOptions::positions, for joint_positions channels
+    // Spec 08 RS-4: the skeleton's size. OFFSETs, end sites, the hip's rest and non-hip position channels times this;
+    // the hip's move as keyed.
+    double resize = 1;
 };
 
 struct BvhExportResult {

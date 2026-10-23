@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace vats {
@@ -38,6 +39,16 @@ struct GifImage {
     int frames() const { return int(delays_ms.size()); }
 };
 bool read_gif(const std::uint8_t* data, std::size_t size, GifImage& out);
+
+// A still picture (PNG, JPEG, BMP, TGA...) as straight-alpha RGBA, halved (box filter) until neither side is over
+// max_side. flip: the bottom row first, as a GL texture whose v runs up (model UVs are stored so). False when it
+// cannot be read.
+struct Picture {
+    int width = 0, height = 0;
+    std::vector<std::uint8_t> rgba;
+};
+bool read_picture(const std::uint8_t* data, std::size_t size, Picture& out, int max_side = 2048, bool flip = false);
+bool read_picture_file(const std::string& path, Picture& out, int max_side = 2048, bool flip = false);
 
 // True when the bytes are a PNG in which every pixel is fully transparent: a thumbnail that drew nothing (the viewer's
 // build 25 wrote them so), which the Inventory renders again. False for anything that does not decode.

@@ -1160,6 +1160,16 @@ void skin_prop(const DaeModel& model, const Skeleton& skel, const std::vector<Xf
     for (std::thread& th : pool) th.join();
 }
 
+DaeModel scaled_model(const DaeModel& model, double s) {
+    DaeModel out = model;
+    for (float& v : out.positions) v = float(v * s);
+    for (DaeShapeKey& k : out.shape_keys)
+        for (float& v : k.dpos) v = float(v * s);
+    for (Xform& b : out.binds) b.pos = b.pos * s;
+    out.bounds_min = out.bounds_min * s, out.bounds_max = out.bounds_max * s;
+    return out;
+}
+
 DaeModel shown_model(const DaeModel& m, const MeshLook& look) {
     DaeModel out;
     out.materials = m.materials;

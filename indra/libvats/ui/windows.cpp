@@ -8,6 +8,7 @@
 #include <map>
 #include <sstream>
 
+#include "vats/changelog.h"
 #include "vats_version.h"
 #include "app.h"
 #include "icons.h"
@@ -241,6 +242,13 @@ void App::draw_preferences() {
         host_.associate_file_types(false, msg);
         status(msg);
     }
+    if (host_.can_update()) {  // an installed release (not the viewer, not a build folder)
+        row("Updates");
+        bool on = settings_.update_check == "on";
+        if (ImGui::Checkbox("Check for a new version at startup", &on)) settings_.update_check = on ? "on" : "off", save_settings();
+        ImGui::SetItemTooltip("Asks GitHub for the latest release each time VATs starts, and offers it when it is newer.\n"
+                              "Nothing installs without your click. Help > Check for Updates... works either way.");
+    }
 
     if (host_.world_view()) {  // settings only the viewer uses (spec 09 U4b)
         subheading("In the viewer");
@@ -279,13 +287,22 @@ void App::draw_controls_help() {
 }
 
 void App::draw_welcome() {
+    if (!version_seen_) {  // the first run of a newer version (an update) shows what changed, once
+        version_seen_ = true;
+        if (!headless_ && settings_.last_version != kVersion) {
+            if (!settings_.last_version.empty() || !first_run_) show_welcome_ = true;  // 0.4.x kept no last_version
+            settings_.last_version = kVersion;
+            save_settings();
+        }
+    }
     if (!show_welcome_) return;
     static std::string text;
-    if (text.empty()) {
-        std::ifstream f(assets_dir_ + "/welcome.md");
+    if (text.empty()) {  // the newest five releases of the changelog; a host without one shows its welcome.md
+        const std::string& changelog = host_.paths().changelog;
+        std::ifstream f(changelog.empty() ? assets_dir_ + "/welcome.md" : changelog);
         std::ostringstream ss;
         ss << f.rdbuf();
-        text = ss.str();
+        text = changelog.empty() ? ss.str() : recent_changes(ss.str(), 5);
     }
     ImGui::SetNextWindowSize(window_size(43, 35), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
@@ -351,7 +368,9 @@ std::string App::bake_shape_label(const std::string& key) const {
     return key == "sl-default-male" ? "SL Default (Male)" : "SL Default";
 }
 
-const Shape* App::export_shape() const {
+const Shape* App::export_shape() const { return resized(export_shape_base(), body_size()); }  // 08 RS-3
+
+const Shape* App::export_shape_base() const {
     // "avatar": IK and pins bake on SL Default; only the moving joints' positions come from the worn avatar
     // (export_positions), so nothing else of it (scales, other joints) reaches the file.
     // With the body swap (spec 09 build 32), "avatar" is the swapped body: IK, pins and positions bake on its own joints.
@@ -366,7 +385,7 @@ const Shape* App::export_shape() const {
 // Read live from the host at each export or upload; the project keeps only the choice "avatar".
 const Shape* App::export_positions() const {
     if (bake_shape_key(doc_.clip().export_settings, exporting_yours()) != "avatar") return nullptr;
-    return swap_body() ? export_shape() : host_.body_shape();  // the swapped body's joints, or the worn avatar's
+    return swap_body() ? export_shape_base() : host_.body_shape();  // the swapped body's joints, or the worn avatar's
 }
 
 // The export settings and buttons: Properties > Export (body_h 0: one column, the buttons at its end), the Export panel
@@ -454,6 +473,15 @@ void App::draw_export_section(float body_h) {
             ImGui::SetCursorPosX(label_w);
             hint(("Swapped body: bakes on " + b->name + "'s own joint positions, not your worn avatar's").c_str());
         }
+        if (const double s = body_size(); s != 1) {  // 08 RS-6
+            ImGui::SetCursorPosX(label_w);
+            char text[96];
+            std::snprintf(text, sizeof text, "Resized to %.0f%%", s * 100);
+            if (ImGui::SmallButton(text)) show_resize_ = true;
+            ImGui::SetItemTooltip("The skeleton is %.0f%% of this body's size: IK, pins and position keys bake on it. Click "
+                                  "to change it (View > Body > Resize Skeleton...).",
+                                  s * 100);
+        }
     }
     if (host_.world_view()) {  // the viewer: Your avatar is for the actor that is your avatar, unless this is on
         bool every = json_bool(ex, "avatar_all");
@@ -477,7 +505,7 @@ void App::draw_export_section(float body_h) {
         const std::string text = std::string(name) + (on ? " (" + std::to_string(on) + " on)" : "") + "###" + id;
         return section_header(text.c_str(), false);
     };
-    const int also_on = both + !export_heights(ex).empty() + count_up + to_library + mirrored + bvh_positions + undeform;
+    const int also_on = both + !variant_heights(ex).empty() + count_up + to_library + mirrored + bvh_positions + undeform;
     if (header("Also Write", "also_write", also_on)) {
         ImGui::SetCursorPosX(label_w);
         if (ImGui::Checkbox("Also export the other side (mirrored)", &both)) set("both", both);
@@ -624,7 +652,8 @@ void App::draw_export_section(float body_h) {
                                   "lift them), while it plays and after. mSkull's own position keys are kept and the counter-move "
                                   "added to them. Anything rigged to mSkull, such as system hair, may shift.");
             if (hold) {
-                const Shape* s = export_positions() ? export_positions() : export_shape();  // deformer_body
+                // deformer_body, before the skeleton's size: the wearer's own head (08 RS-4 writes the size in the positions)
+                const Shape* s = export_positions() ? export_positions() : export_shape_base();
                 const int head = skel_.find("mHead");
                 char text[160];
                 if (s && head >= 0 && size_t(head) < s->scale.size())
@@ -688,7 +717,7 @@ void App::draw_export_section(float body_h) {
         for (const Actor& a : doc_.project.actors) actor_names.push_back(a.name);
     }
     std::vector<std::string> files;
-    const std::vector<AnimVariant> variants = anim_variants(mirrored, both, export_heights(ex));
+    const std::vector<AnimVariant> variants = anim_variants(mirrored, both, variant_heights(ex));
     for (size_t k = 0; k < actor_names.size(); ++k) {
         naming.actor = actor_names[k];
         for (size_t v = 0; v < variants.size(); ++v) {
@@ -776,7 +805,7 @@ void App::upload_now(bool all_clips) {
         const std::string stem = export_stem();
         const bool mirrored = doc_.clip().mirror_export;
         // HV-4: the mirrored copy and the height variants, each baked on its own body.
-        const std::vector<AnimVariant> variants = anim_variants(mirrored, json_bool(ex, "both"), export_heights(ex));
+        const std::vector<AnimVariant> variants = anim_variants(mirrored, json_bool(ex, "both"), variant_heights(ex));
         const int home = pr.active, actors = multi_actor() ? int(pr.actors.size()) : 1;
         if (actors > 1) export_home_ = home;
         for (int a = 0; a < actors && problems.empty(); ++a) {
@@ -864,6 +893,7 @@ void App::export_now(bool bvh, bool all_bones, bool all_clips) {
         opt.all_bones = all_bones;
         opt.joint_positions = json_bool(doc_.clip().export_settings, "bvh_positions");
         opt.shape = export_shape();
+        opt.resize = body_size();
         if (multi_actor()) opt.external = actor_resolver(doc_.project.active);
         bvh_lost_ = vats::export_bvh(skel_, doc_.clip(), opt).lost;
         if (!bvh_lost_.empty()) {
@@ -899,7 +929,7 @@ void App::export_now(bool bvh, bool all_bones, bool all_clips) {
         const bool mirrored = doc_.clip().mirror_export;
         // HV-4: the mirrored copy and, for .anim, the height variants, each baked on its own body.
         const std::vector<AnimVariant> variants =
-            anim_variants(mirrored, json_bool(ex, "both"), bvh ? std::vector<double>{} : export_heights(ex));
+            anim_variants(mirrored, json_bool(ex, "both"), bvh ? std::vector<double>{} : variant_heights(ex));
         std::map<double, std::vector<double>> lifts;  // height -> each actor's hip lift, for the placement note
         const bool count_up = json_bool(ex, "count_up"), library = !bvh && json_bool(ex, "save_to_library");
         to_library |= library;
@@ -1139,7 +1169,7 @@ bool App::show_window(const std::string& name) {
         {"hands", &App::show_hands_},       {"export", &App::show_export_dialog_}, {"controls", &App::show_help_},
         {"about", &App::show_about_},       {"quality", &App::show_quality_},
         {"split-dance", &App::show_split_dance_}, {"planner", &App::show_planner_},
-        {"batch-retarget", &App::show_batch_retarget_}, {"foot-lock", &App::show_foot_lock_},
+        {"batch-retarget", &App::show_batch_retarget_}, {"foot-lock", &App::show_foot_lock_}, {"hands-out", &App::show_hands_out_}, {"resize", &App::show_resize_},
         {"auto-balance", &App::show_auto_balance_}, {"jump-arc", &App::show_jump_arc_},
         {"reference", &App::show_reference_}, {"listing-media", &App::show_listing_},
         {"face-cam", &App::face_cam_},      {"keys", &App::show_shortcuts_},

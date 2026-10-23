@@ -47,6 +47,9 @@ struct DaeMaterial {
     std::string texture;  // resolved path of the diffuse texture; empty when none or not found
     bool blend = false;   // alpha-blended (transparency or diffuse alpha < 0.999)
     bool double_sided = false;  // only the default material
+    std::vector<std::uint8_t> image;  // the texture's encoded bytes (PNG, JPEG) when the file embeds it
+    int uv_set = 0;                   // which of the file's UV sets the texture reads (glTF texCoord)
+    float alpha_cutoff = -1;          // glTF MASK: pixels below this alpha are cut away; -1 = none
 };
 
 // The triangles of one material within one part. Its vertices are contiguous too.
@@ -84,7 +87,7 @@ struct MeshLook {
 
 struct DaeModel {
     std::vector<float> positions, normals;  // 3 per vertex, SL space; rigged vertices in bind pose
-    std::vector<float> uvs;                 // 2 per vertex, already flipped (v' = 1 - v)
+    std::vector<float> uvs;                 // 2 per vertex, v running down the image (0 = its top row), as glTF
     std::vector<std::uint32_t> indices;     // 3 per triangle, CCW front faces
     std::vector<DaeGroup> groups;           // per part, one per material in first-use order
     std::vector<DaeMaterial> materials;
@@ -110,6 +113,7 @@ struct DaeModel {
     // few joints close to the centre line) take the decision of a part that could (apply_rig_turn).
     int turn_binds = 0, turn_vertices = 0;
     bool turn_decided = false;
+    bool rest_pose_checked = false;  // stand_in_rest_pose (rig_export.h) has judged it, so it runs once per load
 
     Vec3 bounds_min, bounds_max;  // of positions
     // A mapped rig's spare chains (rig_map.h RM-8): SL joint -> what the chain holds ("scarf"), shown beside its name.
@@ -189,6 +193,10 @@ void apply_rig_turn(DaeModel& model, int turn_binds, int turn_vertices);
 // their joint (SK-40); mRoot is identity. A static model is copied through. 3 floats per vertex out.
 void skin_prop(const DaeModel& model, const Skeleton& skel, const std::vector<Xform>& globals, const Shape* shape,
                std::vector<float>& positions, std::vector<float>& normals);
+
+// Spec 08 RS-8: the model s times its size about the origin (the ground under a body): positions, shape key offsets,
+// bind positions and bounds; rotations, normals and weights unchanged.
+DaeModel scaled_model(const DaeModel& model, double s);
 
 // Spec 08 SK-1..3: the model as a body shows it. Hidden parts are left out (vertices, triangles and groups, the rest
 // renumbered), and each shape key is applied at its look value, else at its file's value: positions move by value x

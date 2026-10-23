@@ -39,6 +39,7 @@ struct Block {
 
 struct Page {
     std::string file;      // stem, e.g. "graph-editor"
+    std::string folder;    // the folder it was read from (its images are relative to it)
     std::string title;     // from the first "# " line
     std::string category;  // from the "Category: " line, "" when absent
     int order = 0;         // from an "Order: <n>" line: its place within the category (0 = after those with one)
@@ -95,10 +96,33 @@ struct Hit {
     int score = 0;
 };
 
+// The online manual, the project's GitHub wiki: every page of docs/wiki but the tutorials, which ship with the app.
+inline constexpr const char* kOnlineManual = "https://github.com/squeedledorf/viewport-avatar-toolset/wiki";
+// Where the Help window fetches an online page from, one at a time, to show it itself: the page's source as the app
+// reads it (<kOnlineSource>/<file>.md, its pictures under images/<file>/).
+inline constexpr const char* kOnlineSource = "https://raw.githubusercontent.com/squeedledorf/viewport-avatar-toolset/main/docs/wiki";
+// A heading's id as GitHub makes it: lower case, spaces as hyphens, punctuation other than hyphens and underscores
+// dropped ("Clean up foot sliding" -> "clean-up-foot-sliding").
+std::string github_anchor(std::string_view heading);
+
+// A page that is in the online manual (online-pages.tsv in the help folder: file, title, category per line), whether
+// or not it is here too.
+struct OnlinePage {
+    std::string file, title, category;
+};
+
 class Library {
 public:
-    // Reads every *.md in dir except STYLE.md and README.md. Returns the number of pages.
+    // Reads every *.md in dir except STYLE.md and README.md, and its online-pages.tsv. Returns the number of pages.
+    // A page already loaded (from an earlier folder) is not added again.
     int load_dir(const std::string& dir);
+    const std::vector<OnlinePage>& online() const { return online_; }
+    // By title (case-insensitive) or by file stem, among the online manual's pages.
+    const OnlinePage* find_online(std::string_view title_or_file) const;
+    // The page's address in the online manual, at a heading when anchor is given.
+    static std::string online_url(const OnlinePage& page, std::string_view anchor = {});
+    // Online pages whose title has every word of the query and that are not here.
+    std::vector<const OnlinePage*> search_online(std::string_view query) const;
     void add(Page page);
 
     const std::vector<Page>& pages() const { return pages_; }
@@ -112,6 +136,7 @@ public:
 
 private:
     std::vector<Page> pages_;
+    std::vector<OnlinePage> online_;
 };
 
 }  // namespace vats::wiki

@@ -14,10 +14,12 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -37,10 +39,30 @@ struct Paths {
     std::string data;       // Linden character data (<data>/character) and rig tables (<data>/retarget)
     std::string assets;     // fonts, starter props (<assets>/props), welcome.md
     std::string help;       // the wiki pages the Help window shows
+    std::string changelog;  // CHANGELOG.md, whose newest releases the Welcome window shows; "" = <assets>/welcome.md
     std::string user;       // libraries, autosaves, window layout; ends with a separator; "" = nowhere to keep them
     std::string library;    // pose, prop and body libraries; ends with a separator; "" = <user>library/
     std::string settings;   // the settings.json file
     std::string character;  // the Linden character files; "" = <data>/character (the viewer ships its own)
+};
+
+// A download running on another thread (Host::download_unpack): state goes from Running to Done or Failed once, with
+// message set before; the UI polls it.
+struct Download {
+    enum State { Running, Done, Failed };
+    std::atomic<int> state{Running};
+    std::string message;  // why it failed
+};
+
+// An update check or download running on another thread (Host::check_for_update): state goes from Running to Done or
+// Failed once, everything else set before; the UI polls it.
+struct UpdateJob {
+    enum State { Running, Done, Failed };
+    std::atomic<int> state{Running};
+    std::atomic<int> percent{0};
+    std::string version;  // a check's: the newer version, "" when there is none
+    std::string notes;    // its release notes (Markdown)
+    std::string message;  // why it failed
 };
 
 // A file-type filter for the file dialogs: {"Mesh", "dae;fbx"}.
@@ -71,9 +93,11 @@ public:
     virtual bool scene_begin(SceneTarget target, int width, int height, const Camera& cam, const SceneColours& colours,
                              const Mat4* projection = nullptr) = 0;
     virtual void scene_ground(const Vec3& focus) = 0;  // grid and contact shadow at height focus.z, under focus's x, y
-    // translucent: back faces culled and no depth writes, for see-through overlays.
+    // translucent: back faces culled and no depth writes, for see-through overlays. texture: the colour is the vertex
+    // colour times the texture (a make_mesh_texture one) at the vertex's uv, its alpha as the material says.
     virtual void scene_triangles(const std::vector<Vertex>& verts, const std::vector<std::uint32_t>& indices,
-                                 bool depth_test, float gloss = 0.f, bool translucent = false) = 0;
+                                 bool depth_test, float gloss = 0.f, bool translucent = false,
+                                 const SurfaceTexture* texture = nullptr) = 0;
     virtual ImTextureID scene_end() = 0;  // the target's picture, for ImDrawList::AddImage (bottom-up rows)
     // Saves the last Thumbnail picture as a PNG with straight alpha; false when it cannot.
     virtual bool save_thumbnail_png(const std::string& path) = 0;
@@ -82,6 +106,12 @@ public:
     // A texture from straight-alpha RGBA pixels, width * height * 4 bytes, top row first (the help's GIF frames),
     // freed with free_texture; 0 when this host cannot (the help then shows the GIF's alt text).
     virtual ImTextureID make_texture(const std::uint8_t* rgba, int width, int height) {
+        (void)rgba, (void)width, (void)height;
+        return ImTextureID{};
+    }
+    // A texture for a model's material (scene_triangles): bottom row first, mipmapped and repeating. Freed with
+    // free_texture. A host that cannot texture models returns 0, and the model draws in its material colours.
+    virtual ImTextureID make_mesh_texture(const std::uint8_t* rgba, int width, int height) {
         (void)rgba, (void)width, (void)height;
         return ImTextureID{};
     }
@@ -159,6 +189,11 @@ public:
     // a mesh body; spec 09 build 32). The host then hides your avatar and its attachments on this screen only (nothing
     // goes to the region) and shows them again with false, and when the editor closes.
     virtual void hide_avatar(bool hide) { (void)hide; }
+    // With world_view, once a frame (spec 08 RS-7): your avatar drawn size times as big on this screen only (nothing goes
+    // to the region), every bone and collision volume scaled and the pelvis moved by pelvis_lift (your actor's space)
+    // so the soles stay on the ground; 1 = as it is. True when the host shows it: the UI then poses on the resized
+    // worn shape.
+    virtual bool resize_avatar(double size, const Vec3& pelvis_lift) { (void)size, (void)pelvis_lift; return false; }
     // With world_view (spec 09 build 34): your own avatar's pose as the world shows it now, whatever plays it (the region's
     // and your AO's animations, the walk, the sit, the editor's own motion), read back from its joints as
     // Skeleton::pose_from_live makes it: each node's rotation from rest, and the pelvis's offset from rest in your actor's
@@ -250,6 +285,14 @@ public:
         // its menu label, or nullptr when the host has none.
         virtual const char* inventory_label() const { return nullptr; }
         virtual void toggle_inventory() {}
+        // The host's own object editor (the viewer's Build window): while it is on, the world's clicks, hover and keys
+        // are the host's tools again, to move, turn and resize worn objects on the posed avatar; the editor keeps
+        // holding the avatar. Its menu label, or nullptr when the host has none; the host may end it by itself (the
+        // Build window closed), so ask editing_objects every frame.
+        virtual const char* edit_objects_label() const { return nullptr; }
+        virtual const char* edit_objects_shortcut() const { return nullptr; }
+        virtual bool editing_objects() const { return false; }
+        virtual void edit_objects(bool on) { (void)on; }
         // The host's full UI, shown over the editor until turned off again (the viewer).
         virtual const char* reveal_label() const = 0;
         virtual const char* reveal_shortcut() const { return nullptr; }  // shown beside it in the menu
@@ -309,6 +352,27 @@ public:
 
     // --- The rest -------------------------------------------------------------------------------
     virtual void open_url(const std::string& url) = 0;
+    // Downloads a .tar.gz from an https URL and unpacks it into dir, replacing what was there only once it has all
+    // arrived and unpacked (Help > Download the Manual). nullptr when this host cannot download.
+    virtual std::shared_ptr<Download> download_unpack(const std::string& url, const std::string& dir) {
+        (void)url, (void)dir;
+        return nullptr;
+    }
+    // Downloads one file from an https URL to path (written whole, or not at all). nullptr when this host cannot.
+    virtual std::shared_ptr<Download> download_file(const std::string& url, const std::string& path) {
+        (void)url, (void)path;
+        return nullptr;
+    }
+    // Updates of the standalone app (Velopack): only an installed release can (not the viewer, not a build folder).
+    virtual bool can_update() { return false; }
+    // Asks for a newer release, on another thread: Done with version and notes set, or version "" when this one is
+    // the latest. One update job at a time.
+    virtual std::shared_ptr<UpdateJob> check_for_update() { return nullptr; }
+    // Downloads what the last check found, on another thread, setting percent as it goes.
+    virtual std::shared_ptr<UpdateJob> download_update() { return nullptr; }
+    // Puts the downloaded update in place once this program has quit, then starts VATs again; the caller quits next.
+    // An update downloaded and not applied this way is put in place at the next start.
+    virtual bool apply_update_on_exit() { return false; }
     virtual void set_title(const std::string& title) = 0;
     // Runs shell commands for the firewall helper (firewall.h), possibly on another thread.
     virtual CommandRunner command_runner() = 0;

@@ -19,6 +19,7 @@
 #include "vats/face_fit.h"
 #include "vats/fbx.h"
 #include "vats/picker.h"
+#include "vats/rig_export.h"
 #include "vats/rig_map.h"
 #include "vats/soft_body.h"
 
@@ -164,10 +165,10 @@ const App::MeshBody* App::swap_body() const {
 
 const Shape* App::shape() const {
     if (const Shape* worn = worn_shape()) {  // the viewer: your actor is the avatar in the world (unless swapped)
-        if (!editing_other()) return worn;
+        if (!editing_other()) return worn;  // 08 RS-7: drawn by the world at its own size, so not resized
         return actor_shape(doc_.project.active);  // another actor: the proportions of the body it is drawn with
     }
-    return view_body_shape();
+    return resized(view_body_shape(), body_size());  // 08 RS-3
 }
 
 const Shape* App::view_body_shape() const {
@@ -385,19 +386,33 @@ void App::harmonize_body(const MeshBody& b) const {
             decided = m;
             break;
         }
-    if (!decided) return;
-    for (const std::string& path : b.parts) {
-        if (auto it = self->prop_models_.find(path); it != self->prop_models_.end() && it->second)
-            apply_rig_turn(*it->second, decided->turn_binds, decided->turn_vertices);
-        if (auto it = self->prop_sources_.find(path); it != self->prop_sources_.end() && it->second)  // so a rebuild keeps it
-            apply_rig_turn(*it->second, decided->turn_binds, decided->turn_vertices);
-    }
+    if (decided)
+        for (const std::string& path : b.parts) {
+            if (auto it = self->prop_models_.find(path); it != self->prop_models_.end() && it->second)
+                apply_rig_turn(*it->second, decided->turn_binds, decided->turn_vertices);
+            if (auto it = self->prop_sources_.find(path); it != self->prop_sources_.end() && it->second)  // so a rebuild keeps it
+                apply_rig_turn(*it->second, decided->turn_binds, decided->turn_vertices);
+        }
+    // RG-9: a body bound in an A-pose stands in SL's rest pose, as SL shows it after the rig export, so animations made
+    // for that rest (a retarget) fit it. Not while mapping or rigging: their bones are drawn in the file's own pose.
+    if (b.id == "run:rig-map-preview" || b.id == "run:rig-scratch-preview") return;
+    // The parts as loaded are stood, so what is shown and every edit carried back (weights, rig fixes) share one frame.
+    std::vector<DaeModel*> sources;
+    std::vector<std::string> fresh;
+    for (const std::string& path : b.parts)
+        if (auto it = self->prop_sources_.find(path); it != self->prop_sources_.end() && it->second) {
+            sources.push_back(it->second.get());  // all of them: the legs may be in another part
+            if (!it->second->rest_pose_checked) fresh.push_back(path);
+        }
+    if (fresh.empty() || !stand_in_rest_pose(skel_, sources)) return;
+    for (const std::string& path : fresh) self->part_source_changed(path);  // shown again from the stood part
+    self->body_shapes_.clear();
 }
 
 const Shape* App::mesh_body_shape(const MeshBody& b, const Shape* base) const {
+    harmonize_body(b);  // first: standing a part in the rest pose clears this cache
     auto [it, fresh] = body_shapes_.try_emplace({b.id, base});
     if (fresh) {
-        harmonize_body(b);
         std::vector<const DaeModel*> parts;
         // ponytail: prop_model caches meshes and is not const; the cache is the only state it touches here.
         for (const std::string& path : b.parts) parts.push_back(const_cast<App*>(this)->prop_model(path));

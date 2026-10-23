@@ -1,3 +1,17 @@
+# What's new in 0.3.0
+
+## Your own models, as they look
+- **Textures.** Meshes and mesh bodies show their own textures, including ones packed inside a .glb or .fbx, with cut-out and see-through materials.
+- **Push Hands Out of the Body.** Hands that sink into a wide body (its real mesh, not SL's) are moved back out through the arms, easing out and back. **Tools** menu.
+
+## Motion capture
+- **Import any BVH.** A CMU or Mixamo BVH opens in the retarget importer, and **Remove Spikes** cleans capture glitches on import or from the **Edit** menu.
+- **Loops that line up.** Make Loop Seamless spreads its fix over the whole loop; Remove Hip Travel follows a wandering take's path and keeps planted feet planted; **Move to Origin** centres a take. **Tools > Loop Tools**.
+- **Crop to Range** keeps only the frames you mark. **Edit > Time**.
+
+## Help
+- The manual is online: any page opens right here in the Help window, fetched as you open it and kept for offline reading. The tutorials come with VATs; **Help > Download the Manual for Offline Reading** fetches the rest at once.
+
 # What's new in 0.2.0
 
 ## Posing

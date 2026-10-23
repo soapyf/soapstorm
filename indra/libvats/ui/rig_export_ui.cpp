@@ -15,6 +15,7 @@
 #include "icons.h"
 #include "imgui.h"
 #include "theme.h"
+#include "vats/deformer.h"
 #include "vats/lint.h"
 #include "vats/rig_export.h"
 #include "widgets.h"
@@ -36,6 +37,10 @@ struct RigExportUi {
     std::string last_export;  // the file written last, for Local Mesh
     RigHeight height;         // where SL will stand it (RG-8)
     bool show_ground = true;  // draw SL's ground under the body while the window is open
+    // RS-8: Resize Skeleton's size. Not 1: the parts are checked and written as copies at that size (scaled), and
+    // a fix found on a copy is carried back to the part at its own size.
+    double size = 1;
+    std::vector<DaeModel> scaled;
 };
 
 namespace {
@@ -77,6 +82,8 @@ std::string upload_steps(const RigExportUi& ui) {
 
 }  // namespace
 
+RigExportOptions App::rig_export_options() const { return rig_ui_ ? rig_ui_->opt : RigExportOptions{}; }
+
 // Rebuilds the parts, the findings and the joint tables from the body shown.
 void App::refresh_rig_check() {
     if (!rig_ui_) rig_ui_ = std::make_shared<RigExportUi>();
@@ -91,10 +98,15 @@ void App::refresh_rig_check() {
     const MeshBody* b = mesh_body();
     ui.body_id = b ? b->id : "";
     ui.height = {};
+    ui.size = body_size();
+    ui.scaled.clear();
     if (!b) return;
+    harmonize_body(*b);  // as the view shows it (an A-pose body stood in SL's rest pose), drawn yet or not (--export-rig)
+    ui.scaled.reserve(b->parts.size());  // parts point into it
     for (const std::string& path : b->parts) {
         RigPart p;
         p.model = prop_model(path);
+        if (p.model && ui.size != 1) p.model = &ui.scaled.emplace_back(scaled_model(*p.model, ui.size));
         p.name = stem_of(path);
         if (auto it = prop_reports_.find(path); it != prop_reports_.end()) {
             p.unmapped_joints = it->second.unmapped_joints;
@@ -125,8 +137,9 @@ void App::rig_fix_applied(int part, const std::function<void(DaeModel&)>& fix) {
     DaeModel* src = part_source(path);
     const DaeModel* shown = prop_model(path);
     if (src && shown) {
-        DaeModel after = *shown;
+        DaeModel after = ui.size != 1 ? scaled_model(*shown, ui.size) : *shown;
         fix(after);
+        if (ui.size != 1) after = scaled_model(after, 1 / ui.size);
         src->binds = after.binds, src->bound = after.bound, src->rig_axes = after.rig_axes;
         const std::vector<std::uint32_t> from = shown_vertex_sources(*src, prop_looks_[path]);
         for (size_t v = 0; v < from.size() && v < size_t(after.vertex_count()); ++v) {
@@ -149,6 +162,32 @@ double App::ground_shown() const {
     return rest_floor();
 }
 
+// RG-13: the pose at this frame, its joint positions only (on the bake shape's: Your avatar's mesh joint positions
+// stay), the hip's travel left out, as a rigged mesh with one hidden triangle; mSkull holds the height on the bake
+// shape's scales, as Hold without sinking does.
+void App::export_silent_rig(const std::string& path) {
+    SilentRigInfo info;
+    const DaeModel m = silent_rig(skel_, pose_, export_positions(), deformer_body(anim_export_options()), true, &info);
+    if (info.moved == 0)
+        return message("Silent rig not exported", "No joint is moved at this frame: move joints with the Move tool first (their positions are what the rig carries)");
+    int uploads = 0;
+    for (const RigJoint& j : rig_joints(skel_, m, {})) uploads += j.uploads;
+    if (uploads == 0)
+        return message("Silent rig not exported", "The moves at this frame only change mSkull's height, which holding the wearer on the ground takes back");
+    RigPart part;
+    part.model = &m;
+    part.name = stem_of(path);
+    std::string text, why;
+    if (!write_rig_dae(skel_, {part}, {}, text, why)) return message("Silent rig not exported", why);
+    if (!write_text(path, text, false, why)) return message("Could not write " + stem_of(path) + ".dae", why);
+    char held[96] = "";
+    if (std::fabs(info.skull_counter) >= 0.0005)
+        std::snprintf(held, sizeof held, ", mSkull %.1f cm %s so you neither sink nor float", std::fabs(info.skull_counter) * 100,
+                      info.skull_counter < 0 ? "lower" : "higher");
+    status("Exported " + stem_of(path) + ".dae: " + std::to_string(info.moved) + " moved joint" + (info.moved == 1 ? "" : "s") + " from frame " +
+           std::to_string(int(std::lround(frame_))) + held + ". Upload with Include skin weight and Include joint positions ticked");
+}
+
 void App::export_rig(const std::string& path) {
     refresh_rig_check();
     RigExportUi& ui = *rig_ui_;
@@ -161,7 +200,8 @@ void App::export_rig(const std::string& path) {
         for (const RigJoint& j : ui.tables[i]) listed += j.listed, positions += j.uploads;
         if (ui.parts[i].model) tris += ui.parts[i].model->triangle_count();
     }
-    std::string summary = std::to_string(ui.parts.size()) + (ui.parts.size() == 1 ? " mesh, " : " meshes, ") + std::to_string(tris) +
+    std::string summary = (ui.size != 1 ? "At " + std::to_string(int(std::lround(ui.size * 100))) + "% size, " : std::string()) +
+                          std::to_string(ui.parts.size()) + (ui.parts.size() == 1 ? " mesh, " : " meshes, ") + std::to_string(tris) +
                           " triangles, " + std::to_string(listed) + " joints listed";
     if (ui.opt.joint_positions && !ui.opt.bind_pose_only)
         summary += ", " + std::to_string(positions) + " joint position" + (positions == 1 ? "" : "s") +
@@ -195,7 +235,7 @@ void App::draw_rig_export_window() {
     if (!rig_ui_) rig_ui_ = std::make_shared<RigExportUi>();
     RigExportUi& ui = *rig_ui_;
     const MeshBody* b = mesh_body();
-    if (ui.due || (b ? b->id : "") != ui.body_id) refresh_rig_check();
+    if (ui.due || (b ? b->id : "") != ui.body_id || body_size() != ui.size) refresh_rig_check();
     place_tool_window("Export Rigged Mesh for SL", 36, 38);
     if (!ImGui::Begin("Export Rigged Mesh for SL", &show_rig_export_)) return ImGui::End();
     help_button("rigging-for-sl-without-add-ons");
@@ -214,6 +254,15 @@ void App::draw_rig_export_window() {
         ImGui::SetTooltip("%s", tip.c_str());
     }
     hint("A rigged .dae the SL mesh uploader takes, checked against its rules.");
+    if (ui.size != 1) {  // RS-8: the avatar for animations made at this size
+        double top = 0;
+        for (const RigPart& p : ui.parts)
+            if (p.model) top = std::max(top, double(p.model->bounds_max.z));
+        ImGui::Text("Written at Resize Skeleton's size: %.0f%%, %.2f m tall.", ui.size * 100, top);
+        ImGui::SetItemTooltip("The mesh and its joint positions are scaled with the skeleton (View > Resize Skeleton), so\n"
+                              "animations exported at that size fit the avatar this file makes. Set the size to 100%% to\n"
+                              "write the body as imported.");
+    }
     ImGui::Separator();
     bool changed = false;
     changed |= ImGui::Checkbox("Joint positions", &ui.opt.joint_positions);
@@ -275,6 +324,14 @@ void App::draw_rig_export_window() {
                 status("Rig export: " + label + " on " + name);
             }
             ImGui::SetItemTooltip("%s", "Applied to the part as loaded, for this session; re-import the file to undo");
+            ImGui::SameLine();
+        }
+        if (f.fix_options) {
+            if (ImGui::Button(f.fix_label.c_str())) {
+                f.fix_options(ui.opt);
+                ui.due = true;
+                status("Rig export: " + f.fix_label);
+            }
             ImGui::SameLine();
         }
         std::vector<int> nodes;

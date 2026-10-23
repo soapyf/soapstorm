@@ -7,6 +7,7 @@ add_library(vats_core STATIC
     src/audio_decoders.c
     src/image_decoders.c
     src/anim_file.cpp
+    src/changelog.cpp
     src/avatar_mesh.cpp
     src/bone_heat.cpp
     src/auto_rig.cpp
@@ -33,6 +34,7 @@ add_library(vats_core STATIC
     src/sit_export.cpp
     src/world_reduce.cpp
     src/height_variant.cpp
+    src/resize.cpp
     src/clips.cpp
     src/ao_notecard.cpp
     src/file_library.cpp
@@ -63,6 +65,7 @@ add_library(vats_core STATIC
     src/lint.cpp
     src/deformer.cpp
     src/self_contact.cpp
+    src/mesh_contact.cpp
     src/loop_tools.cpp
     src/loop_assist.cpp
     src/tween.cpp

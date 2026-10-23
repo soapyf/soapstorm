@@ -51,6 +51,21 @@ namespace FSVATsEditor
     // Build 32: true while View > Body shows a mesh body in your avatar's place (the editor holds your avatar):
     // LLVOAvatar::isVisible hides your own avatar and, with it, its attachments, on this screen only.
     bool hidesYourAvatar();
+    // VATs spec 08 RS-7: true while the editor draws your avatar resized (joint scales on your screen only).
+    // LLVOAvatar then takes no new body size from the scaled joints, so none is sent to the region
+    // (bodySizeChanged -> sendAgentSetAppearance); the size is measured again once the scales are put back.
+    bool resizesYourAvatar();
+    // Around LLVOAvatar writing your avatar's joint scales (shape params and avatar physics, which add to the scale
+    // they find; a mesh's lock-scale overrides, which keep the scale they find): while the editor resizes your avatar
+    // its joints hold their own scales for the change, and the editor takes them again after it.
+    struct AvatarScaleChange
+    {
+        explicit AvatarScaleChange(bool self);
+        ~AvatarScaleChange();
+        AvatarScaleChange(const AvatarScaleChange&) = delete;
+        AvatarScaleChange& operator=(const AvatarScaleChange&) = delete;
+        bool mSelf;
+    };
     // True while the editor hides every other avatar (spec 09 U5): it turns on the viewer's Render Only Friends
     // (RenderAvatarFriendsOnly) and LLVOAvatar::isBuddy answers false, so friends are hidden too; never your own.
     bool hidesOtherAvatars();
@@ -64,6 +79,11 @@ namespace FSVATsEditor
     bool hidesWorldTips();
     // True while the editor is open: the world's clicks and the keys are the editor's (FSVATsImGui).
     bool ownsWorld();
+    // Spec 09 §0m, Viewer > Edit Objects in World: true while the viewer's Build window edits objects over the open editor;
+    // the world's clicks, hover and keys are then the viewer's again (FSVATsImGui), the editor still holds your avatar.
+    // toggleEditObjects: Ctrl+B while the editor is open, and Esc while editing; true when the mode changed.
+    bool editingObjects();
+    bool toggleEditObjects();
     // From LLAgent::setControlFlags (spec 09 U4b): the flags that may reach the avatar. While the editor holds it,
     // no movement input does (only the editor's own return autopilot), and neither does Stand Up while the
     // editor has sat it down (with a "Close the editor to stand up" tip).

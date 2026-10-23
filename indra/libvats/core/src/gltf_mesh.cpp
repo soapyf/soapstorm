@@ -233,17 +233,26 @@ bool load(const std::vector<std::uint8_t>& bytes, const std::string& dir, const 
                     const Json* img = images && si >= 0 && si < int(images->arr.size()) ? &images->arr[si] : nullptr;
                     const Json* uri = img ? img->find("uri") : nullptr;
                     std::string raw = uri && uri->is_string() ? uri->str : "";
+                    d.uv_set = std::max(0, inum(bt->find("texCoord"), 0));
                     std::error_code ec;
                     const std::filesystem::path file = std::filesystem::path(dir) / raw;
-                    if (!raw.empty() && raw.rfind("data:", 0) != 0 && std::filesystem::is_regular_file(file, ec)) {
+                    if (const Json* bv = img ? img->find("bufferView") : nullptr; bv && raw.empty()) {
+                        if (!rd.view_bytes(inum(bv), d.image)) d.image.clear(), rd.err.clear();  // embedded (GLB)
+                    } else if (raw.rfind("data:", 0) == 0) {
+                        if (const size_t comma = raw.find(','); comma != std::string::npos)  // a data: URI
+                            d.image = gltf::base64(std::string_view(raw).substr(comma + 1));
+                    } else if (!raw.empty() && std::filesystem::is_regular_file(file, ec)) {
                         d.texture = file.lexically_normal().string();
-                        d.rgba = {1, 1, 1, d.rgba[3]};
-                    } else {
-                        add_unique(rep.missing_textures, raw.empty() ? "an embedded texture" : raw);
                     }
+                    if (!d.texture.empty() || !d.image.empty())
+                        d.rgba = {1, 1, 1, d.rgba[3]};
+                    else
+                        add_unique(rep.missing_textures, raw.empty() || raw.rfind("data:", 0) == 0 ? "an embedded texture" : raw);
                 }
             }
             if (const Json* am = m->find("alphaMode"); am && am->is_string() && am->str == "BLEND") d.blend = true;
+            if (const Json* am = m->find("alphaMode"); am && am->is_string() && am->str == "MASK")
+                d.alpha_cutoff = float(num(m->find("alphaCutoff"), 0.5));
             if (const Json* ds = m->find("doubleSided"); ds && ds->is_bool()) d.double_sided = ds->b;
             d.blend = d.blend || d.rgba[3] < 0.999f;
         } else {
@@ -285,6 +294,8 @@ bool load(const std::vector<std::uint8_t>& bytes, const std::string& dir, const 
             }
             const Json* attrs = prim.find("attributes");
             if (!attrs) continue;
+            const int mat = material(inum(prim.find("material")));
+            const std::string texcoord = "TEXCOORD_" + std::to_string(model.materials[size_t(mat)].uv_set);
             std::vector<float> pos, nrm, uv, j0, w0, j1, w1, idxf;
             int w = 0;
             if (!attrs->find("POSITION") || !rd.floats(inum(attrs->find("POSITION")), pos, w) || w != 3) {
@@ -294,7 +305,8 @@ bool load(const std::vector<std::uint8_t>& bytes, const std::string& dir, const 
             }
             const size_t nv = pos.size() / 3;
             if (attrs->find("NORMAL") && !(rd.floats(inum(attrs->find("NORMAL")), nrm, w) && w == 3 && nrm.size() == nv * 3)) nrm.clear();
-            if (attrs->find("TEXCOORD_0") && !(rd.floats(inum(attrs->find("TEXCOORD_0")), uv, w) && w == 2 && uv.size() == nv * 2)) uv.clear();
+            const Json* tc = attrs->find(texcoord) ? attrs->find(texcoord) : attrs->find("TEXCOORD_0");
+            if (tc && !(rd.floats(inum(tc), uv, w) && w == 2 && uv.size() == nv * 2)) uv.clear();
             if (skin) {
                 if (attrs->find("JOINTS_0") && !(rd.floats(inum(attrs->find("JOINTS_0")), j0, w) && w == 4 && j0.size() == nv * 4)) j0.clear();
                 if (attrs->find("WEIGHTS_0") && !(rd.floats(inum(attrs->find("WEIGHTS_0")), w0, w) && w == 4 && w0.size() == nv * 4)) w0.clear();
@@ -323,7 +335,7 @@ bool load(const std::vector<std::uint8_t>& bytes, const std::string& dir, const 
             } else {
                 for (size_t i = 0; i < nv; ++i) idx.push_back(std::uint32_t(i));
             }
-            Build& b = builds[{ni, material(inum(prim.find("material")))}];
+            Build& b = builds[{ni, mat}];
             const std::uint32_t base = std::uint32_t(b.pos.size() / 3);
             for (size_t v = 0; v < nv; ++v) {
                 const Vec3 p = x.point({pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]});
@@ -331,7 +343,7 @@ bool load(const std::vector<std::uint8_t>& bytes, const std::string& dir, const 
                 for (int i = 0; i < 3; ++i) b.pos.push_back(float(p[i])), b.nrm.push_back(float(nv3[i]));
                 b.smooth.push_back(nrm.empty());
                 b.uv.push_back(uv.empty() ? 0.f : uv[v * 2]);
-                b.uv.push_back(uv.empty() ? 0.f : 1 - uv[v * 2 + 1]);
+                b.uv.push_back(uv.empty() ? 0.f : uv[v * 2 + 1]);  // glTF's v already runs down
                 if (!model.rigged) continue;
                 // Weights: summed per SL joint, the four largest renormalised; nothing -> 100 % root.
                 int j4[4] = {root, root, root, root};

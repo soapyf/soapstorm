@@ -45,6 +45,9 @@ struct Settings {
     bool show_graph = true;
     std::string theme = "Dusk";
     bool show_welcome = true;
+    std::string update_check;  // "" = ask on the first run, "on" = look for a new version at startup, "off" = only when asked
+    std::string update_skip;   // a version the user chose to skip
+    std::string last_version;  // the version that ran last: a newer one shows What's New once
 #ifdef VATS_LEGACY_IMPORT
     bool migration_offered = false;  // IO-54: the first-run legacy import is offered once
 #endif
@@ -58,6 +61,7 @@ struct Settings {
     bool hide_unused_bones = true;     // View > Bones > Hide Unused Bones (on by default): a mesh body's unweighted bones
     bool plain_bone_names = true;      // View > Bones > Plain Names: "Left Thigh" beside mHipLeft (off for those who know SL's)
     bool follow_through = true;        // 08 FP-4: Tools > Follow-Through While Posing
+    bool resize_keys = true;           // 08 RS-5: Resize Skeleton's "Keep feet on the ground and scale the keys"
     bool show_weights = true;          // RM-10: View > Bones > Show Weights of Selected (the heat map on the body)
     bool avatar_physics = false;       // RM-10: Tools > Avatar Physics Preview (SL's bounce on BELLY, BUTT and the PECs)
     Json physics = Json::object();     // its settings, read and written by dynamics_ui.cpp

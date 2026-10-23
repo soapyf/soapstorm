@@ -416,14 +416,15 @@ std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const
     if (on("ground") && skel.find("mAnkleLeft") >= 0) {
         const auto lo = std::min_element(low.begin(), low.end());
         const double d = *lo - ground;
+        const double tol = kGroundTol * opt.resize;  // 08 RS: a body twice the size dips twice as far for the same step
         std::vector<int> frames;
-        if (d < -kGroundTol) {
+        if (d < -tol) {
             for (int f = 0; f <= last; ++f)
-                if (low[f] - ground < -kGroundTol) frames.push_back(f);
+                if (low[f] - ground < -tol) frames.push_back(f);
         } else {
             frames.push_back(int(lo - low.begin()));
         }
-        if (std::fabs(d) > kGroundTol) {
+        if (std::fabs(d) > tol) {
             std::vector<std::string> ik_legs;
             for (const char* limb : {"LegLeft", "LegRight"})
                 if (int l = rig.find_limb(limb); l >= 0 && uses_ik(clip, rig.limbs()[l])) ik_legs.push_back("ik." + std::string(limb));
@@ -573,7 +574,8 @@ std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const
     if (on("body_height") && !taller.empty()) {
         // The whole height, as the viewer takes it: the left leg's keys count too (for its knee, ankle and foot the
         // root rises half what the leg grows, so the feet sink the other half), and Hold without sinking evens it all.
-        const Shape* body = deformer_body(eo);  // the worn avatar's scales when the export uses its joints
+        const Shape sized = sized_deformer_body(skel, eo);  // the worn avatar's scales when the export uses its joints
+        const Shape* body = &sized;
         const double rest = sl_body_size(skel, nullptr, body).height;
         // The clip as the export writes it: End at rest and Hold without sinking (09 0l) change the positions.
         const bool deformer = eo.end_at_rest || eo.hold_without_sinking;
@@ -619,7 +621,7 @@ std::vector<LintFinding> lint_clip(const Skeleton& skel, const Clip& clip, const
             const int head = skel.find("mHead");
             const double hs = body && head >= 0 && size_t(head) < body->scale.size() ? body->scale[size_t(head)].z : 1;
             if (counter)
-                fix = {fmt("Hold Without Sinking (mSkull, head scale %.3g)", hs),
+                fix = {fmt("Hold Without Sinking (mSkull, head scale %.3g)", hs / eo.resize),  // the wearer's (08 RS-4)
                        [&skel, sh = body ? std::optional<Shape>(*body) : std::nullopt](Clip& c) {
                            hold_without_sinking(c, skel, sh ? &*sh : nullptr);
                        }};

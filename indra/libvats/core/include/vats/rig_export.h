@@ -87,6 +87,30 @@ bool snap_joint_to_default(const Skeleton& skel, DaeModel& model, int node, cons
 // Its vertices are untouched. False for mRoot or an index out of range.
 bool set_written_local(const Skeleton& skel, DaeModel& model, int node, const Vec3& local, const RigExportOptions& opt = {});
 
+// RG-13, a silent rig: the joint positions of a pose (each joint's rest, plus positions' offsets when given (the
+// worn avatar's, "Your avatar"), plus the pose's offsets; the hip's own offset left out) as a rigged mesh with
+// nothing to see, one 4 mm triangle inside the pelvis weighted to mPelvis. Worn in SL with "Include joint positions"
+// it moves those joints for as long as it is worn, through Reset Skeleton, with no undeformer and no animation slot;
+// rotation-only animations keep the shape. Every joint and collision volume is bound, so only moved ones are listed.
+// hold_height: SL takes the avatar's height from the joint positions (sl_body_size, on body's scales: the bake shape,
+// null = none) and stands a taller one half the growth into the ground, so mSkull (unweighted, listed) moves by the
+// growth / (sqrt 2 * body's mHead scale), as Hold without sinking does in an animation (deformer.h).
+struct SilentRigInfo {
+    int moved = 0;              // joints and volumes the pose moves (the hip aside), the body's own positions not counted
+    double skull_counter = 0;   // the height hold's move of mSkull, metres (< 0: down)
+};
+DaeModel silent_rig(const Skeleton& skel, const Pose& pose, const Shape* positions = nullptr, const Shape* body = nullptr,
+                    bool hold_height = true, SilentRigInfo* info = nullptr);
+
+// RG-9 for showing a body: each part the export refuses without "Stand it in SL's rest pose" (an upright humanoid
+// bound in an A-pose, legs judged across the parts) is made the way SL shows it after that export: its vertices
+// skinned into SL's rest pose at the joint positions the file would write, its binds there. Posed in VATs it then moves
+// as in SL, where animations made for SL's rest (a retarget, a stand) would otherwise turn its arms through the body.
+// The export of a stood part writes the same in-world result. Pass every part of the body (the legs may be in another
+// file); each is judged once (DaeModel::rest_pose_checked), so call it on the models as loaded, before any copy is
+// made of them, and edits made afterwards stay in the stood frame. Shape key offsets turn with their vertices. False
+// when no part was stood.
+bool stand_in_rest_pose(const Skeleton& skel, const std::vector<DaeModel*>& parts);
 enum class RigSeverity { Error, Warning, Info };  // Error: the uploader refuses or breaks it; export is refused
 
 struct RigFinding {
@@ -97,6 +121,7 @@ struct RigFinding {
     std::string message;
     std::string fix_label;                             // "" = no automatic fix
     std::function<void(DaeModel&)> fix;                // applied to parts[part]'s model (the caller drops caches)
+    std::function<void(RigExportOptions&)> fix_options;  // or: the export options that fix it (fix_label names it)
 };
 
 struct RigRule {

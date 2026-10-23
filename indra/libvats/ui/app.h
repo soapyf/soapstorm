@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <list>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -46,6 +47,7 @@
 #include "vats/project.h"
 #include "vats/motion_quality.h"
 #include "vats/rig.h"
+#include "vats/rig_export.h"
 #include "vats/rig_map.h"
 #include "vats/simplify.h"
 #include "vats/skeleton.h"
@@ -94,6 +96,8 @@ struct Action {
     std::function<void()> run;
     std::function<const char*()> unavailable;  // why it can't run now, or nullptr
 };
+
+struct HelpUi;  // help_ui.cpp
 
 class App {
 public:
@@ -151,6 +155,12 @@ public:
     void goto_frame(double f) { set_frame(f); }
     // Opens the help browser at a page (title or file stem; "" = the front page, VATs) and heading.
     void open_help(const std::string& page = "", const std::string& anchor = "");
+    HelpUi& help();               // the help's state, made on first use (help_ui.cpp)
+    void download_manual();       // Help > Download the Manual: the online manual, for offline reading
+    void remove_manual();
+    void poll_manual_download();
+    bool manual_downloaded();
+    bool manual_pages_kept();  // the whole manual, or pages opened one by one
     void cli_import_prop(const std::string& path) { guarded(path, [&] { import_prop(path); }); }
     // --import-body: the files as one body, shown (headless runs: the report goes to stderr).
     void cli_import_body(const std::vector<std::string>& paths) { guarded(paths.empty() ? "" : paths[0], [&] { import_body(paths); }); }
@@ -209,6 +219,9 @@ public:
         return true;
     }
     bool cli_select_group(const std::string& name);  // --select-group: a picker group by its name ("Right Arm")
+    // --resize <percent> [--resize-keys-off] (08 RS): View > Body > Resize Skeleton's Apply on the open project; false
+    // when the size is not a number in range. The checkbox stays as saved unless keys_off.
+    bool cli_resize(const std::string& percent, bool keys_off);
     // --light <noon|key|rim|dusk|night|studio> and --backdrop (08 LT): the Light menu from the command line.
     bool set_light(const std::string& id);
     void show_backdrop() { backdrop_ = true; }
@@ -265,7 +278,7 @@ private:
     // File dialogs run asynchronously; results come back through this queue.
     enum class Dialog { Open, SaveAs, ImportAnim, ImportBvh, ImportProp, ImportBody, ImportRetarget, LoadAudio, ExportFolder,
                         LoadActor, SaveActor, ExportActor, SitLines, AoNotecard, ExpressionPack, Rhubarb, LoadReference,
-                        ListingMedia, LoadTarget, ExportFile, ExportRig, MapRig, RigScratch };
+                        ListingMedia, LoadTarget, ExportFile, ExportRig, ExportSilentRig, MapRig, RigScratch };
     // the *Actor ones act on file_actor_; SitLines on sit_format_, AoNotecard on ao_format_
     // A dialog's answer, queued for the next frame (hosts may answer on another thread). Several files
     // (body parts) arrive joined with newlines; "" = cancelled.
@@ -352,6 +365,8 @@ private:
     void draw_shortcut_table(bool editable, const char* search, float height);  // its table; Help > Controls shows it too
     void set_action_keys(const std::string& id, const KeyPair& keys);  // records an override, saved at once
     void draw_welcome();
+    void draw_update();                     // update_ui.cpp: the first-run question and Help > Check for Updates...
+    void check_for_updates(bool asked);     // asked: from the menu, so "up to date" and failures are said too
     void draw_help_browser();
     void help_button(const char* page);  // "?" in a tool window's title bar, opens its help page
     void draw_export_section(float body_h = 0);  // windows.cpp: 0 inline, < 0 fills a panel, > 0 a dialog's most
@@ -476,7 +491,13 @@ private:
     // It shows now: always with View > Body > Keep in Real-Avatar Modes (build 34, the default), else not while a real-avatar
     // mode runs (your real avatar shows then, as in build 32). The app: always false.
     bool swap_shown() const { return swap_body() && (settings_.viewer_keep_swap || !real_avatar_mode()); }
-    const Shape* worn_shape() const { return swap_shown() ? nullptr : host_.body_shape(); }  // the worn avatar's, unless swapped
+    // The worn avatar's, unless swapped; resized (08 RS-7) while the host draws it at your actor's size.
+    const Shape* worn_shape() const;
+    void update_avatar_resize();  // once a frame in the world view: the host told your actor's size
+    bool host_resizes_ = false;   // the host draws your avatar resized this frame
+    bool host_can_resize_ = false;  // the host's last answer, whatever the size (the camera reframes on it)
+    mutable Shape worn_resized_, worn_resized_src_;  // updated in place, as the host's own worn shape is
+    mutable double worn_resized_s_ = 1;
     // Build 34: while it shows in a real-avatar mode, the body follows what your avatar does in the world (the region's and
     // your AO's animations, the walk, the sit), not the editor's pose: your avatar's live pose (Host::live_pose) on the
     // body's own joints, in your actor's space. Null otherwise, or when the host cannot say (the editor's pose then).
@@ -539,6 +560,25 @@ private:
     const Shape* shape() const;  // the view's body; a mesh body's own proportions when one is shown (BD-3)
     const Shape* view_body_shape() const;  // the app's own body (the Linden body or the mesh body shown)
     const Shape* export_shape() const;  // IK and pins bake against this, not the viewport body (IO-13)
+    const Shape* export_shape_base() const;  // the same before the skeleton's size (08 RS) is applied
+    // Spec 08 RS (resize_ui.cpp): the skeleton's size, the active clip's or actor i's (1 = as is), and a body's shape
+    // made that size, cached for the session so the pointer stays valid (and comparable) as long as the base's does.
+    double body_size() const;
+    double actor_size(int i) const;
+    bool any_resized() const;  // the active clip or any actor's not at 100%
+    std::vector<double> variant_heights(const Json& export_settings) const;  // HV heights, none while any_resized()
+    const Shape* resized(const Shape* base, double s) const;
+    struct ResizedEntry {
+        const Shape* base;
+        double s;
+        Shape base_copy, shape;  // base_copy: a base rebuilt at the same address is told apart by its contents
+    };
+    mutable std::list<ResizedEntry> resized_;  // a list: entries never move
+    void draw_resize_window();
+    void apply_resize(double size);  // one undo step; the keys too with settings_.resize_keys
+    bool show_resize_ = false;
+    double resize_pending_ = 1;  // the window's size, before Apply
+    bool resize_window_open_ = false;  // was shown last frame: the size is read from the clip again when it opens
     double face_move_scale() const;     // FaceSettings::scale for every face move, from the head the export plays on
     std::string current_body_id() const;
     const RigConstraints* constraints() const;
@@ -639,6 +679,25 @@ private:
     int selected_prop_ = -1;  // a selected prop is exclusive with bones and handles (VP-27)
     // What each mesh shows (shown_model of its source under its look): everything draws, picks, stands and exports this.
     std::map<std::string, std::unique_ptr<DaeModel>> prop_models_;
+    // Model textures, one per picture (a file, or bytes a model packs: several materials, and a model read again,
+    // share it), 0 when unreadable; made on first draw, freed once no shown model uses them (free_mesh_textures).
+    std::map<std::string, ImTextureID> mesh_textures_;
+    struct MaterialKeys {  // a shown model's pictures by material, kept so the bytes are hashed once
+        std::vector<std::string> keys;
+        std::size_t made_from = 0;  // a signature of the materials' texture paths and image sizes, to tell a new model
+    };
+    std::map<const DaeModel*, MaterialKeys> material_keys_;
+    struct TexBatch {  // draw_prop's triangles of one texture, reused from draw to draw
+        std::vector<Vertex> verts;
+        std::vector<std::uint32_t> indices;
+    };
+    std::map<SurfaceTexture, TexBatch> tex_batches_;
+    TexBatch glow_;  // the weight glow over textured materials
+    TexBatch late_;  // see-through plain materials, drawn after the textured ones (a lens over a textured eye)
+    int textures_pruned_ = -1;  // the ImGui frame free_mesh_textures last ran in
+    const std::vector<std::string>& texture_keys(const DaeModel& m);
+    SurfaceTexture mesh_texture(const DaeModel& m, int material);
+    void free_mesh_textures(bool all);
     std::map<std::string, DaeReport> prop_reports_;  // each loaded mesh's import report (the rig export check reads it)
     // Spec 08 SK: each mesh as loaded, with all its parts and shape keys; the rig export's fixes and the soft-body share
     // edit this, and the shown model is rebuilt from it. prop_looks_: the look each shown model was built with.
@@ -1270,7 +1329,11 @@ private:
     float loop_travel_ = 1.f;
     // --- Clean Up Foot Sliding (footlock_ui.cpp; spec 07 RT-9, 08 FC) ---
     void draw_foot_lock_window();
+    void draw_hands_out_window();  // hands_out_ui.cpp
     bool show_foot_lock_ = false, foot_heel_toe_ = true, foot_to_ground_ = false;
+    bool show_hands_out_ = false;
+    int hands_out_state_ = 0;  // 1: show "Working..." this frame, 2: push next frame
+    std::string hands_out_report_;
     Clip foot_measured_;  // the clip foot_ground_ was measured on
     bool foot_measured_heel_toe_ = true;
     int foot_measured_legs_ = -1;
@@ -1484,12 +1547,12 @@ private:
     };
     std::vector<Triangles>* capture_triangles_ = nullptr;
     void scene_triangles(const std::vector<Vertex>& verts, const std::vector<std::uint32_t>& indices, bool depth_test,
-                         float gloss, bool translucent = false) {
-        if (capture_triangles_) {
+                         float gloss, bool translucent = false, const SurfaceTexture* texture = nullptr) {
+        if (capture_triangles_) {  // the Picker's thumbnails draw in the material colours
             if (!translucent) capture_triangles_->push_back({verts, indices, gloss});
             return;
         }
-        host_.scene_triangles(verts, indices, depth_test, gloss, translucent);
+        host_.scene_triangles(verts, indices, depth_test, gloss, translucent, texture);
     }
     // --- animation check (lint_ui.cpp; spec 08 CK) ---
     void update_check();       // re-runs the check once the clip is still after an edit (from draw_check_panel)
@@ -1505,13 +1568,18 @@ private:
     void draw_rig_export_window();  // File > Export Rigged Mesh for SL...
     void draw_joint_inspector();    // Rig > Joint Offset Inspector...
     void refresh_rig_check();       // the parts, findings and joint tables of the body shown
+    RigExportOptions rig_export_options() const;  // the export window's options (the defaults before it opens)
     // A fix on the body's part-th file, applied to its source (part_source); the body's shape cache dropped, re-checked.
     void rig_fix_applied(int part, const std::function<void(DaeModel&)>& fix);
     void rig_check_stale();         // a part's mesh changed: check again before the window draws
     void export_rig(const std::string& path);
+    void export_silent_rig(const std::string& path);  // RG-13: the pose's joint positions as a rigged mesh with nothing to see
     double ground_shown() const;    // the ground grid: rest_floor(), or SL's ground under the body while the export shows it
     bool show_rig_export_ = false, show_joint_inspector_ = false;
     std::shared_ptr<struct RigExportUi> rig_ui_;
+    std::shared_ptr<struct UpdateUi> update_ui_;
+    bool version_seen_ = false;  // draw_welcome compared this version with the one that ran last
+    bool first_run_ = false;     // no settings file yet: a new user, not an update
     // --- rig mapping (rig_map_ui.cpp; spec 08 RM): any rigged model's own bones onto SL's skeleton ---
 public:
     void open_rig_map(const std::string& path);  // Rig > Map Rig to Second Life... on a model; --map-rig

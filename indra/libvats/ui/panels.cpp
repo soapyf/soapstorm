@@ -1007,6 +1007,12 @@ void App::draw_status_bar() {
                 ImGui::SameLine(0, 24);
                 hint((std::to_string(n) + " selected: keys, copy/paste and the graph apply to all of them").c_str());
             }
+            if (ui::Host::HostUi* hui = host_.host_ui(); hui && hui->editing_objects()) {  // Viewer > Edit Objects in World
+                ImGui::SameLine(0, 24);
+                hint("Editing objects in the world: clicks and keys are the viewer's");
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Done")) hui->edit_objects(false);
+            }
             if (ui::Host::HostUi* hui = host_.host_ui(); hui && hui->unread_notices() > 0) {  // spec 09 U4b: the unread badge
                 ImGui::SameLine(0, 24);
                 if (ImGui::SmallButton(("Notifications (" + std::to_string(hui->unread_notices()) + ")").c_str())) hui->toggle_notices();
