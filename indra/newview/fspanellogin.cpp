@@ -1011,7 +1011,7 @@ void FSPanelLogin::loadLoginPage()
         }
         else
         {
-            bar_logo->setValue(LLSD(std::string("login_fs_logo")));
+            bar_logo->setValue(LLSD(std::string("login_soapstorm_logo")));
         }
     }
 
