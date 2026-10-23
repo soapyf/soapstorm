@@ -32,6 +32,7 @@
 // Viewer includes
 #include "llagent.h"
 #include "llagentcamera.h"
+#include "llfloatercamera.h"
 #include "llmatrix4a.h"
 #include "llviewercontrol.h"
 #include "llviewerobjectlist.h"
@@ -84,6 +85,61 @@ LLViewerCamera::LLViewerCamera() : LLCamera()
             LLViewerCamera::getInstance()->setDefaultFOV((F32)value.asReal());
         });
     }
+
+    mIsOrtho = false;
+    mOrthoFocusDist = 3.5f;
+    mOrthoFrameCountdown = 0;
+
+    LLPointer<LLControlVariable> ortho_ptr = gSavedSettings.getControl("FSCameraOrtho");
+    if (ortho_ptr.notNull())
+    {
+        ortho_ptr->getCommitSignal()->connect([](LLControlVariable* control, const LLSD& value, const LLSD& previous)
+        {
+            LLViewerCamera::getInstance()->setOrtho(value.asBoolean());
+        });
+    }
+}
+
+void LLViewerCamera::setOrtho(bool ortho)
+{
+    if (mIsOrtho == ortho)
+    {
+        return;
+    }
+
+    mIsOrtho = ortho;
+    if (mIsOrtho)
+    {
+        F32 focus_dist = (mLastPointOfInterest - getOrigin()).length();
+        if (focus_dist < 0.1f || !std::isfinite(focus_dist))
+        {
+            LLVector3 focus_agent = gAgent.getPosAgentFromGlobal(gAgentCamera.getFocusGlobal());
+            focus_dist = (focus_agent - getOrigin()).length();
+            if (focus_dist < 0.1f || !std::isfinite(focus_dist))
+            {
+                focus_dist = 3.5f;
+            }
+        }
+        mOrthoFocusDist = llclamp(focus_dist, 0.5f, 5000.f);
+        mOrthoFrameCountdown = 6;
+    }
+
+    if (gSavedSettings.controlExists("FSCameraOrtho") && gSavedSettings.getBOOL("FSCameraOrtho") != mIsOrtho)
+    {
+        gSavedSettings.setBOOL("FSCameraOrtho", mIsOrtho);
+    }
+
+    LLFloaterCamera::updateAllItemsSelection();
+
+    if (gViewerWindow)
+    {
+        gViewerWindow->setup3DRender();
+    }
+}
+
+void LLViewerCamera::toggleOrtho()
+{
+    setOrtho(!mIsOrtho);
 }
 
 bool LLViewerCamera::updateCameraLocation(const LLVector3 &center, const LLVector3 &up_direction, const LLVector3 &point_of_interest)
@@ -157,6 +213,22 @@ bool LLViewerCamera::updateCameraLocation(const LLVector3 &center, const LLVecto
     mAverageAngularSpeed = (F32)LLTrace::get_frame_recording().getPeriodMeanPerSec(sAngularVelocityStat);
     mCosHalfCameraFOV = cosf(0.5f * getView() * llmax(1.0f, getAspect()));
 
+    if (mIsOrtho)
+    {
+        if (mOrthoFrameCountdown > 0)
+        {
+            --mOrthoFrameCountdown;
+        }
+        else
+        {
+            static LLCachedControl<bool> auto_perspective(gSavedSettings, "FSAutoPerspectiveOnCameraMove", true);
+            if (auto_perspective() && ((std::isfinite(dpos) && dpos > 0.005f) || (std::isfinite(drot) && drot > 0.002f)))
+            {
+                setOrtho(false);
+            }
+        }
+    }
+
     // update pixel meter ratio using default fov, not modified one
     mPixelMeterRatio = (F32)(getViewHeightInPixels()/ (2.f*tanf(mCameraFOVDefault*0.5f)));
     // update screen pixel area
@@ -186,14 +258,43 @@ void LLViewerCamera::calcProjection(const F32 far_distance) const
     F32 z_near = getNear();
     F32 aspect = getAspect();
 
-    F32 f = 1 / tan(fov_y * 0.5f);
+    if (mIsOrtho)
+    {
+        F32 focus_dist = (mOrthoFocusDist > 0.1f && std::isfinite(mOrthoFocusDist)) ? mOrthoFocusDist : 3.5f;
+        F32 half_height = focus_dist * tanf(fov_y * 0.5f);
+        if (half_height < 0.001f || !std::isfinite(half_height))
+        {
+            half_height = 0.001f;
+        }
+        F32 half_width = half_height * aspect;
+        if (half_width < 0.001f || !std::isfinite(half_width))
+        {
+            half_width = 0.001f;
+        }
+        F32 depth_range = z_far - z_near;
+        if (depth_range < 0.1f || !std::isfinite(depth_range))
+        {
+            depth_range = 0.1f;
+        }
 
-    mProjectionMatrix.setZero();
-    mProjectionMatrix.mMatrix[0][0] = f/aspect;
-    mProjectionMatrix.mMatrix[1][1] = f;
-    mProjectionMatrix.mMatrix[2][2] = (z_far + z_near)/(z_near - z_far);
-    mProjectionMatrix.mMatrix[3][2] = (2*z_far*z_near)/(z_near - z_far);
-    mProjectionMatrix.mMatrix[2][3] = -1;
+        mProjectionMatrix.setZero();
+        mProjectionMatrix.mMatrix[0][0] = 1.0f / half_width;
+        mProjectionMatrix.mMatrix[1][1] = 1.0f / half_height;
+        mProjectionMatrix.mMatrix[2][2] = -2.0f / depth_range;
+        mProjectionMatrix.mMatrix[3][2] = -(z_far + z_near) / depth_range;
+        mProjectionMatrix.mMatrix[3][3] = 1.0f;
+    }
+    else
+    {
+        F32 f = 1 / tan(fov_y * 0.5f);
+
+        mProjectionMatrix.setZero();
+        mProjectionMatrix.mMatrix[0][0] = f/aspect;
+        mProjectionMatrix.mMatrix[1][1] = f;
+        mProjectionMatrix.mMatrix[2][2] = (z_far + z_near)/(z_near - z_far);
+        mProjectionMatrix.mMatrix[3][2] = (2*z_far*z_near)/(z_near - z_far);
+        mProjectionMatrix.mMatrix[2][3] = -1;
+    }
 }
 
 // Sets up opengl state for 3D drawing.  If for selection, also
@@ -378,7 +479,25 @@ void LLViewerCamera::setPerspective(bool for_selection,
 
     calcProjection(z_far); // Update the projection matrix cache
 
-    proj_mat *= glm::perspective(fov_y,aspect,z_near,z_far);
+    if (mIsOrtho)
+    {
+        F32 focus_dist = (mOrthoFocusDist > 0.1f && std::isfinite(mOrthoFocusDist)) ? mOrthoFocusDist : 3.5f;
+        F32 half_height = focus_dist * tanf(fov_y * 0.5f);
+        if (half_height < 0.001f || !std::isfinite(half_height))
+        {
+            half_height = 0.001f;
+        }
+        F32 half_width = half_height * aspect;
+        if (half_width < 0.001f || !std::isfinite(half_width))
+        {
+            half_width = 0.001f;
+        }
+        proj_mat *= glm::ortho(-half_width, half_width, -half_height, half_height, z_near, z_far);
+    }
+    else
+    {
+        proj_mat *= glm::perspective(fov_y,aspect,z_near,z_far);
+    }
 
     gGL.loadMatrix(glm::value_ptr(proj_mat));
 
@@ -415,7 +534,7 @@ void LLViewerCamera::setPerspective(bool for_selection,
         set_current_modelview(modelview);
     }
 
-    updateFrustumPlanes(*this);
+    updateFrustumPlanes(*this, mIsOrtho);
 }
 
 // Uses the last GL matrices set in set_perspective to project a point from

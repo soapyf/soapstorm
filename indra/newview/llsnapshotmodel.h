@@ -51,7 +51,10 @@ public:
     {
         SNAPSHOT_TYPE_COLOR,
         SNAPSHOT_TYPE_DEPTH,
-        SNAPSHOT_TYPE_DEPTH24 // <FS:Ansariel> FIRE-15667: 24bit depth maps
+        SNAPSHOT_TYPE_DEPTH24, // <FS:Ansariel> FIRE-15667: 24bit depth maps
+        SNAPSHOT_TYPE_AVATAR_TRANSPARENT,
+        SNAPSHOT_TYPE_AVATAR_MASK_BLACK,
+        SNAPSHOT_TYPE_AVATAR_MASK_WHITE
     } ESnapshotLayerType;
 };
 

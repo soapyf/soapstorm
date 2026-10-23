@@ -103,6 +103,8 @@
 #include "llviewerstats.h"
 #include "llviewerjoystick.h"
 #include "llviewerdisplay.h"
+#include "llsnapshotmodel.h"
+#include "llcontrolavatar.h"
 #include "sspreciprenderer.h"
 #include "ssvolcloud.h"
 #include "sslightningrender.h"
@@ -2659,6 +2661,116 @@ bool LLPipeline::isWaterClip()
     return (gPipeline.mHeroProbeManager.isMirrorPass()) ? false : (!sRenderTransparentWater || gCubeSnapshot) && !sRenderingHUDs;
 }
 
+LLVOAvatar* getAvatarFromObject(LLViewerObject* vobj)
+{
+    if (!vobj || vobj->isDead()) return nullptr;
+
+    if (vobj->isAvatar())
+    {
+        LLVOAvatar* av = static_cast<LLVOAvatar*>(vobj);
+        if (av->isDead()) return nullptr;
+        if (av->isControlAvatar())
+        {
+            LLControlAvatar* cav = static_cast<LLControlAvatar*>(av);
+            const LLVOAvatar* attached_to = cav->getAttachedAvatar();
+            if (attached_to && !attached_to->isDead())
+            {
+                return const_cast<LLVOAvatar*>(attached_to);
+            }
+        }
+        return av;
+    }
+
+    LLVOAvatar* ancestor = vobj->getAvatarAncestor();
+    if (!ancestor && vobj->isAttachment())
+    {
+        ancestor = LLVOAvatar::findAvatarFromAttachment(vobj);
+    }
+    if (ancestor && !ancestor->isDead())
+    {
+        if (ancestor->isControlAvatar())
+        {
+            LLControlAvatar* cav = static_cast<LLControlAvatar*>(ancestor);
+            const LLVOAvatar* attached_to = cav->getAttachedAvatar();
+            if (attached_to && !attached_to->isDead())
+            {
+                return const_cast<LLVOAvatar*>(attached_to);
+            }
+        }
+        return ancestor;
+    }
+
+    LLControlAvatar* ca = vobj->getControlAvatar();
+    if (ca && !ca->isDead())
+    {
+        const LLVOAvatar* attached_to = ca->getAttachedAvatar();
+        if (attached_to && !attached_to->isDead())
+        {
+            return const_cast<LLVOAvatar*>(attached_to);
+        }
+    }
+
+    LLVOAvatar* av = vobj->getAvatar();
+    if (av && !av->isDead())
+    {
+        if (av->isControlAvatar())
+        {
+            LLControlAvatar* cav = static_cast<LLControlAvatar*>(av);
+            const LLVOAvatar* attached_to = cav->getAttachedAvatar();
+            if (attached_to && !attached_to->isDead())
+            {
+                return const_cast<LLVOAvatar*>(attached_to);
+            }
+        }
+        return av;
+    }
+
+    return nullptr;
+}
+
+bool isAvatarOrAttachmentSelected(LLViewerObject* vobj)
+{
+    LLVOAvatar* target_avatar = getAvatarFromObject(vobj);
+    if (!target_avatar || target_avatar->isDead())
+    {
+        return false;
+    }
+
+    return (gSnapshotSelectedAvatars.count(target_avatar->getID()) > 0);
+}
+
+bool isOtherAvatarOrAttachment(LLViewerObject* vobj)
+{
+    if (!vobj || vobj->isDead()) return false;
+
+    LLVOAvatar* av = getAvatarFromObject(vobj);
+    if (!av || av->isDead())
+    {
+        return false;
+    }
+
+    if (av->isSelf())
+    {
+        return false;
+    }
+
+    if (gSnapshotAvatarScope == SNAPSHOT_AVATARS_ALL)
+    {
+        return false;
+    }
+
+    if (gSnapshotAvatarScope == SNAPSHOT_AVATARS_SELECTED)
+    {
+        if (isAvatarOrAttachmentSelected(av))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
 void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_attachments)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE; //LL_RECORD_BLOCK_TIME(FTM_CULL);
@@ -2698,6 +2810,101 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
 
     sCull->clear();
 
+    auto markAvatarAndAttachmentsVisible = [&](LLVOAvatar* avp) {
+        if (!avp || avp->isDead() || !avp->mDrawable) return;
+        markVisible(avp->mDrawable, camera);
+        for (const auto& pair : avp->mAttachmentPoints)
+        {
+            LLViewerJointAttachment* attachment = pair.second;
+            if (!attachment || attachment->getIsHUDAttachment()) continue;
+            for (const auto& attached_iter : attachment->mAttachedObjects)
+            {
+                LLViewerObject* attached_obj = attached_iter.get();
+                if (attached_obj && !attached_obj->isDead())
+                {
+                    if (attached_obj->mDrawable)
+                    {
+                        if (attached_obj->mDrawable->getSpatialBridge())
+                        {
+                            markVisible(attached_obj->mDrawable->getSpatialBridge(), camera);
+                        }
+                        else
+                        {
+                            markVisible(attached_obj->mDrawable, camera);
+                        }
+                    }
+                    if (attached_obj->getControlAvatar() && attached_obj->getControlAvatar()->mDrawable)
+                    {
+                        markVisible(attached_obj->getControlAvatar()->mDrawable, camera);
+                    }
+                    for (LLViewerObject* child : attached_obj->getChildren())
+                    {
+                        if (child && !child->isDead() && !child->isAvatar())
+                        {
+                            if (child->mDrawable)
+                            {
+                                if (child->mDrawable->getSpatialBridge())
+                                {
+                                    markVisible(child->mDrawable->getSpatialBridge(), camera);
+                                }
+                                else
+                                {
+                                    markVisible(child->mDrawable, camera);
+                                }
+                            }
+                            if (child->getControlAvatar() && child->getControlAvatar()->mDrawable)
+                            {
+                                markVisible(child->getControlAvatar()->mDrawable, camera);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    if (gSnapshotAvatarOnly)
+    {
+        if (gSnapshotAvatarScope == SNAPSHOT_AVATARS_ALL)
+        {
+            for (LLCharacter* character : LLCharacter::sInstances)
+            {
+                LLVOAvatar* avatar = (LLVOAvatar*)character;
+                if (avatar && !avatar->isDead() && !avatar->mIsDummy && !avatar->isOrphaned() && !avatar->isControlAvatar())
+                {
+                    markAvatarAndAttachmentsVisible(avatar);
+                }
+            }
+            if (gAgentAvatarp && gAgentAvatarp->mDrawable)
+            {
+                markAvatarAndAttachmentsVisible(gAgentAvatarp);
+            }
+        }
+        else if (gSnapshotAvatarScope == SNAPSHOT_AVATARS_SELECTED)
+        {
+            if (gAgentAvatarp && gAgentAvatarp->mDrawable)
+            {
+                markAvatarAndAttachmentsVisible(gAgentAvatarp);
+            }
+            for (LLCharacter* character : LLCharacter::sInstances)
+            {
+                LLVOAvatar* avatar = (LLVOAvatar*)character;
+                if (avatar && !avatar->isDead() && !avatar->mIsDummy && !avatar->isOrphaned() && !avatar->isControlAvatar() && !avatar->isSelf())
+                {
+                    if (isAvatarOrAttachmentSelected(avatar))
+                    {
+                        markAvatarAndAttachmentsVisible(avatar);
+                    }
+                }
+            }
+        }
+        else if (gAgentAvatarp && gAgentAvatarp->mDrawable)
+        {
+            markAvatarAndAttachmentsVisible(gAgentAvatarp);
+        }
+        return;
+    }
+
     for (LLWorld::region_list_t::const_iterator iter = LLWorld::getInstance()->getRegionList().begin();
             iter != LLWorld::getInstance()->getRegionList().end(); ++iter)
     {
@@ -2705,6 +2912,11 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
 
         for (U32 i = 0; i < LLViewerRegion::NUM_PARTITIONS; i++)
         {
+            if (gSnapshot && !gSnapshotCaptureAllAvatars && i == LLViewerRegion::PARTITION_AVATAR)
+            {
+                continue;
+            }
+
             LLSpatialPartition* part = region->getSpatialPartition(i);
             if (part)
             {
@@ -2722,6 +2934,28 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
             // <FS:Beq> Fix area search again
             //vo_part->cull(camera, sUseOcclusion > 0);
             vo_part->cull(camera, sUseOcclusion > 0 && !gAgent.getFSAreaSearchActive());
+        }
+    }
+
+    if (gSnapshot && !gSnapshotCaptureAllAvatars)
+    {
+        if (gAgentAvatarp && gAgentAvatarp->mDrawable)
+        {
+            markAvatarAndAttachmentsVisible(gAgentAvatarp);
+        }
+        if (gSnapshotAvatarScope == SNAPSHOT_AVATARS_SELECTED)
+        {
+            for (LLCharacter* character : LLCharacter::sInstances)
+            {
+                LLVOAvatar* avatar = (LLVOAvatar*)character;
+                if (avatar && !avatar->isDead() && !avatar->mIsDummy && !avatar->isOrphaned() && !avatar->isControlAvatar() && !avatar->isSelf())
+                {
+                    if (isAvatarOrAttachmentSelected(avatar))
+                    {
+                        markAvatarAndAttachmentsVisible(avatar);
+                    }
+                }
+            }
         }
     }
 
@@ -3389,6 +3623,14 @@ void LLPipeline::stateSort(LLCamera& camera, LLCullResult &result)
         {
             LLCullResult::bridge_iterator cur_iter = i;
             LLSpatialBridge* bridge = *cur_iter;
+            if (gSnapshot && !gSnapshotCaptureAllAvatars && bridge && bridge->mDrawable)
+            {
+                LLViewerObject* vobj = bridge->mDrawable->getVObj();
+                if (isOtherAvatarOrAttachment(vobj))
+                {
+                    continue;
+                }
+            }
             LLSpatialGroup* group = bridge->getSpatialGroup();
 
             if (last_group == NULL)
@@ -3490,6 +3732,11 @@ void LLPipeline::stateSort(LLDrawable* drawablep, LLCamera& camera)
     if (!drawablep
         || drawablep->isDead()
         || !hasRenderType(drawablep->getRenderType()))
+    {
+        return;
+    }
+
+    if (gSnapshot && !gSnapshotCaptureAllAvatars && isOtherAvatarOrAttachment(drawablep->getVObj()))
     {
         return;
     }
@@ -9361,13 +9608,21 @@ void LLPipeline::renderFinalize()
 
     LLVertexBuffer::unbind();
 
-    generateGlow(&mPostPingMap);
-
     LLRenderTarget* sourceBuffer = &mPostPingMap;
     LLRenderTarget* targetBuffer = &mPostPongMap;
 
-    combineGlow(sourceBuffer, targetBuffer);
-    std::swap(sourceBuffer, targetBuffer);
+    if (!gSnapshotAvatarOnly)
+    {
+        generateGlow(&mPostPingMap);
+        combineGlow(sourceBuffer, targetBuffer);
+        std::swap(sourceBuffer, targetBuffer);
+    }
+    else
+    {
+        mGlow[1].bindTarget();
+        mGlow[1].clear();
+        mGlow[1].flush();
+    }
 
     gGLViewport[0] = gViewerWindow->getWorldViewRectRaw().mLeft;
     gGLViewport[1] = gViewerWindow->getWorldViewRectRaw().mBottom;
@@ -9377,29 +9632,33 @@ void LLPipeline::renderFinalize()
 
     if((RenderDepthOfFieldInEditMode || !LLToolMgr::getInstance()->inBuildMode()) &&
         RenderDepthOfField &&
-        !gCubeSnapshot)
+        !gCubeSnapshot &&
+        !gSnapshotAvatarOnly)
     {
         renderDoF(sourceBuffer, targetBuffer);
         std::swap(sourceBuffer, targetBuffer);
     }
 
-     if (RenderFSAAType == 1)
+    if (!gSnapshotAvatarOnly)
     {
-        applyFXAA(sourceBuffer, targetBuffer);
-        std::swap(sourceBuffer, targetBuffer);
-    }
-    else if (RenderFSAAType == 2)
-    {
-        generateSMAABuffers(sourceBuffer);
-        applySMAA(sourceBuffer, targetBuffer);
-        std::swap(sourceBuffer, targetBuffer);
+        if (RenderFSAAType == 1)
+        {
+            applyFXAA(sourceBuffer, targetBuffer);
+            std::swap(sourceBuffer, targetBuffer);
+        }
+        else if (RenderFSAAType == 2)
+        {
+            generateSMAABuffers(sourceBuffer);
+            applySMAA(sourceBuffer, targetBuffer);
+            std::swap(sourceBuffer, targetBuffer);
+        }
     }
 
     // <FS:Beq> Restore shader post proc for Vignette
     LLRenderTarget* auxActiveBuffer = sourceBuffer;
     LLRenderTarget* auxTargetBuffer = RenderFSAAType ? &mRT->screen : &mPostPingMap;
 // [RLVa:KB] - @setsphere
-    if (RlvActions::hasBehaviour(RLV_BHVR_SETSPHERE))
+    if (!gSnapshotAvatarOnly && RlvActions::hasBehaviour(RLV_BHVR_SETSPHERE))
     {
         LLShaderEffectParams params(auxActiveBuffer, auxTargetBuffer, false);
         LLVfxManager::instance().runEffect(EVisualEffect::RlvSphere, &params);
@@ -9409,13 +9668,13 @@ void LLPipeline::renderFinalize()
     }
 // [/RLVa:KB]
 
-    if (renderVignette(auxActiveBuffer, auxTargetBuffer))
+    if (!gSnapshotAvatarOnly && renderVignette(auxActiveBuffer, auxTargetBuffer))
     {
         std::swap(auxActiveBuffer, auxTargetBuffer);
     };
     // </FS:Beq>
     // <FS:Beq> new shader for snapshot frame helper
-    if (renderSnapshotFrame(auxActiveBuffer, auxTargetBuffer))
+    if (!gSnapshotAvatarOnly && renderSnapshotFrame(auxActiveBuffer, auxTargetBuffer))
     {
         std::swap(auxActiveBuffer, auxTargetBuffer);
     };
@@ -9476,12 +9735,15 @@ void LLPipeline::renderFinalize()
 
     gGL.setSceneBlendType(LLRender::BT_ALPHA);
 
-    renderSnapshotGuidesOverlay(); // <FS:Beq/> Render snapshot guides as part of UI
-    renderFocusPoint(); // <FS:Beq/> FIRE-32023 render focus point
-
-    if (hasRenderDebugMask(LLPipeline::RENDER_DEBUG_PHYSICS_SHAPES))
+    if (!gSnapshotAvatarOnly)
     {
-        renderPhysicsDisplay();
+        renderSnapshotGuidesOverlay(); // <FS:Beq/> Render snapshot guides as part of UI
+        renderFocusPoint(); // <FS:Beq/> FIRE-32023 render focus point
+
+        if (hasRenderDebugMask(LLPipeline::RENDER_DEBUG_PHYSICS_SHAPES))
+        {
+            renderPhysicsDisplay();
+        }
     }
 
     /*if (LLRenderTarget::sUseFBO && !gCubeSnapshot)
@@ -9974,6 +10236,9 @@ void LLPipeline::renderDeferredLighting()
 
             soften_shader.uniform4fv(LLShaderMgr::WATER_WATERPLANE, 1, LLDrawPoolAlpha::sWaterPlane.mV);
 
+            static LLStaticHashedString avatar_snapshot_str("avatar_snapshot");
+            soften_shader.uniform1i(avatar_snapshot_str, gSnapshotAvatarOnly ? 1 : 0);
+
             // <SS:Nexii> Atmo Magic: the volumetric deck's ground shadow - the baked transmittance map and its projection uniforms, gated to zero whenever there is nothing to cast. [interaction: SSVolCloud]
             SSVolCloud::getInstance()->bindGroundShadow(soften_shader);
 
@@ -10332,8 +10597,8 @@ void LLPipeline::doAtmospherics()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
 
-    if (sImpostorRender)
-    { // do not attempt atmospherics on impostors
+    if (sImpostorRender || gSnapshotAvatarOnly)
+    { // do not attempt atmospherics on impostors or avatar-only snapshot
         return;
     }
 
@@ -10401,8 +10666,8 @@ void LLPipeline::doAtmospherics()
 void LLPipeline::doWaterHaze()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
-    if (sImpostorRender)
-    { // do not attempt water haze on impostors
+    if (sImpostorRender || gSnapshotAvatarOnly)
+    { // do not attempt water haze on impostors or avatar-only snapshot
         return;
     }
 

@@ -200,6 +200,17 @@
     </rows>
 <!-- </FS:Chanayane> -->
     <rows
+     name="toggle_ortho"
+     value="toggle_ortho">
+        <columns
+         column="lst_action"
+         font="SansSerif"
+         halign="left"
+         name="lst_action"
+         tool_tip="Toggle orthographic view (returns to 3D on camera movement)"
+         value="Toggle Orthographic View" />
+    </rows>
+    <rows
      name="move_forward_sitting"
      value="move_forward_sitting">
         <columns

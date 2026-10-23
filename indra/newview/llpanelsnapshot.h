@@ -77,6 +77,7 @@ protected:
     void onCustomResolutionCommit();
     void onResolutionComboCommit(LLUICtrl* ctrl);
     void onKeepAspectRatioCommit(LLUICtrl* ctrl);
+    void onSwapResolutionCommit();
 
     LLFloaterSnapshotBase* mSnapshotFloater;
 };

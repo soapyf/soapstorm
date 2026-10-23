@@ -445,14 +445,22 @@ bool LLToolCamera::handleHover(S32 x, S32 y, MASK mask)
             {
                 const F32 RADIANS_PER_PIXEL = 360.f * DEG_TO_RAD / gViewerWindow->getWorldViewWidthScaled();
 
-                if (dx != 0)
+                const F32 rot = gAgentCamera.getRollAngle();
+                const F32 cos_r = cosf(rot);
+                const F32 sin_r = sinf(rot);
+                // Transform screen mouse deltas into unrolled camera input:
+                // When rot == 0: left_input = -dx, up_input = -dy
+                const F32 left_input = -(F32)dx * cos_r - (F32)dy * sin_r;
+                const F32 up_input   =  (F32)dx * sin_r - (F32)dy * cos_r;
+
+                if (left_input != 0.f)
                 {
-                    gAgentCamera.cameraOrbitAround( -dx * RADIANS_PER_PIXEL );
+                    gAgentCamera.cameraOrbitAround( left_input * RADIANS_PER_PIXEL );
                 }
 
-                if (dy != 0)
+                if (up_input != 0.f)
                 {
-                    gAgentCamera.cameraOrbitOver( -dy * RADIANS_PER_PIXEL );
+                    gAgentCamera.cameraOrbitOver( up_input * RADIANS_PER_PIXEL );
                 }
 
                 gViewerWindow->moveCursorToCenter();
@@ -473,14 +481,16 @@ bool LLToolCamera::handleHover(S32 x, S32 y, MASK mask)
                 // Fudge factor for pan
                 F32 meters_per_pixel = 3.f * dist / gViewerWindow->getWorldViewWidthScaled();
 
+                // Pan uses getLeftAxis() and getUpAxis() which are already rotated by mRollAngle in LLViewerCamera,
+                // so mouse dx and dy directly map to screen-space left and up.
                 if (dx != 0)
                 {
-                    gAgentCamera.cameraPanLeft( dx * meters_per_pixel );
+                    gAgentCamera.cameraPanLeft( (F32)dx * meters_per_pixel );
                 }
 
                 if (dy != 0)
                 {
-                    gAgentCamera.cameraPanUp( -dy * meters_per_pixel );
+                    gAgentCamera.cameraPanUp( -(F32)dy * meters_per_pixel );
                 }
 
                 gViewerWindow->moveCursorToCenter();
@@ -492,12 +502,17 @@ bool LLToolCamera::handleHover(S32 x, S32 y, MASK mask)
             // Zoom tool
             if (hasMouseCapture())
             {
-
                 const F32 RADIANS_PER_PIXEL = 360.f * DEG_TO_RAD / gViewerWindow->getWorldViewWidthScaled();
 
-                if (dx != 0)
+                const F32 rot = gAgentCamera.getRollAngle();
+                const F32 cos_r = cosf(rot);
+                const F32 sin_r = sinf(rot);
+                const F32 left_input = -(F32)dx * cos_r - (F32)dy * sin_r;
+                const F32 up_input   =  (F32)dx * sin_r - (F32)dy * cos_r;
+
+                if (left_input != 0.f)
                 {
-                    gAgentCamera.cameraOrbitAround( -dx * RADIANS_PER_PIXEL );
+                    gAgentCamera.cameraOrbitAround( left_input * RADIANS_PER_PIXEL );
                 }
 
                 const F32 IN_FACTOR = 0.99f;
@@ -506,7 +521,7 @@ bool LLToolCamera::handleHover(S32 x, S32 y, MASK mask)
                 {
                     if (mMouseSteering)
                     {
-                        gAgentCamera.cameraOrbitOver( -dy * RADIANS_PER_PIXEL );
+                        gAgentCamera.cameraOrbitOver( up_input * RADIANS_PER_PIXEL );
                     }
                     else
                     {

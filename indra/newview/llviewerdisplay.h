@@ -42,6 +42,23 @@ extern bool         gForceRenderLandFence;
 extern bool gResizeScreenTexture;
 extern bool gResizeShadowTexture;
 extern bool gWindowResized;
+#include <set>
+#include "lluuid.h"
+
+extern bool gSnapshot;
+extern bool gCubeSnapshot;
+extern bool gSnapshotNoPost;
+extern bool gSnapshotAvatarOnly;
+enum ESnapshotAvatarScope
+{
+    SNAPSHOT_AVATARS_SELF = 0,
+    SNAPSHOT_AVATARS_SELECTED = 1,
+    SNAPSHOT_AVATARS_ALL = 2
+};
+extern U32  gSnapshotAvatarScope;
+extern bool gSnapshotCaptureAllAvatars;
+extern std::set<LLUUID> gSnapshotSelectedAvatars;
+extern S32 gSnapshotLayerType;
 
 // <FS:Ansariel> Draw Distance stepping; originally based on SpeedRez by Henri Beauchamp, licensed under LGPL
 extern F32 gSavedDrawDistance;

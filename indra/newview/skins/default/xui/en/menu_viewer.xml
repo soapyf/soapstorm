@@ -486,6 +486,16 @@
 			 function="View.ToggleCameraFloater" />
 		</menu_item_check>
 
+		<menu_item_check
+		 label="Orthographic View"
+		 name="Orthographic View"
+		 shortcut="PAD_CENTER">
+			<menu_item_check.on_check
+			 function="View.CheckOrthoView" />
+			<menu_item_check.on_click
+			 function="View.ToggleOrthoView" />
+		</menu_item_check>
+
         <menu_item_separator/>
 
         <menu
@@ -3931,6 +3941,18 @@
                 <menu_item_call.on_click
                  function="View.ZoomOut" />
             </menu_item_call>
+
+            <menu_item_separator/>
+
+            <menu_item_check
+             label="Orthographic View"
+             name="Shortcuts Orthographic View"
+             shortcut="PAD_CENTER">
+                <menu_item_check.on_check
+                 function="View.CheckOrthoView" />
+                <menu_item_check.on_click
+                 function="View.ToggleOrthoView" />
+            </menu_item_check>
         </menu> <!--Shortcuts-->
 
         <menu_item_separator/>

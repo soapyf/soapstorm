@@ -71,6 +71,10 @@ void LLViewerWindowListener::saveSnapshot(const LLSD& event) const
 #define tp(name) types[#name] = LLSnapshotModel::SNAPSHOT_TYPE_##name
     tp(COLOR);
     tp(DEPTH);
+    tp(DEPTH24);
+    tp(AVATAR_TRANSPARENT);
+    tp(AVATAR_MASK_BLACK);
+    tp(AVATAR_MASK_WHITE);
 #undef  tp
     // Our add() call should ensure that the incoming LLSD does in fact
     // contain our required arguments. Deal with the optional ones.

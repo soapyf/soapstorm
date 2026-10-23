@@ -55,6 +55,9 @@
 #include "llcontrolavatar.h"
 #include "lldrawpoolavatar.h"
 
+extern bool gSnapshot;
+extern bool gSnapshotCaptureAllAvatars;
+
 // <FS:ND> Tentatively ignoring mismatched new/delete from the MemTrackableNonVirtual. I think according to the docs
 // they are properly matched
 #if LL_LINUX
@@ -1523,9 +1526,13 @@ void LLSpatialBridge::setVisible(LLCamera& camera_in, std::vector<LLDrawable*>* 
         return;
     }
 
+    LLViewerObject *vobj = mDrawable ? mDrawable->getVObj() : nullptr;
+    if (gSnapshot && !gSnapshotCaptureAllAvatars && isOtherAvatarOrAttachment(vobj))
+    {
+        return;
+    }
 
     //HACK don't draw attachments for avatars that haven't been visible in more than a frame
-    LLViewerObject *vobj = mDrawable->getVObj();
     if (vobj && vobj->isAttachment() && !vobj->isHUDAttachment())
     {
         LLDrawable* av;

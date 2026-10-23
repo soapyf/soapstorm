@@ -89,7 +89,10 @@ bool LLPanelSnapshotLocal::postBuild()
     getChild<LLUICtrl>("save_btn")->setCommitCallback(boost::bind(&LLPanelSnapshotLocal::onSaveFlyoutCommit, this, _1));
 
     // <FS:Ansariel> Store settings at logout
-    getImageSizeComboBox()->setCurrentByIndex(gSavedSettings.getS32("LastSnapshotToDiskResolution"));
+    if (!getImageSizeComboBox()->setCurrentByIndex(gSavedSettings.getS32("LastSnapshotToDiskResolution")))
+    {
+        getImageSizeComboBox()->setCurrentByIndex(0);
+    }
     getWidthSpinner()->setValue(gSavedSettings.getS32("LastSnapshotToDiskWidth"));
     getHeightSpinner()->setValue(gSavedSettings.getS32("LastSnapshotToDiskHeight"));
     // </FS:Ansariel>

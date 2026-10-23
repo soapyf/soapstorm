@@ -43,6 +43,7 @@
     <binding key="R" mask="NONE" command="roll_left"/>
     <binding key="T" mask="NONE" command="roll_right"/>
 <!-- </FS:Chanayane> -->
+    <binding key="PAD_CENTER" mask="NONE" command="toggle_ortho"/>
     <binding key="F" mask="NONE" command="toggle_fly"/>
 
     <binding key="SPACE" mask="NONE" command="stop_moving"/>
@@ -133,6 +134,7 @@
     <binding key="R" mask="NONE" command="roll_left" />
     <binding key="T" mask="NONE" command="roll_right" />
 <!-- </FS:Chanayane> -->
+    <binding key="PAD_CENTER" mask="NONE" command="toggle_ortho"/>
 
     <binding key="LEFT" mask="NONE" command="spin_around_cw_sitting"/>
     <binding key="RIGHT" mask="NONE" command="spin_around_ccw_sitting"/>

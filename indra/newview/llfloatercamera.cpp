@@ -91,6 +91,8 @@ protected:
 // <FS:Chanayane> Camera roll (from Alchemy)
     void    onRollLeftHeldDown();
     void    onRollRightHeldDown();
+    void    onRollReset();
+    void    onRollPortrait();
 // </FS:Chanayane>
 
 private:
@@ -186,6 +188,8 @@ void LLPanelCameraZoom::onCreate()
 // <FS:Chanayane> Camera roll (from Alchemy)
     mCommitCallbackRegistrar.add("Camera.roll_left", boost::bind(&LLPanelCameraZoom::onRollLeftHeldDown, this));
     mCommitCallbackRegistrar.add("Camera.roll_right", boost::bind(&LLPanelCameraZoom::onRollRightHeldDown, this));
+    mCommitCallbackRegistrar.add("Camera.roll_reset", boost::bind(&LLPanelCameraZoom::onRollReset, this));
+    mCommitCallbackRegistrar.add("Camera.roll_portrait", boost::bind(&LLPanelCameraZoom::onRollPortrait, this));
 // </FS:Chanayane>
 }
 
@@ -240,6 +244,24 @@ void LLPanelCameraZoom::onRollRightHeldDown()
     F32 time = mRollRight->getHeldDownTime();
     gAgentCamera.unlockView();
     gAgentCamera.setRollRightKey(getOrbitRate(time));
+}
+
+void LLPanelCameraZoom::onRollReset()
+{
+    gAgentCamera.resetCameraRoll();
+}
+
+void LLPanelCameraZoom::onRollPortrait()
+{
+    F32 current_roll = gAgentCamera.getRollAngle();
+    if (fabsf(current_roll - F_PI_BY_TWO) < 0.1f)
+    {
+        gAgentCamera.resetCameraRoll();
+    }
+    else
+    {
+        gAgentCamera.setRollAngle(F_PI_BY_TWO);
+    }
 }
 // </FS:Chanayane>
 
@@ -762,6 +784,33 @@ void LLFloaterCamera::updateItemsSelection()
     getChild<LLPanelCameraItem>("mouselook_view")->setValue(argument);
     argument["selected"] = mCurrMode == CAMERA_CTRL_MODE_FREE_CAMERA;
     getChild<LLPanelCameraItem>("object_view")->setValue(argument);
+
+    LLPanelCameraItem* ortho_item = findChild<LLPanelCameraItem>("ortho_view");
+    if (ortho_item)
+    {
+        argument["selected"] = LLViewerCamera::getInstance()->getOrtho();
+        ortho_item->setValue(argument);
+    }
+}
+
+// static
+void LLFloaterCamera::updateAllItemsSelection()
+{
+    LLFloaterCamera* camera_floater = LLFloaterCamera::findInstance();
+    if (camera_floater)
+    {
+        camera_floater->updateItemsSelection();
+    }
+    camera_floater = LLFloaterCamera::findPhototoolsInstance();
+    if (camera_floater)
+    {
+        camera_floater->updateItemsSelection();
+    }
+    camera_floater = LLFloaterCamera::findSmallInstance();
+    if (camera_floater)
+    {
+        camera_floater->updateItemsSelection();
+    }
 }
 
 // static
@@ -772,6 +821,10 @@ void LLFloaterCamera::onClickCameraItem(const LLSD& param)
     if ("mouselook_view" == name)
     {
         gAgentCamera.changeCameraToMouselook();
+    }
+    else if ("ortho_view" == name)
+    {
+        LLViewerCamera::getInstance()->toggleOrtho();
     }
     else if ("object_view" == name)
     {

@@ -942,11 +942,21 @@ void LLAgentCamera::cameraOrbitOver(const F32 angle)
 
         F32 angle_from_up = acos( camera_offset_unit * gAgent.getReferenceUpVector() );
 
-        LLVector3d left_axis;
-        left_axis.setVec(LLViewerCamera::getInstance()->getLeftAxis());
+        // Compute unrolled pitch axis perpendicular to line of sight and world up.
+        // Using unrolled vector avoids gimbal lock / pitch twisting caused by post-roll LeftAxis.
+        LLVector3 unrolled_left = camera_offset_unit % gAgent.getReferenceUpVector();
+        if (unrolled_left.isNull() || !unrolled_left.isFinite())
+        {
+            unrolled_left = LLVector3(0.f, 1.f, 0.f);
+        }
+        else
+        {
+            unrolled_left.normalize();
+        }
+
         F32 new_angle = llclamp(angle_from_up - angle, 1.f * DEG_TO_RAD, 179.f * DEG_TO_RAD);
         mOrbitOverAngle += angle_from_up - new_angle;
-        mCameraFocusOffsetTarget.rotVec(angle_from_up - new_angle, left_axis);
+        mCameraFocusOffsetTarget.rotVec(angle_from_up - new_angle, LLVector3d(unrolled_left));
 
         cameraZoomIn(1.f);
     }
@@ -971,9 +981,16 @@ void LLAgentCamera::resetCameraOrbit()
     LLVector3 camera_offset_unit(mCameraFocusOffsetTarget);
     camera_offset_unit.normalize();
 
-    LLVector3d left_axis;
-    left_axis.setVec(LLViewerCamera::getInstance()->getLeftAxis());
-    mCameraFocusOffsetTarget.rotVec(-mOrbitOverAngle, left_axis);
+    LLVector3 unrolled_left = camera_offset_unit % gAgent.getReferenceUpVector();
+    if (unrolled_left.isNull() || !unrolled_left.isFinite())
+    {
+        unrolled_left = LLVector3(0.f, 1.f, 0.f);
+    }
+    else
+    {
+        unrolled_left.normalize();
+    }
+    mCameraFocusOffsetTarget.rotVec(-mOrbitOverAngle, LLVector3d(unrolled_left));
 
     mCameraFocusOffsetTarget.rotVec(-mOrbitAroundRadians, 0.f, 0.f, 1.f);
 

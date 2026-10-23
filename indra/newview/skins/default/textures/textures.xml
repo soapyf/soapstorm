@@ -327,6 +327,8 @@ with the same filename but different name
   <texture name="Icon_Restore_Press" file_name="windows/Icon_Restore_Press.png" preload="false" />
 
   <texture name="Icon_Snapshot" file_name="icons/snapshot_icon.png" preload="true" />
+  <texture name="Icon_Orientation_Portrait" file_name="icons/icn_orientation_portrait.png" preload="true" />
+  <texture name="Icon_Orientation_Landscape" file_name="icons/icn_orientation_landscape.png" preload="true" />
   
   <texture name="Icon_Use_Texture" file_name="icons/texture_icon.png" preload="true" />
 
@@ -706,6 +708,8 @@ with the same filename but different name
 
 
   <texture name="Refresh_Off" file_name="icons/Refresh_Off.png" preload="true" />
+  <texture name="Cam_Ortho_Off" file_name="icons/Cam_Ortho_Off.png" preload="true" />
+  <texture name="Cam_Ortho_On" file_name="icons/Cam_Ortho_On.png" preload="true" />
 
   <texture name="Resize_Corner" file_name="windows/Resize_Corner.png" preload="true" />
 

@@ -104,6 +104,11 @@ public:
     F32 getZoomFactor() const { return mZoomFactor; }
     S16 getZoomSubRegion() const { return mZoomSubregion; }
 
+    void setOrtho(bool ortho);
+    void toggleOrtho();
+    bool getOrtho() const { return mIsOrtho; }
+    F32 getOrthoFocusDist() const { return mOrthoFocusDist; }
+
 protected:
     void calcProjection(const F32 far_distance) const;
 
@@ -123,6 +128,9 @@ protected:
     S32                 mScreenPixelArea; // Pixel area of entire window
     F32                 mZoomFactor;
     S16                 mZoomSubregion;
+    bool                mIsOrtho{ false };
+    mutable F32         mOrthoFocusDist{ 3.5f };
+    mutable U32         mOrthoFrameCountdown{ 0 };
 
 public:
 };

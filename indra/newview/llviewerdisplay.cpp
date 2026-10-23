@@ -149,6 +149,11 @@ bool gWindowResized = false;
 bool gSnapshot = false;
 bool gCubeSnapshot = false;
 bool gSnapshotNoPost = false;
+bool gSnapshotAvatarOnly = false;
+U32  gSnapshotAvatarScope = SNAPSHOT_AVATARS_ALL;
+bool gSnapshotCaptureAllAvatars = false;
+std::set<LLUUID> gSnapshotSelectedAvatars;
+S32 gSnapshotLayerType = 0;
 bool gShaderProfileFrame = false;
 
 // This is how long the sim will try to teleport you before giving up.
@@ -954,6 +959,27 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
         static LLCullResult result;
         LLViewerCamera::sCurCameraID = LLViewerCamera::CAMERA_WORLD;
         LLPipeline::sUnderWaterRender = LLViewerCamera::getInstance()->cameraUnderWater();
+
+        if (gSnapshotAvatarOnly)
+        {
+            gPipeline.pushRenderTypeMask();
+            gPipeline.clearRenderTypeMask(
+                LLPipeline::RENDER_TYPE_SKY,
+                LLPipeline::RENDER_TYPE_WL_SKY,
+                LLPipeline::RENDER_TYPE_TERRAIN,
+                LLPipeline::RENDER_TYPE_GRASS,
+                LLPipeline::RENDER_TYPE_TREE,
+                LLPipeline::RENDER_TYPE_VOIDWATER,
+                LLPipeline::RENDER_TYPE_WATER,
+                LLPipeline::RENDER_TYPE_ALPHA_PRE_WATER,
+                LLPipeline::RENDER_TYPE_PASS_GRASS,
+                LLPipeline::RENDER_TYPE_HUD,
+                LLPipeline::RENDER_TYPE_HUD_PARTICLES,
+                LLPipeline::RENDER_TYPE_CLOUDS,
+                LLPipeline::END_RENDER_TYPES
+            );
+        }
+
         gPipeline.updateCull(*LLViewerCamera::getInstance(), result);
         stop_glerror();
 
@@ -1180,6 +1206,10 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
             constexpr F32 g = 0.5f;
             glClearColor(g, g, g, 1.f);
         }
+        else if (gSnapshotAvatarOnly)
+        {
+            glClearColor(0.f, 0.f, 0.f, 0.f);
+        }
         else
         {
             glClearColor(1, 0, 1, 1);
@@ -1260,6 +1290,11 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
 
 
         LLSpatialGroup::sNoDelete = false;
+
+        if (gSnapshotAvatarOnly)
+        {
+            gPipeline.popRenderTypeMask();
+        }
 
         gPipeline.clearReferences();
     }
@@ -1730,18 +1765,21 @@ void render_ui(F32 zoom_factor, int subfield)
         LLGLState::checkStates();
 
 
-        LL_PROFILE_ZONE_NAMED_CATEGORY_UI("HUD");
-    render_hud_elements();
-// [RLVa:KB] - Checked: RLVa-2.2 (@setoverlay)
-        if (RlvActions::hasBehaviour(RLV_BHVR_SETOVERLAY))
+        if (!gSnapshotAvatarOnly)
         {
-            LLVfxManager::instance().runEffect(EVisualEffect::RlvOverlay);
-        }
+            LL_PROFILE_ZONE_NAMED_CATEGORY_UI("HUD");
+            render_hud_elements();
+// [RLVa:KB] - Checked: RLVa-2.2 (@setoverlay)
+            if (RlvActions::hasBehaviour(RLV_BHVR_SETOVERLAY))
+            {
+                LLVfxManager::instance().runEffect(EVisualEffect::RlvOverlay);
+            }
 // [/RLVa:KB]
-        LLGLState::checkStates();
-        render_hud_attachments();
+            LLGLState::checkStates();
+            render_hud_attachments();
 
-        LLGLState::checkStates();
+            LLGLState::checkStates();
+        }
 
         LLGLSDefault gls_default;
         LLGLSUIDefault gls_ui;

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater
+ legacy_header_height="18"
+ can_minimize="false"
+ can_resize="true"
+ can_close="true"
+ height="380"
+ layout="topleft"
+ name="snapshot_avatar_select"
+ single_instance="true"
+ save_rect="true"
+ save_visibility="false"
+ title="Select Avatars"
+ width="280"
+ min_height="220"
+ min_width="240">
+    <text
+     type="string"
+     length="1"
+     follows="left|top|right"
+     height="16"
+     layout="topleft"
+     left="10"
+     right="-10"
+     name="header_text"
+     top="10">
+        Check avatars to include with self:
+    </text>
+    <filter_editor
+     follows="left|top|right"
+     height="22"
+     layout="topleft"
+     left="10"
+     right="-10"
+     name="avatar_filter"
+     top_pad="4"
+     label="Filter names..." />
+    <scroll_list
+     follows="all"
+     column_padding="2"
+     height="260"
+     draw_heading="true"
+     draw_stripes="true"
+     bg_stripe_color="SL-Titanium_25"
+     top_pad="6"
+     left="10"
+     right="-10"
+     name="avatar_list">
+        <scroll_list.columns
+         type="checkbox"
+         width="24"
+         label=""
+         name="check" />
+        <scroll_list.columns
+         label="Name"
+         width="165"
+         name="name" />
+        <scroll_list.columns
+         label="Dist"
+         width="50"
+         name="distance" />
+    </scroll_list>
+    <button
+     follows="left|bottom"
+     height="22"
+     layout="topleft"
+     left="10"
+     top_pad="8"
+     width="75"
+     label="Select All"
+     name="select_all_btn" />
+    <button
+     follows="left|bottom"
+     height="22"
+     layout="topleft"
+     left_pad="4"
+     top_delta="0"
+     width="65"
+     label="Clear"
+     name="clear_btn" />
+    <button
+     follows="right|bottom"
+     height="22"
+     layout="topleft"
+     right="-10"
+     top_delta="0"
+     width="75"
+     label="Refresh"
+     name="refresh_btn" />
+</floater>

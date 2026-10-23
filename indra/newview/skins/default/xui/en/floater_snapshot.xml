@@ -5,7 +5,7 @@
  can_minimize="true"
  can_resize="false"
  can_close="true"
- height="510"
+ height="560"
  layout="topleft"
  name="Snapshot"
  single_instance="true"
@@ -14,7 +14,7 @@
  save_visibility="false"
  title="Snapshot"
  width="624"
- min_height="475">
+ min_height="525">
     <floater.string
      name="unknown">
         unknown
@@ -92,7 +92,20 @@
 	 label="Refresh"
      name="new_snapshot_btn"
      top_pad="10"
-     width="167" />
+     width="135" />
+    <button
+     follows="left|top"
+     height="25"
+     image_hover_unselected="Toolbar_Middle_Over"
+     image_selected="Toolbar_Middle_Off"
+     image_unselected="Toolbar_Middle_Off"
+     image_overlay="Icon_Orientation_Landscape"
+     layout="topleft"
+     left_pad="1"
+     top_delta="0"
+     width="31"
+     name="rotate_portrait_btn"
+     tool_tip="Orientation: Landscape (Click to switch to Portrait)" />
 	<button
        follows="left|top"
 	   control_name="AdvanceSnapshot"
@@ -124,7 +137,7 @@
 	   top_delta="0"
        width="31" />
 	<panel
-     height="200"
+     height="220"
      layout="topleft"
 	 follows="top|left"
      left="0"
@@ -174,7 +187,55 @@
              label="Depth (24 bit)"
              name="Depth24"
              value="depth24" />
+            <combo_box.item
+             label="Avatar (Transparent)"
+             name="AvatarTransparent"
+             value="avatar_transparent" />
+            <combo_box.item
+             label="Avatar Matte (Black on White)"
+             name="AvatarMaskBlack"
+             value="avatar_mask_black" />
+            <combo_box.item
+             label="Avatar Matte (White on Black)"
+             name="AvatarMaskWhite"
+             value="avatar_mask_white" />
         </combo_box>
+        <combo_box
+         control_name="FSSnapshotAvatarScope"
+         follows="left|top|right"
+         height="23"
+         layout="topleft"
+         left="30"
+         name="avatar_scope_combo"
+         top_pad="4"
+         right="-30"
+         tool_tip="Choose which avatars to include in snapshots and avatar alpha passes">
+            <combo_box.item
+             label="Avatars: All"
+             name="AvatarsAll"
+             value="2" />
+            <combo_box.item
+             label="Avatars: Self + Selected"
+             name="AvatarsSelected"
+             value="1" />
+            <combo_box.item
+             label="Avatars: Self only"
+             name="AvatarsSelf"
+             value="0" />
+        </combo_box>
+        <button
+         follows="right|top"
+         height="23"
+         layout="topleft"
+         left_pad="3"
+         top_delta="0"
+         width="24"
+         image_overlay="Command_Avatar_Icon"
+         image_hover_unselected="Toolbar_Middle_Over"
+         image_selected="Toolbar_Middle_Off"
+         image_unselected="Toolbar_Middle_Off"
+         name="avatar_scope_popout_btn"
+         tool_tip="Open Nearby Avatars selection list" />
         <check_box
          label="Interface"
          layout="topleft"
@@ -297,7 +358,7 @@
     </panel>
 	<panel_container
      follows="left|top"
-     height="230"
+     height="260"
      layout="topleft"
      left="0"
      name="panel_container"
@@ -453,7 +514,7 @@
     top="23"
 	left="215"
 	width="420"
-	height="420"
+	height="470"
     follows="top|left"/>
   <view_border 
    bevel_style="in" 
