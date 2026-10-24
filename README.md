@@ -14,8 +14,17 @@
 
 ## About This Fork
 
-Soapstorm builds upon Firestorm to experiment with enhanced photography and avatar tools, combat and camera controls, UI quality-of-life additions, and stability improvements:
+Soapstorm builds upon Firestorm to experiment with enhanced photography and avatar tools, an in-viewer animation and rigging suite, combat and camera controls, UI quality-of-life additions, and stability improvements:
 
+- **In-Viewer Animation & Rigging Suite:**
+  - Integrated animation editor: pose, animate, retarget, and rig avatars and models directly inside the viewer.
+  - **Edit Objects in World (Ctrl+B):** Open the viewer Build window over the editor to move, rotate, and resize worn attachments directly on the posed avatar while the editor holds the pose.
+  - **Resize Skeleton (10% to 1000%):** Scale the avatar preview client-side with ground foot alignment, scaling hip moves, keyframes, and IK targets proportionately so sits and crouches preserve their depth.
+  - **Export Silent Rig for SL:** Export current pose joint positions as a rigged .dae deformer (with a 4mm pelvis triangle) to reshape skeletons and fit custom worn mechs or attachments by eye.
+  - **Textured Mesh Bodies:** Preview imported meshes and custom bodies with their own textures (local image files or packed in .glb / .fbx) with cut-out and see-through material support.
+  - **Push Hands Out of the Body:** Automatically pushes hands that sink into custom mesh bodies back out through the arms.
+  - **Safe Rig Export for SL:** Validates rigs prior to export and warns against structures that break in the SL mesh uploader, providing one-click fix buttons.
+  - **Mocap Clean-Up & Loop Tools:** Rebuild 1-2 frame mocap capture glitches (Remove Spikes), eliminate wandering hip drift (Remove Hip Travel), center root takes (Move to Origin), distribute seamless loop seams, and crop timeline ranges.
 - **Photography & Avatar Snapshot Suite:**
   - Transparent avatar snapshot capture with holdout alpha mattes (clean avatar cutouts).
   - Blender-style orthographic camera toggle with automatic perspective revert upon camera motion.
