@@ -1079,7 +1079,10 @@ DaeModel silent_rig(const Skeleton& skel, const Pose& pose, const Shape* positio
         m.binds.push_back(v.node >= 0 && size_t(v.node) < g.size() ? g[size_t(v.node)] : g[size_t(v.joint)] * Xform{v.rot, v.pos});
     m.bound.assign(m.binds.size(), true);
     m.bound[size_t(root)] = false;
-    m.materials.push_back({"Silent", {0.5f, 0.5f, 0.5f, 1.f}, "", false, false});
+    DaeMaterial mat;
+    mat.name = "Silent";
+    mat.rgba = {0.5f, 0.5f, 0.5f, 1.f};
+    m.materials.push_back(std::move(mat));
     const Vec3 at = pelvis >= 0 ? m.binds[size_t(pelvis)].pos : Vec3{};
     for (const Vec3& c : {Vec3{0, 0, 0}, Vec3{0.004, 0, 0}, Vec3{0, 0.004, 0}}) {
         const Vec3 v = at + c;

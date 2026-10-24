@@ -75,10 +75,10 @@ MeshContactCheck::MeshContactCheck(const Skeleton& skel, const std::vector<const
 HandContacts MeshContactCheck::measure(const std::vector<Xform>& globals) const {
     HandContacts out;
     if (!usable_) return out;
-    std::vector<float> pos, nrm, p, q;
+    std::vector<float> pos, nrm, skin_pos, skin_nrm;
     for (const DaeModel* m : parts_) {
-        skin_prop(*m, skel_, globals, shape_, p, q);
-        pos.insert(pos.end(), p.begin(), p.end()), nrm.insert(nrm.end(), q.begin(), q.end());
+        skin_prop(*m, skel_, globals, shape_, skin_pos, skin_nrm);
+        pos.insert(pos.end(), skin_pos.begin(), skin_pos.end()), nrm.insert(nrm.end(), skin_nrm.begin(), skin_nrm.end());
     }
     const size_t n = arm_.size();
     auto at = [&](const std::vector<float>& a, size_t v) { return Vec3{a[v * 3], a[v * 3 + 1], a[v * 3 + 2]}; };
