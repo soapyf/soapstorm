@@ -68,8 +68,6 @@ public:
 
     inline LLViewerObject *findObject(const LLUUID &id);
     LLViewerObject *createObjectViewer(const LLPCode pcode, LLViewerRegion *regionp, S32 flags = 0); // Create a viewer-side object
-    // <SS:Nexii> Adopts a viewer-side object constructed outside the pcode factory - the Atmo water planes (sswater.h) reuse the stock water pcodes, so the factory cannot build their subclasses; the caller news the object and this does the same bookkeeping createObjectViewer would have.
-    LLViewerObject *adoptViewerObject(LLViewerObject *objectp);
     LLViewerObject *createObjectFromCache(const LLPCode pcode, LLViewerRegion *regionp, const LLUUID &uuid, const U32 local_id);
     LLViewerObject *createObject(const LLPCode pcode, LLViewerRegion *regionp,
                                  const LLUUID &uuid, const U32 local_id, const LLHost &sender);

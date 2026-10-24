@@ -338,9 +338,6 @@ public:
     void bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_target = nullptr, LLRenderTarget* depth_target = nullptr);
     void setupSpotLight(LLGLSLShader& shader, LLDrawable* drawablep);
 
-    // <SS:Nexii> Atmo Magic: the nearest projector lights that are worth lighting precipitation with, nearest first. mNearbyLights and the set type it is held in are protected, and the point of this is to hand out the few lights a caller wants rather than the whole list, so the filtering that the deferred pass does per light lives here too.
-    void getNearbyProjectors(std::vector<LLDrawable*>& out, U32 max_count) const;
-
     void unbindDeferredShader(LLGLSLShader& shader);
 
     // set env_mat parameter in given shader
@@ -668,15 +665,7 @@ public:
         RENDER_DEBUG_IMPOSTORS          = 0x100000000,
         RENDER_DEBUG_REFLECTION_PROBES  = 0x200000000,
         RENDER_DEBUG_PROBE_UPDATES      = 0x400000000,
-        RENDER_DEBUG_TEXTURE_SIZE       = 0x800000000,
-        // <SS:Nexii> Atmo Magic wind flowmap
-        RENDER_DEBUG_WIND_FLOW          = 0x1000000000,
-        RENDER_DEBUG_RAIN_SHADOW        = 0x2000000000,
-        RENDER_DEBUG_ROOF_RUNOFF        = 0x4000000000,
-        RENDER_DEBUG_GEOM_SETTLE        = 0x8000000000,
-        RENDER_DEBUG_SURFACE_FIELD      = 0x10000000000,
-        RENDER_DEBUG_WORLD_FIELD        = 0x20000000000,
-        RENDER_DEBUG_CLOUD_FIELD        = 0x40000000000
+        RENDER_DEBUG_TEXTURE_SIZE       = 0x800000000
     };
 
 public:

@@ -42,7 +42,6 @@
 #include "llagent.h"
 #include "llagentcamera.h"
 #include "pipeline.h"
-#include "ssatmomagic.h"  // <SS:Nexii> Atmo Magic geometry-change settling
 #include "llspatialpartition.h"
 #include "lltooltip.h"
 #include "llworld.h"
@@ -334,9 +333,6 @@ void LLViewerObjectList::processUpdateCore(LLViewerObject* objectp,
     }
 
     updateActive(objectp);
-
-    // <SS:Nexii> Prim changes queue a lazy recapture of the rain shadow map and a resolve of the wind flowmap. The callee filters out avatars, attachments, tiny objects and anything still moving, and holds the rest for a few seconds before either map hears about it - a prim thrower or a combat rez would otherwise have both rebuilding continuously for geometry that is gone before the rebuild finishes.
-    SSAtmoMagic::onObjectUpdate(objectp);
 
     if (just_created)
     {
@@ -2344,22 +2340,6 @@ LLViewerObject *LLViewerObjectList::createObjectViewer(const LLPCode pcode, LLVi
     return objectp;
 }
 
-// <SS:Nexii> The tail of createObjectViewer for an object the caller already constructed - see the header note.
-LLViewerObject *LLViewerObjectList::adoptViewerObject(LLViewerObject *objectp)
-{
-    if (!objectp)
-    {
-        return NULL;
-    }
-
-    mUUIDObjectMap[objectp->getID()] = objectp;
-
-    mObjects.push_back(objectp);
-
-    updateActive(objectp);
-
-    return objectp;
-}
 
 LLViewerObject *LLViewerObjectList::createObjectFromCache(const LLPCode pcode, LLViewerRegion *regionp, const LLUUID &uuid, const U32 local_id)
 {

@@ -21,9 +21,9 @@ Root hierarchy (llviewerwindow.cpp:2203+): `mRootView` → main view → `gFloat
 
 ## Floater lifecycle
 
-`LLFloaterReg` is a static name→(xml, build func) map; all ~246 viewer registrations in `llviewerfloaterreg.cpp` (ss floaters at :692-705; `ss_atmo_audio` binds plain `LLFloater`, pure XML; `ss_atmo_fx` binds `SSFloaterEffects` for the one control XUI cannot bind, its cloud-field debug mask). `getInstance()` (llfloaterreg.cpp:180) finds-or-builds: build_func → `buildFromFile` → `applyControlsAndPosition` → `adjustToFitScreen`. Position/visibility persistence comes from `save_rect="true"` in XML → lazily declared rect/visibility controls (llfloaterreg.cpp:422-431, 511).
+`LLFloaterReg` is a static name→(xml, build func) map; all viewer registrations in `llviewerfloaterreg.cpp`. `getInstance()` (llfloaterreg.cpp:180) finds-or-builds: build_func → `buildFromFile` → `applyControlsAndPosition` → `adjustToFitScreen`. Position/visibility persistence comes from `save_rect="true"` in XML → lazily declared rect/visibility controls (llfloaterreg.cpp:422-431, 511).
 
-Typical wiring (see `ssfloateratmoenv.cpp:84+`): everything happens in `postBuild()` — `getChild<T>("name")->setCommitCallback(lambda)` directly onto model singletons. No event pumps in normal UI code.
+Typical wiring: everything happens in `postBuild()` — `getChild<T>("name")->setCommitCallback(lambda)` directly onto model singletons. No event pumps in normal UI code.
 
 ## Input routing
 

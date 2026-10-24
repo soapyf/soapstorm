@@ -22,13 +22,6 @@
  tab_min_width="50"
  tab_position="top">
 
-    <panel
-     class="panel_preference"
-     filename="panel_preferences_soapstorm_atmo.xml"
-     label="Atmo Magic"
-     layout="topleft"
-     help_topic="preferences_soapstorm_tab"
-     name="soapstorm_atmo" />
 
     <panel
      class="panel_preference"

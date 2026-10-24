@@ -240,7 +240,6 @@
 #include "fsfloaterkillfeed.h"
 #include "fscombathitmarker.h"
 #include "fsrezqueue.h" // <SS:Nexii> Rez queue watch
-#include "ssatmomagic.h" // <SS:Nexii> Atmo Magic weather
 #include "fspanellogin.h"
 #include "fsvatsimgui.h" // VATs ImGui UI
 #include "fsvatshost.h" // VATs editor
@@ -1272,12 +1271,6 @@ bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK m
             {
                 LL_INFOS() << buttonname << " Mouse " << buttonstatestr << " not handled by view" << LL_ENDL;
             }
-
-        // <SS:Nexii> Atmo Magic info overlay: a left-click on an orange heading row collapses that section
-        if (down && clicktype == CLICK_LEFT && SSAtmoMagic::handleInfoClick(x, y))
-        {
-            return true;
-        }
     }
 
     if (FSVATsImGui::worldClick(pos, mask, clicktype, down)) return true; // VATs ImGui UI: clicks no viewer window took
@@ -3113,9 +3106,6 @@ void LLViewerWindow::draw()
 
         // <SS:Nexii> Rez queue warning above the crosshair
         FSRezQueue::draw();
-
-        // <SS:Nexii> Atmo Magic diagnostic readout
-        SSAtmoMagic::drawInfo();
 
         if (inMouselook && fsMouselookCombatFeatures)
         {

@@ -64,10 +64,8 @@ Enum order = render order (lldrawpool.h:49-80): SKY … SIMPLE/FULLBRIGHT/BUMP/M
 
 - **State leakage is the norm**: post-deferred ambient state is `setColorMask(true,false)`; `doAtmospherics`/`doWaterHaze` flip colormask AND set a custom blendFunc `(ONE, SRC_ALPHA, ZERO, SRC_ALPHA)` and restore only the blend type, not the colormask (10196, 10260).
 - `doAtmospherics`/`doWaterHaze` **flush and re-bind `mRT->screen` mid-pass** to copy depth into `mWaterDis` — don't hold bound-target assumptions across them.
-- `SSSurfaceField::renderWetPass` (sssurfacefield.cpp:919) rebinds `deferredScreen` and uses raw `glDrawBuffers` to write only attachment 1 (and optionally 2); if the restore of all four draw buffers (:1384-1386) is skipped, all later G-buffer writes silently vanish.
 - `tonemap` reuses `deferredLight` as scratch when CAS is on — its shadow/AO content is dead by then.
 - `addDeferredAttachments` silently no-ops if the target already has >1 texture (pipeline.cpp:397).
 - `setSkipRenderFlag` is honored in the deferred loop (4349) but NOT post-deferred (4503).
 - `renderDeferredLighting` toggles off RENDER_TYPE_HUD and never restores it in scope (9641).
 - `RenderResolutionDivisor/Multiplier` scale all screen RTs; shadows have independent `RenderShadowResolutionScale`.
-- SS shader programs: 15 `gSS*Program` globals (llviewershadermgr.cpp:183-200); shared-shader edits live behind the `SS_ATMO` define (see [soapstorm_layer.md](soapstorm_layer.md)). Shader binary cache is keyed on source digest, not viewer version (llviewershadermgr.cpp:567-629).
