@@ -67,6 +67,11 @@ public:
     static void updateFrustumPlanes(LLCamera& camera, bool ortho = false, bool zflip = false, bool no_hacks = false);
     void setPerspective(bool for_selection, S32 x, S32 y_from_bot, S32 width, S32 height, bool limit_select_distance, F32 z_near = 0, F32 z_far = 0);
 
+    // <SS:Nexii> Render far plane helpers. MAX_FAR_CLIP is the constant projection far plane (2048m).
+    static constexpr F32 calcRenderFarPlane(F32 far_clip = 0.f) { return MAX_FAR_CLIP; }
+    F32 getRenderFarPlane() const { return MAX_FAR_CLIP; }
+    // </SS:Nexii>
+
     const LLMatrix4 &getProjection() const;
     const LLMatrix4 &getModelview() const;
 

@@ -142,7 +142,7 @@ const std::vector<std::string>& App::texture_keys(const DaeModel& m) {
             const auto when = mat.texture.empty() ? std::filesystem::file_time_type{}
                                                   : std::filesystem::last_write_time(mat.texture, ec);
             if (!mat.texture.empty())
-                mk.keys.push_back("file:" + mat.texture + "@" + std::to_string(when.time_since_epoch().count()));
+                mk.keys.push_back("file:" + mat.texture + "@" + std::to_string(static_cast<long long>(when.time_since_epoch().count())));
             else if (!mat.image.empty())
                 mk.keys.push_back("bytes:" + std::to_string(mat.image.size()) + ":" +
                                   std::to_string(std::hash<std::string_view>{}(std::string_view(

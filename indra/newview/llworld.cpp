@@ -1489,14 +1489,9 @@ void LLWorld::updateWaterObjects()
         (S32)(512 - (region_y - min_y)) };
 // </FS:CR> Fix water height on regions larger than 2048x2048
 
-    // <SS:Nexii> How far the void water reaches past the hole water box. Must clear the draw distance to fill the view, but stop short of
-    // the projection far plane - triangles it slices through rasterise black along the horizon. The tiles are a square ring, so the corner
-    // at sqrt(2) is what has to fit. mLandFarClip not the camera: setLandFarClip() assigns it before re-running us, the camera is a frame
-    // behind. Even whole metres so the tiles, offset by half of it, round to matching edges in LLVOWater::updateGeometry.
-    const F32 far_plane = LLViewerCamera::calcRenderFarPlane(getLandFarClip());
-    const F32 corner_room = far_plane * 0.7f - (F32)llmax(wx, wy);
-    const F32 stretch_wanted = llmin(getLandFarClip() * 2.f, corner_room);
-    const F32 water_stretch = llmax(2048.f, (F32)(2 * ll_round(stretch_wanted * 0.5f)));
+    // <SS:Nexii> Void water skirt past the hole box: as far out as fits, capped so the ring's far corner at sqrt(2) stays inside MAX_FAR_CLIP from a camera anywhere in the box (0.7 ~ 1/sqrt(2) with rounding margin) - triangles the projection slices through rasterise black along the horizon. Floor 256 because under ~128m LLVOWater::updateGeometry rounds a patch to zero quads (crash). Even metres so tile edges round together.
+    const F32 corner_room = MAX_FAR_CLIP * 0.7f - (F32)llmax(wx, wy);
+    const F32 water_stretch = (F32)(2 * ll_round(llclamp(corner_room, 256.f, 1024.f) * 0.5f));
     // </SS:Nexii>
 
     S32 dir;

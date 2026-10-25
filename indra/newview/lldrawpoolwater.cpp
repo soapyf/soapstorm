@@ -106,7 +106,7 @@ S32 LLDrawPoolWater::getNumPostDeferredPasses()
     // which water is deliberately drawn past (its partition sets mInfiniteFarClip). Works out to the original 1024m at default draw distance.
     //if (LLViewerCamera::getInstance()->getOrigin().mV[2] < 1024.f)
     const F32 height_above_water = LLViewerCamera::getInstance()->getOrigin().mV[2] - LLEnvironment::instance().getWaterHeight();
-    if (height_above_water < LLViewerCamera::getInstance()->getRenderFarPlane())
+    if (height_above_water < MAX_FAR_CLIP)
     // </SS:Nexii>
     {
         return 1;
