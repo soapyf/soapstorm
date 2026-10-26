@@ -101,7 +101,8 @@ static const char* CONTROLLER_BUTTON_NAMES[] = {
     "button_dpad_up", "button_dpad_down", "button_dpad_left", "button_dpad_right",
     "button_misc1", "button_paddle1", "button_paddle2", "button_paddle3", "button_paddle4",
     "button_touchpad",
-    "", "", "", "", "", "", "", "", "", // 21-29 unused
+    "button_misc2", "button_misc3", "button_misc4", "button_misc5", "button_misc6", // SDL MISC2..6
+    "", "", "", "", // 26-29 unused
     "button_lefttrigger", "button_righttrigger" };
 
 static std::string controllerStringFromKeyData(const U8 actionType, const U8 action)

@@ -6241,7 +6241,11 @@ void LLAppViewer::idle()
             if (LLGameControl::willControlAvatar() || LLGameControl::willControlFlycam())
             {
                 LLGameControl::AgentActions game_control_actions = LLGameControl::computeAgentActions();
-                gAgent.applyExternalActions(game_control_actions);
+                // OCOL: a button pressed to bind it in the key dialog doesn't also act
+                if (!LLSetKeyBindDialog::isRecording())
+                {
+                    gAgent.applyExternalActions(game_control_actions);
+                }
             }
 
             // OCOL: controller key bindings and gesture buttons (not while the

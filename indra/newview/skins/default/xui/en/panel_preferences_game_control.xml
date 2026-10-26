@@ -236,16 +236,6 @@
         height="16"
         width="90"
         tool_tip="Draw a crosshair at the centre of the screen while flying the flycam."/>
-    <check_box
-        name="flycam_hide_cursor"
-        label="Hide cursor"
-        layout="topleft"
-        follows="top|left"
-        top="58"
-        left_pad="6"
-        height="16"
-        width="100"
-        tool_tip="Hide the mouse cursor while flying the flycam. It comes back while the mouse moves."/>
 
     <!-- ===== Diagram and inspector ===== -->
     <layout_stack

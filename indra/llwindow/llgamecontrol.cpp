@@ -2402,6 +2402,7 @@ void LLGameControllerManager::applyButtonToggles()
         return;
     }
     U32 presses = g_allButtons & ~g_prevAllButtons & ~g_reservedButtons & mToggleMask;
+    mToggleLatch &= ~g_reservedButtons; // a button bound to a key or gesture since it latched
     mToggleLatch ^= presses;
     g_innerState.mButtons = (g_innerState.mButtons & ~mToggleMask) | (mToggleLatch & mToggleMask);
 }
@@ -4546,6 +4547,10 @@ bool LLGameControl::actionFromString(const std::string& string, ActionType& acti
         {
             action = BUTTON_TOUCHPAD;
         }
+        else if(string.size() == 12 && string.compare(0, 11, "button_misc") == 0 && string[11] >= '2' && string[11] <= '6')
+        {
+            action = (U8)(BUTTON_21 + (string[11] - '2')); // <GMDX> SDL MISC2..6
+        }
         else if(string == "button_lefttrigger")
         {
             action = BUTTON_LEFT_TRIGGER;
@@ -4611,6 +4616,11 @@ std::string LLGameControl::stringFromAction(const ActionType actionType, const U
                 case BUTTON_PADDLE3:        return "button_paddle3";
                 case BUTTON_PADDLE4:        return "button_paddle4";
                 case BUTTON_TOUCHPAD:       return "button_touchpad";
+                case BUTTON_21:             return "button_misc2"; // <GMDX> SDL MISC2..6
+                case BUTTON_22:             return "button_misc3";
+                case BUTTON_23:             return "button_misc4";
+                case BUTTON_24:             return "button_misc5";
+                case BUTTON_25:             return "button_misc6";
                 case BUTTON_LEFT_TRIGGER:   return "button_lefttrigger";
                 case BUTTON_RIGHT_TRIGGER:  return "button_righttrigger";
             }

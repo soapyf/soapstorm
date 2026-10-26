@@ -140,13 +140,11 @@ namespace
                 { "Avatar", "Buttons", "Jump", "BUTTON_SOUTH" },
                 { "Avatar", "Buttons", "Crouch", "BUTTON_EAST" },
                 { "Avatar", "Buttons", "Toggle sit", "BUTTON_WEST" },
-                { "Avatar", "Buttons", "Interact", "BUTTON_NORTH" },
                 { "Avatar", "Buttons", "Zoom +", "BUTTON_DPAD_UP" },
                 { "Avatar", "Buttons", "Zoom -", "BUTTON_DPAD_DOWN" },
                 { "Avatar", "Buttons", "Toggle flycam", "BUTTON_RIGHT_STICK" },
                 GC_STICKS("Captive"), GC_SYSTEM("Captive"),
                 { "Captive", "Buttons", "Toggle sit", "BUTTON_WEST" },
-                { "Captive", "Buttons", "Interact", "BUTTON_NORTH" },
                 { "Captive", "Buttons", "Zoom +", "BUTTON_DPAD_UP" },
                 { "Captive", "Buttons", "Zoom -", "BUTTON_DPAD_DOWN" },
             }) },
@@ -187,7 +185,11 @@ namespace
         {
             return nullptr;
         }
-        size_t index = std::stoul(value.substr(BUILTIN_PRESET_PREFIX.size()));
+        U32 index = 0;
+        if (!LLStringUtil::convertToU32(value.substr(BUILTIN_PRESET_PREFIX.size()), index))
+        {
+            return nullptr;
+        }
         return index < builtInPresets().size() ? &builtInPresets()[index].second : nullptr;
     }
 
@@ -328,8 +330,6 @@ bool LLPanelPreferenceGameControl::postBuild()
     mFlycamFastLabel = getChild<LLTextBox>("flycam_speed_fast_label");
     mCheckFlycamCrosshair = getChild<LLCheckBoxCtrl>("flycam_crosshair");
     mCheckFlycamCrosshair->setCommitCallback([this](LLUICtrl*, const LLSD&) { LLGameControl::setFlycamCrosshairEnabled(mCheckFlycamCrosshair->getValue()); });
-    mCheckFlycamHideCursor = getChild<LLCheckBoxCtrl>("flycam_hide_cursor");
-    mCheckFlycamHideCursor->setCommitCallback([this](LLUICtrl*, const LLSD&) { LLGameControl::setFlycamHideCursorEnabled(mCheckFlycamHideCursor->getValue()); });
     mCurrentModeIndicator = getChild<LLTextBox>("current_mode_indicator");
 
     // ---- top and bottom bars ----
@@ -502,7 +502,22 @@ void LLPanelPreferenceGameControl::cancel(const std::vector<std::string> setting
     {
         return;
     }
-    LLGameControl::applySettingsFromLLSD(mOrigSettings);
+    // Only this page's edits are undone. The Gyro Aim and Trackpads window and the
+    // debug window write to the same GameControl map and save straight away.
+    LLSD restore = mOrigSettings;
+    const LLSD& live = LLGameControl::getGameControlSettings();
+    for (const char* key : { "Gyro", "Trackpads", "Devices" })
+    {
+        if (live.has(key))
+        {
+            restore[key] = live[key];
+        }
+        else
+        {
+            restore.erase(key);
+        }
+    }
+    LLGameControl::applySettingsFromLLSD(restore);
     LLGameControl::saveToSettings();
 }
 
@@ -609,7 +624,7 @@ void LLPanelPreferenceGameControl::updateActionModeEnabledUI()
 
     const bool is_flycam = (mode == "FlyCam");
     for (LLView* view : { (LLView*)mCheckFlycamAllowRoll, (LLView*)mSliderFlycamSpeedFactor, (LLView*)mFlycamSlowLabel,
-                          (LLView*)mFlycamFastLabel, (LLView*)mCheckFlycamCrosshair, (LLView*)mCheckFlycamHideCursor })
+                          (LLView*)mFlycamFastLabel, (LLView*)mCheckFlycamCrosshair })
     {
         view->setVisible(is_flycam);
     }
@@ -621,8 +636,6 @@ void LLPanelPreferenceGameControl::updateActionModeEnabledUI()
         mSliderFlycamSpeedFactor->setEnabled(enabled);
         mCheckFlycamCrosshair->set(LLGameControl::isFlycamCrosshairEnabled());
         mCheckFlycamCrosshair->setEnabled(enabled);
-        mCheckFlycamHideCursor->set(LLGameControl::isFlycamHideCursorEnabled());
-        mCheckFlycamHideCursor->setEnabled(enabled);
     }
     refreshDiagram();
 }
@@ -1284,6 +1297,7 @@ void LLPanelPreferenceGameControl::setListMode(bool list)
 // Each row's value is {input_type, action}.
 void LLPanelPreferenceGameControl::populateActionMappings()
 {
+    clearSelectionState(); // the selection points into the rows freed below
     mActionMappingsAxes->clearRows();
     mActionMappingsButtons->clearRows();
     const std::string mode = currentEditMode();
@@ -1674,7 +1688,7 @@ void LLPanelPreferenceGameControl::onPresetSave()
             std::string name = response["message"].asString();
             LLStringUtil::trim(name);
             LLPanelPreferenceGameControl* panel = static_cast<LLPanelPreferenceGameControl*>(handle.get());
-            if (name.empty() || !panel)
+            if (name.empty() || !panel || LLStringUtil::startsWith(name, BUILTIN_PRESET_PREFIX))
             {
                 return false;
             }
@@ -1719,6 +1733,11 @@ void LLPanelPreferenceGameControl::resetModeToDefaults(const std::string& mode)
         LLGameControl::setSpeedFactor("FlyCam", 1.0f);
         LLGameControl::setFlycamCrosshairEnabled(false);
         LLGameControl::setFlycamHideCursorEnabled(true);
+    }
+    else if (mode == "Avatar" || mode == "Mouselook")
+    {
+        // Linden Lab's turn speed for these modes; Sensitivity above does that job here
+        LLGameControl::setSpeedFactor(mode, 1.0f);
     }
 }
 

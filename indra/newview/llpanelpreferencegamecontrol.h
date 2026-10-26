@@ -149,7 +149,6 @@ private:
     LLTextBox* mFlycamSlowLabel { nullptr };
     LLTextBox* mFlycamFastLabel { nullptr };
     LLCheckBoxCtrl* mCheckFlycamCrosshair { nullptr };
-    LLCheckBoxCtrl* mCheckFlycamHideCursor { nullptr };
     LLTextBox* mCurrentModeIndicator { nullptr };
     LLGameControl::AgentControlMode mLastDrawnControlMode { LLGameControl::CONTROL_MODE_NONE };
 
