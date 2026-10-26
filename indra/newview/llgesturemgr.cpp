@@ -59,6 +59,8 @@
 // </FS:Ansariel> [FS Communication UI]
 #include "llappearancemgr.h"
 #include "llgesturelistener.h"
+#include "llgamecontrol.h"
+#include "llviewercontrol.h"
 
 #include "chatbar_as_cmdline.h" // <ND/> For FIRE-1624
 
@@ -821,6 +823,114 @@ bool LLGestureMgr::triggerGestureRelease(KEY key, MASK mask)
     return matching.size() > 0;
 }
 
+
+// OCOL: per-account gesture -> controller button map
+static const std::string GESTURE_CONTROLLER_BUTTONS("OCOLGestureControllerButtons");
+
+S32 LLGestureMgr::getControllerButton(const LLUUID& item_id) const
+{
+    if (item_id.isNull() || !gSavedPerAccountSettings.controlExists(GESTURE_CONTROLLER_BUTTONS))
+    {
+        return -1;
+    }
+    const LLSD buttons = gSavedPerAccountSettings.getLLSD(GESTURE_CONTROLLER_BUTTONS);
+    const std::string key = item_id.asString();
+    if (!buttons.has(key))
+    {
+        return -1;
+    }
+    S32 button = buttons[key].asInteger();
+    return (button >= 0 && button < LLGameControl::NUM_BUTTONS) ? button : -1;
+}
+
+void LLGestureMgr::setControllerButton(const LLUUID& item_id, S32 button)
+{
+    if (item_id.isNull() || !gSavedPerAccountSettings.controlExists(GESTURE_CONTROLLER_BUTTONS))
+    {
+        return;
+    }
+    LLSD buttons = gSavedPerAccountSettings.getLLSD(GESTURE_CONTROLLER_BUTTONS);
+    if (!buttons.isMap())
+    {
+        buttons = LLSD::emptyMap();
+    }
+    const std::string key = item_id.asString();
+    if (button >= 0 && button < LLGameControl::NUM_BUTTONS)
+    {
+        buttons[key] = button;
+    }
+    else
+    {
+        buttons.erase(key);
+    }
+    gSavedPerAccountSettings.setLLSD(GESTURE_CONTROLLER_BUTTONS, buttons);
+}
+
+U32 LLGestureMgr::getControllerBoundButtons() const
+{
+    if (!gSavedPerAccountSettings.controlExists(GESTURE_CONTROLLER_BUTTONS))
+    {
+        return 0;
+    }
+    const LLSD buttons = gSavedPerAccountSettings.getLLSD(GESTURE_CONTROLLER_BUTTONS);
+    U32 mask = 0;
+    for (LLSD::map_const_iterator it = buttons.beginMap(); it != buttons.endMap(); ++it)
+    {
+        S32 button = it->second.asInteger();
+        if (button >= 0 && button < LLGameControl::NUM_BUTTONS
+            && mActive.find(LLUUID(it->first)) != mActive.end())
+        {
+            mask |= 1U << button;
+        }
+    }
+    return mask;
+}
+
+void LLGestureMgr::updateControllerGestures()
+{
+    U32 buttons = 0;
+    U32 previous = 0;
+    LLGameControl::getButtonStates(buttons, previous);
+    U32 pressed = buttons & ~previous;
+    U32 released = previous & ~buttons;
+    if (!pressed && !released)
+    {
+        return;
+    }
+
+    for (U8 button = 0; button < LLGameControl::NUM_BUTTONS; ++button)
+    {
+        U32 flag = 1U << button;
+        if (!((pressed | released) & flag))
+        {
+            continue;
+        }
+
+        std::vector<LLMultiGesture*> matching;
+        for (const auto& [item_id, gesture] : mActive)
+        {
+            // asset data might not have arrived yet
+            if (!gesture || getControllerButton(item_id) != button)
+            {
+                continue;
+            }
+            if (released & flag)
+            {
+                gesture->mKeyReleased = true;
+            }
+            else if (!gesture->mWaitingKeyRelease)
+            {
+                matching.push_back(gesture);
+            }
+        }
+
+        if (!matching.empty())
+        {
+            LLMultiGesture* gesture = matching[ll_rand(static_cast<S32>(matching.size()))];
+            playGesture(gesture, true);
+        }
+    }
+}
 
 S32 LLGestureMgr::getPlayingCount() const
 {

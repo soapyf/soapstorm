@@ -28,39 +28,33 @@
 
 #include "llfloaterpreference.h"
 #include "llgamecontrol.h"
+#include "llsetkeybinddialog.h"
 #include "llscrolllistcell.h"
 #include "llscrolllistctrl.h"
 
+#include <array>
+
+class ALCurveEditorCtrl;
 class LLButton;
 class LLCheckBoxCtrl;
 class LLComboBox;
 class LLPanel;
 class LLSliderCtrl;
-class LLSpinCtrl;
 class LLTextBox;
+class SSGameControlDiagram;
+class SSGameControlStickView;
 
-//------------------------LLPanelPreferenceGameControl--------------------------------
-//
-// Preference panel for configuring game controller (gamepad) input.
-//
-// Two visible sub-tabs:
-//   - Actions (global, per mode Avatar/Mouselook/FlyCam/Captive/Cursor): one table binding
-//     each mode's axis and button actions to a canonical input.  Independent of device.
-//   - Devices (per device): normalizes physical hardware to canonical inputs --
-//     an axis-channels table and a button-channels table, each mapping the physical
-//     input (icon + text) to the canonical output (icon + text).  Axis tuning
-//     (invert/offset/dead zone) lives on the Device State tab.
-//
-// All settings are stored under a single "GameControl" key:
-//   GameControl/ModeMappings/<Mode>/{Axes,Buttons} - GLOBAL action -> input
-//   GameControl/Devices/<guid>/Config             - serialized per-device options
-//
-class LLPanelPreferenceGameControl : public LLPanelPreference
+// <SS:GameControl> Preferences > Game Controls, rebuilt around a picture of the
+// controller: pick a mode, pick an input on the picture (or press it), and edit what
+// it does in the inspector below. The same bindings are still available as the old
+// tables ("List view"). Hardware remap, raw input, calibration and the server packet
+// moved to Develop > Game Controller Debug (SSFloaterGameControlDebug).
+class LLPanelPreferenceGameControl : public LLPanelPreference, public LLKeyBindResponderInterface
 {
     LOG_CLASS(LLPanelPreferenceGameControl);
-public:
 
-    // Called when a device is connected/disconnected
+public:
+    // A controller was connected or removed.
     static void updateDeviceList();
 
     LLPanelPreferenceGameControl();
@@ -68,210 +62,159 @@ public:
 
     void onOpen(const LLSD& key) override;
     void draw() override;
-
     void apply() override;
     void cancel(const std::vector<std::string> settings_to_skip = {}) override;
     void saveSettings() override;
 
-    // Snapshots the panel's UI state as the single "GameControl" setting map.
-    // The result can be fed to LLGameControl::applySettingsFromLLSD()
-    // to push pending changes into the runtime without touching gSavedSettings.
     LLSD getSettingsAsLLSD();
 
-    void updateDeviceListInternal(); // Refresh device list and settings
+    void onCancelKeyBind() override;
+    void onDefaultKeyBind(bool all_modes) override;
+    bool onSetKeyBind(EMouseClickType click, KEY key, MASK mask, bool all_modes) override;
 
-    // UI event handlers
-    void onGridSelect(LLUICtrl* ctrl);         // Handle table row selection
-    void onCommitInputChannel(LLUICtrl* ctrl); // Handle input/output combobox selection
-    void onCommitNumericValue();               // Handle deadzone/offset value changes
-
-    // Live input capture support
-    static bool isWaitingForInputChannel();    // True if a cell is waiting for input
-    static void applyGameControlInput();       // Assign detected input to selected cell
-
-    // Data Output tab: refresh the Value column with the channel values packed into
-    // the most recent outgoing GameControlInput message.  Called from the send path.
-    static void updateDataOutput();
+    // True while controller input should configure rather than play: a list-view
+    // selector is waiting for an input, or the controller picture is on screen.
+    static bool isWaitingForInputChannel();
+    // Main loop hook while waiting: refresh the controller state and hand it on.
+    static void applyGameControlInput();
 
 protected:
     bool postBuild() override;
 
-    // Actions tab (global, per-mode) population.
-    void populateActionMappings();      // Rebuild the action table for the current mode
-    LLGameControl::Options& getSelectedDeviceOptions();  // Get options for selected device
-
-    // Devices tab (per-device) population.
-    void populateDeviceTitle();         // Update device selector UI
-    void populateDeviceSettings(const std::string& guid);  // Load settings for device
-    void populateAxisChannelsRows();    // Create axis-channel rows (one per physical axis)
-    void populateAxisChannelsCells();   // Fill axis-channel invert/deadzone/offset/output
-    void populateButtonChannelsRows();  // Create button-channel rows (one per physical button)
-    void populateButtonChannelsCells(); // Fill button-channel output column
-
-    // Device State tab (per-device, live read-only) population.
-    void updateDeviceStateList();       // Rebuild the state device selector from connected devices
-    void populateAxisStateRows();       // Create axis-state rows (one per physical axis)
-    void populateAxisStateOptionCells();// Fill the state-tab axis option cells (invert/offset/dead zone) from the state device
-    void populateButtonStateRows();     // Create button-state rows (one per physical button)
-    void populateDeviceStateValues();   // Fill the Value columns from the selected device's live state
-
-    // Data Output tab (live, read-only view of the last outgoing GameControlInput).
-    void populateDataOutputRows();      // Create the AXIS_/BUTTON_ label rows (with a blank separator)
-    void populateDataOutputSemanticRows(LLGameControl::AgentControlMode mode);  // Rebuild the mode-dependent semantic block
-    void populateDataOutputValues();    // Fill the Value column from the last outgoing server state
-
-    // Utility methods
-    // Column index of a named axis-state column.  Lets the code address the
-    // Device State axis table by column name, so the XML column order is the
-    // single source of truth: columns can be reordered in the XML with no code
-    // change here.  Returns -1 if no such column exists.
-    S32 axisStateColumn(const std::string& name) const;
-    static void setNumericLabel(LLScrollListCell* cell, S32 value);  // Format numeric cell
-    static void fitInRect(LLUICtrl* ctrl, LLScrollListCtrl* grid, S32 row_index, S32 col_index);  // Position editor over cell
-
 private:
-    // Inline editing support
-    bool initCombobox(LLScrollListItem* item, LLScrollListCtrl* grid);  // Show combobox over cell
-    void clearSelectionState();  // Hide editors and clear selection tracking
+    // ---- modes ----
+    std::string currentEditMode();
+    void selectMode(S32 mode);
+    void onActionModeChanged();
+    void onModeEnabledToggled(bool enabled);
+    void updateActionModeEnabledUI();
+    void updateCurrentModeIndicator();
+    LLComboBox* actionSelectorForMode(bool axis, const std::string& mode) const;
 
-    // Actions-tab helpers
-    std::string currentEditMode();   // mode string ("Avatar"/"Mouselook"/"FlyCam"/"Captive"/"Cursor") from mActionMode
-    void onActionModeChanged();      // rebuild the action table when the edit-mode selector changes
-    void onModeEnabledToggled(bool enabled);  // toggle conversion for the currently-selected mode
-    void updateActionModeEnabledUI();    // sync the Enabled checkbox and lock/unlock the tables
-    void updateCurrentModeIndicator();   //sync mode indicator
-    LLComboBox* actionSelectorForMode(bool axis, const std::string& mode) const;  // default vs flycam selector
-    void removeDuplicateActionInput(const std::string& mode, const std::string& kind,
+    // ---- controller picture and inspector ----
+    void refreshDiagram();          // callouts, conflicts and the inspector for the current mode
+    void refreshInspector();
+    void refreshTuning();
+    void updateLiveInput();         // per frame: highlights, stick view, select-by-press
+    void selectElement(S32 element);
+    void updateControllerName();
+    std::string buttonInputValue(S32 element) const;
+    std::string buttonActionFor(const std::string& input_value, S32* count = nullptr);
+    std::string axisActionFor(const std::string& input_value, S32* count = nullptr);
+    std::string actionLabel(const std::string& action, bool axis);
+    void fillButtonActionCombo(LLComboBox* combo, const std::string& input_value);
+    void fillAxisActionCombo(LLComboBox* combo, const std::string& input_value);
+    void fillBehaviorCombo(LLComboBox* combo, const std::string& action);
+    void assignButtonAction(const std::string& input_value, const std::string& action);
+    void assignAxisAction(const std::string& input_value, const std::string& action);
+    void onButtonActionCommit(LLComboBox* combo, const std::string& input_value);
+    void onBehaviorCommit(LLComboBox* combo, const std::string& input_value);
+    void onAxisInvertCommit(LLCheckBoxCtrl* check, const std::string& input_value);
+    void onTuningCommit();
+    void onDeadZoneCommit();
+    LLGameControl::Stick selectedStick() const;
+    // The dead zone lives on the controller (per physical axis); this reads and
+    // writes it for the stick's two canonical axes on the controller in use.
+    F32 deadZoneFraction(LLGameControl::Stick stick) const;
+    void setDeadZoneFraction(LLGameControl::Stick stick, F32 fraction);
+
+    // ---- list view (the original tables) ----
+    void setListMode(bool list);
+    void populateActionMappings();
+    void onGridSelect(LLUICtrl* ctrl);
+    bool initCombobox(LLScrollListItem* item, LLScrollListCtrl* grid);
+    void onCommitInputChannel(LLUICtrl* ctrl);
+    void clearSelectionState();
+    void removeDuplicateActionInput(const std::string& mode, const std::string& input_type,
         const std::string& keep_action, const std::string& input_value, const LLComboBox* input_selector);
-    // True for the FlyCam Roll actions and Unroll while "Allow Roll" is unchecked: new
-    // mappings to them are refused (existing ones stay mapped, but greyed out and clearable).
-    static bool isFlycamRollDisallowed(const std::string& mode, const std::string& action);
-    static std::string inputLabel(const LLComboBox* input_selector, const std::string& input_value);  // value -> label
-    static std::string selectorLabelAt(const LLComboBox* selector, S32 index);  // label of item at index
-    // Fill glyph_selector with one item per value in text_selector, each labelled
-    // with that input's PromptFont glyph (or its text label where no glyph exists).
-    static void buildInputGlyphSelector(const LLComboBox* text_selector, LLComboBox* glyph_selector);
+    void openKeyDialog(const std::string& action);
 
-    // Handlers for individual table selections/commits
-    void onAxisChannelsSelect();     // output popup (Device Options tab)
-    void onButtonChannelsSelect();   // output popup
-    void onAxisStateSelect();        // invert checkbox / offset-deadzone editor (Device State tab)
+    // ---- presets and resets ----
+    void populatePresets();
+    void onPresetSelected();
+    void onPresetSave();
+    void onPresetDelete();
+    void onResetActionsToDefaults();
+    void resetModeToDefaults(const std::string& mode);
+    void onResetAll();
 
-    // Reset to defaults handlers
-    void onResetActionsToDefaults();    // Reset current mode's action mappings
-    void onResetDeviceToDefaults();     // Reset selected device's options (remap/invert/deadzone/offset)
-    void onResetDeviceOptionsToDefaults();  // Reset state device's per-axis tuning (invert/offset/dead zone)
+    void rememberOriginalSettings();
 
-    // Auto-calibration: samples the state device's raw axes over several frames and
-    // derives Offset/Dead Zone for axes that don't move.  See updateAutoCalibration().
-    void onAutoCalibrate();          // Kick off a new calibration pass
-    void updateAutoCalibration();    // Advance the in-progress pass; called once per frame from draw()
+    // modes and this-mode options
+    LLComboBox* mActionMode { nullptr };  // hidden; holds the edited AgentControlMode
+    std::array<LLButton*, 5> mModeButtons {};
+    LLCheckBoxCtrl* mCheckActionModeEnabled { nullptr };
+    LLCheckBoxCtrl* mCheckFlycamAllowRoll { nullptr };
+    LLSliderCtrl* mSliderFlycamSpeedFactor { nullptr };
+    LLTextBox* mFlycamSlowLabel { nullptr };
+    LLTextBox* mFlycamFastLabel { nullptr };
+    LLCheckBoxCtrl* mCheckFlycamCrosshair { nullptr };
+    LLCheckBoxCtrl* mCheckFlycamHideCursor { nullptr };
+    LLTextBox* mCurrentModeIndicator { nullptr };
+    LLGameControl::AgentControlMode mLastDrawnControlMode { LLGameControl::CONTROL_MODE_NONE };
 
-    void rememberOriginalSettings();  // Capture settings for cancel restoration
-
-    // Sends game_control data to server
+    // top and bottom bars
+    LLTextBox* mControllerName { nullptr };
+    LLComboBox* mPresetList { nullptr };
+    LLComboBox* mStyleList { nullptr };
+    LLButton* mRestoreActionsDefaults { nullptr };
+    LLButton* mViewToggle { nullptr };
+    LLTextBox* mConflictText { nullptr };
     LLCheckBoxCtrl* mCheckGameControlToServer { nullptr };
 
-    // Sub-tab panels
-    LLPanel* mTabActions { nullptr };
-    LLPanel* mTabDevices { nullptr };
+    // picture and inspector
+    LLView* mBodyStack { nullptr };
+    SSGameControlDiagram* mDiagram { nullptr };
+    LLTextBox* mInspectorTitle { nullptr };
+    LLPanel* mInspectorButton { nullptr };
+    LLPanel* mInspectorStick { nullptr };
+    LLPanel* mInspectorTrigger { nullptr };
+    LLPanel* mInspectorTuning { nullptr };
+    LLComboBox* mButtonAction { nullptr };
+    LLComboBox* mButtonBehavior { nullptr };
+    LLTextBox* mButtonNote { nullptr };
+    LLComboBox* mStickXAction { nullptr };
+    LLComboBox* mStickYAction { nullptr };
+    LLCheckBoxCtrl* mStickXInvert { nullptr };
+    LLCheckBoxCtrl* mStickYInvert { nullptr };
+    LLComboBox* mStickClickAction { nullptr };
+    LLComboBox* mStickClickBehavior { nullptr };
+    LLComboBox* mTriggerAxisAction { nullptr };
+    LLCheckBoxCtrl* mTriggerAxisInvert { nullptr };
+    LLComboBox* mTriggerButtonAction { nullptr };
+    LLComboBox* mTriggerBehavior { nullptr };
+    LLSliderCtrl* mTuneSensitivity { nullptr };
+    LLSliderCtrl* mTuneCurve { nullptr };
+    LLSliderCtrl* mTuneDeadZone { nullptr };
+    LLSliderCtrl* mTuneSmoothing { nullptr };
+    LLCheckBoxCtrl* mTuneRescale { nullptr };
+    LLSliderCtrl* mTuneOuter { nullptr };
+    LLSliderCtrl* mTuneBoost { nullptr };
+    SSGameControlStickView* mStickView { nullptr };
+    ALCurveEditorCtrl* mCurveView { nullptr };
+    U32 mPrevLiveButtons { 0 };
+    std::array<F32, 4> mPrevStickMagnitude {};  // for select-by-flick: LX, LY, RX, RY
 
-    // Actions tab
-    LLComboBox* mActionMode { nullptr };            // selects which mode's mappings are edited
-    LLCheckBoxCtrl* mCheckActionModeEnabled { nullptr };  // enables/disables the selected mode
-    LLCheckBoxCtrl* mCheckFlycamAllowRoll { nullptr };  // FlyCam-only: allows Roll input; hidden for other modes
-    LLSliderCtrl* mSliderSpeedFactor { nullptr };  // FlyCam/Mouselook/Avatar-only: "Slow".."Fast" speed multiplier; hidden for other modes
-    LLTextBox* mSpeedSlowLabel { nullptr };        // "Slow"/"Fast" labels shown/hidden with mSliderSpeedFactor
-    LLTextBox* mSpeedFastLabel { nullptr };
-    LLCheckBoxCtrl* mCheckFlycamCrosshair { nullptr };  // FlyCam-only: draws a centered crosshair while flying; hidden for other modes
-    LLCheckBoxCtrl* mCheckFlycamHideCursor { nullptr };  // FlyCam-only: hides the mouse cursor while flying (until the mouse moves); hidden for other modes
-    LLButton* mRestoreActionsDefaults { nullptr };
-    LLTextBox* mCurrentModeIndicator { nullptr };         //mode indicator
-    LLGameControl::AgentControlMode mLastDrawnControlMode { LLGameControl::CONTROL_MODE_NONE };
-    LLScrollListCtrl* mActionMappingsAxes { nullptr };     // Action | Axis Input (axis action block)
-    LLScrollListCtrl* mActionMappingsButtons { nullptr };  // Action | Buttons Input (button action block)
-
-    // Devices tab
-    LLTextBox* mNoDeviceMessage { nullptr };     // Shown when no devices connected
-    LLTextBox* mDevicePrompt { nullptr };        // "Device:" label
-    LLComboBox* mDeviceList { nullptr };         // Dropdown listing available devices
-    LLCheckBoxCtrl* mCheckShowAllDevices { nullptr };  // Include disconnected devices
-    LLPanel* mPanelDeviceSettings { nullptr };
-    LLButton* mRestoreDeviceDefaults { nullptr };
-    LLScrollListCtrl* mAxisChannels { nullptr };    // input(glyph) | input_description | output_description | output(glyph)
-    LLScrollListCtrl* mButtonChannels { nullptr };  // input(glyph) | input_description | output_description | output(glyph)
-
-    // Device State tab (per-device, live read-only)
-    LLPanel* mTabDeviceState { nullptr };
-    LLTextBox* mStateNoDeviceMessage { nullptr };  // Shown when no devices connected
-    LLTextBox* mStateDevicePrompt { nullptr };     // "Device:" label
-    LLTextBox* mStateRemapNote { nullptr };        // Note that values are post-remap
-    LLComboBox* mStateDeviceList { nullptr };      // Dropdown listing connected devices
-    LLButton* mRestoreDeviceOptionsDefaults { nullptr };  // Restore per-axis tuning to defaults
-    LLButton* mAutoCalibrate { nullptr };          // Kicks off automatic offset/dead-zone calibration
-    LLPanel* mPanelDeviceState { nullptr };        // Wrapper holding the two state tables
-    LLScrollListCtrl* mAxisState { nullptr };      // Input(glyph) | Axis | Raw/Adjusted values | invert/offset/dead-zone
-    LLScrollListCtrl* mButtonState { nullptr };    // Input(glyph) | Button | Value (live pressed state)
-    std::string mStateSelectedDeviceGUID;          // GUID of the device shown in the state tab
-
-    // Auto-calibration: in-progress sample capture kicked off by mAutoCalibrate.
-    // updateAutoCalibration() (called from draw()) appends one raw-axis sample per
-    // physical axis each frame; once CALIBRATION_SAMPLE_COUNT samples are collected,
-    // any axis whose samples were all equal is treated as being at rest, and its
-    // Offset/Dead Zone are derived from that reading.
-    static constexpr S32 CALIBRATION_SAMPLE_COUNT = 5;
-    bool mCalibrating { false };
-    S32 mCalibrationSamplesCollected { 0 };
-    std::vector<std::vector<S16>> mCalibrationSamples;  // per physical axis, up to CALIBRATION_SAMPLE_COUNT raw samples
-
-    // Data Output tab (live, read-only view of the last outgoing GameControlInput)
-    LLPanel* mTabDataOutput { nullptr };
-    LLScrollListCtrl* mDataOutput { nullptr };     // Output | Value (last sent axis/button values)
-
-    // AgentControlMode (as an S32; -1 == none yet) the semantic block of mDataOutput
-    // was last built for.  populateDataOutputValues() rebuilds that block via
-    // populateDataOutputSemanticRows() whenever the live ServerState::mActionMode no
-    // longer matches, since both row count and labels are mode-dependent.
-    S32 mDataOutputSemanticMode { -1 };
-
-    // Inline editors - positioned over table cells when editing
-    LLSpinCtrl* mNumericValueEditor { nullptr };    // For deadzone/offset values
-    LLComboBox* mAxisInputSelector { nullptr };     // Axis-action Input popup (sticks + "Triggers left/right" pair)
-    LLComboBox* mAxisOutputSelector { nullptr };    // Device axis Output popup (individual canonical axes, index-based)
-    LLComboBox* mButtonInputSelector { nullptr };   // Canonical buttons (action Input + button Output popups)
-
-    // Glyph counterparts of the two action-Input selectors above, shown when the
-    // user edits the PromptFont icon ("Axis"/"Button") column instead of the text
-    // "input_description" column.  Same values, but each item is rendered as its
-    // PromptFont glyph.  Built in postBuild() from the text selectors' values.
+    // list view
+    LLPanel* mListView { nullptr };
+    bool mListMode { false };
+    LLScrollListCtrl* mActionMappingsAxes { nullptr };
+    LLScrollListCtrl* mActionMappingsButtons { nullptr };
+    LLComboBox* mAxisInputSelector { nullptr };
+    LLComboBox* mButtonInputSelector { nullptr };
     LLComboBox* mAxisInputGlyphSelector { nullptr };
     LLComboBox* mButtonInputGlyphSelector { nullptr };
+    LLComboBox* mAnalogActionSelector { nullptr };
+    LLComboBox* mBinaryActionSelector { nullptr };
+    LLComboBox* mMouselookAnalogActionSelector { nullptr };
+    LLComboBox* mMouselookBinaryActionSelector { nullptr };
+    LLComboBox* mFlycamAnalogActionSelector { nullptr };
+    LLComboBox* mFlycamBinaryActionSelector { nullptr };
+    LLComboBox* mCaptiveBinaryActionSelector { nullptr };
+    LLComboBox* mCursorAnalogActionSelector { nullptr };
+    LLComboBox* mCursorBinaryActionSelector { nullptr };
 
-    // Glyph counterpart of mAxisOutputSelector, shown when the user edits the
-    // PromptFont icon ("output") column of the Devices-tab axis-channels table
-    // instead of the text "output_description" column.  Built in postBuild().
-    LLComboBox* mAxisOutputGlyphSelector { nullptr };
-
-    // Action selectors: source of the "Action" column rows, chosen by edit mode.
-    LLComboBox* mAnalogActionSelector { nullptr };        // Avatar axis actions
-    LLComboBox* mBinaryActionSelector { nullptr };        // Avatar button actions
-    LLComboBox* mMouselookAnalogActionSelector { nullptr }; // Mouselook axis actions
-    LLComboBox* mMouselookBinaryActionSelector { nullptr }; // Mouselook button actions
-    LLComboBox* mFlycamAnalogActionSelector { nullptr };  // FlyCam axis actions
-    LLComboBox* mFlycamBinaryActionSelector { nullptr };  // FlyCam button actions
-    LLComboBox* mCaptiveBinaryActionSelector { nullptr }; // Captive (sitting) button actions
-    LLComboBox* mCursorAnalogActionSelector { nullptr };   // Cursor-mode axis actions
-    LLComboBox* mCursorBinaryActionSelector { nullptr };   // Cursor-mode button actions
-
-    // Per-device options storage
-    struct DeviceOptions
-    {
-        std::string name;      // Device display name
-        std::string settings;  // Serialized settings string
-        LLGameControl::Options options;  // Parsed options (axis settings, mappings)
-    };
-    std::map<std::string, DeviceOptions> mDeviceOptions;  // Keyed by device GUID
-    std::string mSelectedDeviceGUID;  // Currently selected device
-
-    LLSD mOrigSettings;  // Captured settings for cancel restoration
+    LLSD mOrigSettings;  // captured for Cancel
+    std::string mEditingKeyAction;
+    std::string mPendingKeyInput;  // inspector: the button a new keyboard key goes on
 };

@@ -1,0 +1,18 @@
+Game Controls preferences art
+
+body_*.png
+    "8th Gen Console Vector Gamepad Collection" by TheHoodieGuy02, CC0 (public domain),
+    https://opengameart.org/content/8th-gen-console-vector-gamepad-collection
+    Recoloured for the viewer skin, cropped and rendered from the SVGs. The Switch body is
+    the Joy-Cons in their grip; PS5 pads use the DualShock 4. Unofficial; not affiliated
+    with Microsoft, Nintendo or Sony.
+
+body_steam.png
+    The Steam Controller (2026), original art made for this viewer in the same style,
+    CC0 (public domain). Drawn from scratch as hand-placed SVG geometry, not traced
+    from photos, renders, models or Valve artwork. Unofficial; not affiliated with or endorsed by Valve.
+
+icon_*.png
+    Input Prompts by Kenney (www.kenney.nl), public domain (CC0), in the SVG
+    conversions distributed with ControllerImage by Ryan C. Gordon,
+    https://github.com/icculus/ControllerImage (art: public domain).

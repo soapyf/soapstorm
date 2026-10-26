@@ -3784,6 +3784,12 @@ bool LLViewerWindow::handleKey(KEY key, MASK mask)
 bool LLViewerWindow::handleUnicodeChar(llwchar uni_char, MASK mask)
 {
     if (FSVATsImGui::unicodeChar(uni_char, mask)) return true; // VATs ImGui UI
+    // <SS:GameControl> the character of a key the key binding dialog just recorded
+    if (LLSetKeyBindDialog::consumesTypedChar())
+    {
+        return true;
+    }
+
     // HACK:  We delay processing of return keys until they arrive as a Unicode char,
     // so that if you're typing chat text at low frame rate, we don't send the chat
     // until all keystrokes have been entered. JC

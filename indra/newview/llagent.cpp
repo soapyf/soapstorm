@@ -28,6 +28,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llagent.h"
+#include "lltoolcomp.h" // <SS:GameControl/> gyro aim
 
 #include "fsvatshost.h" // VATs editor
 
@@ -139,6 +140,7 @@ const F32 AUTOPILOT_MAX_TIME_NO_PROGRESS_FLY = 2.5f;        // seconds. Flying i
 // against, so refuse them outright when the ground below the agent is farther
 // than this away, rather than snapping the agent down onto distant terrain.
 const F32 MAX_SIT_ON_GROUND_DISTANCE = 30.f;                // meters
+static bool sOverlaySkippedInMouselook = false; // <GMDX> controller overlay kept up in mouselook
 
 const F32 MAX_VELOCITY_AUTO_LAND_SQUARED = 4.f * 4.f;
 const F64 CHAT_AGE_FAST_RATE = 3.0;
@@ -2862,6 +2864,12 @@ void LLAgent::endAnimationUpdateUI()
                 skip_list.insert(tmp);
             }
             // </FS:LO>
+            // <GMDX> the overlay kept up in mouselook wasn't pushed, so it isn't popped
+            if (sOverlaySkippedInMouselook && LLFloaterReg::findInstance("game_control_overlay"))
+            {
+                skip_list.insert(LLFloaterReg::findInstance("game_control_overlay"));
+            }
+            // </GMDX>
             // <FS:Ansariel> Skip restoring conversations and radar floater
             if (gSavedSettings.getBOOL("FSShowConvoAndRadarInML"))
             {
@@ -3031,6 +3039,14 @@ void LLAgent::endAnimationUpdateUI()
         if(gSavedSettings.getBOOL("FSShowStatsBarInMouselook"))
         {
             skip_list.insert(LLFloaterReg::findInstance("stats"));
+        }
+        // <SS:GameControl> the controller overlay, when it is set to show in mouselook
+        // (<GMDX> remembered, so leaving mouselook skips it too and doesn't pop it to
+        // the hidden state it never was pushed from)
+        sOverlaySkippedInMouselook = gSavedSettings.getBOOL("GameControlOverlayInMouselook");
+        if (sOverlaySkippedInMouselook)
+        {
+            skip_list.insert(LLFloaterReg::findInstance("game_control_overlay"));
         }
         // <FS:LO> //FIRE-6385: Show all script dialogs still when entering mouselook
         for (LLFloater* tmp : LLFloaterReg::getFloaterList("script_floater"))
@@ -6423,6 +6439,61 @@ void LLAgent::applyExternalActions(const LLGameControl::AgentActions& actions)
     }
 
     mExternalActionFlags = actions.mControlFlags;
+
+    // <SS:GameControl> Gyro aim turns the view by an angle, the way the mouse does
+    // (LLToolGun::handleHover), not by a rate like the stick, so the stick still covers
+    // big turns while the gyro fine-tunes. Aiming down sights or zoomed scales it by the
+    // same ratio the mouse sensitivity settings give the mouse.
+    if (gAgentCamera.cameraMouselook() && (actions.mGyroYaw != 0.f || actions.mGyroPitch != 0.f))
+    {
+        static LLCachedControl<F32> mouse_sens(gSavedSettings, "MouseSensitivity");
+        static LLCachedControl<F32> mouse_sens_zoomed(gSavedSettings, "MouseSensitivityZoomed");
+        static LLCachedControl<F32> mouse_sens_ads(gSavedSettings, "FSADSMouseSensitivity");
+        LLToolCompGun* gun = LLToolCompGun::getInstance();
+        F32 scale = 1.f;
+        if (gun->isADS() || gun->isZoomed())
+        {
+            const F32 base = clamp_rescale((F32)mouse_sens, 0.f, 100.f, 0.05f, 2.75f);
+            const F32 aimed = clamp_rescale((F32)(gun->isADS() ? mouse_sens_ads : mouse_sens_zoomed), 0.f, 100.f, 0.05f, 2.75f);
+            scale = aimed / llmax(base, 0.01f);
+        }
+        pitch(-actions.mGyroPitch * scale); // pad tipped up looks up
+        LLVector3 skyward = getReferenceUpVector();
+        rotate(actions.mGyroYaw * scale, skyward.mV[VX], skyward.mV[VY], skyward.mV[VZ]);
+    }
+
+    // <GMDX> A trackpad used as a mouse: in mouselook (and OTS) it turns the view the
+    // way LLToolGun turns it for the mouse, scaled by the field of view and by the
+    // aim-down-sights or zoomed ratio; anywhere else it moves the cursor.
+    if (actions.mPadDX != 0.f || actions.mPadDY != 0.f)
+    {
+        if (gAgentCamera.cameraMouselook())
+        {
+            constexpr F32 RADIANS_PER_PAD_WIDTH = 1.6f; // about the default mouse sensitivity over 700 px
+            F32 scale = RADIANS_PER_PAD_WIDTH * LLViewerCamera::getInstance()->getView() / DEFAULT_FIELD_OF_VIEW;
+            LLToolCompGun* gun = LLToolCompGun::getInstance();
+            if (gun->isADS() || gun->isZoomed())
+            {
+                static LLCachedControl<F32> mouse_sens(gSavedSettings, "MouseSensitivity");
+                static LLCachedControl<F32> mouse_sens_zoomed(gSavedSettings, "MouseSensitivityZoomed");
+                static LLCachedControl<F32> mouse_sens_ads(gSavedSettings, "FSADSMouseSensitivity");
+                const F32 base = clamp_rescale((F32)mouse_sens, 0.f, 100.f, 0.05f, 2.75f);
+                const F32 aimed = clamp_rescale((F32)(gun->isADS() ? mouse_sens_ads : mouse_sens_zoomed), 0.f, 100.f, 0.05f, 2.75f);
+                scale *= aimed / llmax(base, 0.01f);
+            }
+            pitch(actions.mPadDY * scale); // finger up (-y) looks up
+            LLVector3 skyward = getReferenceUpVector();
+            rotate(-actions.mPadDX * scale, skyward.mV[VX], skyward.mV[VY], skyward.mV[VZ]);
+        }
+        else
+        {
+            constexpr F32 PIXELS_PER_PAD_WIDTH = 900.f;
+            LLCoordGL cursor_pos = gViewerWindow->getCurrentMouse();
+            // LLCoordGL's Y increases upward; the pad's downward
+            gViewerWindow->moveCursorTo(cursor_pos.mX + ll_round(actions.mPadDX * PIXELS_PER_PAD_WIDTH),
+                                        cursor_pos.mY - ll_round(actions.mPadDY * PIXELS_PER_PAD_WIDTH));
+        }
+    }
 
     // (the frame deltas are measured every frame in updateGameControlMode())
     U64 now = LLFrameTimer::getTotalTime();

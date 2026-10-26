@@ -40,6 +40,7 @@
 // </FS:Ansariel> [FS Communication UI]
 #include "llfocusmgr.h"
 #include "llgamecontrol.h"
+#include <array>
 #include "llkeybind.h" // LLKeyData
 #include "llmorphview.h"
 #include "llmoveview.h"
@@ -1919,7 +1920,7 @@ void LLViewerInput::storeDeltaTime()
     // Note: it is possible for the deltas to be very large
     // and it is the duty of the code that uses them to clamp as necessary
     U64 now = LLFrameTimer::getTotalTime();
-    g_deltaTime = F32(now - g_lastUpdateTime) / (F32)(USEC_PER_SEC);
+    g_deltaTime = llmin(F32(now - g_lastUpdateTime) / (F32)(USEC_PER_SEC), 0.1f); // OCOL: no jump on the first/slow frame
     g_lastUpdateTime = now;
 }
 
@@ -2096,74 +2097,249 @@ bool LLViewerInput::scanControllerInput(const LLGameControl::ActionType actionTy
 {
     S32 mode = getMode();
 
-    for(auto binding : mControllerBindings[mode])
+    // OCOL: global bindings first, then the current mode's, like keys
+    for (const std::vector<LLControllerBinding>* bindings : { &mGlobalControllerBindings[mode], &mControllerBindings[mode] })
     {
-        if (binding.mActionType != actionType || binding.mAction != action)
+        for (const LLControllerBinding& binding : *bindings)
         {
-            continue;
-        }
+            if (binding.mActionType != actionType || binding.mAction != action)
+            {
+                continue;
+            }
 
-        LL_WARNS() << "Controller Val " << LLGameControl::stringFromAction(actionType, action) << state.mValue << LL_ENDL;
+            LL_DEBUGS("GameControl") << "Controller " << LLGameControl::stringFromAction(actionType, action)
+                << " " << state.mValue << " -> " << binding.mFunctionName << LL_ENDL;
 
-        bool res = binding.mFunction(state);
-        if (state.mDown)
-        {
-            return true;
+            if (binding.mFunction(state))
+            {
+                return true;
+            }
         }
-        return res;
     }
     return false;
 }
 
-void LLViewerInput::scanController()
+// OCOL: buttons bound in the current mode; they're reserved so they don't also
+// drive their game control action (see LLGameControl::setReservedButtons())
+U32 LLViewerInput::getBoundControllerButtons() const
 {
-    LLGameControl::computeFinalState();
-    const LLGameControl::State& state = LLGameControl::getState();
-    // HACK: GameControl: supply hard-coded threshold for ON/OFF zones
-    constexpr U16 AXIS_THRESHOLD = 32768 / 8;
-
-    // TODO: GameControl: This is kind of inificient, it would be more efficient to
-    // loop the bindings and check if the keys/axes they want are active
-    // rather than looping all keys/axes then all bindings for each one
-    // But copying scanMouse pattern for now.
-
-    LLKeyPressState keyState = LLKeyPressState(true, false, false, 0.0);
-    keyState.mAnalog = true;
-
-    for(U8 i = 0;i < state.mAxes.size();i++)
+    U32 buttons = 0;
+    S32 mode = getMode();
+    for (const std::vector<LLControllerBinding>* bindings : { &mGlobalControllerBindings[mode], &mControllerBindings[mode] })
     {
-        U16 current = state.mAxes[i];
-        U16 prev = state.mPrevAxes[i];
-        keyState.mDown = prev < AXIS_THRESHOLD && current >= AXIS_THRESHOLD;
-        keyState.mLevel = prev >= AXIS_THRESHOLD && current >= AXIS_THRESHOLD;
-        keyState.mUp = prev >= AXIS_THRESHOLD && current < AXIS_THRESHOLD;
-
-        if(keyState.mDown || keyState.mLevel || keyState.mUp)
+        for (const LLControllerBinding& binding : *bindings)
         {
-            keyState.mElapsedTime = LLGameControl::getControllerHeldTime(LLGameControl::ActionType::DOF, i);
-            keyState.mElapsedFrames = LLGameControl::getControllerHeldFrames(LLGameControl::ActionType::DOF, i);
-            keyState.mValue = std::clamp(((F32)current) / 32767.0f, 0.0f, 1.0f);
-            keyState.mState = keyState.mDown ? KEYSTATE_DOWN : (keyState.mLevel ? KEYSTATE_LEVEL : KEYSTATE_UP);
-            scanControllerInput(LLGameControl::ActionType::DOF, i, keyState);
+            if (binding.mActionType == LLGameControl::ActionType::BUTTON && binding.mAction < LLGameControl::NUM_BUTTONS)
+            {
+                buttons |= 1U << binding.mAction;
+            }
+        }
+    }
+    return buttons;
+}
+
+// OCOL: controller buttons bound to keyboard keys. They're rows of the game
+// control Buttons mapping named "key:<MASK>:<KEY>" (e.g. "key:SHIFT:E"), set up in
+// Preferences > Game Controls > Action Mappings, so they're per mode.
+std::string string_from_mask(MASK mask); // llkeyconflict.cpp
+
+// static
+std::string LLViewerInput::controllerKeyAction(KEY key, MASK mask)
+{
+    return "key:" + string_from_mask(mask) + ":" + LLKeyboard::stringFromKey(key, false /*not localized*/);
+}
+
+// static
+bool LLViewerInput::keyFromControllerKeyAction(const std::string& action, KEY& key, MASK& mask)
+{
+    if (!LLStringUtil::startsWith(action, "key:"))
+    {
+        return false;
+    }
+    size_t mask_end = action.find(':', 4);
+    if (mask_end == std::string::npos)
+    {
+        return false;
+    }
+    key = KEY_NONE;
+    mask = MASK_NONE;
+    return LLKeyboard::maskFromString(action.substr(4, mask_end - 4), &mask)
+        && LLKeyboard::keyFromString(action.substr(mask_end + 1), &key)
+        && key != KEY_NONE;
+}
+
+namespace
+{
+    struct ControllerKey
+    {
+        KEY mKey { KEY_NONE };
+        MASK mMask { MASK_NONE };
+    };
+
+    // keys bound to each button in the active game control mode
+    std::array<ControllerKey, LLGameControl::NUM_BUTTONS> activeControllerKeys()
+    {
+        std::array<ControllerKey, LLGameControl::NUM_BUTTONS> keys;
+        const std::string mode = LLGameControl::getModeName(LLGameControl::getAgentControlMode());
+        if (mode.empty() || !LLGameControl::isModeEnabled(mode))
+        {
+            return keys;
+        }
+        const LLSD buttons = LLGameControl::getModeMapping(mode, "Buttons");
+        for (LLSD::map_const_iterator it = buttons.beginMap(); it != buttons.endMap(); ++it)
+        {
+            KEY key;
+            MASK mask;
+            if (!LLViewerInput::keyFromControllerKeyAction(it->first, key, mask))
+            {
+                continue;
+            }
+            S32 button = LLGameControl::buttonFromInputName(it->second.asString());
+            if (button >= 0)
+            {
+                keys[button].mKey = key;
+                keys[button].mMask = mask;
+            }
+        }
+        return keys;
+    }
+}
+
+void LLViewerInput::releaseControllerKeys()
+{
+    if (!gKeyboard)
+    {
+        return;
+    }
+    for (U8 i = 0; i < LLGameControl::NUM_BUTTONS; ++i)
+    {
+        if (mControllerHeldKey[i] != KEY_NONE)
+        {
+            gKeyboard->handleTranslatedKeyUp(mControllerHeldKey[i], mControllerHeldMask[i]);
+            mControllerHeldKey[i] = KEY_NONE;
+            mControllerHeldMask[i] = MASK_NONE;
+        }
+    }
+    gKeyboard->setEmulatedMask(MASK_NONE);
+}
+
+void LLViewerInput::scanControllerKeys()
+{
+    if (!gKeyboard)
+    {
+        return;
+    }
+
+    U32 buttons = 0;
+    U32 prev_buttons = 0;
+    LLGameControl::getButtonStates(buttons, prev_buttons);
+    const auto keys = activeControllerKeys();
+
+    for (U8 i = 0; i < LLGameControl::NUM_BUTTONS; ++i)
+    {
+        U32 flag = 1U << i;
+        bool down = (buttons & flag) != 0;
+
+        // release when the button goes up or its binding changed underneath it
+        if (mControllerHeldKey[i] != KEY_NONE
+            && (!down || mControllerHeldKey[i] != keys[i].mKey || mControllerHeldMask[i] != keys[i].mMask))
+        {
+            KEY key = mControllerHeldKey[i];
+            MASK mask = mControllerHeldMask[i];
+            mControllerHeldKey[i] = KEY_NONE;
+            mControllerHeldMask[i] = MASK_NONE;
+            gKeyboard->handleTranslatedKeyUp(key, mask);
+        }
+
+        if (down && !(prev_buttons & flag) && keys[i].mKey != KEY_NONE && mControllerHeldKey[i] == KEY_NONE)
+        {
+            mControllerHeldKey[i] = keys[i].mKey;
+            mControllerHeldMask[i] = keys[i].mMask;
         }
     }
 
-    keyState.mAnalog = false;
-    for(U8 i = 0; i < LLGameControl::Button::NUM_BUTTONS; i++)
+    // modifiers of every held key count while any of them is down
+    MASK held_mask = MASK_NONE;
+    for (U8 i = 0; i < LLGameControl::NUM_BUTTONS; ++i)
     {
-        U32 flag = 1 << i;
-        bool current = (state.mButtons & flag) == flag;
-        bool prev = (state.mPrevButtons & flag) == flag;
-        if(current || prev)
+        if (mControllerHeldKey[i] != KEY_NONE)
         {
-            keyState.mDown = current && !prev;
-            keyState.mLevel = current && prev;
-            keyState.mUp = !current && prev;
-            keyState.mElapsedTime = LLGameControl::getControllerHeldTime(LLGameControl::ActionType::BUTTON, i);
-            keyState.mElapsedFrames = LLGameControl::getControllerHeldFrames(LLGameControl::ActionType::BUTTON, i);
-            keyState.mValue = current ? 1.0f : 0.0f;
-            keyState.mState = keyState.mDown ? KEYSTATE_DOWN : (keyState.mLevel ? KEYSTATE_LEVEL : KEYSTATE_UP);
-            scanControllerInput(LLGameControl::ActionType::BUTTON, i, keyState);
+            held_mask |= mControllerHeldMask[i];
+        }
+    }
+    gKeyboard->setEmulatedMask(held_mask);
+
+    // press after the mask is set, so the key arrives with its modifiers
+    for (U8 i = 0; i < LLGameControl::NUM_BUTTONS; ++i)
+    {
+        U32 flag = 1U << i;
+        if ((buttons & flag) && !(prev_buttons & flag) && mControllerHeldKey[i] != KEY_NONE)
+        {
+            gKeyboard->handleTranslatedKeyDown(mControllerHeldKey[i], mControllerHeldMask[i]);
+        }
+    }
+}
+
+// OCOL: runs the controller key bindings once per frame, after LLGameControl
+// has computed this frame's state (LLAppViewer::idle()). Buttons report
+// down/level/up edges; stick directions and triggers act like keys past a
+// quarter of their travel and pass their deflection as the analog value.
+void LLViewerInput::scanController()
+{
+    if (!LLGameControl::isEnabled())
+    {
+        return;
+    }
+
+    // frame delta for the analog pitch actions (agent_pitch())
+    storeDeltaTime();
+
+    constexpr U16 AXIS_THRESHOLD = 32767 / 4;
+    const LLGameControl::State& state = LLGameControl::getState();
+
+    LLKeyPressState key_state(false, false, false, 0.f);
+    key_state.mAnalog = true;
+    for (U8 dir = 0; dir < LLGameControl::NUM_MOVE_DIRS; ++dir)
+    {
+        S32 slot = LLGameControl::halfAxisForDirection(dir);
+        if (slot < 0 || slot >= (S32)state.mAxes.size())
+        {
+            continue;
+        }
+        U16 current = state.mAxes[slot];
+        U16 prev = state.mPrevAxes[slot];
+        key_state.mDown = prev < AXIS_THRESHOLD && current >= AXIS_THRESHOLD;
+        key_state.mLevel = prev >= AXIS_THRESHOLD && current >= AXIS_THRESHOLD;
+        key_state.mUp = prev >= AXIS_THRESHOLD && current < AXIS_THRESHOLD;
+        if (key_state.mDown || key_state.mLevel || key_state.mUp)
+        {
+            key_state.mElapsedTime = LLGameControl::getControllerHeldTime(LLGameControl::ActionType::DOF, (U8)slot);
+            key_state.mElapsedFrames = LLGameControl::getControllerHeldFrames(LLGameControl::ActionType::DOF, (U8)slot);
+            key_state.mValue = llclamp((F32)current / 32767.f, 0.f, 1.f);
+            key_state.mState = key_state.mDown ? KEYSTATE_DOWN : (key_state.mLevel ? KEYSTATE_LEVEL : KEYSTATE_UP);
+            scanControllerInput(LLGameControl::ActionType::DOF, dir, key_state);
+        }
+    }
+
+    U32 buttons = 0;
+    U32 prev_buttons = 0;
+    LLGameControl::getButtonStates(buttons, prev_buttons);
+    key_state.mAnalog = false;
+    for (U8 i = 0; i < LLGameControl::NUM_BUTTONS; ++i)
+    {
+        U32 flag = 1U << i;
+        bool current = (buttons & flag) != 0;
+        bool prev = (prev_buttons & flag) != 0;
+        if (current || prev)
+        {
+            key_state.mDown = current && !prev;
+            key_state.mLevel = current && prev;
+            key_state.mUp = !current && prev;
+            key_state.mElapsedTime = LLGameControl::getControllerHeldTime(LLGameControl::ActionType::BUTTON, i);
+            key_state.mElapsedFrames = LLGameControl::getControllerHeldFrames(LLGameControl::ActionType::BUTTON, i);
+            key_state.mValue = current ? 1.f : 0.f;
+            key_state.mState = key_state.mDown ? KEYSTATE_DOWN : (key_state.mLevel ? KEYSTATE_LEVEL : KEYSTATE_UP);
+            scanControllerInput(LLGameControl::ActionType::BUTTON, i, key_state);
         }
     }
 }

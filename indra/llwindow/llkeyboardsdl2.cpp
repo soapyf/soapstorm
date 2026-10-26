@@ -262,7 +262,7 @@ MASK LLKeyboardSDL::currentMask(bool for_mouse_event)
             result |= MASK_CONTROL;
     }
 
-    return result;
+    return result | mEmulatedMask; // OCOL: controller buttons bound to keys
 }
 
 void LLKeyboardSDL::scanKeyboard()

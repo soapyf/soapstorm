@@ -135,6 +135,19 @@ public:
     // Does some gesture have this key bound?
     bool isKeyBound(KEY key, MASK mask);
 
+    // OCOL: game controller button per gesture, stored locally per account
+    // (the gesture asset has no room for it). -1 = none.
+    S32 getControllerButton(const LLUUID& item_id) const;
+    void setControllerButton(const LLUUID& item_id, S32 button);
+
+    // OCOL: buttons bound to active gestures (reserved from game control)
+    U32 getControllerBoundButtons() const;
+
+    // OCOL: call once per frame after LLGameControl has computed its state.
+    // A press plays a random active gesture bound to that button; the release
+    // satisfies "wait for key release" steps, like a shortcut key.
+    void updateControllerGestures();
+
     S32 getPlayingCount() const;
 
     void addObserver(LLGestureManagerObserver* observer);

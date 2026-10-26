@@ -3746,9 +3746,11 @@ void LLAgentCamera::updateFlycam(F32 delta_time)
     // which only sees a physical controller).  mFlycamKeyboardInput is
     // level-triggered by flycam_axis_key<> in llviewerinput.cpp -- it must be
     // re-set every frame a key is held, so clear it here once consumed.
+    // OCOL: controller sensitivity may push the controller part past 1
+    F32 input_limit = llmax(1.f, LLGameControl::getActiveSensitivity());
     for (U8 i = 0; i < LLGameControl::FLYCAM_NUM_CHANNELS; ++i)
     {
-        flycam_inputs[i] = llclamp(flycam_inputs[i] + mFlycamKeyboardInput[i], -1.f, 1.f);
+        flycam_inputs[i] = llclamp(flycam_inputs[i] + mFlycamKeyboardInput[i], -input_limit, input_limit);
     }
     mFlycamKeyboardInput.fill(0.f);
     bool flycam_key_unroll_requested = mFlycamKeyboardUnrollRequested;

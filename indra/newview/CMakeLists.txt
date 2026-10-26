@@ -87,6 +87,7 @@ endif ()
 
 set(viewer_SOURCE_FILES
 # <Add FS includes below this line>
+    alcurveeditorctrl.cpp
     alfloaterregiontracker.cpp
     animationexplorer.cpp
     ao.cpp
@@ -201,6 +202,11 @@ set(viewer_SOURCE_FILES
     ssstratabudgetwire.cpp
     sspanelprefs.cpp
     sssqueezedebug.cpp
+    ssfloatergamecontroldebug.cpp
+    ssfloatergamecontrolgyro.cpp
+    ssfloatergamecontroloverlay.cpp
+    ssgamecontroldiagram.cpp
+    ssgamecontrolui.cpp
     fspanelradar.cpp
     fsparticipantlist.cpp
     fspose.cpp
@@ -994,6 +1000,7 @@ set(viewer_HEADER_FILES
     ViewerInstall.cmake
 
 # <Add FS includes below this line>
+    alcurveeditorctrl.h
     alfloaterregiontracker.h
     animationexplorer.h
     ao.h
@@ -1105,6 +1112,11 @@ set(viewer_HEADER_FILES
     ssstratabudget.h
     sspanelprefs.h
     sssqueezedebug.h
+    ssfloatergamecontroldebug.h
+    ssfloatergamecontrolgyro.h
+    ssfloatergamecontroloverlay.h
+    ssgamecontroldiagram.h
+    ssgamecontrolui.h
     fspanelradar.h
     fsparticipantlist.h
     fspose.h

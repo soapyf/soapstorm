@@ -148,6 +148,16 @@ public:
     bool            handleMouse(LLWindow *window_impl, LLCoordGL pos, MASK mask, EMouseClickType clicktype, bool down);
     void            scanMouse();
     void            scanController();
+    U32             getBoundControllerButtons() const; // OCOL
+
+    // OCOL: controller buttons that act as keyboard keys ("key:<MASK>:<KEY>"
+    // actions in the game control Buttons mapping). A press/release goes through
+    // the normal keyboard path, so UI, gesture shortcuts, key bindings and the
+    // chat key relay all see it.
+    void            scanControllerKeys();
+    void            releaseControllerKeys();
+    static std::string controllerKeyAction(KEY key, MASK mask);
+    static bool     keyFromControllerKeyAction(const std::string& action, KEY& key, MASK& mask);
 
     bool            isMouseBindUsed(const EMouseClickType mouse, const MASK mask, const S32 mode) const;
     bool            isLMouseHandlingDefault(const S32 mode) const { return mLMouseDefaultHandling[mode]; }
@@ -203,6 +213,10 @@ private:
     std::vector<LLKeyboardBinding>      mGlobalKeyBindings[MODE_COUNT];
     std::vector<LLMouseBinding>         mGlobalMouseBindings[MODE_COUNT];
     std::vector<LLControllerBinding>    mGlobalControllerBindings[MODE_COUNT];
+
+    // OCOL: keys currently held down by controller buttons, and their modifiers
+    KEY                                 mControllerHeldKey[32] {};
+    MASK                                mControllerHeldMask[32] {};
 
     typedef std::map<U32, U32> key_remap_t;
     key_remap_t     mRemapKeys[MODE_COUNT];

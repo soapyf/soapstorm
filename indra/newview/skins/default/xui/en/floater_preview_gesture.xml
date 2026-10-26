@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <floater
  legacy_header_height="18"
- height="475"
+ height="496"
  layout="topleft"
  name="gesture_preview"
  help_topic="gesture_preview"
@@ -149,6 +149,28 @@
      layout="topleft"
      left="10"
      font.style="BOLD"
+     name="controller_label"
+     tool_tip="Game controller button that plays this gesture. Saved on this computer for your account. The button stops doing its normal game controller action while the gesture is active."
+     top_delta="25"
+     width="130">
+        Controller:
+    </text>
+    <combo_box
+     height="20"
+     layout="topleft"
+     left_delta="135"
+     name="controller_combo"
+     top_delta="-4"
+     width="109" />
+    <text
+     type="string"
+     length="1"
+     follows="top|left"
+     font="SansSerifSmall"
+     height="10"
+     layout="topleft"
+     left="10"
+     font.style="BOLD"
      name="library_label"
      top_delta="25"
      width="100">
@@ -239,7 +261,7 @@
      layout="topleft"
      left="15"
      name="options_text"
-     top="315"
+     top="336"
      width="205">
 	 (options)
 	 </text>
@@ -249,7 +271,7 @@
      layout="topleft"
      left_delta="15"
      name="animation_list"
-     top="330"
+     top="351"
      width="100"/>
     <combo_box
      follows="top|left"
@@ -257,7 +279,7 @@
      layout="topleft"
      left_delta="0"
      name="sound_list"
-     top="330"
+     top="351"
      width="100" />
     <line_editor
      follows="top|left"
@@ -266,7 +288,7 @@
      left_delta="0"
      max_length_bytes="127"
      name="chat_editor"
-     top="330"
+     top="351"
      width="100" />
     <radio_group
      follows="top|left"
@@ -274,7 +296,7 @@
      layout="topleft"
      left_pad="8"
      name="animation_trigger_type"
-     top="330"
+     top="351"
      width="80">
         <radio_item
          height="16"
@@ -300,7 +322,7 @@
      layout="topleft"
      left="28"
      name="wait_key_release_check"
-     top="330"
+     top="351"
      width="100" />
     <check_box
      follows="top|left"

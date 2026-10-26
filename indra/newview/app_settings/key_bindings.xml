@@ -29,17 +29,6 @@
     <binding key="" mask="NONE" mouse="MMB" command="toggle_voice"/>
 
     <binding key="" mask="NONE" mouse="LMB" command="script_trigger_lbutton"/>
-
-    <binding key="" mask="none" controller="axis_forward" command="push_forward"/>
-    <binding key="" mask="none" controller="axis_backward" command="push_backward"/>
-    <binding key="" mask="none" controller="axis_left" command="slide_left"/>
-    <binding key="" mask="none" controller="axis_right" command="slide_right"/>
-    <binding key="" mask="none" controller="button_a" command="jump"/>
-    <binding key="" mask="none" controller="button_b" command="push_down"/>
-    <binding key="" mask="none" controller="axis_turn_left" command="turn_left"/>
-    <binding key="" mask="none" controller="axis_turn_right" command="turn_right"/>
-    <binding key="" mask="none" controller="axis_look_up" command="pitch_forward"/>
-    <binding key="" mask="none" controller="axis_look_down" command="pitch_backward"/>
   </first_person>
   <third_person>
     <binding key="A" mask="NONE" command="turn_left"/>
@@ -72,20 +61,6 @@
     <binding key="PGUP" mask="NONE" command="jump"/>
     <binding key="PGDN" mask="NONE" command="push_down"/>
     <binding key="HOME" mask="NONE" command="toggle_fly"/>
-
-    <!-- Controller gamepad bindings -->
-    <binding key="" mask="none" controller="axis_forward" command="push_forward"/>
-    <binding key="" mask="none" controller="axis_backward" command="push_backward"/>
-    <binding key="" mask="none" controller="axis_left" command="slide_left"/>
-    <binding key="" mask="none" controller="axis_right" command="slide_right"/>
-    <binding key="" mask="none" controller="axis_turn_left" command="turn_left"/>
-    <binding key="" mask="none" controller="axis_turn_right" command="turn_right"/>
-    <binding key="" mask="none" controller="axis_look_up" command="spin_over_agent"/>
-    <binding key="" mask="none" controller="axis_look_down" command="spin_under_agent"/>
-
-    <binding key="" mask="none" controller="button_a" command="jump"/>
-    <binding key="" mask="none" controller="button_b" command="push_down"/>
-    <binding key="" mask="none" controller="button_dpad_up" command="toggle_fly"/>
 
     <!--Camera controls in third person on Alt-->
     <binding key="LEFT" mask="ALT" command="spin_around_cw"/>
@@ -153,7 +128,6 @@
     <binding key="DOWN" mask="CTL_ALT" command="spin_under"/>
     <binding key="PGUP" mask="CTL_ALT" command="spin_over"/>
     <binding key="PGDN" mask="CTL_ALT" command="spin_under"/>
-
 
     <binding key="A" mask="NONE" command="spin_around_cw_sitting"/>
     <binding key="D" mask="NONE" command="spin_around_ccw_sitting"/>

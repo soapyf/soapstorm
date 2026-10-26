@@ -4911,6 +4911,41 @@ bool LLPanelPreferenceControls::onSetKeyBind(EMouseClickType click, KEY key, MAS
     return true;
 }
 
+// OCOL: bind a game controller input to the selected action
+bool LLPanelPreferenceControls::onSetControllerBind(U8 action_type, U8 action, bool all_modes)
+{
+    if (!mConflictHandler[mEditingMode].canAssignControl(mEditingControl))
+    {
+        return true;
+    }
+
+    if (mEditingColumn > 0)
+    {
+        if (all_modes)
+        {
+            for (U32 i = 0; i < LLKeyConflictHandler::MODE_COUNT - 1; ++i)
+            {
+                if (mConflictHandler[i].empty())
+                {
+                    mConflictHandler[i].loadFromSettings((LLKeyConflictHandler::ESourceMode)i);
+                }
+                mConflictHandler[i].registerControllerControl(mEditingControl, mEditingColumn - 1, action_type, action);
+                // Apply changes to viewer as 'temporary'
+                mConflictHandler[i].saveToSettings(true);
+            }
+        }
+        else
+        {
+            mConflictHandler[mEditingMode].registerControllerControl(mEditingControl, mEditingColumn - 1, action_type, action);
+            // Apply changes to viewer as 'temporary'
+            mConflictHandler[mEditingMode].saveToSettings(true);
+        }
+    }
+
+    updateTable();
+    return true;
+}
+
 void LLPanelPreferenceControls::onDefaultKeyBind(bool all_modes)
 {
     if (!mConflictHandler[mEditingMode].canAssignControl(mEditingControl))

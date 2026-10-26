@@ -42,6 +42,7 @@ public:
 
     LLSD asLLSD() const;
     bool isEmpty() const;
+    bool isController() const; // OCOL: bound to a game controller input
     bool empty() const { return isEmpty(); };
     void reset();
     LLKeyData& operator=(const LLKeyData& rhs);

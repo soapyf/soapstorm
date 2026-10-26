@@ -1,0 +1,342 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <SS:GameControl> Gyro aim: turning a controller with a gyro turns the view in mouselook,
+     like a mouse. After GyroWiki (Jibb Smart) and JoyShockMapper. -->
+<floater
+    name="game_control_gyro"
+    title="Gyro Aim and Trackpads"
+    help_topic="game_control_gyro"
+    single_instance="true"
+    save_rect="true"
+    can_resize="false"
+    height="548"
+    width="350">
+    <text
+        type="string"
+        name="gyro_status"
+        layout="topleft"
+        follows="top|left"
+        top="24"
+        left="10"
+        height="30"
+        width="330"
+        word_wrap="true">...</text>
+    <text
+        type="string"
+        name="engage_label"
+        layout="topleft"
+        top="60"
+        left="10"
+        height="16"
+        width="110">Gyro aim:</text>
+    <combo_box
+        name="gyro_engage"
+        layout="topleft"
+        top="58"
+        left="120"
+        height="20"
+        width="220"
+        tool_tip="Gyro aim only ever works in mouselook. For the Hold and Except modes, bind Gyro hold to a button on the Mouselook tab.">
+        <combo_box.item label="Off" name="engage_off" value="0"/>
+        <combo_box.item label="On in mouselook" name="engage_always" value="1"/>
+        <combo_box.item label="While Gyro hold is held" name="engage_hold" value="2"/>
+        <combo_box.item label="Except while Gyro hold is held" name="engage_ratchet" value="3"/>
+    </combo_box>
+    <text
+        type="string"
+        name="space_label"
+        layout="topleft"
+        top="84"
+        left="10"
+        height="16"
+        width="110">Turn with:</text>
+    <combo_box
+        name="gyro_space"
+        layout="topleft"
+        top="82"
+        left="120"
+        height="20"
+        width="220"
+        tool_tip="Player: turning the controller or leaning it both turn the view, however it is held. Local: only turning it about its own up axis.">
+        <combo_box.item label="Turning or leaning (player)" name="space_player" value="player"/>
+        <combo_box.item label="Turning (local)" name="space_local" value="local"/>
+    </combo_box>
+    <slider
+        name="gyro_min_sens"
+        layout="topleft"
+        follows="top|left"
+        top="112"
+        left="10"
+        height="16"
+        width="330"
+        label="Sensitivity"
+        label_width="110"
+        min_val="0.1"
+        max_val="10"
+        increment="0.05"
+        decimal_digits="2"
+        can_edit_text="true"
+        show_text="true"
+        tool_tip="How far the view turns per degree the controller turns. 2 turns the view twice as far."/>
+    <slider
+        name="gyro_max_sens"
+        layout="topleft"
+        follows="top|left"
+        top="134"
+        left="10"
+        height="16"
+        width="330"
+        label="Fast sensitivity"
+        label_width="110"
+        min_val="0.1"
+        max_val="10"
+        increment="0.05"
+        decimal_digits="2"
+        can_edit_text="true"
+        show_text="true"
+        tool_tip="Sensitivity at or above the fast speed. The same as Sensitivity means no acceleration."/>
+    <slider
+        name="gyro_slow_speed"
+        layout="topleft"
+        follows="top|left"
+        top="156"
+        left="10"
+        height="16"
+        width="330"
+        label="Slow speed"
+        label_width="110"
+        min_val="0"
+        max_val="200"
+        increment="1"
+        decimal_digits="0"
+        can_edit_text="true"
+        show_text="true"
+        tool_tip="Controller speed (degrees per second) at or below which Sensitivity applies."/>
+    <slider
+        name="gyro_fast_speed"
+        layout="topleft"
+        follows="top|left"
+        top="178"
+        left="10"
+        height="16"
+        width="330"
+        label="Fast speed"
+        label_width="110"
+        min_val="0"
+        max_val="500"
+        increment="1"
+        decimal_digits="0"
+        can_edit_text="true"
+        show_text="true"
+        tool_tip="Controller speed (degrees per second) at or above which Fast sensitivity applies."/>
+    <slider
+        name="gyro_tighten"
+        layout="topleft"
+        follows="top|left"
+        top="200"
+        left="10"
+        height="16"
+        width="330"
+        label="Steadying"
+        label_width="110"
+        min_val="0"
+        max_val="20"
+        increment="0.5"
+        decimal_digits="1"
+        can_edit_text="true"
+        show_text="true"
+        tool_tip="Slow motion below this speed (degrees per second) shrinks toward nothing, so a steady hand's tremor does not move the aim. 0 is off."/>
+    <slider
+        name="gyro_smooth_speed"
+        layout="topleft"
+        follows="top|left"
+        top="222"
+        left="10"
+        height="16"
+        width="330"
+        label="Smooth below"
+        label_width="110"
+        min_val="0"
+        max_val="50"
+        increment="0.5"
+        decimal_digits="1"
+        can_edit_text="true"
+        show_text="true"
+        tool_tip="Motion slower than this (degrees per second) is averaged to steady it; faster motion passes straight through. 0 is off."/>
+    <slider
+        name="gyro_smooth_time"
+        layout="topleft"
+        follows="top|left"
+        top="244"
+        left="10"
+        height="16"
+        width="330"
+        label="Smooth over"
+        label_width="110"
+        min_val="0.01"
+        max_val="0.5"
+        increment="0.005"
+        decimal_digits="3"
+        can_edit_text="true"
+        show_text="true"
+        tool_tip="Seconds that slow motion is averaged over."/>
+    <slider
+        name="gyro_recalibrate"
+        layout="topleft"
+        follows="top|left"
+        top="266"
+        left="10"
+        height="16"
+        width="330"
+        label="Recalibrate after"
+        label_width="110"
+        min_val="0"
+        max_val="10"
+        increment="0.5"
+        decimal_digits="1"
+        can_edit_text="true"
+        show_text="true"
+        tool_tip="Seconds the controller must rest still, with gyro aim not in use, before its drift correction is re-learned on its own. 0 turns it off (use Calibrate instead)."/>
+    <check_box
+        name="gyro_invert_pitch"
+        layout="topleft"
+        top="290"
+        left="10"
+        height="16"
+        width="200"
+        label="Invert up and down"/>
+    <button
+        name="gyro_calibrate"
+        layout="topleft"
+        top="288"
+        right="-10"
+        height="22"
+        width="110"
+        label="Calibrate"
+        tool_tip="Put the controller down and keep it still for two seconds. It also recalibrates on its own whenever it rests while gyro aim is not in use."/>
+    <text
+        type="string"
+        name="gyro_readout"
+        layout="topleft"
+        font="Monospace"
+        top="318"
+        left="10"
+        height="16"
+        width="330"/>
+    <!-- <GMDX> trackpads: Steam Controller (2026), Steam Deck, DualSense -->
+    <view_border
+        name="pads_divider"
+        layout="topleft"
+        top="346"
+        left="10"
+        height="2"
+        width="330"
+        bevel_style="in"/>
+    <text
+        type="string"
+        name="pads_status"
+        layout="topleft"
+        follows="top|left"
+        top="356"
+        left="10"
+        height="44"
+        width="330"
+        word_wrap="true">...</text>
+    <text
+        type="string"
+        name="pads_right_label"
+        layout="topleft"
+        top="408"
+        left="10"
+        height="16"
+        width="110">Right pad:</text>
+    <combo_box
+        name="pads_right"
+        layout="topleft"
+        top="406"
+        left="120"
+        height="20"
+        width="220"
+        tool_tip="A controller's only touchpad (DualSense) counts as its right pad.">
+        <combo_box.item label="Off" name="pads_right_off" value="0"/>
+        <combo_box.item label="Mouse (aim / cursor)" name="pads_right_mouse" value="1"/>
+    </combo_box>
+    <text
+        type="string"
+        name="pads_left_label"
+        layout="topleft"
+        top="432"
+        left="10"
+        height="16"
+        width="110">Left pad:</text>
+    <combo_box
+        name="pads_left"
+        layout="topleft"
+        top="430"
+        left="120"
+        height="20"
+        width="220"
+        tool_tip="D-pad: clicking the left pad presses the d-pad direction under your thumb (diagonals press two) instead of the pad's own click.">
+        <combo_box.item label="Its own click button" name="pads_left_off" value="0"/>
+        <combo_box.item label="D-pad: click a direction" name="pads_left_dpad" value="1"/>
+    </combo_box>
+    <slider
+        name="pads_sensitivity"
+        layout="topleft"
+        follows="top|left"
+        top="458"
+        left="10"
+        height="16"
+        width="330"
+        label="Sensitivity"
+        label_width="110"
+        min_val="0.1"
+        max_val="4"
+        increment="0.05"
+        decimal_digits="2"
+        can_edit_text="true"
+        show_text="true"
+        tool_tip="How far the view turns or the cursor moves per pad width. Aiming down sights and zooming scale it like the mouse."/>
+    <check_box
+        name="pads_momentum"
+        layout="topleft"
+        top="482"
+        left="10"
+        height="16"
+        width="160"
+        label="Trackball roll"
+        tool_tip="A flick keeps the view or cursor rolling after your thumb lifts; touching the pad stops it."/>
+    <slider
+        name="pads_friction"
+        layout="topleft"
+        follows="top|left"
+        top="482"
+        left="170"
+        height="16"
+        width="170"
+        label="Stops"
+        label_width="40"
+        min_val="0.5"
+        max_val="20"
+        increment="0.5"
+        decimal_digits="1"
+        can_edit_text="true"
+        show_text="true"
+        tool_tip="How quickly the roll slows down. Higher stops sooner."/>
+    <check_box
+        name="pads_invert_y"
+        layout="topleft"
+        top="504"
+        left="10"
+        height="16"
+        width="200"
+        label="Invert up and down"/>
+    <text
+        type="string"
+        name="pads_readout"
+        layout="topleft"
+        font="Monospace"
+        top="526"
+        left="10"
+        height="16"
+        width="330"/>
+</floater>

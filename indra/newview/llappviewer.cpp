@@ -58,6 +58,8 @@
 #include "llmd5.h"
 #include "llmeshrepository.h"
 #include "llpanelpreferencegamecontrol.h"
+#include "ssfloatergamecontroldebug.h"
+#include "llsetkeybinddialog.h"
 #include "llpumpio.h"
 #include "llmimetypes.h"
 #include "llslurl.h"
@@ -1687,8 +1689,8 @@ void sendGameControlData()
     LLGameControl::updateResendPeriod();
     gAgent.sendMessage();
 
-    // Mirror the just-sent channel values into the preferences "Data Output" tab.
-    LLPanelPreferenceGameControl::updateDataOutput();
+    // Mirror the just-sent channel values into the controller debug floater.
+    SSFloaterGameControlDebug::updateDataOutput();
 }
 
 bool LLAppViewer::doFrame()
@@ -6196,8 +6198,21 @@ void LLAppViewer::idle()
             LLGameControl::setMouseCursorPosition(pixel_x, pixel_y, rect_width, rect_height);
         }
 
+        // OCOL: buttons bound to viewer actions or gestures don't drive their
+        // game control action (nothing is reserved while a pref is capturing input)
+        if (LLPanelPreferenceGameControl::isWaitingForInputChannel() || LLSetKeyBindDialog::isRecording())
+        {
+            LLGameControl::setReservedButtons(0);
+        }
+        else
+        {
+            LLGameControl::setReservedButtons(gViewerInput.getBoundControllerButtons()
+                | LLGestureMgr::instance().getControllerBoundButtons());
+        }
+
         if (LLPanelPreferenceGameControl::isWaitingForInputChannel())
         {
+            gViewerInput.releaseControllerKeys();
             LLPanelPreferenceGameControl::applyGameControlInput();
         }
         else
@@ -6227,6 +6242,19 @@ void LLAppViewer::idle()
             {
                 LLGameControl::AgentActions game_control_actions = LLGameControl::computeAgentActions();
                 gAgent.applyExternalActions(game_control_actions);
+            }
+
+            // OCOL: controller key bindings and gesture buttons (not while the
+            // key binding dialog is waiting for a controller input)
+            if (!LLSetKeyBindDialog::isRecording())
+            {
+                gViewerInput.scanControllerKeys();
+                gViewerInput.scanController();
+                LLGestureMgr::instance().updateControllerGestures();
+            }
+            else
+            {
+                gViewerInput.releaseControllerKeys();
             }
         }
 

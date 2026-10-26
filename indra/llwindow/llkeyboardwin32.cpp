@@ -243,7 +243,7 @@ MASK LLKeyboardWin32::currentMask(bool)
     if (mKeyLevel[KEY_CONTROL])     mask |= MASK_CONTROL;
     if (mKeyLevel[KEY_ALT])         mask |= MASK_ALT;
 
-    return mask;
+    return mask | mEmulatedMask; // OCOL: controller buttons bound to keys
 }
 
 

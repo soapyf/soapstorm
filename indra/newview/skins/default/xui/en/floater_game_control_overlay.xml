@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <SS:GameControl> The controller picture on its own, lighting up with live input. No
+     background, title or close button: drag it by the picture, resize it from its edges,
+     right-click for options. Remembers its place and whether it was open. -->
+<floater
+    name="game_control_overlay"
+    title=""
+    help_topic="game_control_overlay"
+    single_instance="true"
+    save_rect="true"
+    save_visibility="true"
+    background_visible="false"
+    can_resize="true"
+    can_minimize="false"
+    can_close="false"
+    can_tear_off="false"
+    header_height="0"
+    height="180"
+    width="270"
+    min_height="70"
+    min_width="110">
+    <game_control_diagram
+        name="overlay_diagram"
+        layout="topleft"
+        follows="all"
+        show_callouts="false"
+        mouse_opaque="false"
+        left="0"
+        top="0"
+        width="270"
+        height="180"/>
+</floater>

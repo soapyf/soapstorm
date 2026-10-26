@@ -33,6 +33,7 @@
 #include "lleventtimer.h"
 #include "llfloaterreg.h"
 #include "llfocusmgr.h"
+#include "llgamecontrol.h"
 #include "llkeyconflict.h"
 #include "llviewercontrol.h"
 
@@ -66,6 +67,7 @@ private:
 };
 
 bool LLSetKeyBindDialog::sRecordKeys = false;
+U32 LLSetKeyBindDialog::sRecordedKeyFrame = U32_MAX; // <SS:GameControl/>
 
 LLSetKeyBindDialog::LLSetKeyBindDialog(const LLSD& key)
     : LLModalDialog(key),
@@ -73,6 +75,8 @@ LLSetKeyBindDialog::LLSetKeyBindDialog(const LLSD& key)
     mKeyFilterMask(DEFAULT_KEY_FILTER),
     pUpdater(NULL),
     mLastMaskKey(0),
+    mLastControllerButtons(0),
+    mLastControllerAxes(U32_MAX),
     mContextConeOpacity(0.f),
     mContextConeInAlpha(CONTEXT_CONE_IN_ALPHA),
     mContextConeOutAlpha(CONTEXT_CONE_OUT_ALPHA),
@@ -136,6 +140,70 @@ void LLSetKeyBindDialog::draw()
 {
     drawFrustum();
     LLModalDialog::draw();
+    recordController();
+}
+
+// OCOL: the first controller button, stick direction or trigger pushed while the
+// dialog is open becomes the binding. Inputs already held when the dialog
+// opened have to be released first.
+void LLSetKeyBindDialog::recordController()
+{
+    if (!pParent || (mKeyFilterMask & ALLOW_CONTROLLER) == 0 || !LLGameControl::isEnabled())
+    {
+        return;
+    }
+
+    constexpr U16 AXIS_THRESHOLD = 32767 / 2;
+    U32 buttons = 0;
+    U32 previous = 0;
+    LLGameControl::getButtonStates(buttons, previous);
+    const LLGameControl::State& state = LLGameControl::getState();
+    U32 axes = 0;
+    for (size_t i = 0; i < state.mAxes.size() && i < 32; ++i)
+    {
+        if (state.mAxes[i] > AXIS_THRESHOLD)
+        {
+            axes |= 1U << i;
+        }
+    }
+
+    if (mLastControllerAxes == U32_MAX)
+    {
+        // first frame: remember what's already held
+        mLastControllerButtons = buttons;
+        mLastControllerAxes = axes;
+        return;
+    }
+
+    U32 new_buttons = buttons & ~mLastControllerButtons;
+    U32 new_axes = axes & ~mLastControllerAxes;
+    mLastControllerButtons = buttons;
+    mLastControllerAxes = axes;
+
+    bool all_modes = pCheckBox->getValue().asBoolean();
+    for (U8 i = 0; i < LLGameControl::NUM_BUTTONS; ++i)
+    {
+        if (new_buttons & (1U << i))
+        {
+            pParent->onSetControllerBind(LLGameControl::ActionType::BUTTON, i, all_modes);
+            pParent = NULL;
+            sRecordKeys = false;
+            closeFloater();
+            return;
+        }
+    }
+    for (U8 dir = 0; dir < LLGameControl::NUM_MOVE_DIRS; ++dir)
+    {
+        S32 slot = LLGameControl::halfAxisForDirection(dir);
+        if (slot >= 0 && (new_axes & (1U << slot)))
+        {
+            pParent->onSetControllerBind(LLGameControl::ActionType::DOF, dir, all_modes);
+            pParent = NULL;
+            sRecordKeys = false;
+            closeFloater();
+            return;
+        }
+    }
 }
 
 void LLSetKeyBindDialog::setParent(LLKeyBindResponderInterface* parent, LLView* frustum_origin, U32 key_mask)
@@ -157,6 +225,15 @@ void LLSetKeyBindDialog::setParent(LLKeyBindResponderInterface* parent, LLView* 
         }
         input += getString("keyboard");
     }
+    if ((key_mask & ALLOW_CONTROLLER) != 0 && hasString("controller"))
+    {
+        if (!input.empty())
+        {
+            input += ", ";
+        }
+        input += getString("controller");
+    }
+    mLastControllerAxes = U32_MAX;
     pDescription->setText(getString("basic_description"));
     pDescription->setTextArg("[INPUT]", input);
 }
@@ -169,6 +246,10 @@ bool LLSetKeyBindDialog::recordKey(KEY key, MASK mask, bool down)
         LLSetKeyBindDialog* dialog = LLFloaterReg::getTypedInstance<LLSetKeyBindDialog>("keybind_dialog", LLSD());
         if (dialog && dialog->getVisible())
         {
+            if (down)
+            {
+                sRecordedKeyFrame = LLFrameTimer::getFrameCount(); // <SS:GameControl/>
+            }
             return dialog->recordAndHandleKey(key, mask, down);
         }
         else
@@ -178,6 +259,12 @@ bool LLSetKeyBindDialog::recordKey(KEY key, MASK mask, bool down)
         }
     }
     return false;
+}
+
+// static <SS:GameControl>
+bool LLSetKeyBindDialog::consumesTypedChar()
+{
+    return sRecordKeys || LLFrameTimer::getFrameCount() - sRecordedKeyFrame <= 1;
 }
 
 bool LLSetKeyBindDialog::recordAndHandleKey(KEY key, MASK mask, bool down)
@@ -252,7 +339,7 @@ bool LLSetKeyBindDialog::recordAndHandleKey(KEY key, MASK mask, bool down)
         return false;
     }
 
-    if (LLKeyConflictHandler::isReservedByMenu(key, mask))
+    if ((mKeyFilterMask & ALLOW_MENU_KEYS) == 0 && LLKeyConflictHandler::isReservedByMenu(key, mask))
     {
         pDescription->setText(getString("reserved_by_menu"));
         pDescription->setTextArg("[KEYSTR]", LLKeyboard::stringFromAccelerator(mask,key));

@@ -142,6 +142,11 @@ public:
     virtual MASK    currentMask(bool for_mouse_event) = 0;
     virtual KEY     currentKey() { return mCurTranslatedKey; }
 
+    // OCOL: modifiers held by emulated key presses (game controller buttons bound
+    // to keys); currentMask() includes them
+    void            setEmulatedMask(MASK mask) { mEmulatedMask = mask; }
+    MASK            getEmulatedMask() const { return mEmulatedMask; }
+
     EKeyboardInsertMode getInsertMode() { return mInsertMode; }
     void toggleInsertMode();
 
@@ -181,6 +186,7 @@ protected:
     bool            mKeyDown[KEY_COUNT];        // Down edge
     KEY             mCurTranslatedKey;
     KEY             mCurScanKey;        // Used during the scanKeyboard()
+    MASK            mEmulatedMask { MASK_NONE }; // OCOL
 
     static LLKeyStringTranslatorFunc*   mStringTranslator;  // Used for l10n + PC/Mac/Linux accelerator labeling
 

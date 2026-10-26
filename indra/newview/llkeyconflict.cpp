@@ -189,6 +189,32 @@ bool LLKeyConflictHandler::registerControl(const std::string &control_name, U32 
     return false;
 }
 
+// OCOL: bind a game controller input (see LLGameControl::ActionType)
+bool LLKeyConflictHandler::registerControllerControl(const std::string &control_name, U32 index, U8 action_type, U8 action)
+{
+    if (control_name.empty())
+    {
+        return false;
+    }
+    LLKeyConflict &type_data = mControlsMap[control_name];
+    if (!type_data.mAssignable)
+    {
+        return false;
+    }
+    LLKeyData data(action_type, action);
+    if (type_data.mKeyBind.getKeyData(index) == data)
+    {
+        return true;
+    }
+    if (removeConflicts(data, type_data.mConflictMask))
+    {
+        type_data.mKeyBind.replaceKeyData(data, index);
+        mHasUnsavedChanges = true;
+        return true;
+    }
+    return false;
+}
+
 bool LLKeyConflictHandler::clearControl(const std::string &control_name, U32 data_index)
 {
     if (control_name.empty())
@@ -244,7 +270,10 @@ std::string LLKeyConflictHandler::getStringFromKeyData(const LLKeyData& keydata)
 
     result += LLKeyboard::stringFromMouse(keydata.mMouse);
 
-    result += LLGameControl::controllerInputStringFromAction((LLGameControl::ActionType)keydata.mControllerActionType, keydata.mControllerAction);
+    if (keydata.isController())
+    {
+        result += LLGameControl::controllerInputStringFromAction((LLGameControl::ActionType)keydata.mControllerActionType, keydata.mControllerAction);
+    }
 
     return result;
 }

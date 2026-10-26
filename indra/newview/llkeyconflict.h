@@ -97,6 +97,7 @@ public:
     // is active) or ignore not expected masks as long as expected mask is present
     // (ctrl+K will be triggered if ctrl+shift+K is active)
     bool registerControl(const std::string &control_name, U32 data_index, EMouseClickType mouse_ind, KEY key, MASK mask, bool ignore_mask); //todo: return conflicts?
+    bool registerControllerControl(const std::string &control_name, U32 data_index, U8 action_type, U8 action); // OCOL
     bool clearControl(const std::string &control_name, U32 data_index);
 
     LLKeyData getControl(const std::string &control_name, U32 data_index);

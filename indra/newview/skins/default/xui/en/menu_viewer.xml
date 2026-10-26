@@ -463,6 +463,18 @@
 				<menu_item_check.on_click
 				 function="Avatar.AlignToggle" />
 			</menu_item_check>
+			<!-- <SS:GameControl> the controller picture as a movable overlay showing live input -->
+			<menu_item_check
+			 label="Controller Overlay"
+			 layout="topleft"
+			 name="Controller Overlay">
+				<menu_item_check.on_check
+				 function="Floater.Visible"
+				 parameter="game_control_overlay" />
+				<menu_item_check.on_click
+				 function="Floater.Toggle"
+				 parameter="game_control_overlay" />
+			</menu_item_check>
 		</menu>
 
 		<menu_item_check
@@ -4085,6 +4097,14 @@
                parameter="soapstorm" />
             </menu_item_check>
             <!-- </SS:Nexii> -->
+            <!-- <SS:GameControl> live input, calibration, hardware remap and the region packet, moved out of Preferences -->
+            <menu_item_call
+             label="Game Controller Debug..."
+             name="Game Controller Debug">
+                <menu_item_call.on_click
+                 function="Floater.Show"
+                 parameter="game_control_debug" />
+            </menu_item_call>
             <menu_item_separator/>
 
             <menu_item_check

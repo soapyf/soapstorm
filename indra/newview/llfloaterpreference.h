@@ -498,6 +498,7 @@ public:
 
     // from interface
     bool onSetKeyBind(EMouseClickType click, KEY key, MASK mask, bool all_modes) override;
+    bool onSetControllerBind(U8 action_type, U8 action, bool all_modes) override; // OCOL
     void onDefaultKeyBind(bool all_modes) override;
     void onCancelKeyBind() override;
 

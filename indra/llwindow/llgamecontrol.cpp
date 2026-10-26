@@ -39,6 +39,7 @@
 #include "llfile.h"
 #include "llformat.h"
 #include "llgamecontroltranslator.h"
+#include "llmath.h"
 #include "llsd.h"
 #include "llsdl.h"
 #include "lltimer.h"
@@ -48,7 +49,7 @@ namespace std
     string to_string(const SDL_GUID& guid)
     {
         char buffer[33] = { 0 };
-        SDL_GUIDToString(guid, buffer, sizeof(guid));
+        SDL_GUIDToString(guid, buffer, sizeof(buffer));
         return buffer;
     }
 
@@ -363,6 +364,30 @@ std::string LLGameControl::InputChannel::getRemoteName() const
             case 20:
                 name = "BUTTON_TOUCHPAD";
                 break;
+            // <GMDX> SDL's MISC2..MISC6. The Steam Controller (2026) and the Steam
+            // Deck put their extra inputs here: right pad click, left/right stick
+            // touch, left/right grip touch (SDL_gamepad.c's Triton mapping).
+            case 21:
+                name = "BUTTON_MISC2";
+                break;
+            case 22:
+                name = "BUTTON_MISC3";
+                break;
+            case 23:
+                name = "BUTTON_MISC4";
+                break;
+            case 24:
+                name = "BUTTON_MISC5";
+                break;
+            case 25:
+                name = "BUTTON_MISC6";
+                break;
+            case LLGameControl::BUTTON_LEFT_TRIGGER:
+                name = "BUTTON_LEFT_TRIGGER";
+                break;
+            case LLGameControl::BUTTON_RIGHT_TRIGGER:
+                name = "BUTTON_RIGHT_TRIGGER";
+                break;
             default:
                 break;
         }
@@ -414,6 +439,22 @@ public:
 
     void onAxis(SDL_JoystickID id, U8 axis, S16 value);
     void onButton(SDL_JoystickID id, U8 button, bool pressed);
+    // <SS:GameControl> gyro aim
+    void onSensor(SDL_JoystickID id, S32 sensor, const float* data, U64 timestamp_ns);
+    void updateSensors();               // switch pads' sensors to match the gyro setting
+    bool gyroEngaged() const;
+    void takeGyro(F32& yaw, F32& pitch); // this frame's camera rotation, and reset
+    void finishGyroCalibration();        // per frame: a manual calibration's time is up
+    void calibrateGyro();
+    bool isCalibratingGyro() const { return mGyroCalibrateUntil != 0; }
+    bool hasGyro() const;
+    bool getGyroRates(F32 rates[3]) const;
+    // <GMDX> trackpads
+    void onTouchpad(const SDL_Event& event);
+    void takePads(F32& dx, F32& dy);  // this frame's mouse-pad travel, and reset
+    U32 padDpadButtons(LLGameControl::Device& device) const; // the device's buttons, left pad clicks as d-pad
+    bool hasPads() const;
+    bool getPadFinger(U8 pad, F32& x, F32& y) const;
 
     // Re-derives a device's live (post-fix) axis state from its last-known raw
     // values using its *current* Options, instead of waiting for the next
@@ -423,6 +464,24 @@ public:
     void clearAllStates();
 
     void accumulateInternalState();
+    void updateShapedAxes(); // OCOL: applies StickTuning, once per frame
+    // OCOL: tuned (dead zone rescale, curve, smoothing) signed deflection of a
+    // canonical axis in [-32767, 32767], before sensitivity
+    S32 shapedDeflection(U8 axis) const { return axis < LLGameControl::NUM_AXES ? mShapedAxes[axis] : 0; }
+    const LLGameControl::StickTuning& activeTuning() const { return mTuning; }
+    // <SS:GameControl> sensitivity of the stick a canonical axis belongs to
+    F32 axisGain(U8 axis) const { return mStickTunings[LLGameControl::stickForAxis(axis)].mSensitivity; }
+    F32 maxGain() const
+    {
+        F32 gain = mTuning.mSensitivity;
+        for (const auto& tuning : mStickTunings)
+        {
+            gain = std::max(gain, tuning.mSensitivity);
+        }
+        return gain;
+    }
+    // <SS:GameControl> apply toggle latches to g_innerState.mButtons (see accumulateInternalState)
+    void applyButtonToggles();
     void computeFinalState();
     void accumulateFinalState();
     void computeSemanticState(LLGameControl::ServerState& state);
@@ -438,6 +497,8 @@ public:
     // for the currently-active AgentControlMode.  Cheap; called on settings change
     // and on mode change.  Safe to call every frame (early-outs when up to date).
     void rebuildActionLookup(bool force = false);
+    // <SS:GameControl> the binding half of rebuildActionLookup(); false when already current
+    bool rebuildActionLookupMappings(bool force);
 
     void clear();
 
@@ -495,6 +556,22 @@ private:
     // half-axis feeds; mButtonActionLabels by Button (NUM_BUTTONS).
     std::vector<AxisActionBinding> mAxisActionBindings;
     std::vector<std::string> mButtonActionLabels;
+
+    // OCOL: stick tuning for the looked-up mode and the per-frame shaped axes
+    LLGameControl::StickTuning mTuning;
+    // <SS:GameControl> per-stick tuning (falls back to mTuning) and toggle latches
+    LLGameControl::StickTuning mStickTunings[LLGameControl::NUM_STICKS];
+    U32 mToggleMask { 0 };   // canonical buttons whose bound action toggles in this mode
+    U32 mToggleLatch { 0 };  // which of those are currently latched on
+    S32 mShapedAxes[LLGameControl::NUM_AXES] {};
+    F32 mSmoothedAxes[LLGameControl::NUM_AXES] {};
+    U64 mLastShapeTime { 0 };
+    SDL_JoystickID mLastPadDevice { 0 }; // <GMDX> most recently touched trackpad's pad
+    U64 mLastPadFrameNs { 0 };
+    LLGameControl::GyroOptions mGyroOptions; // <SS:GameControl> cached from the settings
+    U64 mGyroCalibrateUntil { 0 };           // totalTime() when a manual calibration ends
+    U64 mLastBoostTime { 0 };      // <SS:GameControl> edge boost
+    F32 mEdgeHeldSeconds { 0.f };
     LLGameControl::AgentControlMode mLookupMode { LLGameControl::CONTROL_MODE_NONE };
 
     // Whether the lookup currently in mAxisActionBindings/mButtonActionLabels is the
@@ -559,6 +636,12 @@ namespace
     }
 
     LLGameControl::State g_innerState; // state from all game controllers
+
+    // OCOL: all controller buttons (before reserved ones are masked out of
+    // g_innerState) and the buttons reserved for viewer-side bindings
+    U32 g_allButtons = 0;
+    U32 g_prevAllButtons = 0;
+    U32 g_reservedButtons = 0;
     LLGameControl::State g_mappedState; // state after user mapping is applied
     LLGameControl::State g_flycamMappedState; // state for flycam after user mapping is applied
     LLGameControl::ServerState g_controllerState; // controller-only, pre-keyboard-accumulation
@@ -627,6 +710,21 @@ namespace
     // Per-mode axis-action -> Invert(bool) map, sibling of GC_AXES.  Buttons have no
     // polarity so there is no button counterpart.
     const std::string GC_AXES_INVERT("AxesInvert");
+    const std::string GC_TUNING("Tuning"); // OCOL
+    const std::string GC_TUNING_SENSITIVITY("Sensitivity");
+    const std::string GC_TUNING_CURVE("Curve");
+    const std::string GC_TUNING_SMOOTHING("Smoothing");
+    const std::string GC_TUNING_RESCALE("RescaleDeadZone");
+    const std::string GC_TUNING_OUTER("OuterDeadZone");  // <SS:GameControl>
+    const std::string GC_TUNING_BOOST("TurnBoost");
+    const std::string GC_TUNING_BOOST_DELAY("TurnBoostDelay");
+    const std::string GC_TUNING_BOOST_RAMP("TurnBoostRamp");
+    // <SS:GameControl> per-stick overrides under Tuning, and per-action toggles
+    const std::string GC_TUNING_STICKS[LLGameControl::NUM_STICKS] = { "Left", "Right", "Triggers" };
+    const std::string GC_BUTTON_TOGGLE("ButtonToggle");
+    const std::string GC_GYRO("Gyro");            // <SS:GameControl> gyro aim options
+    const std::string GC_TRACKPADS("Trackpads");  // <GMDX> trackpad options
+    const std::string GC_GYRO_BIAS("GyroBias");   // per device, next to its Config
     // Per-mode flag gating whether game-control input is converted to that mode's
     // actions.  When false the mode's mappings are locked and no actions fire.
     const std::string GC_ENABLED("Enabled");
@@ -701,11 +799,14 @@ namespace
         }
     }
 
-    // Build the default global per-mode mapping structure.  Layout:
+    // Build the suggested global per-mode mapping structure.  Layout:
     //   { <Mode> : { "Axes": {action:input...}, "Buttons": {action:input...} } }
     // Action keys match the combo-box labels in panel_preferences_game_control.xml;
     // input values match the axis_input_selector / button_input_selector values.
-    LLSD buildDefaultModeMappings()
+    // <SS:GameControl> Not what a new profile starts with (buildDefaultModeMappings() leaves
+    // everything unbound, so each user sets up their own); it is offered as the "Suggested
+    // layout" preset, and it stays the reference for the GameControlData semantic slots.
+    LLSD buildSuggestedModeMappings()
     {
         // Axes: action label -> axis input
         LLSD avatar_axes;
@@ -865,6 +966,25 @@ namespace
         return mappings;
     }
 
+    // <SS:GameControl> What a new profile, "Reset mode" and "Reset all" give: every action
+    // of the suggested layout present but unbound, inverts and the enable flags kept.
+    LLSD buildDefaultModeMappings()
+    {
+        LLSD mappings = buildSuggestedModeMappings();
+        for (auto mode = mappings.beginMap(); mode != mappings.endMap(); ++mode)
+        {
+            for (auto it = mode->second[GC_AXES].beginMap(); it != mode->second[GC_AXES].endMap(); ++it)
+            {
+                it->second = "AXIS_NONE";
+            }
+            for (auto it = mode->second[GC_BUTTONS].beginMap(); it != mode->second[GC_BUTTONS].endMap(); ++it)
+            {
+                it->second = "BUTTON_NONE";
+            }
+        }
+        return mappings;
+    }
+
     // Build the full default GameControl structure: global per-mode action mappings
     // plus a single empty "Default" device template.  ModeMappings are global (not
     // per-device): the Devices layer normalizes hardware to canonical inputs, while
@@ -1005,10 +1125,10 @@ LLGameControl::Device::Device(int joystickID, const std::string& guid, const std
 {
 }
 
-S16 LLGameControl::Options::AxisOptions::computeModifiedValue(S16 raw_value) const
+S16 LLGameControl::Options::AxisOptions::computeModifiedValue(S16 raw_value, bool apply_dead_zone) const
 {
     S16 new_value = (S16)(std::clamp(((S32)raw_value + S32(mOffset)) * mMultiplier, -32768, 32767));
-    if (abs(new_value) < mDeadZone)
+    if (apply_dead_zone && abs(new_value) < mDeadZone)
     {
         new_value = 0;
     }
@@ -1099,7 +1219,7 @@ U8 LLGameControl::Options::unmapButton(U8 button) const
     return button;
 }
 
-S16 LLGameControl::Options::fixAxisValue(U8 axis, S16 value) const
+S16 LLGameControl::Options::fixAxisValue(U8 axis, S16 value, bool apply_dead_zone) const
 {
     if (axis >= NUM_AXES)
     {
@@ -1107,7 +1227,7 @@ S16 LLGameControl::Options::fixAxisValue(U8 axis, S16 value) const
     }
     else
     {
-        value = mAxisOptions[axis].computeModifiedValue(value);
+        value = mAxisOptions[axis].computeModifiedValue(value, apply_dead_zone);
     }
     return value;
 }
@@ -1351,7 +1471,19 @@ void LLGameControllerManager::addController(SDL_JoystickID id, const std::string
         }
     }
 
-    mDevices.emplace_back(id, guid, name).loadOptionsFromString(getDeviceOptionsString(guid));
+    LLGameControl::Device& device = mDevices.emplace_back(id, guid, name);
+    device.loadOptionsFromString(getDeviceOptionsString(guid));
+    // <SS:GameControl> gyro: remembered bias, and sensors on if gyro aim is
+    const LLSD& root = g_gameControlSettings; // const access: reading must not insert keys
+    const LLSD& bias = root[GC_DEVICES][guid][GC_GYRO_BIAS];
+    if (bias.isArray() && bias.size() == 3)
+    {
+        for (int i = 0; i < 3; ++i)
+        {
+            device.mGyro.mBias[i] = device.mGyro.mMean[i] = (F32)bias[i].asReal();
+        }
+    }
+    updateSensors();
 }
 
 void LLGameControllerManager::recordSessionDevice(const std::string& guid, const std::string& name,
@@ -1509,6 +1641,507 @@ static void routeAxisValue(LLGameControl::State& state, U8 phys, bool phys_is_tr
     storeHalfAxes(state.mRawAxes, (U8)(out * 2), raw_value);
 }
 
+// <SS:GameControl> A stick axis keeps its small values (no per-axis dead zone, see
+// fixAxisValue()), so a slow diagonal is not squared off onto a cardinal direction. The
+// dead zone is cut here instead, as a circle: a stick whose vector is shorter than the
+// larger of its two axes' dead zones reads zero on both axes. Everything downstream
+// (buttons from sticks, the region data, the shaping) sees the same clean zero.
+static bool isStickRoute(const LLGameControl::Options& options, U8 phys)
+{
+    return phys < LLGameControl::AXIS_LEFT_TRIGGER && options.mapAxis(phys) < LLGameControl::AXIS_LEFT_TRIGGER;
+}
+
+static void applyRadialDeadZone(LLGameControl::State& state, const LLGameControl::Options& options)
+{
+    const auto& axis_options = options.getAxisOptions();
+    for (U8 stick = LLGameControl::STICK_LEFT; stick <= LLGameControl::STICK_RIGHT; ++stick)
+    {
+        const U8 ax = stick * 2;
+        const U8 ay = ax + 1;
+        // rebuild the pair from its physical axes: an earlier cut zeroed it in place
+        U16 radius = 0;
+        for (U8 phys = 0; phys < LLGameControl::NUM_AXES && phys < axis_options.size(); ++phys)
+        {
+            U8 out = options.mapAxis(phys);
+            if ((out == ax || out == ay) && isStickRoute(options, phys))
+            {
+                storeHalfAxes(state.mAxes, (U8)(out * 2), state.mPhysicalFixedAxes[phys]);
+                radius = std::max(radius, axis_options[phys].mDeadZone);
+            }
+        }
+        const F32 x = (F32)state.mAxes[ax * 2] - (F32)state.mAxes[ax * 2 + 1];
+        const F32 y = (F32)state.mAxes[ay * 2] - (F32)state.mAxes[ay * 2 + 1];
+        if (x * x + y * y < (F32)radius * (F32)radius)
+        {
+            state.mAxes[ax * 2] = state.mAxes[ax * 2 + 1] = 0;
+            state.mAxes[ay * 2] = state.mAxes[ay * 2 + 1] = 0;
+        }
+    }
+}
+
+// <SS:GameControl> ---- gyro aim ----------------------------------------------------------
+
+namespace
+{
+    constexpr F32 GYRO_STILL_NOISE = 0.02f;      // rad/s (~1 deg/s): the pad counts as resting
+    constexpr F32 GYRO_CALIBRATE_SECONDS = 2.f;
+    constexpr F32 RAD_TO_DEG_F = 57.2957795f;
+
+    // GyroWiki "player space": turning the pad (yaw) or leaning it (roll) both turn the
+    // camera, whichever way it is held, by taking the rotation about the real up axis.
+    // 'up' is the accelerometer at rest, which reads the reaction to gravity (up).
+    F32 playerSpaceYaw(const F32 w[3], const F32 up_in[3])
+    {
+        F32 len = sqrtf(up_in[0] * up_in[0] + up_in[1] * up_in[1] + up_in[2] * up_in[2]);
+        if (len < 0.001f)
+        {
+            return w[1];
+        }
+        const F32 up_y = up_in[1] / len;
+        const F32 up_z = up_in[2] / len;
+        const F32 world_yaw = up_y * w[1] + up_z * w[2];
+        constexpr F32 YAW_RELAX = 1.41f;
+        const F32 limit = sqrtf(w[1] * w[1] + w[2] * w[2]);
+        return copysignf(llmin(fabsf(world_yaw) * YAW_RELAX, limit), world_yaw);
+    }
+}
+
+bool LLGameControllerManager::hasGyro() const
+{
+    for (const auto& device : mDevices)
+    {
+        if (device.mGyro.mPresent)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool LLGameControllerManager::getGyroRates(F32 rates[3]) const
+{
+    const LLGameControl::Device* chosen = nullptr;
+    for (const auto& device : mDevices)
+    {
+        if (device.mGyro.mEnabled && (!chosen || device.getJoystickID() == mlastActiveControllerID))
+        {
+            chosen = &device;
+        }
+    }
+    if (!chosen)
+    {
+        return false;
+    }
+    for (int i = 0; i < 3; ++i)
+    {
+        rates[i] = chosen->mGyro.mRate[i];
+    }
+    return true;
+}
+
+// Sensors cost battery and Bluetooth bandwidth, so they are on only while gyro aim is.
+void LLGameControllerManager::updateSensors()
+{
+    const bool want = mGyroOptions.mEngage != LLGameControl::GyroOptions::ENGAGE_OFF || mGyroCalibrateUntil != 0;
+    for (auto& device : mDevices)
+    {
+        SDL_Gamepad* pad = SDL_GetGamepadFromID((SDL_JoystickID)device.getJoystickID());
+        if (!pad)
+        {
+            continue;
+        }
+        device.mGyro.mPresent = SDL_GamepadHasSensor(pad, SDL_SENSOR_GYRO);
+        const bool on = want && device.mGyro.mPresent;
+        if (on == device.mGyro.mEnabled)
+        {
+            continue;
+        }
+        SDL_SetGamepadSensorEnabled(pad, SDL_SENSOR_GYRO, on);
+        if (SDL_GamepadHasSensor(pad, SDL_SENSOR_ACCEL))
+        {
+            SDL_SetGamepadSensorEnabled(pad, SDL_SENSOR_ACCEL, on);
+        }
+        device.mGyro.mEnabled = on;
+        device.mGyro.mLastTimestampNs = 0;
+        device.mGyro.mYaw = device.mGyro.mPitch = 0.f;
+        LL_INFOS("SDL3") << "gyro " << (on ? "on" : "off") << " for " << device.getName() << LL_ENDL;
+    }
+}
+
+bool LLGameControllerManager::gyroEngaged() const
+{
+    if (g_agentControlMode != LLGameControl::CONTROL_MODE_MOUSELOOK)
+    {
+        return false; // mouselook only; nothing builds up to jump on entering it
+    }
+    switch (mGyroOptions.mEngage)
+    {
+        case LLGameControl::GyroOptions::ENGAGE_ALWAYS:
+            return true;
+        case LLGameControl::GyroOptions::ENGAGE_HOLD:
+        case LLGameControl::GyroOptions::ENGAGE_RATCHET:
+        {
+            bool held = false;
+            for (U8 btn = 0; btn < LLGameControl::NUM_BUTTONS && btn < mButtonActionLabels.size(); ++btn)
+            {
+                if (mButtonActionLabels[btn] == "Gyro hold" && (g_innerState.mButtons & (1U << btn)))
+                {
+                    held = true;
+                }
+            }
+            return (mGyroOptions.mEngage == LLGameControl::GyroOptions::ENGAGE_HOLD) == held;
+        }
+        default:
+            return false;
+    }
+}
+
+void LLGameControllerManager::calibrateGyro()
+{
+    mGyroCalibrateUntil = totalTime() + (U64)(GYRO_CALIBRATE_SECONDS * USEC_PER_SEC);
+    for (auto& device : mDevices)
+    {
+        device.mGyro.mCalibSum[0] = device.mGyro.mCalibSum[1] = device.mGyro.mCalibSum[2] = 0.0;
+        device.mGyro.mCalibCount = 0;
+    }
+    updateSensors();
+}
+
+void LLGameControllerManager::finishGyroCalibration()
+{
+    if (mGyroCalibrateUntil && totalTime() >= mGyroCalibrateUntil)
+    {
+        // manual calibration done: its average is the bias, remembered per pad
+        mGyroCalibrateUntil = 0;
+        for (auto& device : mDevices)
+        {
+            LLGameControl::Device::Gyro& g = device.mGyro;
+            if (g.mCalibCount > 20)
+            {
+                LLSD bias = LLSD::emptyArray();
+                for (int i = 0; i < 3; ++i)
+                {
+                    g.mBias[i] = (F32)(g.mCalibSum[i] / g.mCalibCount);
+                    g.mMean[i] = g.mBias[i];
+                    bias.append(g.mBias[i]);
+                }
+                g_gameControlSettings[GC_DEVICES][device.getGUID()][GC_GYRO_BIAS] = bias;
+                LL_INFOS("SDL3") << "gyro calibrated for " << device.getName() << ": " << bias << LL_ENDL;
+            }
+        }
+        updateSensors();
+    }
+}
+
+void LLGameControllerManager::takeGyro(F32& yaw, F32& pitch)
+{
+    yaw = pitch = 0.f;
+    for (auto& device : mDevices)
+    {
+        yaw += device.mGyro.mYaw;
+        pitch += device.mGyro.mPitch;
+        device.mGyro.mYaw = device.mGyro.mPitch = 0.f;
+    }
+}
+
+// <GMDX> trackpads. SDL reports finger 0..1 positions from the pad's top left.
+// Speed is measured per frame in takePads(): SDL's HIDAPI drivers stamp a frame's
+// batch of reports microseconds apart, so per-event timing would be noise.
+namespace
+{
+    constexpr U64 PAD_UNREAD_NS = 200000000ULL; // 0.2 s without takePads(): nothing reads the pads
+    constexpr F32 PAD_MAX_ROLL = 6.f;           // pad widths per second
+}
+
+void LLGameControllerManager::onTouchpad(const SDL_Event& event)
+{
+    const SDL_GamepadTouchpadEvent& t = event.gtouchpad;
+    device_it it = findDevice(t.which);
+    if (it == mDevices.end() || t.touchpad < 0 || t.touchpad > 1 || t.finger != 0)
+    {
+        return;
+    }
+    if (it->mNumPads < 0)
+    {
+        SDL_Gamepad* gamepad = SDL_GetGamepadFromID(t.which);
+        it->mNumPads = gamepad ? SDL_GetNumGamepadTouchpads(gamepad) : 1;
+    }
+    mLastPadDevice = t.which;
+    LLGameControl::Device::Pad& pad = it->mPads[t.touchpad];
+    if (event.type == SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN)
+    {
+        pad.mDown = true;
+        pad.mX = t.x;
+        pad.mY = t.y;
+        pad.mVX = pad.mVY = 0.f; // touching stops the trackball
+        return;
+    }
+    if (!pad.mDown)
+    {
+        return;
+    }
+    const F32 dx = t.x - pad.mX;
+    const F32 dy = t.y - pad.mY;
+    pad.mX = t.x;
+    pad.mY = t.y;
+    if (event.type == SDL_EVENT_GAMEPAD_TOUCHPAD_UP)
+    {
+        pad.mDown = false; // the roll measured while it moved carries on (takePads)
+        return;
+    }
+    const bool read = mLastPadFrameNs && SDL_GetTicksNS() - mLastPadFrameNs < PAD_UNREAD_NS;
+    if (!read)
+    {
+        // no mode uses the controller: don't save the travel for when one does
+        pad.mDX = pad.mDY = 0.f;
+        pad.mVX = pad.mVY = 0.f;
+        return;
+    }
+    pad.mDX = llclamp(pad.mDX + dx, -1.f, 1.f);
+    pad.mDY = llclamp(pad.mDY + dy, -1.f, 1.f);
+}
+
+void LLGameControllerManager::takePads(F32& dx, F32& dy)
+{
+    dx = dy = 0.f;
+    const LLGameControl::TrackpadOptions o = LLGameControl::getTrackpadOptions();
+    const U64 now_ns = SDL_GetTicksNS();
+    const bool resumed = !mLastPadFrameNs || now_ns - mLastPadFrameNs >= PAD_UNREAD_NS;
+    const F32 dt = resumed ? 0.f : llclamp((F32)(now_ns - mLastPadFrameNs) * 1e-9f, 0.f, 0.1f);
+    mLastPadFrameNs = now_ns;
+    for (auto& device : mDevices)
+    {
+        if (device.mNumPads < 1)
+        {
+            continue;
+        }
+        // the right pad, or the only one (DualSense)
+        const S32 index = device.mNumPads >= 2 ? 1 : 0;
+        LLGameControl::Device::Pad& pad = device.mPads[index];
+        // SDL normalises a single touchpad's x and y separately: make y steps the same
+        // length as x steps (DualSense/DualShock 4 pads are about 1920 x 1070)
+        const F32 y_scale = device.mNumPads >= 2 ? 1.f : 1070.f / 1920.f;
+        F32 pdx = pad.mDX, pdy = pad.mDY * y_scale;
+        pad.mDX = pad.mDY = 0.f;
+        device.mPads[1 - index].mDX = device.mPads[1 - index].mDY = 0.f;
+        if (resumed || o.mRight != LLGameControl::TrackpadOptions::RIGHT_MOUSE)
+        {
+            pad.mVX = pad.mVY = 0.f;
+            continue;
+        }
+        if (pad.mDown)
+        {
+            // the roll a lift would leave: smoothed speed over the last frames
+            if (dt > 0.f)
+            {
+                pad.mVX += (pdx / dt - pad.mVX) * 0.4f;
+                pad.mVY += (pdy / dt - pad.mVY) * 0.4f;
+            }
+            if (!o.mMomentum)
+            {
+                pad.mVX = pad.mVY = 0.f;
+            }
+        }
+        else if (std::fabs(pad.mVX) + std::fabs(pad.mVY) > 0.05f)
+        {
+            pdx += pad.mVX * dt;
+            pdy += pad.mVY * dt;
+            const F32 keep = expf(-o.mFriction * dt);
+            pad.mVX *= keep;
+            pad.mVY *= keep;
+        }
+        else
+        {
+            pad.mVX = pad.mVY = 0.f;
+        }
+        pad.mVX = llclamp(pad.mVX, -PAD_MAX_ROLL, PAD_MAX_ROLL);
+        pad.mVY = llclamp(pad.mVY, -PAD_MAX_ROLL, PAD_MAX_ROLL);
+        dx += pdx;
+        dy += pdy;
+    }
+    dx *= o.mSensitivity;
+    dy *= o.mSensitivity * (o.mInvertY ? -1.f : 1.f);
+}
+
+U32 LLGameControllerManager::padDpadButtons(LLGameControl::Device& device) const
+{
+    U32 buttons = device.mState.mButtons;
+    LLGameControl::Device::Pad& pad = device.mPads[0];
+    // the physical left pad click, whatever it is remapped to
+    const bool click = (device.mState.mPhysicalButtons & (1U << LLGameControl::BUTTON_TOUCHPAD)) != 0;
+    if (device.mNumPads < 2
+        || LLGameControl::getTrackpadOptions().mLeft != LLGameControl::TrackpadOptions::LEFT_DPAD)
+    {
+        pad.mClickHeld = false;
+        pad.mDpadLatch = 0;
+        return buttons;
+    }
+    if (click && !pad.mClickHeld)
+    {
+        // the direction is chosen when the pad clicks and held until it lets go, so the
+        // thumb settling near a boundary doesn't flicker it
+        const F32 x = pad.mX - 0.5f;
+        const F32 y = pad.mY - 0.5f;
+        constexpr F32 CENTER = 0.15f; // a click in the middle presses nothing
+        constexpr F32 TAN_22_5 = 0.4142f; // eight directions: a diagonal presses both
+        const F32 ax = std::fabs(x), ay = std::fabs(y);
+        U32 latch = 0;
+        if (x * x + y * y >= CENTER * CENTER)
+        {
+            if (ax > ay * TAN_22_5)
+            {
+                latch |= 1U << (x < 0.f ? LLGameControl::BUTTON_DPAD_LEFT : LLGameControl::BUTTON_DPAD_RIGHT);
+            }
+            if (ay > ax * TAN_22_5)
+            {
+                latch |= 1U << (y < 0.f ? LLGameControl::BUTTON_DPAD_UP : LLGameControl::BUTTON_DPAD_DOWN);
+            }
+        }
+        pad.mDpadLatch = latch;
+    }
+    pad.mClickHeld = click;
+    if (!click)
+    {
+        pad.mDpadLatch = 0;
+        return buttons;
+    }
+    // the click becomes the direction, not its own button
+    return (buttons & ~(1U << LLGameControl::BUTTON_TOUCHPAD)) | pad.mDpadLatch;
+}
+
+bool LLGameControllerManager::hasPads() const
+{
+    for (const auto& device : mDevices)
+    {
+        SDL_Gamepad* gamepad = SDL_GetGamepadFromID((SDL_JoystickID)device.getJoystickID());
+        if (gamepad && SDL_GetNumGamepadTouchpads(gamepad) > 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool LLGameControllerManager::getPadFinger(U8 index, F32& x, F32& y) const
+{
+    for (const auto& device : mDevices)
+    {
+        if ((SDL_JoystickID)device.getJoystickID() == mLastPadDevice && index < 2 && device.mPads[index].mDown)
+        {
+            x = device.mPads[index].mX;
+            y = device.mPads[index].mY;
+            return true;
+        }
+    }
+    return false;
+}
+
+void LLGameControllerManager::onSensor(SDL_JoystickID id, S32 sensor, const float* data, U64 timestamp_ns)
+{
+    device_it it = findDevice(id);
+    if (it == mDevices.end())
+    {
+        return;
+    }
+    LLGameControl::Device::Gyro& g = it->mGyro;
+    if (sensor == SDL_SENSOR_ACCEL)
+    {
+        for (int i = 0; i < 3; ++i)
+        {
+            g.mUp[i] += (data[i] - g.mUp[i]) * 0.05f; // low-pass: gravity, not the hand's jolts
+        }
+        return;
+    }
+    if (sensor != SDL_SENSOR_GYRO)
+    {
+        return;
+    }
+
+    // integrate on the sensor's own clock, not the frame's
+    const F32 dt = g.mLastTimestampNs ? (F32)(timestamp_ns - g.mLastTimestampNs) * 1e-9f : 0.f;
+    g.mLastTimestampNs = timestamp_ns;
+    if (dt <= 0.f || dt > 0.05f)
+    {
+        return; // first sample, or a gap after a stall or a reconnect
+    }
+
+    F32 w[3] = { data[0], data[1], data[2] };
+
+    if (mGyroCalibrateUntil)
+    {
+        for (int i = 0; i < 3; ++i)
+        {
+            g.mCalibSum[i] += w[i];
+        }
+        ++g.mCalibCount;
+    }
+
+    // continuous calibration: a pad that has sat still long enough is reading its bias.
+    // Only while gyro aim is not engaged: a slow, steady aiming turn looks like rest and would be learned as bias.
+    const bool engaged = gyroEngaged();
+    F32 dev2 = 0.f;
+    for (int i = 0; i < 3; ++i)
+    {
+        g.mMean[i] += (w[i] - g.mMean[i]) * llmin(dt * 2.f, 1.f);
+        const F32 d = w[i] - g.mMean[i];
+        dev2 += d * d;
+    }
+    g.mStillSeconds = !engaged && dev2 < GYRO_STILL_NOISE * GYRO_STILL_NOISE ? g.mStillSeconds + dt : 0.f;
+    const F32 rest_needed = mGyroOptions.mRecalibrateSeconds;
+    if (rest_needed > 0.f && g.mStillSeconds > rest_needed && !mGyroCalibrateUntil)
+    {
+        for (int i = 0; i < 3; ++i)
+        {
+            g.mBias[i] = g.mMean[i];
+        }
+    }
+    for (int i = 0; i < 3; ++i)
+    {
+        w[i] -= g.mBias[i];
+        g.mRate[i] = w[i];
+    }
+
+    if (!engaged)
+    {
+        g.mYaw = g.mPitch = 0.f;
+        g.mSmoothYaw = g.mSmoothPitch = 0.f;
+        return;
+    }
+
+    const LLGameControl::GyroOptions& o = mGyroOptions;
+    F32 yaw_rate = o.mPlayerSpace ? playerSpaceYaw(w, g.mUp) : w[1];
+    F32 pitch_rate = w[0];
+    const F32 speed_deg = sqrtf(yaw_rate * yaw_rate + pitch_rate * pitch_rate) * RAD_TO_DEG_F;
+
+    // soft-tiered smoothing: slow motion is averaged, fast motion passes straight through
+    if (o.mSmoothSpeed > 0.f)
+    {
+        const F32 direct = llclamp((speed_deg - o.mSmoothSpeed) / o.mSmoothSpeed, 0.f, 1.f);
+        const F32 k = llmin(dt / llmax(o.mSmoothTime, 0.001f), 1.f);
+        g.mSmoothYaw += (yaw_rate * (1.f - direct) - g.mSmoothYaw) * k;
+        g.mSmoothPitch += (pitch_rate * (1.f - direct) - g.mSmoothPitch) * k;
+        yaw_rate = yaw_rate * direct + g.mSmoothYaw;
+        pitch_rate = pitch_rate * direct + g.mSmoothPitch;
+    }
+
+    // acceleration: sensitivity climbs from min to max with the pad's speed
+    const F32 t = o.mFastSpeed > o.mSlowSpeed
+        ? llclamp((speed_deg - o.mSlowSpeed) / (o.mFastSpeed - o.mSlowSpeed), 0.f, 1.f) : 1.f;
+    F32 sens = o.mMinSens + (o.mMaxSens - o.mMinSens) * t;
+
+    // tightening: tiny motions shrink toward zero, so hand tremor doesn't move the aim
+    if (o.mTightenSpeed > 0.f && speed_deg < o.mTightenSpeed)
+    {
+        sens *= speed_deg / o.mTightenSpeed;
+    }
+
+    g.mYaw += yaw_rate * sens * dt;
+    g.mPitch += pitch_rate * sens * dt * (o.mInvertPitch ? -1.f : 1.f);
+    // a frame that never came (a stall, a modal dialog) must not unload as one big jump
+    g.mYaw = llclamp(g.mYaw, -0.5f, 0.5f);
+    g.mPitch = llclamp(g.mPitch, -0.5f, 0.5f);
+}
+
 void LLGameControllerManager::onAxis(SDL_JoystickID id, U8 axis, S16 raw_value)
 {
     device_it it = findDevice(id);
@@ -1538,7 +2171,7 @@ void LLGameControllerManager::onAxis(SDL_JoystickID id, U8 axis, S16 raw_value)
 
     bool phys_is_trigger = phys >= LLGameControl::AXIS_LEFT_TRIGGER;
 
-    S16 fixed_value = it->mOptions.fixAxisValue(phys, raw_value);
+    S16 fixed_value = it->mOptions.fixAxisValue(phys, raw_value, !isStickRoute(it->mOptions, phys)); // <SS:GameControl/>
     LL_DEBUGS("SDL3") << "joystick=0x" << std::hex << id << std::dec
         << " axis=" << (S32)(phys)
         << " raw_value=" << (S32)(raw_value)
@@ -1557,6 +2190,7 @@ void LLGameControllerManager::onAxis(SDL_JoystickID id, U8 axis, S16 raw_value)
     }
 
     routeAxisValue(it->mState, phys, phys_is_trigger, out, fixed_value, raw_value);
+    applyRadialDeadZone(it->mState, it->mOptions); // <SS:GameControl/>
 }
 
 void LLGameControllerManager::recomputeDeviceAxesFromRaw(LLGameControl::Device& device)
@@ -1566,10 +2200,11 @@ void LLGameControllerManager::recomputeDeviceAxesFromRaw(LLGameControl::Device& 
         S16 raw_value = device.mState.mPhysicalRawAxes[phys];
         U8 out = device.mOptions.mapAxis(phys);
         bool phys_is_trigger = phys >= LLGameControl::AXIS_LEFT_TRIGGER;
-        S16 fixed_value = device.mOptions.fixAxisValue(phys, raw_value);
+        S16 fixed_value = device.mOptions.fixAxisValue(phys, raw_value, !isStickRoute(device.mOptions, phys)); // <SS:GameControl/>
         device.mState.mPhysicalFixedAxes[phys] = fixed_value;
         routeAxisValue(device.mState, phys, phys_is_trigger, out, fixed_value, raw_value);
     }
+    applyRadialDeadZone(device.mState, device.mOptions); // <SS:GameControl/>
 }
 
 void LLGameControllerManager::onButton(SDL_JoystickID id, U8 button, bool pressed)
@@ -1635,6 +2270,11 @@ void LLGameControllerManager::clearAllStates()
     for (auto& device : mDevices)
     {
         device.mState.clear();
+        device.mGyro.mYaw = device.mGyro.mPitch = 0.f; // <SS:GameControl/>
+        for (auto& pad : device.mPads) // <GMDX>
+        {
+            pad = LLGameControl::Device::Pad();
+        }
     }
     mExternalServerState.clear();
     mLastActiveFlags = 0;
@@ -1643,28 +2283,41 @@ void LLGameControllerManager::clearAllStates()
 
 void LLGameControllerManager::accumulateInternalState()
 {
+    finishGyroCalibration(); // <SS:GameControl/>
     g_innerState.storePrevious();
     // clear the old state
     g_innerState.clear();
 
 
     // accumulate the controllers
+    g_prevAllButtons = g_allButtons;
+    g_allButtons = 0;
+    for (auto& device : mDevices)
+    {
+        g_allButtons |= padDpadButtons(device); // <GMDX> left trackpad clicks as d-pad
+    }
+
+    // OCOL: held timers follow the physical buttons, once per frame (they used to
+    // advance once per connected device)
+    for (U8 i = 0; i < LLGameControl::Button::NUM_BUTTONS; i++)
+    {
+        U32 button = 1U << i;
+        if ((g_allButtons & button) && !(g_prevAllButtons & button))
+        {
+            g_buttonLevelTimer[i].reset();
+            g_buttonLevelFrames[i] = 0;
+        }
+        else
+        {
+            g_buttonLevelFrames[i]++;
+        }
+    }
+
+    // OCOL: buttons bound to viewer actions or gestures don't drive game control
+    g_innerState.mButtons = g_allButtons & ~g_reservedButtons;
+
     for (const auto& device : mDevices)
     {
-        g_innerState.mButtons |= device.mState.mButtons;
-        for(U8 i = 0; i < LLGameControl::Button::NUM_BUTTONS; i++)
-        {
-            U32 button = 1 << i;
-            if(g_innerState.mButtons & button && ~(g_innerState.mPrevButtons) & button)
-            {
-                g_buttonLevelTimer[i].reset();
-                g_buttonLevelFrames[i] = 0;
-            }
-            else
-            {
-                g_buttonLevelFrames[i]++;
-            }
-        }
         for (size_t i = 0; i < LLGameControl::NUM_MOVE_DIRS; ++i)
         {
             // Note: we don't bother to clamp the axes yet
@@ -1684,6 +2337,433 @@ void LLGameControllerManager::accumulateInternalState()
             }
         }
     }
+
+    // OCOL: triggers as buttons (with hysteresis so a half pull doesn't flicker)
+    {
+        constexpr U16 PRESS = 32767 / 2;
+        constexpr U16 RELEASE = 32767 * 2 / 5;
+        static bool trigger_down[2] = { false, false };
+        const U8 axes[2] = { LLGameControl::AXIS_LEFT_TRIGGER, LLGameControl::AXIS_RIGHT_TRIGGER };
+        const U8 buttons[2] = { LLGameControl::BUTTON_LEFT_TRIGGER, LLGameControl::BUTTON_RIGHT_TRIGGER };
+        for (int i = 0; i < 2; ++i)
+        {
+            U16 pull = g_innerState.mAxes[axes[i] * 2];
+            trigger_down[i] = trigger_down[i] ? pull > RELEASE : pull >= PRESS;
+            if (trigger_down[i])
+            {
+                g_allButtons |= 1U << buttons[i];
+            }
+        }
+        // held-time bookkeeping and reservation for the virtual buttons
+        for (int i = 0; i < 2; ++i)
+        {
+            U32 button = 1U << buttons[i];
+            if ((g_allButtons & button) && !(g_prevAllButtons & button))
+            {
+                g_buttonLevelTimer[buttons[i]].reset();
+                g_buttonLevelFrames[buttons[i]] = 0;
+            }
+        }
+        g_innerState.mButtons = g_allButtons & ~g_reservedButtons;
+
+        // A trigger used as a button in this mode (button action, keyboard key,
+        // gesture or viewer action) no longer drives the mode's analog trigger
+        // action, e.g. mouselook's default "Fly up/down" on the triggers would
+        // otherwise jump every time a right-trigger "Mouse click left" fires.
+        rebuildActionLookup();
+        applyButtonToggles(); // <SS:GameControl/>
+        for (int i = 0; i < 2; ++i)
+        {
+            bool claimed = !mButtonActionLabels[buttons[i]].empty() || (g_reservedButtons & (1U << buttons[i]));
+            if (claimed)
+            {
+                g_innerState.mAxes[axes[i] * 2] = 0;
+                g_innerState.mAxes[axes[i] * 2 + 1] = 0;
+            }
+        }
+    }
+
+    // OCOL: stick tuning for the analog actions
+    updateShapedAxes();
+}
+
+// <SS:GameControl> Toggle behaviour. A button whose bound action is set to toggle
+// flips its latch on each fresh press, and the action sees the latch instead of the
+// button. Runs after reserved buttons are masked out, so a button that also drives a
+// viewer action or a gesture never latches, and before computeAgentActions() reads
+// g_innerState: from there on a latched button is simply "held", which is what every
+// held action (run, crouch, fly, mouse drag) already understands. Presses are taken
+// from g_allButtons, the physical state, so the latch toggles on the press and not
+// on its own released-to-latched transition.
+void LLGameControllerManager::applyButtonToggles()
+{
+    if (!mToggleMask)
+    {
+        return;
+    }
+    U32 presses = g_allButtons & ~g_prevAllButtons & ~g_reservedButtons & mToggleMask;
+    mToggleLatch ^= presses;
+    g_innerState.mButtons = (g_innerState.mButtons & ~mToggleMask) | (mToggleLatch & mToggleMask);
+}
+
+// OCOL: stick tuning. Turns each canonical axis' raw deflection into the value
+// the analog actions use: dead zone rescale, then response curve, then smoothing.
+void LLGameControllerManager::updateShapedAxes()
+{
+    rebuildActionLookup();
+
+    // largest dead zone any connected device applies to each canonical axis
+    U16 dead_zone[LLGameControl::NUM_AXES] = { 0 };
+    for (const auto& device : mDevices)
+    {
+        const auto& axis_options = device.mOptions.getAxisOptions();
+        for (U8 phys = 0; phys < LLGameControl::NUM_AXES && phys < axis_options.size(); ++phys)
+        {
+            U8 out = device.mOptions.mapAxis(phys);
+            if (out < LLGameControl::NUM_AXES)
+            {
+                dead_zone[out] = std::max(dead_zone[out], axis_options[phys].mDeadZone);
+            }
+        }
+    }
+
+    U64 now = totalTime();
+    F32 dt = mLastShapeTime ? llclamp(F32(now - mLastShapeTime) / (F32)USEC_PER_SEC, 0.f, 0.25f) : 0.f;
+    mLastShapeTime = now;
+
+    auto deflection = [](U8 axis)
+    {
+        return ((F32)g_innerState.mAxes[axis * 2] - (F32)g_innerState.mAxes[axis * 2 + 1]) / 32767.f;
+    };
+    auto smoothInto = [&](U8 axis, F32 shaped, const LLGameControl::StickTuning& tuning)
+    {
+        // fraction of the gap to the new value kept per 60 Hz frame
+        F32 keep = llclamp(tuning.mSmoothing, 0.f, 0.95f);
+        F32 follow = (keep <= 0.f || dt <= 0.f) ? 1.f : 1.f - powf(keep, dt * 60.f);
+        mSmoothedAxes[axis] += (shaped - mSmoothedAxes[axis]) * follow;
+        if (std::abs(mSmoothedAxes[axis]) < 0.0005f && shaped == 0.f)
+        {
+            mSmoothedAxes[axis] = 0.f;
+        }
+        mShapedAxes[axis] = ll_round(mSmoothedAxes[axis] * 32767.f);
+    };
+
+    // <SS:GameControl> Sticks are shaped as one 2D vector: the rescale (from the radial
+    // dead zone), the outer dead zone and the curve all act on the vector's length, so a
+    // diagonal keeps its direction instead of bending toward the cardinals.
+    for (U8 stick = LLGameControl::STICK_LEFT; stick <= LLGameControl::STICK_RIGHT; ++stick)
+    {
+        const LLGameControl::StickTuning& tuning = mStickTunings[stick];
+        const U8 ax = stick * 2;
+        const U8 ay = ax + 1;
+        F32 x = deflection(ax);
+        F32 y = deflection(ay);
+        const F32 len = sqrtf(x * x + y * y);
+        if (len > 0.f)
+        {
+            const F32 inner = tuning.mRescaleDeadZone ? (F32)std::max(dead_zone[ax], dead_zone[ay]) / 32767.f : 0.f;
+            const F32 outer = llclamp(tuning.mOuterDeadZone, inner + 0.05f, 1.f);
+            F32 t = llclamp((len - inner) / (outer - inner), 0.f, 1.f);
+            if (tuning.mCurve != 1.f)
+            {
+                t = powf(t, llclamp(tuning.mCurve, 0.2f, 5.f));
+            }
+            x *= t / len;
+            y *= t / len;
+        }
+        smoothInto(ax, x, tuning);
+        smoothInto(ay, y, tuning);
+    }
+
+    // the triggers stay per axis
+    for (U8 axis = LLGameControl::AXIS_LEFT_TRIGGER; axis < LLGameControl::NUM_AXES; ++axis)
+    {
+        const LLGameControl::StickTuning& tuning = mStickTunings[LLGameControl::STICK_TRIGGERS];
+        F32 value = deflection(axis);
+        F32 magnitude = std::min(std::abs(value), 1.f);
+        if (tuning.mRescaleDeadZone && dead_zone[axis] > 0 && dead_zone[axis] < 32767)
+        {
+            F32 edge = (F32)dead_zone[axis] / 32767.f;
+            magnitude = magnitude <= edge ? 0.f : (magnitude - edge) / (1.f - edge);
+        }
+        if (tuning.mCurve != 1.f && magnitude > 0.f)
+        {
+            magnitude = powf(magnitude, llclamp(tuning.mCurve, 0.2f, 5.f));
+        }
+        smoothInto(axis, value < 0.f ? -magnitude : magnitude, tuning);
+    }
+}
+
+// <SS:GameControl> StickTuning <-> its LLSD block, field by field so a block written by an
+// older viewer (without the newer fields) keeps their defaults.
+static void readStickTuning(const LLSD& data, LLGameControl::StickTuning& tuning)
+{
+    if (!data.isMap())
+    {
+        return;
+    }
+    if (data.has(GC_TUNING_SENSITIVITY)) tuning.mSensitivity = llclamp((F32)data[GC_TUNING_SENSITIVITY].asReal(), 0.1f, 6.f);
+    if (data.has(GC_TUNING_CURVE)) tuning.mCurve = llclamp((F32)data[GC_TUNING_CURVE].asReal(), 1.f, 3.f);
+    if (data.has(GC_TUNING_SMOOTHING)) tuning.mSmoothing = llclamp((F32)data[GC_TUNING_SMOOTHING].asReal(), 0.f, 0.9f);
+    if (data.has(GC_TUNING_RESCALE)) tuning.mRescaleDeadZone = data[GC_TUNING_RESCALE].asBoolean();
+    if (data.has(GC_TUNING_OUTER)) tuning.mOuterDeadZone = llclamp((F32)data[GC_TUNING_OUTER].asReal(), 0.5f, 1.f);
+    if (data.has(GC_TUNING_BOOST)) tuning.mBoostGain = llclamp((F32)data[GC_TUNING_BOOST].asReal(), 1.f, 3.f);
+    if (data.has(GC_TUNING_BOOST_DELAY)) tuning.mBoostDelay = llclamp((F32)data[GC_TUNING_BOOST_DELAY].asReal(), 0.f, 1.f);
+    if (data.has(GC_TUNING_BOOST_RAMP)) tuning.mBoostRamp = llclamp((F32)data[GC_TUNING_BOOST_RAMP].asReal(), 0.f, 2.f);
+}
+
+static LLSD writeStickTuning(const LLGameControl::StickTuning& tuning)
+{
+    LLSD data = LLSD::emptyMap();
+    data[GC_TUNING_SENSITIVITY] = tuning.mSensitivity;
+    data[GC_TUNING_CURVE] = tuning.mCurve;
+    data[GC_TUNING_SMOOTHING] = tuning.mSmoothing;
+    data[GC_TUNING_RESCALE] = tuning.mRescaleDeadZone;
+    data[GC_TUNING_OUTER] = tuning.mOuterDeadZone;
+    data[GC_TUNING_BOOST] = tuning.mBoostGain;
+    data[GC_TUNING_BOOST_DELAY] = tuning.mBoostDelay;
+    data[GC_TUNING_BOOST_RAMP] = tuning.mBoostRamp;
+    return data;
+}
+
+// static
+LLGameControl::StickTuning LLGameControl::getStickTuning(const std::string& mode)
+{
+    StickTuning tuning;
+    if (mode.empty())
+    {
+        return tuning;
+    }
+    ensureGameControlSettings();
+    readStickTuning(g_gameControlSettings[GC_MODEMAPPINGS][mode][GC_TUNING], tuning);
+    return tuning;
+}
+
+// static
+void LLGameControl::setStickTuning(const std::string& mode, const StickTuning& tuning)
+{
+    if (mode.empty())
+    {
+        return;
+    }
+    ensureGameControlSettings();
+    g_gameControlSettings[GC_MODEMAPPINGS][mode][GC_TUNING] = writeStickTuning(tuning);
+    g_manager.rebuildActionLookup(true);
+}
+
+// static
+LLGameControl::StickTuning LLGameControl::getStickTuning(const std::string& mode, Stick stick)
+{
+    // <SS:GameControl> the mode's tuning, overridden field by field by the stick's own
+    StickTuning tuning = getStickTuning(mode);
+    if (mode.empty() || stick >= NUM_STICKS)
+    {
+        return tuning;
+    }
+    const LLSD& root = g_gameControlSettings; // const access: reading must not insert keys
+    const LLSD& data = root[GC_MODEMAPPINGS][mode][GC_TUNING][GC_TUNING_STICKS[stick]];
+    readStickTuning(data, tuning);
+    return tuning;
+}
+
+// static
+void LLGameControl::setStickTuning(const std::string& mode, Stick stick, const StickTuning& tuning)
+{
+    if (mode.empty() || stick >= NUM_STICKS)
+    {
+        return;
+    }
+    ensureGameControlSettings();
+    LLSD& all = g_gameControlSettings[GC_MODEMAPPINGS][mode][GC_TUNING];
+    if (!all.isMap())
+    {
+        all = LLSD::emptyMap();
+    }
+    all[GC_TUNING_STICKS[stick]] = writeStickTuning(tuning);
+    g_manager.rebuildActionLookup(true);
+}
+
+// static
+bool LLGameControl::getButtonToggle(const std::string& mode, const std::string& action)
+{
+    if (mode.empty() || action.empty())
+    {
+        return false;
+    }
+    const LLSD& root = g_gameControlSettings; // const access: reading must not insert keys
+    const LLSD& toggles = root[GC_MODEMAPPINGS][mode][GC_BUTTON_TOGGLE];
+    return toggles.isMap() && toggles.has(action) && toggles[action].asBoolean();
+}
+
+// static
+void LLGameControl::setButtonToggle(const std::string& mode, const std::string& action, bool toggle)
+{
+    if (mode.empty() || action.empty())
+    {
+        return;
+    }
+    ensureGameControlSettings();
+    LLSD& toggles = g_gameControlSettings[GC_MODEMAPPINGS][mode][GC_BUTTON_TOGGLE];
+    if (!toggles.isMap())
+    {
+        toggles = LLSD::emptyMap();
+    }
+    if (toggle)
+    {
+        toggles[action] = true;
+    }
+    else
+    {
+        toggles.erase(action);
+    }
+    g_manager.rebuildActionLookup(true);
+}
+
+// static
+LLGameControl::FaceStyle LLGameControl::getFaceStyle()
+{
+    const Device* device = g_manager.getLastActiveDevice();
+    if (!device)
+    {
+        return FACE_ABXY;
+    }
+    const SDL_JoystickID id = (SDL_JoystickID)device->getJoystickID();
+    // Steam Controller (2026, SDL's "Triton"): wired, Bluetooth, and the Proteus and Nereid
+    // wireless pucks (SDL 3.4 controller_list.h)
+    if (SDL_GetGamepadVendorForID(id) == 0x28de)
+    {
+        switch (SDL_GetGamepadProductForID(id))
+        {
+            case 0x1302: case 0x1303: case 0x1304: case 0x1305: return FACE_STEAM;
+            default: break;
+        }
+    }
+    SDL_GamepadType type = SDL_GetGamepadTypeForID(id);
+    switch (SDL_GetGamepadButtonLabelForType(type, SDL_GAMEPAD_BUTTON_SOUTH))
+    {
+        case SDL_GAMEPAD_BUTTON_LABEL_B:     return FACE_BAYX;
+        case SDL_GAMEPAD_BUTTON_LABEL_CROSS: return type == SDL_GAMEPAD_TYPE_PS5 ? FACE_PS5 : FACE_SONY;
+        default:                             return FACE_ABXY;
+    }
+}
+
+// static <SS:GameControl>
+LLGameControl::GyroOptions LLGameControl::getGyroOptions()
+{
+    GyroOptions o;
+    const LLSD& root = g_gameControlSettings; // const access: reading must not insert keys
+    const LLSD& data = root[GC_GYRO];
+    if (!data.isMap())
+    {
+        return o;
+    }
+    if (data.has("Engage")) o.mEngage = (U8)llclamp(data["Engage"].asInteger(), 0, (S32)GyroOptions::ENGAGE_RATCHET);
+    if (data.has("PlayerSpace")) o.mPlayerSpace = data["PlayerSpace"].asBoolean();
+    if (data.has("InvertPitch")) o.mInvertPitch = data["InvertPitch"].asBoolean();
+    if (data.has("MinSens")) o.mMinSens = llclamp((F32)data["MinSens"].asReal(), 0.1f, 10.f);
+    if (data.has("MaxSens")) o.mMaxSens = llclamp((F32)data["MaxSens"].asReal(), 0.1f, 10.f);
+    if (data.has("SlowSpeed")) o.mSlowSpeed = llclamp((F32)data["SlowSpeed"].asReal(), 0.f, 500.f);
+    if (data.has("FastSpeed")) o.mFastSpeed = llclamp((F32)data["FastSpeed"].asReal(), 0.f, 500.f);
+    if (data.has("TightenSpeed")) o.mTightenSpeed = llclamp((F32)data["TightenSpeed"].asReal(), 0.f, 20.f);
+    if (data.has("SmoothSpeed")) o.mSmoothSpeed = llclamp((F32)data["SmoothSpeed"].asReal(), 0.f, 50.f);
+    if (data.has("SmoothTime")) o.mSmoothTime = llclamp((F32)data["SmoothTime"].asReal(), 0.01f, 0.5f);
+    if (data.has("Recalibrate")) o.mRecalibrateSeconds = llclamp((F32)data["Recalibrate"].asReal(), 0.f, 10.f);
+    return o;
+}
+
+// static
+void LLGameControl::setGyroOptions(const GyroOptions& o)
+{
+    ensureGameControlSettings();
+    LLSD data = LLSD::emptyMap();
+    data["Engage"] = (S32)o.mEngage;
+    data["PlayerSpace"] = o.mPlayerSpace;
+    data["InvertPitch"] = o.mInvertPitch;
+    data["MinSens"] = o.mMinSens;
+    data["MaxSens"] = o.mMaxSens;
+    data["SlowSpeed"] = o.mSlowSpeed;
+    data["FastSpeed"] = o.mFastSpeed;
+    data["TightenSpeed"] = o.mTightenSpeed;
+    data["SmoothSpeed"] = o.mSmoothSpeed;
+    data["SmoothTime"] = o.mSmoothTime;
+    data["Recalibrate"] = o.mRecalibrateSeconds;
+    g_gameControlSettings[GC_GYRO] = data;
+    g_manager.rebuildActionLookup(true); // refreshes the cached options and the sensors
+}
+
+// static <GMDX>
+LLGameControl::TrackpadOptions LLGameControl::getTrackpadOptions()
+{
+    TrackpadOptions o;
+    const LLSD& root = g_gameControlSettings; // const access: reading must not insert keys
+    const LLSD& data = root[GC_TRACKPADS];
+    if (!data.isMap())
+    {
+        return o;
+    }
+    if (data.has("Left")) o.mLeft = (U8)llclamp(data["Left"].asInteger(), 0, (S32)TrackpadOptions::LEFT_DPAD);
+    if (data.has("Right")) o.mRight = (U8)llclamp(data["Right"].asInteger(), 0, (S32)TrackpadOptions::RIGHT_MOUSE);
+    if (data.has("Sensitivity")) o.mSensitivity = llclamp((F32)data["Sensitivity"].asReal(), 0.1f, 4.f);
+    if (data.has("InvertY")) o.mInvertY = data["InvertY"].asBoolean();
+    if (data.has("Momentum")) o.mMomentum = data["Momentum"].asBoolean();
+    if (data.has("Friction")) o.mFriction = llclamp((F32)data["Friction"].asReal(), 0.5f, 20.f);
+    return o;
+}
+
+// static <GMDX>
+void LLGameControl::setTrackpadOptions(const TrackpadOptions& o)
+{
+    ensureGameControlSettings();
+    LLSD data = LLSD::emptyMap();
+    data["Left"] = (S32)o.mLeft;
+    data["Right"] = (S32)o.mRight;
+    data["Sensitivity"] = o.mSensitivity;
+    data["InvertY"] = o.mInvertY;
+    data["Momentum"] = o.mMomentum;
+    data["Friction"] = o.mFriction;
+    g_gameControlSettings[GC_TRACKPADS] = data;
+}
+
+// static <GMDX>
+bool LLGameControl::hasTrackpads()
+{
+    return g_manager.hasPads();
+}
+
+// static <GMDX>
+bool LLGameControl::getTrackpadFinger(U8 pad, F32& x, F32& y)
+{
+    return g_manager.getPadFinger(pad, x, y);
+}
+
+// static
+bool LLGameControl::hasGyro()
+{
+    return g_manager.hasGyro();
+}
+
+// static
+bool LLGameControl::getGyroRates(F32 rates[3])
+{
+    return g_manager.getGyroRates(rates);
+}
+
+// static
+void LLGameControl::calibrateGyro()
+{
+    g_manager.calibrateGyro();
+}
+
+// static
+bool LLGameControl::isCalibratingGyro()
+{
+    return g_manager.isCalibratingGyro();
+}
+
+// static
+F32 LLGameControl::getActiveSensitivity()
+{
+    return g_manager.maxGain(); // <SS:GameControl/> largest in the mode: callers use it as a limit
 }
 
 F32 LLGameControl::getControllerHeldTime(ActionType actionType, U8 action)
@@ -1776,7 +2856,7 @@ void LLGameControllerManager::computeFinalState()
 
     mActionTranslator.calculateTranslatedAxes(axis_mappings, g_innerState, g_mappedState.mAxes);
 
-    g_controllerState.mButtons = g_mappedState.mButtons;
+    g_controllerState.mButtons = g_mappedState.mButtons & ~LLGameControl::VIRTUAL_TRIGGER_BUTTONS; // OCOL
 
     size_t j = 0;
     // clamp the accumulated axes
@@ -1877,6 +2957,13 @@ namespace
             { "BUTTON_PADDLE3",        LLGameControl::BUTTON_PADDLE3 },
             { "BUTTON_PADDLE4",        LLGameControl::BUTTON_PADDLE4 },
             { "BUTTON_TOUCHPAD",       LLGameControl::BUTTON_TOUCHPAD },
+            { "BUTTON_MISC2",          LLGameControl::BUTTON_21 },  // <GMDX> SDL MISC2..6
+            { "BUTTON_MISC3",          LLGameControl::BUTTON_22 },
+            { "BUTTON_MISC4",          LLGameControl::BUTTON_23 },
+            { "BUTTON_MISC5",          LLGameControl::BUTTON_24 },
+            { "BUTTON_MISC6",          LLGameControl::BUTTON_25 },
+            { "BUTTON_LEFT_TRIGGER",   LLGameControl::BUTTON_LEFT_TRIGGER },  // OCOL: virtual
+            { "BUTTON_RIGHT_TRIGGER",  LLGameControl::BUTTON_RIGHT_TRIGGER }, // OCOL: virtual
         };
 
         auto ait = s_axis_names.find(name);
@@ -2019,7 +3106,7 @@ namespace
     // a discrete alternative/addition to the analog stick for driving the on-screen
     // cursor, e.g. so the D-Pad can be rebound to nudge the cursor instead of moving
     // the avatar. Not part of Cursor mode's default button map (see cursor_buttons in
-    // buildDefaultModeMappings()) -- purely opt-in via rebinding. A pressed button
+    // buildSuggestedModeMappings()) -- purely opt-in via rebinding. A pressed button
     // contributes full deflection into computeAgentActions()'s mouse_dx/mouse_dy,
     // same "only override if stronger" pattern as Turn/Look's button contribution.
     struct MouseCursorButtonEffect { bool isX; F32 sign; };
@@ -2177,6 +3264,53 @@ void LLGameControllerManager::applyButtonMappings(const LLSD& buttons)
 
 void LLGameControllerManager::rebuildActionLookup(bool force)
 {
+    // <SS:GameControl> rebuildActionLookupMappings() fills the bindings; the toggle mask
+    // is derived from them afterwards, whichever of its return paths it took.
+    const LLGameControl::AgentControlMode previous_mode = mLookupMode;
+    if (!rebuildActionLookupMappings(force))
+    {
+        return; // already current
+    }
+    mGyroOptions = LLGameControl::getGyroOptions(); // <SS:GameControl/>
+    updateSensors();
+    if (mLookupMode != previous_mode)
+    {
+        mToggleLatch = 0; // a latched action does not follow you into another mode
+    }
+
+    const LLGameControl::AgentControlMode mode = g_agentControlMode;
+    const std::string& mode_name = modeToString(mode);
+    for (U8 stick = 0; stick < LLGameControl::NUM_STICKS; ++stick)
+    {
+        mStickTunings[stick] = LLGameControl::getStickTuning(mode_name, (LLGameControl::Stick)stick);
+    }
+
+    // With FlyCam engaged under Cursor mode the lookup merges both modes' buttons,
+    // so a toggle set in either one counts.
+    U32 mask = 0;
+    for (U8 btn = 0; btn < LLGameControl::NUM_BUTTONS; ++btn)
+    {
+        const std::string& label = mButtonActionLabels[btn];
+        if (label.empty())
+        {
+            continue;
+        }
+        if (LLGameControl::getButtonToggle(mode_name, label)
+            || (mLookupCursorOverFlycam && LLGameControl::getButtonToggle(GC_MODE_FLYCAM, label)))
+        {
+            mask |= 1U << btn;
+        }
+    }
+    if (mask != mToggleMask)
+    {
+        // A button that stops toggling, or changes to a different action, starts released.
+        mToggleLatch &= mask;
+        mToggleMask = mask;
+    }
+}
+
+bool LLGameControllerManager::rebuildActionLookupMappings(bool force)
+{
     LLGameControl::AgentControlMode mode = g_agentControlMode;
 
     // Cursor mode with FlyCam concurrently engaged underneath (see
@@ -2187,10 +3321,11 @@ void LLGameControllerManager::rebuildActionLookup(bool force)
     if (!force && mode == mLookupMode && cursor_over_flycam == mLookupCursorOverFlycam
         && !mAxisActionBindings.empty())
     {
-        return; // already current
+        return false; // already current
     }
     mLookupMode = mode;
     mLookupCursorOverFlycam = cursor_over_flycam;
+    mTuning = LLGameControl::getStickTuning(modeToString(mode));
     mAxisActionBindings.assign(LLGameControl::NUM_AXES, AxisActionBinding());
     mButtonActionLabels.assign(LLGameControl::NUM_BUTTONS, std::string());
 
@@ -2231,16 +3366,17 @@ void LLGameControllerManager::rebuildActionLookup(bool force)
             }
         }
         applyButtonMappings(mouse_buttons);
-        return;
+        return true;
     }
 
     const std::string& mode_name = modeToString(mode);
     if (mode_name.empty())
     {
-        return; // CONTROL_MODE_NONE has no mappings
+        return true; // CONTROL_MODE_NONE has no mappings
     }
     applyAxisMappings(mode, LLGameControl::getModeMapping(mode_name, GC_AXES));
     applyButtonMappings(LLGameControl::getModeMapping(mode_name, GC_BUTTONS));
+    return true;
 }
 
 LLGameControl::AgentActions LLGameControllerManager::computeAgentActions()
@@ -2263,6 +3399,15 @@ LLGameControl::AgentActions LLGameControllerManager::computeAgentActions()
     S32 mouse_dy = 0;
     S32 zoom_value = 0;
     S32 scroll_value = 0;
+    // <SS:GameControl> each rate is scaled by the sensitivity of whatever produced it:
+    // the stick that won, or the mode's own sensitivity for a button
+    F32 yaw_gain = mTuning.mSensitivity;
+    S32 yaw_stick = -1; // <SS:GameControl/> the stick turning us, for the edge boost
+    F32 pitch_gain = mTuning.mSensitivity;
+    F32 mouse_dx_gain = mTuning.mSensitivity;
+    F32 mouse_dy_gain = mTuning.mSensitivity;
+    F32 zoom_gain = mTuning.mSensitivity;
+    F32 scroll_gain = mTuning.mSensitivity;
     for (U8 axis = 0; axis < LLGameControl::NUM_AXES; ++axis)
     {
         const AxisActionBinding& binding = mAxisActionBindings[axis];
@@ -2278,7 +3423,7 @@ LLGameControl::AgentActions LLGameControllerManager::computeAgentActions()
         bool is_mouse_y = binding.label == "Mouse up/down";
         if (is_mouse_x || is_mouse_y)
         {
-            S32 deflection = (S32)g_innerState.mAxes[axis * 2] - (S32)g_innerState.mAxes[axis * 2 + 1];
+            S32 deflection = shapedDeflection(axis); // OCOL: stick tuning
             S32 value = binding.half == HALF_NEGATIVE ? -deflection : deflection;
             if (binding.invert)
             {
@@ -2288,6 +3433,7 @@ LLGameControl::AgentActions LLGameControllerManager::computeAgentActions()
             if (std::abs(value) > std::abs(mouse_axis_value))
             {
                 mouse_axis_value = value;
+                (is_mouse_x ? mouse_dx_gain : mouse_dy_gain) = axisGain(axis);
             }
             continue;
         }
@@ -2297,7 +3443,7 @@ LLGameControl::AgentActions LLGameControllerManager::computeAgentActions()
         // avatarAxisBridge() below, same reasoning as the mouse-cursor axes above.
         if (binding.label == "Zoom +/-")
         {
-            S32 deflection = (S32)g_innerState.mAxes[axis * 2] - (S32)g_innerState.mAxes[axis * 2 + 1];
+            S32 deflection = shapedDeflection(axis); // OCOL: stick tuning
             S32 value = binding.half == HALF_NEGATIVE ? -deflection : deflection;
             if (binding.invert)
             {
@@ -2306,6 +3452,7 @@ LLGameControl::AgentActions LLGameControllerManager::computeAgentActions()
             if (std::abs(value) > std::abs(zoom_value))
             {
                 zoom_value = value;
+                zoom_gain = axisGain(axis);
             }
             continue;
         }
@@ -2314,7 +3461,7 @@ LLGameControl::AgentActions LLGameControllerManager::computeAgentActions()
         // separately for the same reason as "Zoom +/-" above.
         if (binding.label == "Scroll +/-")
         {
-            S32 deflection = (S32)g_innerState.mAxes[axis * 2] - (S32)g_innerState.mAxes[axis * 2 + 1];
+            S32 deflection = shapedDeflection(axis);
             S32 value = binding.half == HALF_NEGATIVE ? -deflection : deflection;
             if (binding.invert)
             {
@@ -2323,6 +3470,7 @@ LLGameControl::AgentActions LLGameControllerManager::computeAgentActions()
             if (std::abs(value) > std::abs(scroll_value))
             {
                 scroll_value = value;
+                scroll_gain = axisGain(axis);
             }
             continue;
         }
@@ -2361,13 +3509,26 @@ LLGameControl::AgentActions LLGameControllerManager::computeAgentActions()
             // drives the analog "is running" hysteresis.
             movement_magnitude = std::max(movement_magnitude, std::abs(value));
         }
-        else if (binding.label == "Turn left/right" && std::abs(value) > std::abs(yaw_value))
+        else if (binding.label == "Turn left/right" || binding.label == "Look up/down")
         {
-            yaw_value = value;
-        }
-        else if (binding.label == "Look up/down" && std::abs(value) > std::abs(pitch_value))
-        {
-            pitch_value = value;
+            // OCOL: the on/off flags above use the raw stick; the speed uses the tuned one
+            S32 shaped = shapedDeflection(axis);
+            shaped = binding.half == HALF_NEGATIVE ? -shaped : shaped;
+            if (binding.invert)
+            {
+                shaped = -shaped;
+            }
+            bool yaw = (binding.label == "Turn left/right");
+            S32& rate_value = yaw ? yaw_value : pitch_value;
+            if (std::abs(shaped) > std::abs(rate_value))
+            {
+                rate_value = shaped;
+                (yaw ? yaw_gain : pitch_gain) = axisGain(axis);
+                if (yaw)
+                {
+                    yaw_stick = LLGameControl::stickForAxis(axis);
+                }
+            }
         }
     }
 
@@ -2440,18 +3601,22 @@ LLGameControl::AgentActions LLGameControllerManager::computeAgentActions()
             if (label == "Turn left" && 32767 > std::abs(yaw_value))
             {
                 yaw_value = 32767;
+                yaw_gain = mTuning.mSensitivity;
             }
             else if (label == "Turn right" && 32767 > std::abs(yaw_value))
             {
                 yaw_value = -32767;
+                yaw_gain = mTuning.mSensitivity;
             }
             else if (label == "Look up" && 32767 > std::abs(pitch_value))
             {
                 pitch_value = 32767;
+                pitch_gain = mTuning.mSensitivity;
             }
             else if (label == "Look down" && 32767 > std::abs(pitch_value))
             {
                 pitch_value = -32767;
+                pitch_gain = mTuning.mSensitivity;
             }
             continue;
         }
@@ -2470,6 +3635,7 @@ LLGameControl::AgentActions LLGameControllerManager::computeAgentActions()
             if (std::abs(full) > std::abs(mouse_axis_value))
             {
                 mouse_axis_value = full;
+                (cursor_it->second.isX ? mouse_dx_gain : mouse_dy_gain) = mTuning.mSensitivity;
             }
             continue;
         }
@@ -2480,6 +3646,7 @@ LLGameControl::AgentActions LLGameControllerManager::computeAgentActions()
             if (std::abs(full) > std::abs(zoom_value))
             {
                 zoom_value = full;
+                zoom_gain = mTuning.mSensitivity;
             }
             continue;
         }
@@ -2490,6 +3657,7 @@ LLGameControl::AgentActions LLGameControllerManager::computeAgentActions()
             if (std::abs(full) > std::abs(scroll_value))
             {
                 scroll_value = full;
+                scroll_gain = mTuning.mSensitivity;
             }
             continue;
         }
@@ -2502,12 +3670,33 @@ LLGameControl::AgentActions LLGameControllerManager::computeAgentActions()
 
     result.mIsRunning = mIsAnalogRunning;
 
-    result.mYawAmplitude = std::clamp((F32)yaw_value / 32767.f, -1.f, 1.f);
-    result.mPitchAmplitude = std::clamp((F32)pitch_value / 32767.f, -1.f, 1.f);
-    result.mMouseCursorDX = std::clamp((F32)mouse_dx / 32767.f, -1.f, 1.f);
-    result.mMouseCursorDY = std::clamp((F32)mouse_dy / 32767.f, -1.f, 1.f);
-    result.mZoomAmplitude = std::clamp((F32)zoom_value / 32767.f, -1.f, 1.f);
-    result.mScrollAmplitude = std::clamp((F32)scroll_value / 32767.f, -1.f, 1.f);
+    // OCOL: sensitivity scales the analog rates (may exceed 1)
+    // <SS:GameControl> per source: the winning stick's sensitivity, or the mode's for a button
+    // <SS:GameControl> Edge boost: held at the edge of its stick, turning speeds up after a
+    // delay, so the inner range stays fine for aiming and big turns still get made. Yaw
+    // only; a button's turn and pitch never boost.
+    {
+        U64 now = totalTime();
+        F32 dt = mLastBoostTime ? llclamp(F32(now - mLastBoostTime) / (F32)USEC_PER_SEC, 0.f, 0.25f) : 0.f;
+        mLastBoostTime = now;
+        const bool at_edge = yaw_stick >= 0 && yaw_stick < LLGameControl::STICK_TRIGGERS
+            && std::abs(yaw_value) >= (S32)(0.95f * 32767.f);
+        mEdgeHeldSeconds = at_edge ? mEdgeHeldSeconds + dt : 0.f;
+        if (at_edge)
+        {
+            const LLGameControl::StickTuning& tuning = mStickTunings[yaw_stick];
+            F32 ramp = llclamp((mEdgeHeldSeconds - tuning.mBoostDelay) / llmax(tuning.mBoostRamp, 0.01f), 0.f, 1.f);
+            yaw_gain *= 1.f + (tuning.mBoostGain - 1.f) * ramp;
+        }
+    }
+    result.mYawAmplitude = std::clamp((F32)yaw_value / 32767.f, -1.f, 1.f) * yaw_gain;
+    result.mPitchAmplitude = std::clamp((F32)pitch_value / 32767.f, -1.f, 1.f) * pitch_gain;
+    result.mMouseCursorDX = std::clamp((F32)mouse_dx / 32767.f, -1.f, 1.f) * mouse_dx_gain;
+    result.mMouseCursorDY = std::clamp((F32)mouse_dy / 32767.f, -1.f, 1.f) * mouse_dy_gain;
+    result.mZoomAmplitude = std::clamp((F32)zoom_value / 32767.f, -1.f, 1.f) * zoom_gain;
+    result.mScrollAmplitude = std::clamp((F32)scroll_value / 32767.f, -1.f, 1.f) * scroll_gain;
+    takeGyro(result.mGyroYaw, result.mGyroPitch); // <SS:GameControl/>
+    takePads(result.mPadDX, result.mPadDY); // <GMDX/>
 
     return result;
 }
@@ -2590,7 +3779,7 @@ namespace
     // Per-mode ModeButtons slot table: default-mapped action label -> semantic slot
     // (the canonical Button index 'mode's DEFAULT mapping assigns that action), e.g.
     // "Crouch" -> 1 (BUTTON_EAST) for Avatar mode. This is derived solely from the
-    // DEFAULT mapping (buildDefaultModeMappings()), so it stays fixed no matter how
+    // SUGGESTED layout (buildSuggestedModeMappings(), the historical default), so it stays fixed no matter how
     // the user remaps buttons in Preferences: whichever physical button "Crouch" is
     // currently bound to, pressing it must still set the same ModeButtons bit (see
     // message_template.msg's GameControlData doc -- "a ModeButtons bit index is
@@ -2611,7 +3800,7 @@ namespace
         const std::string& mode_name = modeToString(mode);
         if (!mode_name.empty())
         {
-            LLSD default_buttons = buildDefaultModeMappings()[mode_name][GC_BUTTONS];
+            LLSD default_buttons = buildSuggestedModeMappings()[mode_name][GC_BUTTONS];
             for (auto it = default_buttons.beginMap(); it != default_buttons.endMap(); ++it)
             {
                 LLGameControl::InputChannel channel = channelFromInputName(it->second.asString());
@@ -2654,7 +3843,7 @@ namespace
         {
             return LLStringUtil::null;
         }
-        LLSD axes = buildDefaultModeMappings()[mode_name][GC_AXES];
+        LLSD axes = buildSuggestedModeMappings()[mode_name][GC_AXES];
         for (auto it = axes.beginMap(); it != axes.endMap(); ++it)
         {
             if (it->second.asString() == input)
@@ -2962,15 +4151,14 @@ void LLGameControllerManager::getFlycamInputs(std::vector<F32>& inputs, U32& mis
         // magnitude, flipping the sign).  A right-trigger half (HALF_NEGATIVE)
         // negates; left (HALF_POSITIVE) and full axes use the deflection as-is.
         // binding.invert (the per-mode, per-action Invert flag) is applied on top.
-        F32 pos = (F32)g_innerState.mAxes[axis * 2]     / 32767.f;
-        F32 neg = (F32)g_innerState.mAxes[axis * 2 + 1] / 32767.f;
-        F32 deflection = pos - neg;
+        F32 deflection = (F32)shapedDeflection(axis) / 32767.f; // OCOL: stick tuning
         F32 signed_value = binding.half == HALF_NEGATIVE ? -deflection : deflection;
         if (binding.invert)
         {
             signed_value = -signed_value;
         }
-        dof[it->second.channel] += it->second.polarity * signed_value;
+        // <SS:GameControl> scaled by this stick's sensitivity here rather than all at the end
+        dof[it->second.channel] += it->second.polarity * signed_value * axisGain(axis);
     }
 
     // TODO: avoid repetitive button_bridge.find() by building
@@ -3001,7 +4189,7 @@ void LLGameControllerManager::getFlycamInputs(std::vector<F32>& inputs, U32& mis
         auto it = button_bridge.find(label);
         if (it != button_bridge.end())
         {
-            dof[it->second.channel] += it->second.polarity;
+            dof[it->second.channel] += it->second.polarity * mTuning.mSensitivity; // <SS:GameControl/> button: the mode's
             continue;
         }
         auto mod_it = modifier_button_bridge.find(label);
@@ -3017,9 +4205,14 @@ void LLGameControllerManager::getFlycamInputs(std::vector<F32>& inputs, U32& mis
         }
     }
 
+    // OCOL: sensitivity scales flycam speed (may exceed 1)
+    // <SS:GameControl> each contribution is already scaled by its source's sensitivity;
+    // the clamp keeps what was the [-1, 1] limit, at the largest sensitivity in play.
+    // With every stick on the mode's tuning this is exactly the old clamp-then-scale.
+    const F32 limit = maxGain();
     for (F32& v : dof)
     {
-        v = std::clamp(v, -1.f, 1.f);
+        v = std::clamp(v, -limit, limit);
     }
     inputs = dof;
 }
@@ -3353,6 +4546,14 @@ bool LLGameControl::actionFromString(const std::string& string, ActionType& acti
         {
             action = BUTTON_TOUCHPAD;
         }
+        else if(string == "button_lefttrigger")
+        {
+            action = BUTTON_LEFT_TRIGGER;
+        }
+        else if(string == "button_righttrigger")
+        {
+            action = BUTTON_RIGHT_TRIGGER;
+        }
         else
         {
             actionType = ActionType::NONE;
@@ -3410,6 +4611,8 @@ std::string LLGameControl::stringFromAction(const ActionType actionType, const U
                 case BUTTON_PADDLE3:        return "button_paddle3";
                 case BUTTON_PADDLE4:        return "button_paddle4";
                 case BUTTON_TOUCHPAD:       return "button_touchpad";
+                case BUTTON_LEFT_TRIGGER:   return "button_lefttrigger";
+                case BUTTON_RIGHT_TRIGGER:  return "button_righttrigger";
             }
         }
         default:
@@ -3420,12 +4623,84 @@ std::string LLGameControl::stringFromAction(const ActionType actionType, const U
 
 std::string LLGameControl::controllerInputStringFromAction(const ActionType actionType, const U8 action)
 {
-    //TODO map to recent controller
-    std::string aa = stringFromAction(actionType, action);
-    if(actionType < 2) {
-        LL_WARNS() << "MAP KEYBIND " << (S32)actionType << ":" << (S32)action << " = " << aa << LL_ENDL;
+    // OCOL: human readable name for the key binding tables
+    switch (actionType)
+    {
+        case ActionType::BUTTON:
+            return buttonDisplayName(action);
+        case ActionType::DOF:
+        {
+            static const char* names[NUM_MOVE_DIRS] = {
+                "Left stick left", "Left stick right", "Left stick up", "Left stick down",
+                "Right stick left", "Right stick right", "Right stick up", "Right stick down",
+                "Right trigger", "Left trigger", "Roll left", "Roll right" };
+            return action < NUM_MOVE_DIRS ? names[action] : std::string();
+        }
+        default:
+            return std::string();
     }
-    return aa;
+}
+
+// static
+std::string LLGameControl::buttonDisplayName(U8 button)
+{
+    static const char* names[NUM_BUTTONS] = {
+        "A (south)", "B (east)", "X (west)", "Y (north)",
+        "Back", "Guide", "Start", "Left stick click", "Right stick click",
+        "LB", "RB", "D-pad up", "D-pad down", "D-pad left", "D-pad right",
+        // <GMDX> paddles as SDL defines them; 21..25 as the Steam Controller (2026)
+        // and the Steam Deck report them
+        "Misc / Quick access", "Right paddle 1", "Left paddle 1", "Right paddle 2", "Left paddle 2",
+        "Touchpad / Left pad click",
+        "Right pad click", "Left stick touch", "Right stick touch", "Left grip touch", "Right grip touch",
+        "Button 26", "Button 27", "Button 28", "Button 29", "LT", "RT" };
+    return button < NUM_BUTTONS ? names[button] : std::string();
+}
+
+// static
+S32 LLGameControl::buttonFromInputName(const std::string& name)
+{
+    InputChannel channel = channelFromInputName(name);
+    return (channel.isButton() && channel.mIndex < NUM_BUTTONS) ? (S32)channel.mIndex : -1;
+}
+
+// static
+S32 LLGameControl::halfAxisForDirection(U8 direction)
+{
+    // SDL reports negative X for left and negative Y for up/forward
+    switch (direction)
+    {
+        case MOVE_DIR_STRAFE_LEFT:  return AXIS_LEFTX * 2 + 1;
+        case MOVE_DIR_STRAFE_RIGHT: return AXIS_LEFTX * 2;
+        case MOVE_DIR_ADVANCE:      return AXIS_LEFTY * 2 + 1;
+        case MOVE_DIR_RETREAT:      return AXIS_LEFTY * 2;
+        case MOVE_DIR_TURN_LEFT:    return AXIS_RIGHTX * 2 + 1;
+        case MOVE_DIR_TURN_RIGHT:   return AXIS_RIGHTX * 2;
+        case MOVE_DIR_LOOK_UP:      return AXIS_RIGHTY * 2 + 1;
+        case MOVE_DIR_LOOK_DOWN:    return AXIS_RIGHTY * 2;
+        case MOVE_DIR_RISE_UP:      return AXIS_RIGHT_TRIGGER * 2;
+        case MOVE_DIR_DROP_DOWN:    return AXIS_LEFT_TRIGGER * 2;
+        default:                    return -1;
+    }
+}
+
+// static
+void LLGameControl::getButtonStates(U32& current, U32& previous)
+{
+    current = g_allButtons;
+    previous = g_prevAllButtons;
+}
+
+// static
+void LLGameControl::setReservedButtons(U32 mask)
+{
+    g_reservedButtons = mask;
+}
+
+// static
+U32 LLGameControl::getReservedButtons()
+{
+    return g_reservedButtons;
 }
 
 // static
@@ -3589,6 +4864,21 @@ void LLGameControl::handleEvent(const SDL_Event& event, bool app_has_focus)
                 onControllerAxis(event);
             }
             break;
+        case SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN: // <GMDX> trackpads
+        case SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION:
+        case SDL_EVENT_GAMEPAD_TOUCHPAD_UP:
+            if (app_has_focus)
+            {
+                g_manager.onTouchpad(event);
+            }
+            break;
+        case SDL_EVENT_GAMEPAD_SENSOR_UPDATE: // <SS:GameControl> gyro aim
+            if (app_has_focus)
+            {
+                g_manager.onSensor(event.gsensor.which, event.gsensor.sensor, event.gsensor.data,
+                                   event.gsensor.sensor_timestamp);
+            }
+            break;
         default:
             break;
     }
@@ -3739,6 +5029,12 @@ std::string LLGameControl::getModeName(AgentControlMode mode)
 LLSD LLGameControl::getDefaultModeMappings()
 {
     return buildDefaultModeMappings();
+}
+
+// static
+LLSD LLGameControl::getSuggestedModeMappings()
+{
+    return buildSuggestedModeMappings();
 }
 
 // static

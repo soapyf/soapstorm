@@ -8,6 +8,9 @@
  name="Preferences"
  help_topic="preferences"
  save_rect="true"
+ can_resize="true"
+ min_width="673"
+ min_height="561"
  single_instance="true"
  title="Preferences"
  width="673">

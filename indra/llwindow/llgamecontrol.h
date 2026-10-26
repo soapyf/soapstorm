@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <vector>
 
 
@@ -205,6 +206,13 @@ public:
         NUM_BUTTONS
     };
 
+    // OCOL: the analog triggers also act as buttons in the two otherwise unused
+    // top slots, pressed past half their travel (see accumulateInternalState()),
+    // so they can be bound like any button. Not sent to the server.
+    static constexpr U8 BUTTON_LEFT_TRIGGER = BUTTON_30;
+    static constexpr U8 BUTTON_RIGHT_TRIGGER = BUTTON_31;
+    static constexpr U32 VIRTUAL_TRIGGER_BUTTONS = (1U << BUTTON_30) | (1U << BUTTON_31);
+
     // Order in which flycam channel values are packed by getFlycamInputs() and
     // consumed by LLAgent::updateFlycam().
     enum FlycamChannel : U8
@@ -322,7 +330,7 @@ public:
 
             void resetToDefaults();
 
-            S16 computeModifiedValue(S16 raw_value) const;
+            S16 computeModifiedValue(S16 raw_value, bool apply_dead_zone = true) const;
 
             std::string saveToString() const;
             void loadFromString(std::string options);
@@ -338,7 +346,9 @@ public:
         U8 unmapAxis(U8 axis) const;
         U8 unmapButton(U8 button) const;
 
-        S16 fixAxisValue(U8 axis, S16 value) const;
+        // <SS:GameControl> apply_dead_zone false for stick axes: their dead zone is radial,
+        // cut per stick by LLGameControllerManager once both axes are known.
+        S16 fixAxisValue(U8 axis, S16 value, bool apply_dead_zone = true) const;
 
         std::string saveToString(const std::string& name, bool force_empty = false) const;
         bool loadFromString(std::string& name, std::string options);
@@ -423,6 +433,39 @@ public:
         Options mOptions;
         State mState;
 
+        // <SS:GameControl> gyro aim. Controller space, SDL's axes: x = pitch, y = yaw,
+        // z = roll, rad/s.
+        struct Gyro
+        {
+            bool mPresent { false };          // the pad has a gyro
+            bool mEnabled { false };          // its sensors are switched on
+            U64 mLastTimestampNs { 0 };
+            F32 mBias[3] { 0.f, 0.f, 0.f };   // subtracted from every sample
+            F32 mMean[3] { 0.f, 0.f, 0.f };   // slow average, the bias candidate
+            F32 mStillSeconds { 0.f };        // how long the pad has sat still
+            F32 mUp[3] { 0.f, 1.f, 0.f };     // low-passed accelerometer: which way is up
+            F32 mRate[3] { 0.f, 0.f, 0.f };   // latest bias-corrected sample, for the readout
+            F32 mSmoothYaw { 0.f };
+            F32 mSmoothPitch { 0.f };
+            F32 mYaw { 0.f };                 // camera radians gathered since the last frame
+            F32 mPitch { 0.f };
+            F64 mCalibSum[3] { 0.0, 0.0, 0.0 }; // manual calibration
+            U32 mCalibCount { 0 };
+        } mGyro;
+
+        // <GMDX> trackpads (Steam Controller (2026), Steam Deck: 0 left, 1 right;
+        // DualSense: one). Positions 0..1 from the pad's top left.
+        struct Pad
+        {
+            bool mDown { false };
+            F32 mX { 0.f }, mY { 0.f };
+            F32 mDX { 0.f }, mDY { 0.f };   // finger travel since the last frame
+            F32 mVX { 0.f }, mVY { 0.f };   // pad widths per second: the trackball roll
+            U32 mDpadLatch { 0 };           // left pad as d-pad: directions chosen at the click
+            bool mClickHeld { false };
+        } mPads[2];
+        S32 mNumPads { -1 }; // -1 until asked (first touch)
+
     public:
         Device(int joystickID, const std::string& guid, const std::string& name);
         int getJoystickID() const { return mJoystickID; }
@@ -441,6 +484,131 @@ public:
     static bool actionFromString(const std::string& string, ActionType& actionType, U8& action);
     static std::string stringFromAction(const ActionType actionType, U8 action);
     static std::string controllerInputStringFromAction(const ActionType actionType, U8 action);
+
+    // OCOL: canonical button state for viewer-side bindings (key bindings and
+    // gestures), before reserved buttons are removed. 'previous' is last frame's.
+    static void getButtonStates(U32& current, U32& previous);
+
+    // OCOL: buttons bound to viewer actions or gestures. They keep reporting in
+    // getButtonStates() but no longer drive their game control actions.
+    static void setReservedButtons(U32 mask);
+    static U32 getReservedButtons();
+
+    // OCOL: short display name for a canonical button, e.g. "A (south)", "LB",
+    // "Paddle 1". Empty for an unknown button.
+    static std::string buttonDisplayName(U8 button);
+
+    // OCOL: which canonical half-axis slot of State::mAxes (axis * 2 for the
+    // positive half, axis * 2 + 1 for the negative half) a MovementDirection
+    // binding ("axis_forward" etc.) reads: left stick for strafe/advance, right
+    // stick for turn/look, triggers for up/down. -1 if it has no stick/trigger.
+    static S32 halfAxisForDirection(U8 direction);
+
+    // OCOL: canonical button index of a ModeMappings input name ("BUTTON_SOUTH"),
+    // -1 if it isn't a button
+    static S32 buttonFromInputName(const std::string& name);
+
+    // OCOL: per-mode analog stick tuning (ModeMappings/<Mode>/Tuning). Applies to
+    // the analog uses of the sticks and triggers -- turn/look speed, cursor, zoom
+    // and flycam -- not to the walk/run thresholds. Defaults change nothing.
+    struct StickTuning
+    {
+        F32 mSensitivity { 1.f };   // speed multiplier, 0.1 .. 6
+        F32 mCurve { 1.f };         // response exponent, 1 = linear .. 3 = fine near center
+        F32 mSmoothing { 0.f };     // 0 = off .. 0.9 = heavy (adds lag)
+        bool mRescaleDeadZone { false }; // ramp from 0 at the dead zone edge instead of jumping
+        // <SS:GameControl> sticks are shaped as one 2D vector (radial dead zone, curve on the length)
+        F32 mOuterDeadZone { 1.f };  // stick travel that counts as full, 0.5 .. 1; below 1 suits worn sticks
+        F32 mBoostGain { 1.f };      // turn speed at the stick's edge after the delay, 1 = off .. 3
+        F32 mBoostDelay { 0.1f };    // seconds at the edge before the boost starts
+        F32 mBoostRamp { 0.3f };     // seconds for the boost to reach full gain
+    };
+    static StickTuning getStickTuning(const std::string& mode);
+    static void setStickTuning(const std::string& mode, const StickTuning& tuning); // also clears the per-stick overrides below
+    static F32 getActiveSensitivity(); // largest sensitivity in the active mode
+
+    // <SS:GameControl> Per-stick tuning, as XAG 107 asks for: each stick (and the
+    // trigger pair) can override the mode's tuning. A stick with no override uses the
+    // mode's, so a settings file written before this reads exactly as it did.
+    // Stored as ModeMappings/<Mode>/Tuning/<Left|Right|Triggers>.
+    enum Stick : U8
+    {
+        STICK_LEFT,     // AXIS_LEFTX, AXIS_LEFTY
+        STICK_RIGHT,    // AXIS_RIGHTX, AXIS_RIGHTY
+        STICK_TRIGGERS, // AXIS_LEFT_TRIGGER, AXIS_RIGHT_TRIGGER
+        NUM_STICKS
+    };
+    static Stick stickForAxis(U8 axis) { return (Stick)std::min<U8>(axis / 2, STICK_TRIGGERS); }
+    static StickTuning getStickTuning(const std::string& mode, Stick stick);
+    static void setStickTuning(const std::string& mode, Stick stick, const StickTuning& tuning);
+
+    // <SS:GameControl> Toggle instead of hold, per mode and per button action: one
+    // press latches the action on, the next releases it. For actions that are held
+    // (run, crouch, fly up/down, mouse drag), so nobody has to keep a button down.
+    // Stored as ModeMappings/<Mode>/ButtonToggle/<action>.
+    static bool getButtonToggle(const std::string& mode, const std::string& action);
+    static void setButtonToggle(const std::string& mode, const std::string& action, bool toggle);
+
+    // <SS:GameControl> Which face-button labelling the most recently used controller
+    // has, so the preferences diagram can draw the matching art.
+    enum FaceStyle : U8
+    {
+        FACE_ABXY,  // Xbox and most PC pads: A at the bottom
+        FACE_BAYX,  // Nintendo: B at the bottom
+        FACE_SONY,  // PlayStation (DualShock and older): cross at the bottom
+        FACE_PS5,   // DualSense
+        FACE_STEAM  // Steam Controller (2026): Xbox labels, its own picture
+    };
+    static FaceStyle getFaceStyle();
+
+    // <SS:GameControl> Gyro aim in mouselook, for pads with a gyro (DualSense, DualShock 4,
+    // Switch Pro, Steam Controller). After GyroWiki (Jibb Smart) and JoyShockMapper.
+    struct GyroOptions
+    {
+        enum Engage : U8 { ENGAGE_OFF, ENGAGE_ALWAYS, ENGAGE_HOLD, ENGAGE_RATCHET };
+        U8 mEngage { ENGAGE_OFF };  // hold / ratchet: while the "Gyro hold" action is held, on / off
+        bool mPlayerSpace { true }; // yaw from turning or leaning the pad, whichever way it is held
+        bool mInvertPitch { false };
+        F32 mMinSens { 2.f };       // camera degrees per degree the pad turns, at or below mSlowSpeed
+        F32 mMaxSens { 2.f };       // ... at or above mFastSpeed; equal to mMinSens = no acceleration
+        F32 mSlowSpeed { 0.f };     // pad speeds, degrees per second
+        F32 mFastSpeed { 75.f };
+        F32 mTightenSpeed { 0.f };  // below this speed motion shrinks toward zero (hand tremor); 0 = off
+        F32 mSmoothSpeed { 0.f };   // below this speed motion is averaged over mSmoothTime; 0 = off
+        F32 mSmoothTime { 0.125f }; // seconds
+        F32 mRecalibrateSeconds { 1.f }; // re-learn the bias once the pad has rested this long; 0 = never
+    };
+    static GyroOptions getGyroOptions();
+    static void setGyroOptions(const GyroOptions& options);
+
+    // <GMDX> trackpads. The right pad (or a pad's only touchpad, e.g. DualSense) moves like
+    // a mouse: it turns the view in mouselook and moves the cursor elsewhere, and a flick
+    // keeps rolling like a trackball. The left pad of a two-pad controller can be a d-pad:
+    // clicking it presses the d-pad direction under the thumb instead of its own button.
+    struct TrackpadOptions
+    {
+        enum LeftUse : U8 { LEFT_OFF, LEFT_DPAD };
+        enum RightUse : U8 { RIGHT_OFF, RIGHT_MOUSE };
+        U8 mLeft { LEFT_DPAD };
+        U8 mRight { RIGHT_MOUSE };
+        F32 mSensitivity { 1.f };  // 0.1 .. 4
+        bool mInvertY { false };
+        bool mMomentum { true };   // trackball roll after a flick
+        F32 mFriction { 4.f };     // how fast the roll stops, 0.5 .. 20 per second
+    };
+    static TrackpadOptions getTrackpadOptions();
+    static void setTrackpadOptions(const TrackpadOptions& options);
+    static bool hasTrackpads(); // a connected pad reports one
+    // Finger on pad 0 (left / only) or 1 (right) of the most recently touched pad, for the
+    // settings window's readout. False when no finger is down.
+    static bool getTrackpadFinger(U8 pad, F32& x, F32& y);
+    static bool hasGyro(); // a connected pad has one
+    // The latest bias-corrected rates of the most recently used pad with a gyro, rad/s
+    // (x pitch, y yaw, z roll); false if there is none.
+    static bool getGyroRates(F32 rates[3]);
+    // Re-learn the gyro's resting bias: keep the pad still for the next two seconds.
+    static void calibrateGyro();
+    static bool isCalibratingGyro();
 
     static F32 getControllerHeldTime(ActionType actionType, U8 action);
     static S32 getControllerHeldFrames(ActionType actionType, U8 action);
@@ -616,6 +784,17 @@ public:
         // data. Consumed by LLAgent::applyExternalActions() via
         // LLAgentCamera::scrollCamera(). Positive scrolls in (camera moves closer).
         F32 mScrollAmplitude { 0.f };
+
+        // <SS:GameControl> gyro aim: how far to turn the view this frame, radians, like a
+        // mouse's motion rather than a stick's rate. Only ever non-zero in mouselook.
+        F32 mGyroYaw { 0.f };
+        F32 mGyroPitch { 0.f };
+
+        // <GMDX> trackpad as a mouse: this frame's travel in pad widths (finger plus
+        // trackball roll, sensitivity applied), +x right, +y down. LLAgent turns it into
+        // a view turn in mouselook, cursor motion elsewhere.
+        F32 mPadDX { 0.f };
+        F32 mPadDY { 0.f };
     };
 
     // Keyboard presses produce action_flags which can be translated into State
@@ -671,7 +850,8 @@ public:
     //   ModeMappings/<Mode>/Axes|Buttons  -- GLOBAL action -> canonical-input maps
     //   Devices/<guid>/Config             -- per-device serialized hardware options
     // 'mode' is "Avatar"/"Mouselook"/"FlyCam"/"Captive"/"Cursor"; 'kind' is "Axes"/"Buttons".
-    static LLSD getDefaultModeMappings();        // { <Mode> : { Axes, Buttons } }
+    static LLSD getDefaultModeMappings();        // { <Mode> : { Axes, Buttons } }, all unbound
+    static LLSD getSuggestedModeMappings();      // <SS:GameControl/> the "Suggested layout" preset
     static LLSD getDefaultGameControlSettings(); // full default GameControl map
     static const LLSD& getGameControlSettings();
     static void setGameControlSettings(const LLSD& settings);
