@@ -38,6 +38,7 @@
 #include "v4color.h"
 
 #include "llappviewer.h"
+#include "llautoupdatechecker.h"
 #include "llbutton.h"
 #if LL_VELOPACK
 #include "llvelopack.h"
@@ -1154,6 +1155,12 @@ void FSPanelLogin::onClickConnect(void *)
     }
 #endif
 
+    if (LLAutoUpdateChecker::instance().isUpdateRequired())
+    {
+        LLAutoUpdateChecker::instance().showUpdateNotification();
+        return;
+    }
+
     if (sInstance && sInstance->mCallback)
     {
         // JC - Make sure the fields all get committed.
@@ -1364,7 +1371,7 @@ void FSPanelLogin::updateLoginButtons()
 {
     LLButton* login_btn = getChild<LLButton>("connect_btn");
 
-    login_btn->setEnabled(mUsernameLength != 0 && mPasswordLength != 0);
+    login_btn->setEnabled(mUsernameLength != 0 && mPasswordLength != 0 && !LLAutoUpdateChecker::instance().isUpdateRequired());
 }
 
 void FSPanelLogin::onSelectServer()

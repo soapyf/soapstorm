@@ -38,6 +38,7 @@
 #include "v4color.h"
 
 #include "llappviewer.h"
+#include "llautoupdatechecker.h"
 #include "llbutton.h"
 #if LL_VELOPACK
 #include "llvelopack.h"
@@ -964,6 +965,12 @@ void LLPanelLogin::onClickConnect(bool commit_fields)
         return;
     }
 #endif
+
+    if (LLAutoUpdateChecker::instance().isUpdateRequired())
+    {
+        LLAutoUpdateChecker::instance().showUpdateNotification();
+        return;
+    }
 
     if (sInstance && sInstance->mCallback && !sInstance->mAlertNotif)
     {

@@ -15603,6 +15603,31 @@ You can enable saving transcripts under Preferences &gt; Privacy &gt; Logs &amp;
   <!-- Auto-Update Notifications -->
   <notification
    icon="alertmodal.tga"
+   name="FSUpdateRequired"
+   type="alertmodal">
+A required update to SoapStorm is available!
+
+Current Version: [CURRENT_VERSION]
+Required Version: [VERSION]
+Size: [SIZE]
+
+This version is no longer supported. You must update to continue using SoapStorm.
+    <tag>confirm</tag>
+    <form>
+      <button
+       default="true"
+       index="0"
+       name="UpdateNow"
+       text="Update Now"/>
+      <button
+       index="1"
+       name="Exit"
+       text="Exit"/>
+    </form>
+  </notification>
+
+  <notification
+   icon="alertmodal.tga"
    name="FSUpdateAvailable"
    type="alertmodal">
 A new version of SoapStorm is available!

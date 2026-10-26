@@ -12,6 +12,7 @@
 #include "llviewercontrol.h"
 #include "llsdjson.h"
 #include "llweb.h"
+#include "llappviewer.h"
 #include <boost/json.hpp>
 
 #include <sstream>
@@ -24,6 +25,7 @@ const std::string UPDATE_CHECK_URL = "https://api.github.com/repos/soapyf/soapst
 
 LLAutoUpdateChecker::LLAutoUpdateChecker()
 :   mUpdateAvailable(false),
+    mUpdateRequired(false),
     mCheckInProgress(false)
 {
     LL_INFOS("AutoUpdate") << "Auto-update checker initialized" << LL_ENDL;
@@ -39,13 +41,6 @@ void LLAutoUpdateChecker::checkForUpdate()
     if (mCheckInProgress)
     {
         LL_DEBUGS("AutoUpdate") << "Update check already in progress" << LL_ENDL;
-        return;
-    }
-
-    // Don't check if disabled in preferences
-    if (!gSavedSettings.getBOOL("FSAutoUpdateCheck"))
-    {
-        LL_DEBUGS("AutoUpdate") << "Auto-update check disabled in preferences" << LL_ENDL;
         return;
     }
 
@@ -269,21 +264,103 @@ void LLAutoUpdateChecker::checkUpdateCoro()
     LL_INFOS("AutoUpdate") << "Remote version: " << remoteVersion 
                            << " Current version: " << currentVersion << LL_ENDL;
 
-    // Check if user skipped this version
+    // Parse release body for minimum required build or version
+    std::string releaseBody;
+    if (jsonObj.contains("body") && jsonObj.at("body").is_string())
+    {
+        releaseBody = jsonObj.at("body").as_string().c_str();
+    }
+
+    S32 minRequiredBuild = 0;
+    std::string minRequiredVersion;
+
+    if (!releaseBody.empty())
+    {
+        // 1. Look for min_build: <number>
+        // Supports: <!-- min_build: 82229 --> or min_build: 82229
+        size_t buildPos = releaseBody.find("min_build:");
+        if (buildPos != std::string::npos)
+        {
+            std::istringstream iss(releaseBody.substr(buildPos + 10));
+            iss >> minRequiredBuild;
+        }
+
+        // 2. Look for min_version: <version_str>
+        // Supports: <!-- min_version: 7.2.5.82229 --> or min_version: 7.2.5.82229
+        size_t verPos = releaseBody.find("min_version:");
+        if (verPos != std::string::npos)
+        {
+            std::string sub = releaseBody.substr(verPos + 12);
+            size_t start = sub.find_first_not_of(" \t");
+            if (start != std::string::npos)
+            {
+                sub = sub.substr(start);
+                size_t end = sub.find_first_of(" \t\r\n->");
+                if (end != std::string::npos)
+                {
+                    minRequiredVersion = sub.substr(0, end);
+                }
+                else
+                {
+                    minRequiredVersion = sub;
+                }
+            }
+        }
+    }
+
+    S32 current_major, current_minor, current_patch, current_build;
+    parseVersion(currentVersion, current_major, current_minor, current_patch, current_build);
+
+    mUpdateRequired = false;
+    if (minRequiredBuild > 0 && current_build < minRequiredBuild)
+    {
+        LL_INFOS("AutoUpdate") << "Current build (" << current_build 
+                               << ") is below minimum required build (" << minRequiredBuild << ")" << LL_ENDL;
+        mUpdateRequired = true;
+    }
+    else if (!minRequiredVersion.empty() && isNewerVersion(minRequiredVersion, currentVersion))
+    {
+        LL_INFOS("AutoUpdate") << "Current version (" << currentVersion 
+                               << ") is below minimum required version (" << minRequiredVersion << ")" << LL_ENDL;
+        mUpdateRequired = true;
+    }
+    else if ((releaseBody.find("[MANDATORY]") != std::string::npos || 
+              releaseBody.find("[REQUIRED]") != std::string::npos) &&
+             isNewerVersion(remoteVersion, currentVersion))
+    {
+        LL_INFOS("AutoUpdate") << "Release marked as mandatory/required in release notes" << LL_ENDL;
+        mUpdateRequired = true;
+    }
+
+    if (mUpdateRequired)
+    {
+        mUpdateInfo["required"] = true;
+    }
+
+    // Check if user skipped this version (cannot skip if update is required)
     std::string skippedVersion = gSavedSettings.getString("FSSkippedUpdateVersion");
-    if (remoteVersion == skippedVersion)
+    if (remoteVersion == skippedVersion && !mUpdateRequired)
     {
         LL_INFOS("AutoUpdate") << "User has skipped version " << remoteVersion << LL_ENDL;
         mCheckInProgress = false;
         return;
     }
 
-    // Compare versions
-    if (isNewerVersion(remoteVersion, currentVersion))
+    // Compare versions or check if required
+    if (mUpdateRequired || isNewerVersion(remoteVersion, currentVersion))
     {
-        LL_INFOS("AutoUpdate") << "New version available: " << remoteVersion << LL_ENDL;
+        LL_INFOS("AutoUpdate") << "Update available: " << remoteVersion 
+                               << (mUpdateRequired ? " [REQUIRED]" : " [OPTIONAL]") << LL_ENDL;
         mUpdateAvailable = true;
-        showUpdateNotification();
+
+        if (!mUpdateRequired && !gSavedSettings.getBOOL("FSAutoUpdateCheck"))
+        {
+            LL_DEBUGS("AutoUpdate") << "Optional update available, but auto-update check disabled in preferences" << LL_ENDL;
+        }
+        else
+        {
+            showUpdateNotification();
+        }
     }
     else
     {
@@ -342,28 +419,50 @@ void LLAutoUpdateChecker::showUpdateNotification()
     {
         args["SIZE"] = llformat("%.1f MB", mUpdateInfo["file_size_mb"].asReal());
     }
+    else
+    {
+        args["SIZE"] = "N/A";
+    }
     
     LLSD payload;
     payload["update_info"] = mUpdateInfo;
 
-    LLNotificationsUtil::add("FSUpdateAvailable", args, payload,
-        [this](const LLSD& notification, const LLSD& response)
-        {
-            S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
-            
-            if (option == 0) // Download Now
+    if (mUpdateRequired)
+    {
+        LLNotificationsUtil::add("FSUpdateRequired", args, payload,
+            [this](const LLSD& notification, const LLSD& response)
             {
-                openDownloadPage();
-            }
-            else if (option == 1) // Remind Later
+                S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
+                
+                if (option == 0) // Update Now
+                {
+                    openDownloadPage();
+                }
+                // Both "Update Now" and "Exit" (or closing the dialog) quit the application
+                LLAppViewer::instance()->forceQuit();
+            });
+    }
+    else
+    {
+        LLNotificationsUtil::add("FSUpdateAvailable", args, payload,
+            [this](const LLSD& notification, const LLSD& response)
             {
-                // Do nothing, will check again next startup
-            }
-            else if (option == 2) // Skip This Version
-            {
-                skipThisVersion();
-            }
-        });
+                S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
+                
+                if (option == 0) // Download Now
+                {
+                    openDownloadPage();
+                }
+                else if (option == 1) // Remind Later
+                {
+                    // Do nothing, will check again next startup
+                }
+                else if (option == 2) // Skip This Version
+                {
+                    skipThisVersion();
+                }
+            });
+    }
 }
 
 void LLAutoUpdateChecker::openDownloadPage()

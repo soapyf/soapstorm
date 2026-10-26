@@ -36,6 +36,12 @@ public:
     // Check if an update is available
     bool isUpdateAvailable() const { return mUpdateAvailable; }
 
+    // Check if an update is required
+    bool isUpdateRequired() const { return mUpdateRequired; }
+
+    // Show update notification to user
+    void showUpdateNotification();
+
 private:
     // Coroutine for checking updates
     void checkUpdateCoro();
@@ -45,13 +51,11 @@ private:
     
     // Parse version string into components
     void parseVersion(const std::string& version_str, S32& major, S32& minor, S32& patch, S32& build);
-    
-    // Show update notification to user
-    void showUpdateNotification();
 
 private:
     LLSD mUpdateInfo;
     bool mUpdateAvailable;
+    bool mUpdateRequired;
     bool mCheckInProgress;
 };
 
