@@ -2731,6 +2731,7 @@ Try enclosing path to the editor with double quotes.
 name="Command_360_Capture_Label">360° Snapshot</string>
   <string name="Command_AboutLand_Label">About land</string>
   <string name="Command_Appearance_Label">Appearance</string>
+  <string name="Command_GMDXLoadouts_Label">Loadouts</string>
   <string name="Command_Avatar_Label">Avatar Welcome Pack</string>
   <string name="Command_Build_Label">Build</string>
   <string name="Command_Chat_Label">Conversations</string>
@@ -2805,6 +2806,7 @@ name="Command_360_Capture_Label">360° Snapshot</string>
   <string name="Command_360_Capture_Tooltip">Capture a 360° equirectangular image</string>
   <string name="Command_AboutLand_Tooltip">Information about the land you're visiting</string>
   <string name="Command_Appearance_Tooltip">Change your avatar</string>
+  <string name="Command_GMDXLoadouts_Tooltip">Swap weapons and loadouts (L)</string>
   <string name="Command_Avatar_Tooltip">Choose a complete avatar</string>
   <string name="Command_Build_Tooltip">Building objects and reshaping terrain (CTRL+4)</string>
   <string name="Command_Chat_Tooltip">Chat with people nearby using text (CTRL+T)</string>

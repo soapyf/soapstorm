@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <GMDX> Weapon importer: every tagged weapon in inventory, versions grouped (gmdxweaponsorter.cpp) -->
+<floater
+ positioning="centered"
+ can_minimize="true"
+ can_resize="true"
+ height="540"
+ min_height="380"
+ min_width="640"
+ layout="topleft"
+ name="floater_gmdx_weapon_import"
+ save_rect="true"
+ single_instance="true"
+ title="IMPORT WEAPONS"
+ width="780">
+    <string name="summary">[ROWS] weapons in [ITEMS] items, [DUPES] with more than one version</string>
+    <string name="unsorted">-</string>
+    <string name="no_group">(no group)</string>
+    <string name="new_group">New group...</string>
+    <string name="new_group_title">New group folder in [CAT]:</string>
+    <string name="sort_label">Sort [COUNT]</string>
+    <string name="versions_tip">Versions (the kept one is ticked)</string>
+    <text
+     name="prefix_label"
+     type="string"
+     length="1"
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top="12"
+     height="16"
+     width="44">
+        Prefix:
+    </text>
+    <line_editor
+     name="prefix_edit"
+     follows="left|top"
+     layout="topleft"
+     left_pad="4"
+     top="8"
+     height="22"
+     width="180"
+     tool_tip="The tag your group puts on its weapons, e.g. [Ash]. Several: separate them with commas." />
+    <button
+     name="scan_btn"
+     follows="left|top"
+     layout="topleft"
+     left_pad="6"
+     top="8"
+     height="22"
+     width="70"
+     label="Scan"
+     tool_tip="Find every item with the prefix in your inventory and group its versions" />
+    <text
+     name="summary_text"
+     type="string"
+     length="1"
+     follows="left|top|right"
+     layout="topleft"
+     left_pad="12"
+     top="12"
+     right="-10"
+     height="16"
+     use_ellipses="true" />
+    <scroll_list
+     name="import_list"
+     follows="all"
+     layout="topleft"
+     left="10"
+     top="38"
+     right="-10"
+     bottom="-112"
+     draw_heading="true"
+     multi_select="true"
+     tool_tip="One row per weapon, its versions grouped. Select rows (Shift / Ctrl click, Ctrl+A) to set where they go; double-click one to pick which version to keep.">
+        <columns name="weapon" label="Weapon (version kept)" relative_width="0.38" />
+        <columns name="versions" label="Versions" relative_width="0.08" />
+        <columns name="dest" label="Sort into" relative_width="0.26" />
+        <columns name="now" label="Kept version is in" relative_width="0.28" />
+    </scroll_list>
+    <text
+     name="selected_label"
+     type="string"
+     length="1"
+     follows="left|bottom"
+     layout="topleft"
+     left="10"
+     bottom="-84"
+     height="16"
+     width="60">
+        Selected:
+    </text>
+    <combo_box
+     name="cat_combo"
+     follows="left|bottom"
+     layout="topleft"
+     left="74"
+     bottom="-80"
+     height="23"
+     width="140"
+     tool_tip="Category (layer) for the selected weapons" />
+    <combo_box
+     name="group_combo"
+     follows="left|bottom"
+     layout="topleft"
+     left_pad="6"
+     top_delta="0"
+     height="23"
+     width="160"
+     tool_tip="Group folder inside the category" />
+    <button
+     name="set_btn"
+     follows="left|bottom"
+     layout="topleft"
+     left_pad="6"
+     top_delta="0"
+     height="23"
+     width="56"
+     label="Set"
+     tool_tip="Sort the selected weapons into this category and group" />
+    <button
+     name="skip_btn"
+     follows="left|bottom"
+     layout="topleft"
+     left_pad="4"
+     top_delta="0"
+     height="23"
+     width="56"
+     label="Skip"
+     tool_tip="Leave the selected weapons where they are" />
+    <button
+     name="pick_btn"
+     follows="left|bottom"
+     layout="topleft"
+     left_pad="4"
+     top_delta="0"
+     height="23"
+     width="110"
+     label="Keep version..."
+     tool_tip="Choose which version of the selected weapon to keep (or double-click its row)" />
+    <text
+     name="others_label"
+     type="string"
+     length="1"
+     follows="left|bottom"
+     layout="topleft"
+     left="10"
+     bottom="-50"
+     height="16"
+     width="100">
+        Other versions:
+    </text>
+    <combo_box
+     name="others_combo"
+     follows="left|bottom"
+     layout="topleft"
+     left="114"
+     bottom="-46"
+     height="23"
+     width="180"
+     tool_tip="What happens to the versions not kept, in the rows being sorted">
+        <combo_box.item label="Move to Outdated" name="outdated" value="0" />
+        <combo_box.item label="Move to the Trash" name="trash" value="1" />
+        <combo_box.item label="Leave them" name="leave" value="2" />
+    </combo_box>
+    <text
+     name="hint_text"
+     type="string"
+     length="1"
+     follows="left|right|bottom"
+     layout="topleft"
+     left="10"
+     bottom="-12"
+     right="-200"
+     height="16"
+     use_ellipses="true">
+        Rows with a category are sorted; the rest stay where they are.
+    </text>
+    <button
+     name="close_btn"
+     follows="right|bottom"
+     layout="topleft"
+     right="-10"
+     bottom="-8"
+     height="23"
+     width="80"
+     label="Close" />
+    <button
+     name="sort_btn"
+     follows="right|bottom"
+     layout="topleft"
+     right="-96"
+     bottom="-8"
+     height="23"
+     width="96"
+     label="Sort"
+     tool_tip="Move each kept version into its category and group, and the other versions as chosen" />
+</floater>

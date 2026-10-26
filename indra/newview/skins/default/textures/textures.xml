@@ -385,6 +385,12 @@ with the same filename but different name
   <texture name="Inv_Sound" file_name="icons/Inv_Sound.png" preload="false" />
   <texture name="Inv_StockFolderClosed" file_name="icons/Inv_StockFolderClosed.png" preload="false" />
   <texture name="Inv_StockFolderOpen" file_name="icons/Inv_StockFolderOpen.png" preload="false" />
+  <texture name="GMDX_Inv_EquipmentClosed" file_name="icons/GMDX_Inv_EquipmentClosed.png" preload="false" />
+  <texture name="GMDX_Inv_EquipmentOpen" file_name="icons/GMDX_Inv_EquipmentOpen.png" preload="false" />
+  <texture name="GMDX_Inv_LoadoutsClosed" file_name="icons/GMDX_Inv_LoadoutsClosed.png" preload="false" />
+  <texture name="GMDX_Inv_LoadoutsOpen" file_name="icons/GMDX_Inv_LoadoutsOpen.png" preload="false" />
+  <texture name="GMDX_Inv_OutdatedClosed" file_name="icons/GMDX_Inv_OutdatedClosed.png" preload="false" />
+  <texture name="GMDX_Inv_OutdatedOpen" file_name="icons/GMDX_Inv_OutdatedOpen.png" preload="false" />
   <texture name="Inv_SysClosed" file_name="icons/Inv_SysClosed.png" preload="false" />
   <texture name="Inv_SysOpen" file_name="icons/Inv_SysOpen.png" preload="false" />
   <texture name="Inv_Tattoo" file_name="icons/Inv_Tattoo.png" preload="false" />

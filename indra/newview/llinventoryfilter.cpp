@@ -28,6 +28,8 @@
 
 #include "llinventoryfilter.h"
 
+#include "gmdxloadouts.h" // <GMDX> the loadouts' Outdated folder is left out of search
+
 // viewer includes
 #include "llagent.h"
 #include "llfolderviewmodel.h"
@@ -770,6 +772,10 @@ bool LLInventoryFilter::checkAgainstSearchVisibility(const LLFolderViewModelItem
 // </AS:chanayane>
         return false;
 
+    // <GMDX> old weapon versions the loadouts' weapon sorter set aside
+    if ((mFilterOps.mSearchVisibility & VISIBILITY_GMDX_NO_OUTDATED) && GMDXLoadouts::isInOutdated(object_id))
+        return false;
+
     return true;
 }
 
@@ -1049,6 +1055,18 @@ void LLInventoryFilter::toggleSearchVisibilityOutfits()
         setModified(hide_outfits ? FILTER_MORE_RESTRICTIVE : FILTER_LESS_RESTRICTIVE);
     }
 }
+
+// <GMDX>
+void LLInventoryFilter::toggleSearchVisibilityGMDXOutdated()
+{
+    bool show_outdated = (mFilterOps.mSearchVisibility & VISIBILITY_GMDX_NO_OUTDATED) == 0;
+    mFilterOps.mSearchVisibility ^= VISIBILITY_GMDX_NO_OUTDATED;
+    if (hasFilterString())
+    {
+        setModified(show_outdated ? FILTER_MORE_RESTRICTIVE : FILTER_LESS_RESTRICTIVE);
+    }
+}
+// </GMDX>
 
 void LLInventoryFilter::toggleSearchVisibilityTrash()
 {

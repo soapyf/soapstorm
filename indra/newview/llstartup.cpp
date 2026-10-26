@@ -241,6 +241,7 @@
 #include "fssoundemitterblacklist.h"
 #include "fsavatarrenderpersistence.h"
 #include "fsfloaterkillfeed.h"
+#include "gmdxweaponsorter.h"
 #include "fscommon.h"
 #include "fscorehttputil.h"
 #include "fsdata.h"
@@ -2777,6 +2778,7 @@ bool idle_startup()
         // </FS:Ansariel>
 
         FSGroupTitleRegionMgr::getInstance()->loadFromDisk(); // <FS:PP> Region-based group titles
+        GMDXWeaponSorter::getInstance(); // <GMDX> loadouts: watches for new weapons from now on
 
         bool show_hud = false;
         LLSD tutorial_setting = response["tutorial_setting"];

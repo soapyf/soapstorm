@@ -251,6 +251,9 @@ set(viewer_SOURCE_FILES
     #gltf/animation.cpp
     #gltf/llgltfloader.cpp
     # </FS:Ansariel> Group GLTF files into their subfolders
+    gmdxfloaterloadouts.cpp    # GunMetal-DX loadouts window and swap toast
+    gmdxloadouts.cpp           # GunMetal-DX loadouts
+    gmdxweaponsorter.cpp       # GunMetal-DX weapon sorter and importer
     groupchatlistener.cpp
     llaccountingcostmanager.cpp
     llaisapi.cpp
@@ -1146,6 +1149,9 @@ set(viewer_HEADER_FILES
     fslocalmeshimportgltf.h
 
     gltfscenemanager.h
+    gmdxfloaterloadouts.h
+    gmdxloadouts.h
+    gmdxweaponsorter.h
     groupchatlistener.h
     # <FS:Ansariel> Group GLTF files into their subfolders
     #gltf/asset.h

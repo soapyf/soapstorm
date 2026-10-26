@@ -122,7 +122,8 @@ public:
         VISIBILITY_TRASH = 0x1 << 0,
         VISIBILITY_LIBRARY = 0x1 << 1,
         VISIBILITY_LINKS    = 0x1 << 2,
-        VISIBILITY_OUTFITS    = 0x1 << 3
+        VISIBILITY_OUTFITS    = 0x1 << 3,
+        VISIBILITY_GMDX_NO_OUTDATED = 0x1 << 30  // <GMDX> set (the default): search skips the loadouts' Outdated folder
     };
 
     struct FilterOps
@@ -263,6 +264,7 @@ public:
     void                toggleSearchVisibilityLinks();
     void                toggleSearchVisibilityTrash();
     void                toggleSearchVisibilityOutfits();
+    void                toggleSearchVisibilityGMDXOutdated(); // <GMDX>
     void                toggleSearchVisibilityLibrary();
     void                setSearchVisibilityTypes(U32 types);
     void                setSearchVisibilityTypes(const Params& params);
