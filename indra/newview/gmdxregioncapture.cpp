@@ -35,6 +35,7 @@
 #include "llnotificationsutil.h"
 #include "llregionhandle.h"
 #include "llsdjson.h"
+#include "lluri.h"
 #include "llviewercontrol.h"
 #include "llviewermenufile.h"   // LLFilePickerReplyThread
 #include "llviewernetwork.h"
@@ -72,19 +73,24 @@ struct MapTex
     bool loading = false;
 };
 
-// This grid's name in the maps folder and in a map file's "grid", as GunMetal-DX writes it: its
-// grid manager's id ("Agni" on Second Life). Firestorm's OpenSim grid manager returns the grid's
-// nick there instead, so its grid key is used (the login host GunMetal-DX's id is made from).
+// This grid's name in the maps folder and in a map file's "grid", as GunMetal-DX writes it in
+// shared maps: "Agni" / "Aditi" on Second Life, else the grid's login host and port, lowercased
+// ("grid.example.org:8002"). (Viewers name OpenSim grids differently -- Firestorm's grid list
+// here, a grids.xml entry in GunMetal-DX -- but agree on the login address.)
 std::string grid_id()
 {
-#ifdef OPENSIM
     LLGridManager* grids = LLGridManager::getInstance();
+#ifdef OPENSIM
     if (grids->isInSLMain()) return "Agni";
     if (grids->isInSLBeta()) return "Aditi";
-    return utf8str_tolower(grids->getGrid());
 #else
-    return LLGridManager::getInstance()->getGridId();
+    if (grids->isSystemGrid()) return grids->getGridId();
 #endif
+    std::vector<std::string> uris;
+    grids->getLoginURIs(uris);
+    const LLURI uri(uris.empty() ? std::string() : uris.front());
+    const std::string host = utf8str_tolower(uri.hostName());
+    return host.empty() ? utf8str_tolower(grids->getGrid()) : host + llformat(":%u", (U32)uri.hostPort());
 }
 } // namespace
 
