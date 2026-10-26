@@ -3,6 +3,10 @@
      background, title or close button: drag it by the picture, resize it from its edges,
      right-click for options. Remembers its place and whether it was open. -->
 <floater
+    positioning="specified"
+    layout="topleft"
+    left="290"
+    top="70"
     name="gmdx_input_overlay"
     title=""
     help_topic="gmdx_input_overlay"
