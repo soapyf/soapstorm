@@ -98,6 +98,7 @@ class ViewerManifest(LLManifest,FSViewerManifest):
                 self.exclude("logcontrol.xml")
                 self.exclude("logcontrol-dev.xml")
                 self.path("*.ini")
+                self.path("*.txt")
                 self.path("*.xml")
 
                 # include the entire shaders directory recursively

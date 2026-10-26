@@ -143,7 +143,7 @@ public:
     virtual bool restoreGamma() = 0;            // Restore original gamma table (before updating gamma)
     virtual ESwapMethod getSwapMethod() { return mSwapMethod; }
     virtual void processMiscNativeEvents();
-    virtual void gatherInput() = 0;
+    virtual void gatherInput(bool app_has_focus) = 0;
     virtual void delayInputProcessing() = 0;
     virtual void swapBuffers() = 0;
     virtual void bringToFront() = 0;

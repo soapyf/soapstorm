@@ -74,7 +74,7 @@ public:
     /*virtual*/ void setFSAASamples(const U32 fsaa_samples) { /* FSAA not supported yet on Mesa headless.*/ }
     /*virtual*/ U32  getFSAASamples() { return 0; }
     //virtual ESwapMethod getSwapMethod() { return mSwapMethod; }
-    /*virtual*/ void gatherInput() {};
+    /*virtual*/ void gatherInput(bool app_has_focus) {};
     /*virtual*/ void delayInputProcessing() {};
     /*virtual*/ void swapBuffers();
     /*virtual*/ void restoreGLContext() {};

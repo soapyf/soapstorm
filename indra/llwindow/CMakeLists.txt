@@ -21,8 +21,11 @@ include(GLM)
 
 set(llwindow_SOURCE_FILES
     llcursortypes.cpp
+    llgamecontrol.cpp
+    llgamecontroltranslator.cpp
     llkeyboard.cpp
     llkeyboardheadless.cpp
+    llsdl.cpp
     llwindowheadless.cpp
     llwindowcallbacks.cpp
     llwindow.cpp
@@ -32,8 +35,11 @@ set(llwindow_HEADER_FILES
     CMakeLists.txt
 
     llcursortypes.h
+    llgamecontrol.h
+    llgamecontroltranslator.h
     llkeyboard.h
     llkeyboardheadless.h
+    llsdl.h
     llwindowheadless.h
     llwindowcallbacks.h
     )

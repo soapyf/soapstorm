@@ -65,6 +65,8 @@ bool gCameraBtnPan = false;
 
 const S32 SLOP_RANGE = 4;
 
+extern bool agent_push_forward(const LLKeyPressState& s);
+
 //
 // Camera - shared functionality
 //
@@ -83,8 +85,10 @@ LLToolCamera::LLToolCamera()
     mMouseSteering(false),
     mMouseUpX(0),
     mMouseUpY(0),
-    mMouseUpMask(MASK_NONE)
-{ }
+    mMouseUpMask(MASK_NONE),
+    mKeyState(LLKeyPressState(false,false,false,1.0))
+{
+}
 
 
 LLToolCamera::~LLToolCamera()
@@ -403,7 +407,8 @@ bool LLToolCamera::handleHover(S32 x, S32 y, MASK mask)
     //<FS:JL> Mouse movement by Singularity
     if (right_hold_mouse_walk)
     {
-        agent_push_forward(KEYSTATE_LEVEL);
+        mKeyState.mState = KEYSTATE_LEVEL;
+        agent_push_forward(mKeyState);
     }
     //</FS:JL>
 
@@ -561,7 +566,8 @@ bool LLToolCamera::handleRightMouseDown(S32 x, S32 y, MASK mask)
 {
     if (mMouseSteering)
     {
-        agent_push_forward(KEYSTATE_DOWN);
+        mKeyState.mState = KEYSTATE_DOWN;
+        agent_push_forward(mKeyState);
         right_hold_mouse_walk = true;
         return true;
     }
@@ -575,7 +581,8 @@ bool LLToolCamera::handleRightMouseUp(S32 x, S32 y, MASK mask)
 {
     if (mMouseSteering || right_hold_mouse_walk)
     {
-        agent_push_forward(KEYSTATE_UP);
+        mKeyState.mState = KEYSTATE_UP;
+        agent_push_forward(mKeyState);
         right_hold_mouse_walk = false;
         return true;
     }

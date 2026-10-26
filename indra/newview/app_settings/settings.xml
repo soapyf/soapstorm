@@ -5363,6 +5363,28 @@
       <key>Value</key>
       <integer>1</integer>
     </map>
+    <key>DebugShowControllerState</key>
+    <map>
+      <key>Comment</key>
+      <string>Display internal controller state values</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>GameControl</key>
+    <map>
+        <key>Comment</key>
+        <string>Game controller settings: global per-mode action mappings plus per-device hardware config. Empty means use built-in defaults.</string>
+        <key>Persist</key>
+        <integer>1</integer>
+        <key>Type</key>
+        <string>LLSD</string>
+        <key>Value</key>
+        <map/>
+    </map>
     <key>EnableGestureSounds</key>
     <map>
       <key>Comment</key>

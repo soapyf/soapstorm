@@ -31,6 +31,7 @@
 #include "llwindowwin32.h"
 
 // LLWindow library includes
+#include "llgamecontrol.h"
 #include "llkeyboardwin32.h"
 #include "lldragdropwin32.h"
 #include "llpreeditor.h"
@@ -2329,7 +2330,7 @@ void LLWindowWin32::delayInputProcessing()
 }
 
 
-void LLWindowWin32::gatherInput()
+void LLWindowWin32::gatherInput(bool app_has_focus)
 {
     ASSERT_MAIN_THREAD();
     LL_PROFILE_ZONE_SCOPED_CATEGORY_WIN32;
@@ -2409,6 +2410,8 @@ void LLWindowWin32::gatherInput()
     mInputProcessingPaused = false;
 
     updateCursor();
+
+    LLGameControl::processEvents(app_has_focus);
 }
 
 // Define device classID for filtering

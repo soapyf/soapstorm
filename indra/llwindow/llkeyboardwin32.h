@@ -48,7 +48,7 @@ public:
     U16                 inverseTranslateExtendedKey(const KEY translated_key);
 
 protected:
-    MASK    updateModifiers();
+    MASK    updateModifiers(const MASK mask) override;
     //void  setModifierKeyLevel( KEY key, bool new_state );
 private:
     std::map<U16, KEY> mTranslateNumpadMap;
