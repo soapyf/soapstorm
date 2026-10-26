@@ -5418,6 +5418,17 @@
       <key>Value</key>
       <integer>1</integer>
     </map>
+    <key>GMDXInputOverlayInMouselook</key>
+    <map>
+      <key>Comment</key>
+      <string>Keep the keyboard and mouse overlay (Avatar &gt; Movement &gt; Keyboard &amp; mouse overlay) on screen in mouselook.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
     <key>EnableGestureSounds</key>
     <map>
       <key>Comment</key>

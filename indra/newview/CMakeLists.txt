@@ -207,6 +207,7 @@ set(viewer_SOURCE_FILES
     ssfloatergamecontroloverlay.cpp
     ssgamecontroldiagram.cpp
     ssgamecontrolui.cpp
+    gmdxfloaterinputoverlay.cpp
     fspanelradar.cpp
     fsparticipantlist.cpp
     fspose.cpp
@@ -1117,6 +1118,7 @@ set(viewer_HEADER_FILES
     ssfloatergamecontroloverlay.h
     ssgamecontroldiagram.h
     ssgamecontrolui.h
+    gmdxfloaterinputoverlay.h
     fspanelradar.h
     fsparticipantlist.h
     fspose.h

@@ -141,6 +141,7 @@ const F32 AUTOPILOT_MAX_TIME_NO_PROGRESS_FLY = 2.5f;        // seconds. Flying i
 // than this away, rather than snapping the agent down onto distant terrain.
 const F32 MAX_SIT_ON_GROUND_DISTANCE = 30.f;                // meters
 static bool sOverlaySkippedInMouselook = false; // <GMDX> controller overlay kept up in mouselook
+static bool sInputOverlaySkippedInMouselook = false; // <GMDX> keyboard and mouse overlay, likewise
 
 const F32 MAX_VELOCITY_AUTO_LAND_SQUARED = 4.f * 4.f;
 const F64 CHAT_AGE_FAST_RATE = 3.0;
@@ -2864,10 +2865,14 @@ void LLAgent::endAnimationUpdateUI()
                 skip_list.insert(tmp);
             }
             // </FS:LO>
-            // <GMDX> the overlay kept up in mouselook wasn't pushed, so it isn't popped
+            // <GMDX> the overlays kept up in mouselook weren't pushed, so they aren't popped
             if (sOverlaySkippedInMouselook && LLFloaterReg::findInstance("game_control_overlay"))
             {
                 skip_list.insert(LLFloaterReg::findInstance("game_control_overlay"));
+            }
+            if (sInputOverlaySkippedInMouselook && LLFloaterReg::findInstance("gmdx_input_overlay"))
+            {
+                skip_list.insert(LLFloaterReg::findInstance("gmdx_input_overlay"));
             }
             // </GMDX>
             // <FS:Ansariel> Skip restoring conversations and radar floater
@@ -3048,6 +3053,13 @@ void LLAgent::endAnimationUpdateUI()
         {
             skip_list.insert(LLFloaterReg::findInstance("game_control_overlay"));
         }
+        // <GMDX> and the keyboard and mouse overlay, likewise
+        sInputOverlaySkippedInMouselook = gSavedSettings.getBOOL("GMDXInputOverlayInMouselook");
+        if (sInputOverlaySkippedInMouselook)
+        {
+            skip_list.insert(LLFloaterReg::findInstance("gmdx_input_overlay"));
+        }
+        // </GMDX>
         // <FS:LO> //FIRE-6385: Show all script dialogs still when entering mouselook
         for (LLFloater* tmp : LLFloaterReg::getFloaterList("script_floater"))
         {

@@ -26,6 +26,7 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llviewerwindow.h"
+#include "gmdxfloaterinputoverlay.h" // <GMDX> scroll on the input overlay
 
 
 // system library includes
@@ -3830,6 +3831,7 @@ bool LLViewerWindow::handleUnicodeChar(llwchar uni_char, MASK mask)
 void LLViewerWindow::handleScrollWheel(S32 clicks)
 {
     LLUI::getInstance()->resetMouseIdleTimer();
+    GMDXFloaterInputOverlay::noteScroll(clicks); // <GMDX> the keyboard and mouse overlay
 
     LLMouseHandler* mouse_captor = gFocusMgr.getMouseCapture();
     if( mouse_captor )

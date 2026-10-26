@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <GMDX> The keyboard and mouse, lighting up with live input (gmdxfloaterinputoverlay.h). No
+     background, title or close button: drag it by the picture, resize it from its edges,
+     right-click for options. Remembers its place and whether it was open. -->
+<floater
+    name="gmdx_input_overlay"
+    title=""
+    help_topic="gmdx_input_overlay"
+    single_instance="true"
+    save_rect="true"
+    save_visibility="true"
+    background_visible="false"
+    can_resize="true"
+    can_minimize="false"
+    can_close="false"
+    can_tear_off="false"
+    header_height="0"
+    height="150"
+    width="280"
+    min_height="50"
+    min_width="90" />

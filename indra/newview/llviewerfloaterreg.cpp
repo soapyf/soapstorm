@@ -82,6 +82,7 @@
 #include "ssfloatergamecontroldebug.h" // <SS:GameControl>
 #include "ssfloatergamecontroloverlay.h" // <SS:GameControl>
 #include "ssfloatergamecontrolgyro.h" // <SS:GameControl>
+#include "gmdxfloaterinputoverlay.h" // <GMDX>
 #include "llfloatergltfasseteditor.h"
 #include "llfloatergodtools.h"
 #include "llfloatergridstatus.h"
@@ -476,6 +477,7 @@ void LLViewerFloaterReg::registerFloaters()
     LLFloaterReg::add("game_control_gyro", "floater_game_control_gyro.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<SSFloaterGameControlGyro>); // <SS:GameControl>
     LLFloaterReg::add("game_control_overlay", "floater_game_control_overlay.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<SSFloaterGameControlOverlay>); // <SS:GameControl>
     LLFloaterReg::add("game_control_debug", "floater_game_control_debug.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<SSFloaterGameControlDebug>); // <SS:GameControl>
+    LLFloaterReg::add("gmdx_input_overlay", "floater_gmdx_input_overlay.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<GMDXFloaterInputOverlay>); // <GMDX>
     LLFloaterReg::add("gltf_asset_editor", "floater_gltf_asset_editor.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterGLTFAssetEditor>);
     LLFloaterReg::add("god_tools", "floater_god_tools.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterGodTools>);
     LLFloaterReg::add("grid_status", "floater_grid_status.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterGridStatus>);
