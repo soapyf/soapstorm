@@ -92,6 +92,7 @@
 #include "llurlentry.h"
 #include "llviewercontrol.h"
 #include "llviewerdisplay.h"
+#include "llviewerjoystick.h"
 #include "llviewermediafocus.h"
 #include "llviewermenu.h"
 #include "llviewernetwork.h" // <FS:PP> For FIRE-10718: llGetSimulatorHostname() is causing LSL Bridge to sleep for 10 seconds
@@ -1703,7 +1704,7 @@ LLVector3 LLAgent::getReferenceUpVector()
     return up_vector;
 }
 
-// Radians, positive is downward toward ground
+// Radians, positive is forward into ground
 //-----------------------------------------------------------------------------
 // pitch()
 //-----------------------------------------------------------------------------
@@ -1717,23 +1718,27 @@ void LLAgent::pitch(F32 angle)
 
     LLVector3 skyward = getReferenceUpVector();
 
-    // SL-19286 Avatar is upside down when viewed from below
-    // after left-clicking the mouse on the avatar and dragging down
-    //
-    // The issue is observed on angle below 10 degrees
-    const F32 look_down_limit = 179.f * DEG_TO_RAD;
-    const F32 look_up_limit = 10.f * DEG_TO_RAD;
-
-    F32 angle_from_skyward = acos(mFrameAgent.getAtAxis() * skyward);
-
     // clamp pitch to limits
-    if ((angle >= 0.f) && (angle_from_skyward + angle > look_down_limit))
+    if (angle >= 0.f)
     {
-        angle = look_down_limit - angle_from_skyward;
+        const F32 look_down_limit = 179.f * DEG_TO_RAD;
+        F32 angle_from_skyward = acos(mFrameAgent.getAtAxis() * skyward);
+        if (angle_from_skyward + angle > look_down_limit)
+        {
+            angle = look_down_limit - angle_from_skyward;
+        }
     }
-    else if ((angle < 0.f) && (angle_from_skyward + angle < look_up_limit))
+    else if (angle < 0.f)
     {
-        angle = look_up_limit - angle_from_skyward;
+        const F32 look_up_limit = 5.f * DEG_TO_RAD;
+        const LLVector3& viewer_camera_pos = LLViewerCamera::getInstance()->getOrigin();
+        LLVector3 agent_focus_pos = getPosAgentFromGlobal(gAgentCamera.calcFocusPositionTargetGlobal());
+        LLVector3 look_dir = agent_focus_pos - viewer_camera_pos;
+        F32 angle_from_skyward = angle_between(look_dir, skyward);
+        if (angle_from_skyward + angle < look_up_limit)
+        {
+            angle = look_up_limit - angle_from_skyward;
+        }
     }
 
     if (fabs(angle) > 1e-4)
@@ -6245,7 +6250,8 @@ void LLAgent::updateGameControlMode()
     // Frame delta for the controller and the flycam, measured every frame. Linden Lab
     // measured it in applyExternalActions(), which runs only while a controller drives
     // the avatar, so a keyboard or 3D mouse flycam integrated with a delta of 0 and the
-    // first controller frame got the whole time since. Clamped like llviewerinput's.
+    // first controller frame got the whole time since. Clamped to 0.1 s so a hitch
+    // does not throw the flycam.
     {
         U64 now = LLFrameTimer::getTotalTime();
         g_deltaTime = g_lastUpdateTime ? llmin(F32(now - g_lastUpdateTime) / (F32)(USEC_PER_SEC), 0.1f) : 0.f;
@@ -6675,7 +6681,24 @@ bool LLAgent::isUsingFlycam() const
 
 void LLAgent::toggleFlycam()
 {
+// [RLVa:KB] - the flycam bypasses updateCamera(), so it would escape the camera
+// distance limits; it can still be turned off
+    if (!isUsingFlycam() && RlvActions::isRlvEnabled() && RlvActions::isCameraDistanceClamped())
+    {
+        return;
+    }
+// [/RLVa:KB]
     gAgentCamera.toggleFlycam();
+    // the Stand / Stop flying bar's Flycam button, as the 3D mouse's flycam keeps it
+    if (isUsingFlycam())
+    {
+        LLPanelStandStopFlying::setStandStopFlyingMode(LLPanelStandStopFlying::SSFM_FLYCAM);
+    }
+    else
+    {
+        LLPanelStandStopFlying::clearStandStopFlyingMode(LLPanelStandStopFlying::SSFM_FLYCAM);
+        LLViewerJoystick::getInstance()->setNeedsReset(true);
+    }
 }
 
 void LLAgent::setFlycamKeyInput(U8 channel, F32 value)

@@ -3036,7 +3036,9 @@ void LLScrollListCtrl::selectItem(LLScrollListItem* itemp, S32 cell, bool select
 {
     if (!itemp) return;
 
-    if (!itemp->getSelected() || itemp->getSelectedCell() != cell)
+    // Re-selecting another cell of a selected row only means something in cell selection;
+    // row lists store -1 whatever column was clicked.
+    if (!itemp->getSelected() || (mSelectionType == CELL && itemp->getSelectedCell() != cell))
     {
         if (mLastSelected)
         {

@@ -138,13 +138,6 @@ bool agent_jump( const LLKeyPressState& s )
 bool agent_push_down( const LLKeyPressState& s )
 {
     if( KEYSTATE_UP == s.mState  ) return true;
-    gAgent.moveUp(-1);
-    return true;
-}
-
-bool agent_toggle_down( const LLKeyPressState& s )
-{
-    if( KEYSTATE_UP == s.mState  ) return true;
     // <FS:Ansariel> Chalice Yao's crouch toggle
     //gAgent.moveUp(-1);
     else if (KEYSTATE_DOWN == s.mState && !gAgent.getFlying() && !gAgentAvatarp->isSitting() && gSavedPerAccountSettings.getBOOL("FSCrouchToggle"))
@@ -165,6 +158,13 @@ bool agent_toggle_down( const LLKeyPressState& s )
     }
     // </FS:Ansariel>
     return true;
+}
+
+// Linden Lab's crouch toggle key. Firestorm's crouch toggle (FSCrouchToggle) already
+// lives on the crouch key itself, so this is the same action.
+bool agent_toggle_down( const LLKeyPressState& s )
+{
+    return agent_push_down(s);
 }
 
 static void agent_check_temporary_run(LLAgent::EDoubleTapRunMode mode)

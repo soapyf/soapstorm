@@ -99,10 +99,6 @@
 
     <binding key="" mask="NONE" mouse="LMB" command="script_trigger_lbutton"/>
 
-    <binding key="Q" mask="SHIFT" command="roll_left"/>
-    <binding key="E" mask="SHIFT" command="roll_right"/>
-    <binding key="Q" mask="CTL_SHIFT" command="roll_reset"/>
-    <binding key="E" mask="CTL_SHIFT" command="roll_reset"/>
   </third_person>
   <sitting>
     <binding key="A" mask="ALT" command="spin_around_cw"/>
@@ -182,10 +178,6 @@
 
     <binding key="" mask="NONE" mouse="LMB" command="script_trigger_lbutton"/>
 
-    <binding key="Q" mask="SHIFT" command="roll_left"/>
-    <binding key="E" mask="SHIFT" command="roll_right"/>
-    <binding key="Q" mask="CTL_SHIFT" command="roll_reset"/>
-    <binding key="E" mask="CTL_SHIFT" command="roll_reset"/>
   </sitting>
   <edit_avatar>
     <!--Avatar editing camera controls-->
@@ -204,7 +196,7 @@
     <binding key="ENTER" mask="NONE" command="start_chat"/>
     <binding key="DIVIDE" mask="NONE" command="start_gesture"/>
 
-    <binding key="" mask="NONE" mouse="MMB" command="voice_follow_key"/>
+    <binding key="" mask="NONE" mouse="MMB" command="toggle_voice"/>
 
     <binding key="" mask="NONE" mouse="LMB" command="script_trigger_lbutton"/>
   </edit_avatar>

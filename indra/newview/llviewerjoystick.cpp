@@ -652,7 +652,10 @@ bool LLViewerJoystick::acceptInitializedDevice()
     // both are switched on.
     mDeviceIs3DConnexion = is3DConnexionDevice(mNdofDev->product);
     mDriverState = JDS_INITIALIZED;
-    mSessionDevices.try_emplace(ll_safe_string(mNdofDev->product), false);
+    if (mDeviceIs3DConnexion) // the viewer stats report these as 3DConnexion devices
+    {
+        mSessionDevices.try_emplace(ll_safe_string(mNdofDev->product), false);
+    }
     return true;
 #else
     return false;

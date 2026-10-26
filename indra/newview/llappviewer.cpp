@@ -68,6 +68,7 @@
 #include "llurlfloaterdispatchhandler.h"
 #include "llviewerjoystick.h"
 #include "llgamecontrol.h"
+#include "llsdl.h"
 #include "llcalc.h"
 #include "llconversationlog.h"
 #if LL_WINDOWS
@@ -2563,6 +2564,10 @@ bool LLAppViewer::cleanup()
     }
 
     LLGameControl::terminate();
+#if !LL_SDL
+    // Windows and macOS start SDL3 for the controllers only; the Linux SDL window shuts it down itself
+    quit_sdl();
+#endif
 
     LL_INFOS() << "Shutting down message system" << LL_ENDL;
     end_messaging_system();
