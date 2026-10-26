@@ -100,7 +100,7 @@ public:
     /*virtual*/ bool restoreGamma();            // Restore original gamma table (before updating gamma)
     /*virtual*/ ESwapMethod getSwapMethod() { return mSwapMethod; }
     /*virtual*/ void processMiscNativeEvents();
-    /*virtual*/ void gatherInput();
+    /*virtual*/ void gatherInput(bool app_has_focus);
     /*virtual*/ void swapBuffers();
     /*virtual*/ void restoreGLContext() {};
 

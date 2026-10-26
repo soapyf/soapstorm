@@ -39,4 +39,15 @@ if (LINUX)
   endif()
 endif (LINUX)
 
+# Windows and macOS keep their native window, so SDL3 is only used there for game
+# controllers (LLGameControl in llwindow).
+if (WINDOWS OR DARWIN)
+  use_prebuilt_binary(SDL3)
 
+  find_library( SDL3_LIBRARY
+    NAMES SDL3 SDL3.lib libSDL3.dylib
+    PATHS "${LIBS_PREBUILT_DIR}/lib/release" REQUIRED NO_DEFAULT_PATH)
+
+  target_include_directories( ll::SDL SYSTEM INTERFACE ${LIBS_PREBUILT_DIR}/include)
+  target_link_libraries( ll::SDL INTERFACE ${SDL3_LIBRARY} )
+endif (WINDOWS OR DARWIN)

@@ -41,6 +41,7 @@
 #include "lltabcontainer.h"
 #include "llspinctrl.h"
 #include "lltextbox.h"
+#include "llviewercontrol.h"
 
 
 namespace

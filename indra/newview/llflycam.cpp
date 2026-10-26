@@ -24,6 +24,8 @@
  * $/LicenseInfo$
  */
 
+#include "llviewerprecompiledheaders.h"
+
 #include "llflycam.h"
 
 #include <algorithm>

@@ -24,6 +24,8 @@
  * $/LicenseInfo$
  */
 
+#include "linden_common.h"
+
 #include <initializer_list>
 #include <list>
 

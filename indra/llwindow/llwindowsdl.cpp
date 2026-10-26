@@ -2014,7 +2014,7 @@ void LLWindowSDL::processMiscNativeEvents()
     }
 }
 
-void LLWindowSDL::gatherInput()
+void LLWindowSDL::gatherInput(bool app_has_focus)
 {
     const Uint32 CLICK_THRESHOLD = 300;  // milliseconds
     static int leftClick = 0;

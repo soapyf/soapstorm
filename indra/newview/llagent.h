@@ -660,6 +660,7 @@ private:
     // level-triggered simulated mouse buttons.
     U32 mPrevMouseButtonBits { 0 };
     bool mToggleRun { true };
+    bool mControllerRunRequest { false }; // last run state the controller asked for
 
     // CONTROL_MODE_CURSOR: toggled by AVATAR_ACTION_TOGGLE_MOUSE_CURSOR, same pattern
     // as LLAgentCamera's flycam toggle. mLastMouseCursorUpdate is the previous frame's

@@ -1164,15 +1164,6 @@ void LLFloaterPreference::cancel(const std::vector<std::string> settings_to_skip
 
 void LLFloaterPreference::onOpen(const LLSD& key)
 {
-    LLTabContainer* tabcontainer = getChild<LLTabContainer>("pref core");
-    for (LLView* view : *tabcontainer->getChildList())
-    {
-        if (LLPanelPreference* panel = dynamic_cast<LLPanelPreference*>(view))
-        {
-            panel->onOpen(key);
-        }
-    }
-
     // this variable and if that follows it are used to properly handle do not disturb mode response message
     static bool initialized = false;
     // if user is logged in and we haven't initialized do not disturb mode response yet, do it

@@ -665,24 +665,6 @@ bool camera_pan_out( const LLKeyPressState& s )
     return true;
 }
 
-// <FS:Chanayane> Camera roll key bindings
-bool camera_roll_left( const LLKeyPressState& s )
-{
-    if( KEYSTATE_UP == s.mState  ) return true;
-    gAgentCamera.unlockView();
-    gAgentCamera.setRollLeftKey(get_orbit_rate());
-    return true;
-}
-
-bool camera_roll_right( const LLKeyPressState& s )
-{
-    if( KEYSTATE_UP == s.mState  ) return true;
-    gAgentCamera.unlockView();
-    gAgentCamera.setRollRightKey(get_orbit_rate());
-    return true;
-}
-// </FS:Chanayane>
-
 bool camera_toggle_ortho( const LLKeyPressState& s )
 {
     if (KEYSTATE_DOWN == s.mState)
@@ -1245,10 +1227,6 @@ REGISTER_KEYBOARD_ACTION("pan_left", camera_pan_left);
 REGISTER_KEYBOARD_ACTION("pan_right", camera_pan_right);
 REGISTER_KEYBOARD_ACTION("pan_in", camera_pan_in);
 REGISTER_KEYBOARD_ACTION("pan_out", camera_pan_out);
-// <FS:Chanayane> Camera roll key bindings
-REGISTER_KEYBOARD_ACTION("roll_left", camera_roll_left);
-REGISTER_KEYBOARD_ACTION("roll_right", camera_roll_right);
-// </FS:Chanayane>
 REGISTER_KEYBOARD_ACTION("toggle_ortho", camera_toggle_ortho);
 REGISTER_KEYBOARD_ACTION("move_forward_fast", camera_move_forward_fast);
 REGISTER_KEYBOARD_ACTION("move_backward_fast", camera_move_backward_fast);

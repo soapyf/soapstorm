@@ -32,6 +32,7 @@
 #include "llwindowsdl.h"
 
 #include "llwindowcallbacks.h"
+#include "llgamecontrol.h"
 #include "llkeyboardsdl.h"
 
 #include "llerror.h"
@@ -1432,7 +1433,7 @@ void LLWindowSDL::processMiscNativeEvents()
     }
 }
 
-void LLWindowSDL::gatherInput()
+void LLWindowSDL::gatherInput(bool app_has_focus)
 {
     const Uint64 CLICK_THRESHOLD = 300;  // milliseconds
     static int leftClick = 0;
@@ -1688,9 +1689,20 @@ void LLWindowSDL::gatherInput()
                 }
                 break;
             default:
-                //LL_INFOS() << "Unhandled SDL event type " << event.type << LL_ENDL;
+                // Game controller events (LLGameControl initialises SDL's gamepad
+                // subsystem itself). This window owns the SDL event queue, so they
+                // are handed on from here rather than polled again by
+                // LLGameControl::processEvents(), which would take this window's
+                // events as well.
+                LLGameControl::handleEvent(event, app_has_focus);
                 break;
         }
+    }
+
+    // the rest of LLGameControl::processEvents()
+    if (!app_has_focus)
+    {
+        LLGameControl::clearAllStates();
     }
 
     updateCursor();

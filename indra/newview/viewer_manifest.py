@@ -703,6 +703,9 @@ class Windows_x86_64_Manifest(ViewerManifest):
             # For textures
             self.path_optional("openjp2.dll")
 
+            # SDL3, for game controllers (LLGameControl)
+            self.path("SDL3.dll")
+
             # These need to be installed as a SxS assembly, currently a 'private' assembly.
             # See http://msdn.microsoft.com/en-us/library/ms235291(VS.80).aspx
             self.path_optional("concrt140.dll") # <FS:Ansariel> Support for concurrency features
@@ -1503,6 +1506,7 @@ class Darwin_x86_64_Manifest(ViewerManifest):
             # Remember where we parked this car.
             with self.prefix(src=relpkgdir, dst="Frameworks"):
                 self.path("libndofdev.dylib")
+                self.path("libSDL3.dylib") # game controllers (LLGameControl)
 
                 if self.args.get('bugsplat'):
                     self.path2basename(relpkgdir, "BugsplatMac.framework")

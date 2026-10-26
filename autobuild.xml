@@ -21,6 +21,20 @@
         <string>SDL3</string>
         <key>platforms</key>
         <map>
+          <key>windows64</key>
+          <map>
+            <key>archive</key>
+            <map>
+              <key>hash</key>
+              <string>121b209bbf8ffb2f7f668a74de0e654f4be7339f</string>
+              <key>hash_algorithm</key>
+              <string>sha1</string>
+              <key>url</key>
+              <string>https://github.com/secondlife/3p-sdl3/releases/download/v3.2.24-r1/SDL3-3.2.24-r1-windows64-18539840462.tar.zst</string>
+            </map>
+            <key>name</key>
+            <string>windows64</string>
+          </map>
           <key>linux64</key>
           <map>
             <key>archive</key>
@@ -34,6 +48,20 @@
             </map>
             <key>name</key>
             <string>linux64</string>
+          </map>
+          <key>darwin64</key>
+          <map>
+            <key>archive</key>
+            <map>
+              <key>hash</key>
+              <string>aff68fb5655629c698e198af1581835267588f77</string>
+              <key>hash_algorithm</key>
+              <string>sha1</string>
+              <key>url</key>
+              <string>https://github.com/secondlife/3p-sdl3/releases/download/v3.2.24-r1/SDL3-3.2.24-r1-darwin64-18539840462.tar.zst</string>
+            </map>
+            <key>name</key>
+            <string>darwin64</string>
           </map>
         </map>
         <key>version</key>

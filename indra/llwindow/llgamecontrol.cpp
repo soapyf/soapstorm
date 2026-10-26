@@ -24,6 +24,8 @@
  * $/LicenseInfo$
  */
 
+#include "linden_common.h"
+
 #include "llgamecontrol.h"
 
 #include <algorithm>

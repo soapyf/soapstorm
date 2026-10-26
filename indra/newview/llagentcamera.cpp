@@ -1723,19 +1723,8 @@ void LLAgentCamera::updateCamera()
         //}
         // </FS:Ansariel>
 
-                }
-            }
-
-            LLViewerCamera::getInstance()->updateCameraLocation(head_pos,
-                                                               mCameraUpVector,
-                                                               gAgentAvatarp->mHeadp->getWorldPosition() +
-                                                                   LLVector3(1.0, 0.0, 0.0) * agent_rot);
-        }
-        else
-        {
-            // SL-315
-            gAgentAvatarp->mPelvisp->setPosition(gAgentAvatarp->mPelvisp->getPosition() + diff);
-        }
+        // SL-315
+        gAgentAvatarp->mPelvisp->setPosition(gAgentAvatarp->mPelvisp->getPosition() + diff);
 
         gAgentAvatarp->mRoot->updateWorldMatrixChildren();
 
@@ -3289,7 +3278,7 @@ void LLAgentCamera::setCameraPosAndFocusGlobal(const LLVector3d& camera_pos, con
 
     if (mCameraAnimating)
     {
-        const F64 ANIM_METERS_PER_SECOND = 25.0;
+        const F64 ANIM_METERS_PER_SECOND = 10.0;
         const F64 MIN_ANIM_SECONDS = 0.5;
         //const F64 MAX_ANIM_SECONDS = 10.0;
         F64 MAX_ANIM_SECONDS = 1.0; // Andromeda radar cam patch, make camming faster

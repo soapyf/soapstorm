@@ -6214,6 +6214,20 @@ static S32 g_deltaFrame { 0 };
 
 void LLAgent::updateGameControlMode()
 {
+    // Frame delta for the controller and the flycam, measured every frame. Linden Lab
+    // measured it in applyExternalActions(), which runs only while a controller drives
+    // the avatar, so a keyboard or 3D mouse flycam integrated with a delta of 0 and the
+    // first controller frame got the whole time since. Clamped like llviewerinput's.
+    {
+        U64 now = LLFrameTimer::getTotalTime();
+        g_deltaTime = g_lastUpdateTime ? llmin(F32(now - g_lastUpdateTime) / (F32)(USEC_PER_SEC), 0.1f) : 0.f;
+        g_lastUpdateTime = now;
+
+        S32 frame_count = LLFrameTimer::getFrameCount();
+        g_deltaFrame = frame_count - g_lastUpdateFrame;
+        g_lastUpdateFrame = frame_count;
+    }
+
     // Auto-derive the active mode from avatar/camera state.  Cursor mode takes
     // precedence over Flycam: toggling the mouse cursor on while Flycam is engaged
     // reports CONTROL_MODE_CURSOR (so the left stick drives the on-screen cursor)
@@ -6389,32 +6403,30 @@ void LLAgent::applyExternalActions(const LLGameControl::AgentActions& actions)
     // every frame even though the player is moving with the keyboard instead.
     constexpr U32 CONTROLLER_MOVEMENT_FLAGS = AGENT_CONTROL_AT_POS | AGENT_CONTROL_AT_NEG
                                              | AGENT_CONTROL_LEFT_POS | AGENT_CONTROL_LEFT_NEG;
-    if ((actions.mControlFlags & CONTROLLER_MOVEMENT_FLAGS)
-        && actions.mIsRunning != getRunning())
+    // Running goes through RLVa's temporary run, which sends it. Act only when the
+    // controller's own run request changes: under Always Run or an RLVa @temprun
+    // restriction getRunning() can't follow the request, and comparing against it
+    // resent a reliable SetAlwaysRun every frame. Letting go of the stick ends a run
+    // the controller started.
+    const bool controller_wants_run = (actions.mControlFlags & CONTROLLER_MOVEMENT_FLAGS) && actions.mIsRunning;
+    if (controller_wants_run != mControllerRunRequest && !getAlwaysRun())
     {
-        if (actions.mIsRunning)
+        mControllerRunRequest = controller_wants_run;
+        if (controller_wants_run)
         {
-            setRunning();
+            setTempRun();
         }
         else
         {
-            clearRunning();
+            clearTempRun();
         }
-        sendWalkRun(actions.mIsRunning);
     }
 
     mExternalActionFlags = actions.mControlFlags;
 
-    // measure delta time and frame
-    // Note: it is possible for the deltas to be very large
-    // and it is the duty of the code that uses them to clamp as necessary
+    // (the frame deltas are measured every frame in updateGameControlMode())
     U64 now = LLFrameTimer::getTotalTime();
-    g_deltaTime = F32(now - g_lastUpdateTime) / (F32)(USEC_PER_SEC);
-    g_lastUpdateTime = now;
-
     S32 frame_count = LLFrameTimer::getFrameCount();
-    g_deltaFrame = frame_count - g_lastUpdateFrame;
-    g_lastUpdateFrame = frame_count;
 
     if (isUsingFlycam())
     {
@@ -6451,7 +6463,7 @@ void LLAgent::applyExternalActions(const LLGameControl::AgentActions& actions)
                 if( delta_time > FLY_TIME
                     && delta_frames > FLY_FRAMES)
                 {
-                    setFlying(TRUE);
+                    setFlying(true);
                 }
             }
         }
@@ -6542,15 +6554,14 @@ void LLAgent::applyExternalActions(const LLGameControl::AgentActions& actions)
     {
         if (mToggleRun)
         {
+            // RLVa's temporary run, which also sends it
             if (getRunning())
             {
-                clearRunning();
-                sendWalkRun(false);
+                clearTempRun();
             }
             else
             {
-                setRunning();
-                sendWalkRun(true);
+                setTempRun();
             }
         }
         mToggleRun = false;

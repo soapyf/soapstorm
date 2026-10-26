@@ -6207,11 +6207,12 @@ void LLAppViewer::idle()
             // but only if the agent's region advertises support for it (the
             // "GameControlEnabled" simulator feature).  While unsupported the
             // resend deadline is left untouched, so the first frame after the
-            // feature appears sends immediately.
+            // feature appears sends immediately.  Sending is off until the user
+            // turns it on in Preferences, and only Second Life regions get it.
             if (LLGameControl::computeFinalStateAndCheckForChanges())
             {
                 LLViewerRegion* regionp = gAgent.getRegion();
-                if (regionp && regionp->gameControlEnabled())
+                if (regionp && regionp->gameControlEnabled() && LLGridManager::getInstance()->isInSecondLife())
                 {
                     sendGameControlData();
                 }

@@ -30,6 +30,8 @@
  * a login name.
  */
 
+#include "linden_common.h"
+
 #include "llgamecontroltranslator.h"
 #include "llgamecontrol.h"
 #include "llsd.h"

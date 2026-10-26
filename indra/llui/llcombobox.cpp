@@ -254,6 +254,11 @@ bool LLComboBox::itemExists(const std::string& name)
     return mList->getItemByLabel(name);
 }
 
+std::vector<LLScrollListItem*> LLComboBox::getAllData() const
+{
+    return mList->getAllData();
+}
+
 // add item "name" to menu
 LLScrollListItem* LLComboBox::add(const std::string& name, EAddPosition pos, bool enabled)
 {
