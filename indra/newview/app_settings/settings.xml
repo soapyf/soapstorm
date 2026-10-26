@@ -6104,6 +6104,160 @@
       <key>Value</key>
       <integer>0</integer>
     </map>
+    <key>GMDXMiniMapCompassStyle</key>
+    <map>
+      <key>Comment</key>
+      <string>Mini-map compass in Show Whole Region (GMDXMiniMapWholeRegion) while north is at the top (mini-map menu, Compass Style). 0 = gunmetal frame: a metal border around the map with the eight directions and tick marks in it. 1 = edge pills: the map fills the mini-map, the eight directions in small rounded labels at its edges and corners. 2 = heading tape: the map fills the mini-map, a strip above it shows the camera's heading.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>GMDXMiniMapCursorCoords</key>
+    <map>
+      <key>Comment</key>
+      <string>Mini-map: show the region coordinates under the cursor beside it (and a mark's name over a mark).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>GMDXMiniMapOpacity</key>
+    <map>
+      <key>Comment</key>
+      <string>Mini-map: opacity of the map itself (its background and region images), 0.1 to 1 (mini-map menu, Map Opacity). The compass, avatars and overlays stay solid. FSMiniMapOpacity is the window's background.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>1.0</real>
+    </map>
+    <key>GMDXMiniMapPhysicalOnly</key>
+    <map>
+      <key>Comment</key>
+      <string>Mini-map Show > Physical Objects Only (with Objects on): instead of the object layer, draws every physical object (the Physical property, such as bullets and vehicles; not attachments) as a dot with a short trail along its velocity, updated every frame. Physical objects at rest are not shown. The colour is GMDXMapPhysicalColor in colors.xml.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>GMDXMiniMapRotateCompass</key>
+    <map>
+      <key>Comment</key>
+      <string>Mini-map compass while the Show Whole Region map turns with the camera (Compass Style while turning): 1 = edge pills, the map fills the view; 0 = gunmetal frame, the map shrinks inside it. The heading tape is north-up only.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>GMDXMiniMapRotateView</key>
+    <map>
+      <key>Comment</key>
+      <string>Mini-map, Show Whole Region with the camera at the top: 0 = turn around me, round (a radar centred on the avatar); 1 = turn around me, square; 2 = turn the whole region about its centre, shrunk so all of it fits at any angle (no zoom).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>GMDXMiniMapShowMarks</key>
+    <map>
+      <key>Comment</key>
+      <string>Mini-map: draw the marks (right-click the map > Add Mark Here). Marks are kept per account in gmdx_minimap_marks.json.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>GMDXMiniMapShowZones</key>
+    <map>
+      <key>Comment</key>
+      <string>Mini-map: draw the zones (right-click the map > Draw Zone). Zones are kept per account in gmdx_minimap_marks.json.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>GMDXMiniMapWholeRegion</key>
+    <map>
+      <key>Comment</key>
+      <string>Mini-map Show Whole Region: the whole region the avatar is in, fitted to the mini-map, with nothing outside it (no neighbouring regions, objects, avatars or parcel lines). The mouse wheel zooms in up to 8 times and back out to the whole region; zoomed in, a drag pans. MiniMapScale is kept for when it is turned off, and resizing the mini-map keeps it square. The compass is drawn in the style GMDXMiniMapCompassStyle picks; with Camera at top, GMDXMiniMapRotateView says how it turns.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>GMDXMiniMapZoneColor</key>
+    <map>
+      <key>Comment</key>
+      <string>Mini-map: the colour of new zones, 0 red, 1 orange, 2 yellow, 3 green, 4 cyan, 5 purple (the last Zone Colour picked).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>4</integer>
+    </map>
+    <key>GMDXMiniMapZoneDotted</key>
+    <map>
+      <key>Comment</key>
+      <string>Mini-map: new zones are drawn with dotted lines (Draw Zone > Dotted Lines; a zone's own Zone Line changes it too).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>GMDXMiniMapZoneFill</key>
+    <map>
+      <key>Comment</key>
+      <string>Mini-map: the fill of new zones, 0 none, 1 the zone's colour, 2 black and yellow caution stripes, both see-through (the last Zone Fill picked).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>GMDXMinimapUseCapturedMaps</key>
+    <map>
+      <key>Comment</key>
+      <string>Mini-map background: a region's region map (made in GunMetal-DX and shared as a .gmdxmap file or an inventory texture; mini-map menu, Region Map) when there is one, instead of the world map tile.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>GMDXWorldMapUseCapturedMaps</key>
+    <map>
+      <key>Comment</key>
+      <string>World Map: draw this grid's region maps (mini-map menu, Region Map) over the map's own tiles, at 512 px, for the regions on screen. Off: the server's map tiles only.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
     <key>GesturesMarketplaceURL</key>
     <map>
       <key>Comment</key>

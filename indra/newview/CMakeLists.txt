@@ -251,6 +251,11 @@ set(viewer_SOURCE_FILES
     #gltf/animation.cpp
     #gltf/llgltfloader.cpp
     # </FS:Ansariel> Group GLTF files into their subfolders
+    gmdxminimapcompass.cpp
+    gmdxminimapimage.cpp
+    gmdxminimapmarks.cpp
+    gmdxnetmap.cpp
+    gmdxregioncapture.cpp
     groupchatlistener.cpp
     llaccountingcostmanager.cpp
     llaisapi.cpp
@@ -1146,6 +1151,10 @@ set(viewer_HEADER_FILES
     fslocalmeshimportgltf.h
 
     gltfscenemanager.h
+    gmdxminimapcompass.h
+    gmdxminimapimage.h
+    gmdxminimapmarks.h
+    gmdxregioncapture.h
     groupchatlistener.h
     # <FS:Ansariel> Group GLTF files into their subfolders
     #gltf/asset.h

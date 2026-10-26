@@ -81,6 +81,7 @@
 #include "llviewermessage.h"
 #include "llviewerobjectlist.h"
 #include "llworldmap.h"
+#include "gmdxregioncapture.h" // <GMDX> region maps
 #include "llmutelist.h"
 #include "llviewerhelp.h"
 #include "lluicolortable.h"
@@ -2170,6 +2171,7 @@ bool LLAppViewer::cleanup()
     {
         LLWorldMap::getInstance()->reset(); // release any images
     }
+    GMDXRegionCapture::shutdown(); // <GMDX> release the region maps' images too
 
     LLCalc::cleanUp();
 

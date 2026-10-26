@@ -139,6 +139,8 @@ public:
 
     inline S32 getNumObjects() { return (S32) mObjects.size(); }
     inline S32 getNumActiveObjects() { return (S32) mActiveObjects.size(); }
+    // <GMDX> the objects that move / update each frame (the mini-map's Physical Objects Only)
+    const std::vector<LLPointer<LLViewerObject> >& getActiveObjects() const { return mActiveObjects; }
     
     // <SS:Nexii>
     U32 getNumLikelyProjectileObjects() const { return mNumLikelyProjectileObjects; }

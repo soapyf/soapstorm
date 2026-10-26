@@ -27,6 +27,8 @@
 #include "llviewerprecompiledheaders.h"
 #include "llinventorybridge.h"
 
+#include "gmdxregioncapture.h" // <GMDX> Use as Region Map
+
 // external projects
 #include "lltransfersourceasset.h"
 #include "llavatarnamecache.h"  // IDEVO
@@ -6981,6 +6983,17 @@ void LLTextureBridge::buildContextMenu(LLMenuGL& menu, U32 flags)
             {
                 disabled_items.push_back(std::string("Save As"));
             }
+            // <GMDX> a region map someone shared from GunMetal-DX (gmdxregioncapture.h); saved to disk like Save As
+            const LLViewerInventoryItem* item = getItem();
+            if (item && GMDXRegionCapture::isMapTexture(item->getDescription()))
+            {
+                items.push_back(std::string("Use as Region Map"));
+                if (!canSaveTexture())
+                {
+                    disabled_items.push_back(std::string("Use as Region Map"));
+                }
+            }
+            // </GMDX>
         }
         items.push_back(std::string("Wearable And Object Separator")); // <FS:Ansariel> Add separator
 
@@ -7015,6 +7028,16 @@ void LLTextureBridge::performAction(LLInventoryModel* model, std::string action)
             preview_texture->saveAs();
         }
     }
+    // <GMDX>
+    else if ("use_region_map" == action)
+    {
+        const LLViewerInventoryItem* item = getItem();
+        if (item && canSaveTexture())
+        {
+            GMDXRegionCapture::useMapTexture(item->getAssetUUID(), item->getName(), item->getDescription());
+        }
+    }
+    // </GMDX>
     else if ("save_selected_as" == action)
     {
         openItem();
