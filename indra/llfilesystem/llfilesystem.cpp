@@ -35,8 +35,6 @@
 #include "lldiskcache.h"
 #include "ssstrata.h"   // <SS:Nexii/> Strata asset volumes
 
-#include "boost/filesystem.hpp"
-
 constexpr S32 LLFileSystem::READ        = 0x00000001;
 constexpr S32 LLFileSystem::WRITE       = 0x00000002;
 constexpr S32 LLFileSystem::READ_WRITE  = 0x00000003;  // LLFileSystem::READ & LLFileSystem::WRITE
@@ -52,14 +50,14 @@ LLFileSystem::LLFileSystem(const LLUUID& file_id, const LLAssetType::EType file_
     mBytesRead = 0;
     mMode = mode;
 
+    // build the filepath
+    mPath = fsyspath(LLDiskCache::metaDataToFilepath(mFileID, mFileType));
+
     // This block of code was originally called in the read() method but after comments here:
     // https://bitbucket.org/lindenlab/viewer/commits/e28c1b46e9944f0215a13cab8ee7dded88d7fc90#comment-10537114
     // we decided to follow Henri's suggestion and move the code to update the last access time here.
     if (mode == LLFileSystem::READ)
     {
-        // build the filename (TODO: we do this in a few places - perhaps we should factor into a single function)
-        const std::string filename = LLDiskCache::metaDataToFilepath(mFileID, mFileType);
-
         // update the last access time for the file if it exists - this is required
         // even though we are reading and not writing because this is the
         // way the cache works - it relies on a valid "last accessed time" for
@@ -72,10 +70,9 @@ LLFileSystem::LLFileSystem(const LLUUID& file_id, const LLAssetType::EType file_
         }
         // </SS:Nexii>
 
-        bool exists = gDirUtilp->fileExists(filename);
-        if (exists)
+        if (LLFile::exists(mPath))
         {
-            updateFileAccessTime(filename);
+            updateFileAccessTime();
         }
     }
 }
@@ -94,16 +91,13 @@ bool LLFileSystem::getExists(const LLUUID& file_id, const LLAssetType::EType fil
 
     const std::string filename = LLDiskCache::metaDataToFilepath(file_id, file_type);
 
-    boost::system::error_code ec;
-    if (boost::filesystem::exists(filename, ec) && boost::filesystem::is_regular_file(filename, ec))
-    {
-        return boost::filesystem::file_size(filename, ec) > 0;
-    }
-    return false;
+    // not only test for existence but for the file to be not empty
+    S64 size =  LLFile::size(filename);
+    return size > 0;
 }
 
 // static
-bool LLFileSystem::removeFile(const LLUUID& file_id, const LLAssetType::EType file_type, int suppress_error /*= 0*/)
+bool LLFileSystem::removeFile(const LLUUID& file_id, const LLAssetType::EType file_type, int suppress_warning /*= 0*/)
 {
     LL_PROFILE_ZONE_COLOR(tracy::Color::Gold); // <FS:Beq> measure cache performance
     // <SS:Nexii> Strata - the record is revoked first and the loose unlink still runs, because a crash between the two has to leave the cache with less rather than with two answers for one uuid.
@@ -114,7 +108,7 @@ bool LLFileSystem::removeFile(const LLUUID& file_id, const LLAssetType::EType fi
     // </SS:Nexii>
     const std::string filename = LLDiskCache::metaDataToFilepath(file_id, file_type);
 
-    LLFile::remove(filename.c_str(), suppress_error);
+    LLFile::remove(filename.c_str(), suppress_warning);
 
     return true;
 }
@@ -147,28 +141,6 @@ bool LLFileSystem::renameFile(const LLUUID& old_file_id, const LLAssetType::ETyp
     return true;
 }
 
-// static
-S32 LLFileSystem::getFileSize(const LLUUID& file_id, const LLAssetType::EType file_type)
-{
-    LL_PROFILE_ZONE_COLOR(tracy::Color::Gold); // <FS:Beq> measure cache performance
-    // <SS:Nexii> Strata - the size is a field of the index record, so this costs a hash lookup where the loose path costs two stats. getSize is called on every seek, so it is one of the hottest things in this file.
-    SSStrataStore* strata = SSStrataStore::live();
-    S32 packed_size = 0;
-    if (strata && strata->objectSize(file_id, packed_size))
-    {
-        return packed_size;
-    }
-    // </SS:Nexii>
-
-    const std::string filename = LLDiskCache::metaDataToFilepath(file_id, file_type);
-
-    boost::system::error_code ec;
-    if (boost::filesystem::exists(filename, ec) && boost::filesystem::is_regular_file(filename, ec))
-    {
-        return static_cast<S32>(boost::filesystem::file_size(filename, ec));
-    }
-    return 0;
-}
 
 bool LLFileSystem::read(U8* buffer, S32 bytes)
 {
@@ -188,10 +160,8 @@ bool LLFileSystem::read(U8* buffer, S32 bytes)
     }
     // </SS:Nexii>
 
-    const std::string filename = LLDiskCache::metaDataToFilepath(mFileID, mFileType);
-
     // <FS:Ansariel> IO-streams replacement
-    //llifstream file(filename, std::ios::binary);
+    //llifstream file(mPath, std::ios::binary);
     //if (file.is_open())
     //{
     //    file.seekg(mPosition, std::ios::beg);
@@ -215,7 +185,7 @@ bool LLFileSystem::read(U8* buffer, S32 bytes)
     //        success = true;
     //    }
     //}
-    LLFILE* file = LLFile::fopen(filename, "rb");
+    LLFILE* file = LLFile::fopen(mPath, LLFILE_MODE("rb"));
     if (file)
     {
         if (fseek(file, mPosition, SEEK_SET) == 0)
@@ -252,7 +222,6 @@ bool LLFileSystem::eof() const
 bool LLFileSystem::write(const U8* buffer, S32 bytes)
 {
     LL_PROFILE_ZONE_COLOR(tracy::Color::Gold); // <FS:Beq> measure cache performance
-    const std::string filename = LLDiskCache::metaDataToFilepath(mFileID, mFileType);
 
     bool success = false;
 
@@ -266,7 +235,7 @@ bool LLFileSystem::write(const U8* buffer, S32 bytes)
     // <FS:Ansariel> IO-streams replacement
     //if (mMode == APPEND)
     //{
-    //    llofstream ofs(filename, std::ios::app | std::ios::binary);
+    //    llofstream ofs(mPath, std::ios::app | std::ios::binary);
     //    if (ofs)
     //    {
     //        ofs.write((const char*)buffer, bytes);
@@ -279,7 +248,7 @@ bool LLFileSystem::write(const U8* buffer, S32 bytes)
     //else if (mMode == READ_WRITE)
     //{
     //    // Don't truncate if file already exists
-    //    llofstream ofs(filename, std::ios::in | std::ios::binary);
+    //    llofstream ofs(mPath, std::ios::in | std::ios::binary);
     //    if (ofs)
     //    {
     //        ofs.seekp(mPosition, std::ios::beg);
@@ -290,7 +259,7 @@ bool LLFileSystem::write(const U8* buffer, S32 bytes)
     //    else
     //    {
     //        // File doesn't exist - open in write mode
-    //        ofs.open(filename, std::ios::binary);
+    //        ofs.open(mPath, std::ios::binary);
     //        if (ofs.is_open())
     //        {
     //            ofs.write((const char*)buffer, bytes);
@@ -301,7 +270,7 @@ bool LLFileSystem::write(const U8* buffer, S32 bytes)
     //}
     //else
     //{
-    //    llofstream ofs(filename, std::ios::binary);
+    //    llofstream ofs(mPath, std::ios::binary);
     //    if (ofs)
     //    {
     //        ofs.write((const char*)buffer, bytes);
@@ -313,7 +282,7 @@ bool LLFileSystem::write(const U8* buffer, S32 bytes)
     //}
     if (mMode == APPEND)
     {
-        LLFILE* ofs = LLFile::fopen(filename, "a+b");
+        LLFILE* ofs = LLFile::fopen(mPath, LLFILE_MODE("a+b"));
         if (ofs)
         {
             S32 bytes_written = static_cast<S32>(fwrite(buffer, 1, bytes, ofs));
@@ -324,7 +293,7 @@ bool LLFileSystem::write(const U8* buffer, S32 bytes)
     }
     else if (mMode == READ_WRITE)
     {
-        LLFILE* ofs = LLFile::fopen(filename, "r+b");
+        LLFILE* ofs = LLFile::fopen(mPath, LLFILE_MODE("r+b"));
         if (ofs)
         {
             if (fseek(ofs, mPosition, SEEK_SET) == 0)
@@ -337,7 +306,7 @@ bool LLFileSystem::write(const U8* buffer, S32 bytes)
         }
         else
         {
-            ofs = LLFile::fopen(filename, "wb");
+            ofs = LLFile::fopen(mPath, LLFILE_MODE("wb"));
             if (ofs)
             {
                 S32 bytes_written = static_cast<S32>(fwrite(buffer, 1, bytes, ofs));
@@ -349,7 +318,7 @@ bool LLFileSystem::write(const U8* buffer, S32 bytes)
     }
     else
     {
-        LLFILE* ofs = LLFile::fopen(filename, "wb");
+        LLFILE* ofs = LLFile::fopen(mPath, LLFILE_MODE("wb"));
         if (ofs)
         {
             S32 bytes_written = static_cast<S32>(fwrite(buffer, 1, bytes, ofs));
@@ -403,7 +372,7 @@ S32 LLFileSystem::tell() const
 S32 LLFileSystem::getSize() const
 {
     LL_PROFILE_ZONE_COLOR(tracy::Color::Gold); // <FS:Beq> measure cache performance
-    return LLFileSystem::getFileSize(mFileID, mFileType);
+    return narrow(LLFile::size(mPath));
 }
 
 S32 LLFileSystem::getMaxSize() const
@@ -420,6 +389,7 @@ bool LLFileSystem::rename(const LLUUID& new_id, const LLAssetType::EType new_typ
 
     mFileID = new_id;
     mFileType = new_type;
+    mPath = fsyspath(LLDiskCache::metaDataToFilepath(mFileID, mFileType));
 
     return true;
 }
@@ -427,11 +397,11 @@ bool LLFileSystem::rename(const LLUUID& new_id, const LLAssetType::EType new_typ
 bool LLFileSystem::remove() const
 {
     LL_PROFILE_ZONE_COLOR(tracy::Color::Gold); // <FS:Beq> measure cache performance
-    LLFileSystem::removeFile(mFileID, mFileType);
+    LLFile::remove(mPath);
     return true;
 }
 
-void LLFileSystem::updateFileAccessTime(const std::string& file_path)
+void LLFileSystem::updateFileAccessTime()
 {
     /**
      * Threshold in time_t units that is used to decide if the last access time
@@ -442,52 +412,32 @@ void LLFileSystem::updateFileAccessTime(const std::string& file_path)
      *
      * Let's start with 1 hour in time_t units and see how that unfolds
      */
-    constexpr std::time_t time_threshold = 1 * 60 * 60;
+    constexpr std::chrono::hours time_threshold(1);
 
     // current time
-    const std::time_t cur_time = std::time(nullptr);
+    const std::filesystem::file_time_type cur_time = std::chrono::file_clock::now();
 
-    boost::system::error_code ec;
-#if LL_WINDOWS
+    std::error_code ec;
     // file last write time
-    const std::time_t last_write_time = boost::filesystem::last_write_time(ll_convert<std::wstring>(file_path), ec);
-    if (ec.failed())
+    const std::filesystem::file_time_type last_write_time = std::filesystem::last_write_time(mPath, ec);
+    if (ec)
     {
-        LL_WARNS() << "Failed to read last write time for cache file " << file_path << ": " << ec.message() << LL_ENDL;
+        LL_WARNS() << "Failed to read last write time for cache file " << mPath << ": " << ec.message() << LL_ENDL;
         return;
     }
 
     // delta between cur time and last time the file was written
-    const std::time_t delta_time = cur_time - last_write_time;
+    const auto delta_time = cur_time - last_write_time;
 
     // we only write the new value if the time in time_threshold has elapsed
     // before the last one
     if (delta_time > time_threshold)
     {
-        boost::filesystem::last_write_time(ll_convert<std::wstring>(file_path), cur_time, ec);
-    }
-#else
-    // file last write time
-    const std::time_t last_write_time = boost::filesystem::last_write_time(file_path, ec);
-    if (ec.failed())
-    {
-        LL_WARNS() << "Failed to read last write time for cache file " << file_path << ": " << ec.message() << LL_ENDL;
-        return;
+        std::filesystem::last_write_time(mPath, cur_time, ec);
     }
 
-    // delta between cur time and last time the file was written
-    const std::time_t delta_time = cur_time - last_write_time;
-
-    // we only write the new value if the time in time_threshold has elapsed
-    // before the last one
-    if (delta_time > time_threshold)
+    if (ec)
     {
-        boost::filesystem::last_write_time(file_path, cur_time, ec);
-    }
-#endif
-
-    if (ec.failed())
-    {
-        LL_WARNS() << "Failed to update last write time for cache file " << file_path << ": " << ec.message() << LL_ENDL;
+        LL_WARNS() << "Failed to update last write time for cache file " << mPath << ": " << ec.message() << LL_ENDL;
     }
 }

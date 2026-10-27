@@ -500,7 +500,7 @@ LLViewerObject* LLViewerObjectList::processObjectUpdateFromCache(LLVOCacheEntry*
         objectp->setLastUpdateType(OUT_FULL_COMPRESSED); //newly cached
         objectp->setLastUpdateCached(true);
     }
-    LLVOAvatar::cullAvatarsByPixelArea();
+    LLVOAvatar::setCullNeedsUpdate();
 
     // <SS:Nexii> A region-object-cache ghost is a guess about what is standing here, so it must not behave as though it were the object. This sits on the common tail of EVERY rez from cache - the initial injection and the re-rez after the stock invisibility culling reaps it behind the camera - because the ghost state lives on the cache record, not on the object, and survives the object being thrown away. Costs one hash lookup guarded by an empty-set test on the non-ghost path. See doc/region_object_cache.md.
     ssROCGhostSuppress(objectp);
@@ -819,7 +819,7 @@ void LLViewerObjectList::processObjectUpdate(LLMessageSystem *mesgsys,
         objectp->setLastUpdateType(update_type);
     }
 
-    LLVOAvatar::cullAvatarsByPixelArea();
+    LLVOAvatar::setCullNeedsUpdate();
 }
 
 void LLViewerObjectList::processCompressedObjectUpdate(LLMessageSystem *mesgsys,
@@ -1765,6 +1765,7 @@ void LLViewerObjectList::killObjects(LLViewerRegion *regionp)
 
 void LLViewerObjectList::killAllObjects()
 {
+    LL_PROFILE_ZONE_SCOPED;
     // Used only on global destruction.
 
     // Mass cleanup to not clear lists one item at a time
@@ -1789,7 +1790,10 @@ void LLViewerObjectList::killAllObjects()
 
     gMeshRepo.unregisterAllMeshes();
 
-    cleanDeadObjects(false);
+    // Direct clear instead of cleanDeadObjects - all objects are already dead
+    mObjects.clear();
+    mDeadObjects.clear();
+    mNumDeadObjects = 0;
 
     if(!mObjects.empty())
     {

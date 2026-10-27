@@ -1350,7 +1350,7 @@ void FSLSLBridgeScriptCallback::fire(const LLUUID& inv_item)
             LL_INFOS("FSLSLBridge") << "Updating script ID for bridge and enqueing upload. Inventory ID: " << inv_item.asString() << LL_ENDL;
             FSLSLBridge::instance().mScriptItemID = inv_item;
 
-            LLResourceUploadInfo::ptr_t uploadInfo(std::make_shared<LLScriptAssetUpload>(obj->getID(), inv_item, LLScriptAssetUpload::MONO, true, LLUUID::null, buffer,
+            LLResourceUploadInfo::ptr_t uploadInfo(std::make_shared<LLScriptAssetUpload>(obj->getID(), inv_item, "mono", true, LLUUID::null, buffer,
                 [](LLUUID, LLUUID, LLUUID, LLSD) {
                     FSLSLBridge::getInstance()->setTimerResult(FSLSLBridge::SCRIPT_UPLOAD_FINISHED);
                 }, nullptr));
@@ -1391,7 +1391,7 @@ std::string FSLSLBridgeScriptCallback::prepUploadFile(std::string &aBuffer)
     const std::string fName = gDirUtilp->getExpandedFilename(LL_PATH_FS_RESOURCES, UPLOAD_SCRIPT_CURRENT);
     const std::string fNew = gDirUtilp->getExpandedFilename(LL_PATH_CACHE,UPLOAD_SCRIPT_CURRENT);
 
-    LLFILE* fpIn = LLFile::fopen(fName, "rt");
+    LLFILE* fpIn = LLFile::fopen(fName, LLFILE_MODE("rt"));
     if (!fpIn)
     {
         LL_WARNS("FSLSLBridge") << "Cannot open script resource file" << LL_ENDL;
@@ -1410,7 +1410,7 @@ std::string FSLSLBridgeScriptCallback::prepUploadFile(std::string &aBuffer)
 
     LLFile::close(fpIn);
 
-    aBuffer = ( (char const*)&vctData[0] );
+    aBuffer = ((char const*)&vctData[0]);
 
     const std::string bridgekey = "BRIDGEKEY";
     size_t pos = aBuffer.find(bridgekey);
@@ -1421,7 +1421,7 @@ std::string FSLSLBridgeScriptCallback::prepUploadFile(std::string &aBuffer)
     }
     aBuffer.replace(pos, bridgekey.length(), FSLSLBridge::getInstance()->getBridgeFolder().asString());
 
-    LLFILE *fpOut = LLFile::fopen(fNew, "wt");
+    LLFILE* fpOut = LLFile::fopen(fNew, LLFILE_MODE("wt"));
     if (!fpOut)
     {
         LL_WARNS("FSLSLBridge") << "Cannot open script upload file" << LL_ENDL;
@@ -1470,7 +1470,7 @@ void FSLSLBridge::checkBridgeScriptName()
     }
 
     LL_INFOS("FSLSLBridge") << "Saving script " << mScriptItemID.asString() << " in object" << LL_ENDL;
-    obj->saveScript(gInventory.getItem(mScriptItemID), true, true);
+    obj->saveScript(gInventory.getItem(mScriptItemID), true, true, LLUUID::null);
     new FSLSLBridgeCleanupTimer();
 }
 

@@ -126,7 +126,8 @@ protected:
     bool onExternalChange(const std::string& filename);
     bool loadNotecardText(const std::string& filename);
     bool writeToFile(const std::string& filename);
-    std::string getTmpFileName();
+    std::string getCleanNameForTmpFile() const;
+    std::string getTmpFileName(const std::string& note_name) const;
 
     // <FS:Ansariel> FIRE-29425: User-selectable font and size for notecards
     boost::signals2::connection mFontNameChangedCallbackConnection;
@@ -145,6 +146,8 @@ protected:
     LLButton* mEditBtn = nullptr;
     LLButton* mDeleteBtn = nullptr;
     LLUICtrl* mLockBtn = nullptr;
+
+    std::string mNoteName;
 
     // <FS> Byte counter
     LLTextBox* mByteCounter = nullptr;
