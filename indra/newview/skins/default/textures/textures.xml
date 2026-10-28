@@ -231,6 +231,62 @@ with the same filename but different name
   <texture name="ChatBarHandle" file_name="bottomtray/ChatBarHandle.png" preload="false" />
   <texture name="DownArrow" file_name="bottomtray/DownArrow.png" preload="false" />
   <texture name="DownArrow_Off" file_name="icons/DownArrow_Off.png" preload="false" />
+  <texture name="Dpad" file_name="bottomtray/Dpad.png" preload="false" /> <!-- game control rows in Preferences > Controls -->
+  <!-- <SS:GameControl> Controller pictures and prompt icons, CC0 (see gamecontrol/CREDITS.txt) -->
+  <texture name="GameControl_Body_xbox" file_name="gamecontrol/body_xbox.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Body_ps4" file_name="gamecontrol/body_ps4.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Body_switch" file_name="gamecontrol/body_switch.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Body_steam" file_name="gamecontrol/body_steam.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_xbox_s" file_name="gamecontrol/icon_xbox_s.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_xbox_e" file_name="gamecontrol/icon_xbox_e.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_xbox_w" file_name="gamecontrol/icon_xbox_w.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_xbox_n" file_name="gamecontrol/icon_xbox_n.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_xbox_back" file_name="gamecontrol/icon_xbox_back.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_xbox_start" file_name="gamecontrol/icon_xbox_start.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_xbox_leftstick" file_name="gamecontrol/icon_xbox_leftstick.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_xbox_rightstick" file_name="gamecontrol/icon_xbox_rightstick.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_xbox_leftshoulder" file_name="gamecontrol/icon_xbox_leftshoulder.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_xbox_rightshoulder" file_name="gamecontrol/icon_xbox_rightshoulder.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_xbox_dpup" file_name="gamecontrol/icon_xbox_dpup.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_xbox_dpdown" file_name="gamecontrol/icon_xbox_dpdown.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_xbox_dpleft" file_name="gamecontrol/icon_xbox_dpleft.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_xbox_dpright" file_name="gamecontrol/icon_xbox_dpright.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_xbox_lefttrigger" file_name="gamecontrol/icon_xbox_lefttrigger.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_xbox_righttrigger" file_name="gamecontrol/icon_xbox_righttrigger.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_sony_s" file_name="gamecontrol/icon_sony_s.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_sony_e" file_name="gamecontrol/icon_sony_e.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_sony_w" file_name="gamecontrol/icon_sony_w.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_sony_n" file_name="gamecontrol/icon_sony_n.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_sony_back" file_name="gamecontrol/icon_sony_back.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_sony_start" file_name="gamecontrol/icon_sony_start.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_sony_leftstick" file_name="gamecontrol/icon_sony_leftstick.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_sony_rightstick" file_name="gamecontrol/icon_sony_rightstick.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_sony_leftshoulder" file_name="gamecontrol/icon_sony_leftshoulder.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_sony_rightshoulder" file_name="gamecontrol/icon_sony_rightshoulder.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_sony_dpup" file_name="gamecontrol/icon_sony_dpup.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_sony_dpdown" file_name="gamecontrol/icon_sony_dpdown.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_sony_dpleft" file_name="gamecontrol/icon_sony_dpleft.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_sony_dpright" file_name="gamecontrol/icon_sony_dpright.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_sony_lefttrigger" file_name="gamecontrol/icon_sony_lefttrigger.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_sony_righttrigger" file_name="gamecontrol/icon_sony_righttrigger.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_s" file_name="gamecontrol/icon_nintendo_s.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_e" file_name="gamecontrol/icon_nintendo_e.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_w" file_name="gamecontrol/icon_nintendo_w.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_n" file_name="gamecontrol/icon_nintendo_n.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_back" file_name="gamecontrol/icon_nintendo_back.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_guide" file_name="gamecontrol/icon_nintendo_guide.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_start" file_name="gamecontrol/icon_nintendo_start.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_leftstick" file_name="gamecontrol/icon_nintendo_leftstick.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_rightstick" file_name="gamecontrol/icon_nintendo_rightstick.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_leftshoulder" file_name="gamecontrol/icon_nintendo_leftshoulder.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_rightshoulder" file_name="gamecontrol/icon_nintendo_rightshoulder.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_dpup" file_name="gamecontrol/icon_nintendo_dpup.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_dpdown" file_name="gamecontrol/icon_nintendo_dpdown.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_dpleft" file_name="gamecontrol/icon_nintendo_dpleft.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_dpright" file_name="gamecontrol/icon_nintendo_dpright.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_lefttrigger" file_name="gamecontrol/icon_nintendo_lefttrigger.png" use_mips="true" preload="false" />
+  <texture name="GameControl_Icon_nintendo_righttrigger" file_name="gamecontrol/icon_nintendo_righttrigger.png" use_mips="true" preload="false" />
+  <!-- </SS:GameControl> -->
   <texture name="Dragbar" file_name="windows/Dragbar.png" preload="false" scale.left="35" scale.top="5" scale.right="29" scale.bottom="5" />
 
   <texture name="DropDown_Disabled" file_name="widgets/DropDown_Disabled.png" preload="true" scale.left="4" scale.top="19" scale.right="99" scale.bottom="4" />

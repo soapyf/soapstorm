@@ -118,9 +118,9 @@ public:
 
     void processMiscNativeEvents() override;
 
-    void gatherInput() override;
+    void gatherInput(bool app_has_focus) override;
 
-    SDL_AppResult handleEvent(const SDL_Event& event);
+    SDL_AppResult handleEvent(const SDL_Event& event, bool app_has_focus = true);
     static SDL_AppResult handleEvents(const SDL_Event& event);
 
     void swapBuffers() override;

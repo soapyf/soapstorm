@@ -566,6 +566,15 @@ LLScrollListItem* LLScrollListCtrl::getLastData() const
     return mItemList.empty() ? NULL : mItemList.back();
 }
 
+LLScrollListItem* LLScrollListCtrl::getNthData(size_t index) const
+{
+    if (mItemList.size() <= index)
+    {
+        return NULL;
+    }
+    return mItemList[index];
+}
+
 std::vector<LLScrollListItem*> LLScrollListCtrl::getAllData() const
 {
     std::vector<LLScrollListItem*> ret;
@@ -2419,6 +2428,7 @@ bool LLScrollListCtrl::handleClick(S32 x, S32 y, MASK mask)
                 // </FS:ND>
                 {
                     LLScrollListCell* cellp = item->getColumn(column_index);
+                    if (!cellp) continue;
                     cellp->setValue(item_value);
                     cellp->onCommit();
                     if (mLastSelected == NULL)
@@ -3039,7 +3049,11 @@ bool LLScrollListCtrl::isRepeatedChars(const LLWString& string) const
 
 void LLScrollListCtrl::selectItem(LLScrollListItem* itemp, S32 cell, bool select_single_item)
 {
-    if (itemp && !itemp->getSelected())
+    if (!itemp) return;
+
+    // Re-selecting another cell of a selected row only means something in cell selection;
+    // row lists store -1 whatever column was clicked.
+    if (!itemp->getSelected() || (mSelectionType == CELL && itemp->getSelectedCell() != cell))
     {
         if (mLastSelected)
         {

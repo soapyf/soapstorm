@@ -1,0 +1,504 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!--
+  Develop > Game Controller Debug. Diagnostics that used to sit in the Game Controls
+  preferences: raw and adjusted input with calibration, the physical-to-canonical
+  hardware remap for controllers SDL maps wrongly, and the data sent to the region.
+  Edits here apply and save immediately.
+-->
+<floater
+    positioning="cascading"
+    can_resize="true"
+    height="480"
+    min_height="360"
+    min_width="520"
+    layout="topleft"
+    name="game_control_debug"
+    help_topic="game_control_debug"
+    save_rect="true"
+    single_instance="true"
+    title="Game Controller Debug"
+    width="560">
+    <tab_container
+        name="game_control_debug_tabs"
+        layout="topleft"
+        follows="all"
+        top="20"
+        left="4"
+        right="-4"
+        bottom="-4"
+        tab_position="top">
+        <panel
+            name="tab_device_options"
+            label="Live input">
+            <text
+                type="string"
+                name="state_nodevice_message"
+                layout="topleft"
+                follows="all"
+                halign="center"
+                valign="center"
+                top="26"
+                left="1"
+                right="-1"
+                bottom="-1">No device</text>
+            <text
+                type="string"
+                name="state_device_prompt"
+                layout="topleft"
+                follows="top|left"
+                valign="center"
+                top="10"
+                left="9"
+                height="23"
+                width="48">Device:</text>
+            <combo_box
+                name="options_device_list"
+                layout="topleft"
+                follows="top|left"
+                top="10"
+                left="61"
+                height="23"
+                width="260"/>
+            <button
+                name="restore_device_options_defaults"
+                layout="topleft"
+                follows="top|right"
+                top="10"
+                right="-8"
+                height="23"
+                width="140"
+                label="Restore Defaults"
+                tool_tip="Restores the default Offset, Invert, and Dead Zone for every axis of the selected device."/>
+            <button
+                name="auto_calibrate"
+                layout="topleft"
+                follows="top|right"
+                top="35"
+                right="-8"
+                height="23"
+                width="140"
+                label="Auto calibrate"
+                tool_tip="Samples the selected device's raw axes over 5 frames; any axis that doesn't move is assumed to be at rest, and its Offset and Dead Zone are set from that reading."/>
+            <panel
+                name="device_state_settings"
+                layout="topleft"
+                follows="all"
+                top="63"
+                left="1"
+                right="-1"
+                bottom="-2">
+                <panel
+                    name="axis_state_panel"
+                    layout="topleft"
+                    follows="top|left|right"
+                    top="1"
+                    left="1"
+                    right="-1"
+                    height="146">
+                    <scroll_list
+                        name="axis_state"
+                        follows="all"
+                        top="1"
+                        left="1"
+                        right="-1"
+                        bottom="-1"
+                        can_sort="false"
+                        column_padding="0"
+                        draw_heading="true"
+                        multi_select="false"
+                        selection_type="header"
+                        fg_disable_color="ScrollUnselectedColor">
+                        <scroll_list.columns name="input_glyph" label="Input"          relative_width="0.12"/>
+                        <scroll_list.columns name="input"       label="Axis"           relative_width="0.18"/>
+                        <scroll_list.columns name="raw_value"   label="Raw Value"      relative_width="0.14"/>
+                        <scroll_list.columns name="offset"      label="Offset"         relative_width="0.10"/>
+                        <scroll_list.columns name="invert"      label="Invert"         type="checkbox" relative_width="0.10"/>
+                        <scroll_list.columns name="dead_zone"   label="Dead Zone"      relative_width="0.15"/>
+                        <scroll_list.columns name="fixed_value" label="Adjusted Value" relative_width="0.21"/>
+                    </scroll_list>
+                </panel>
+                <panel
+                    name="button_state_panel"
+                    layout="topleft"
+                    follows="all"
+                    top="143"
+                    left="1"
+                    right="-1"
+                    bottom="-1">
+                    <scroll_list
+                        name="button_state"
+                        follows="all"
+                        top="1"
+                        left="1"
+                        right="-1"
+                        bottom="-1"
+                        can_sort="false"
+                        column_padding="0"
+                        draw_heading="true"
+                        multi_select="false"
+                        selection_type="header"
+                        fg_disable_color="ScrollUnselectedColor">
+                        <scroll_list.columns name="input_glyph" label="Input"  relative_width="0.15"/>
+                        <scroll_list.columns name="input"       label="Button" relative_width="0.45"/>
+                        <scroll_list.columns name="value"       label="Value"  relative_width="0.40"/>
+                    </scroll_list>
+                </panel>
+            </panel>
+        </panel>
+        <panel
+            name="tab_device_mappings"
+            label="Hardware remap">
+            <text
+                type="string"
+                name="nodevice_message"
+                layout="topleft"
+                follows="all"
+                halign="center"
+                valign="center"
+                top="26"
+                left="1"
+                right="-1"
+                bottom="-1">No device</text>
+            <check_box
+                name="show_all_known_devices"
+                label="Show all known devices"
+                layout="topleft"
+                follows="top|left"
+                top="38"
+                left="61"
+                height="16"
+                width="160"/>
+            <text
+                type="string"
+                name="device_prompt"
+                layout="topleft"
+                follows="top|left"
+                valign="center"
+                top="10"
+                left="9"
+                height="23"
+                width="48">Device:</text>
+            <combo_box
+                name="device_list"
+                layout="topleft"
+                follows="top|left"
+                top="10"
+                left="61"
+                height="23"
+                width="260"/>
+            <button
+                name="restore_device_defaults"
+                layout="topleft"
+                follows="top|right"
+                top="10"
+                right="-8"
+                height="23"
+                width="140"
+                label="Restore Defaults"
+                tool_tip="Restores default settings for the selected device."/>
+            <panel
+                name="device_settings"
+                layout="topleft"
+                follows="all"
+                top="66"
+                left="1"
+                right="-1"
+                bottom="-2">
+                <panel
+                    name="axis_channels_panel"
+                    layout="topleft"
+                    follows="top|left|right"
+                    top="1"
+                    left="1"
+                    right="-1"
+                    height="146">
+                    <scroll_list
+                        name="axis_channels"
+                        follows="all"
+                        top="1"
+                        left="1"
+                        right="-1"
+                        bottom="-1"
+                        can_sort="false"
+                        column_padding="0"
+                        draw_heading="true"
+                        multi_select="false"
+                        selection_type="header"
+                        fg_disable_color="ScrollUnselectedColor">
+                        <scroll_list.columns name="input"              label=""              relative_width="0.15"/>
+                        <scroll_list.columns name="input_description"  label="What you press" relative_width="0.35"/>
+                        <scroll_list.columns name="output_description" label="What you get"   relative_width="0.35"/>
+                        <scroll_list.columns name="output"             label=""              relative_width="0.15"/>
+                    </scroll_list>
+                </panel>
+                <panel
+                    name="button_channels_panel"
+                    layout="topleft"
+                    follows="all"
+                    top="143"
+                    left="1"
+                    right="-1"
+                    bottom="-1">
+                    <scroll_list
+                        name="button_channels"
+                        follows="all"
+                        top="1"
+                        left="1"
+                        right="-1"
+                        bottom="-1"
+                        can_sort="false"
+                        column_padding="0"
+                        draw_heading="true"
+                        multi_select="false"
+                        selection_type="header"
+                        fg_disable_color="ScrollUnselectedColor">
+                        <scroll_list.columns name="input"              label=""              relative_width="0.15"/>
+                        <scroll_list.columns name="input_description"  label="What you press" relative_width="0.35"/>
+                        <scroll_list.columns name="output_description" label="What you get"   relative_width="0.35"/>
+                        <scroll_list.columns name="output"             label=""              relative_width="0.15"/>
+                    </scroll_list>
+                </panel>
+            </panel>
+        </panel>
+        <panel
+            name="tab_server_data"
+            label="Server data">
+            <text
+                type="string"
+                name="data_note"
+                layout="topleft"
+                follows="top|left|right"
+                word_wrap="true"
+                top="8"
+                left="9"
+                right="-9"
+                height="42">The last GameControlData sent to the region: canonical axes and buttons, then the semantic axes and buttons for the current mode. Only sent when "Send controller data to Second Life regions" is on in Preferences.</text>
+            <panel
+                name="data_panel"
+                layout="topleft"
+                follows="all"
+                top="48"
+                left="1"
+                right="-1"
+                bottom="-1">
+                <scroll_list
+                    name="data_output"
+                    follows="all"
+                    top="1"
+                    left="1"
+                    right="-1"
+                    bottom="-1"
+                    can_sort="false"
+                    column_padding="0"
+                    draw_heading="true"
+                    multi_select="false"
+                    selection_type="header"
+                    fg_disable_color="ScrollUnselectedColor">
+                    <scroll_list.columns name="index"  label="#"      relative_width="0.1"/>
+                    <scroll_list.columns name="output" label="Name"   relative_width="0.5"/>
+                    <scroll_list.columns name="value"  label="Value"  relative_width="0.4"/>
+                </scroll_list>
+            </panel>
+        </panel>
+    </tab_container>
+    <!-- axis_output_selector: the canonical axis a physical device axis maps to on
+         the Devices tab.  This is strictly index-based (item N == canonical axis N,
+         matching LLGameControl::KeyboardAxis; the final "None" item == NUM_AXES), so
+         it lists every individual canonical axis, including each trigger separately. -->
+    <combo_box
+        name="axis_output_selector"
+        width="200"
+        height="18">
+        <combo_box.item
+            label="L Stick ↔"
+            name="axis_0"
+            value="AXIS_LEFTX"/>
+        <combo_box.item
+            label="L Stick ↕"
+            name="axis_1"
+            value="AXIS_LEFTY"/>
+        <combo_box.item
+            label="R Stick ↔"
+            name="axis_2"
+            value="AXIS_RIGHTX"/>
+        <combo_box.item
+            label="R Stick ↕"
+            name="axis_3"
+            value="AXIS_RIGHTY"/>
+        <combo_box.item
+            label="L Trigger ↘"
+            name="axis_4"
+            value="AXIS_LEFT_TRIGGER"/>
+        <combo_box.item
+            label="R Trigger ↙"
+            name="axis_5"
+            value="AXIS_RIGHT_TRIGGER"/>
+        <combo_box.item
+            label="Triggers ↘↙"
+            name="axis_output_triggers"
+            value="AXIS_TRIGGERS"/>
+        <combo_box.item
+            label="None"
+            name="axis_none"
+            value="AXIS_NONE"/>
+    </combo_box>
+    <!-- axis_output_glyph_selector: the glyph counterpart of axis_output_selector,
+         shown when editing the "output" (icon) column of the Devices-tab
+         axis-channels table.  Items are built in C++ from axis_output_selector's
+         values; each item's label is the font glyph for that canonical axis. -->
+    <combo_box
+        name="axis_output_glyph_selector"
+        width="200"
+        height="18"/>
+    <combo_box
+        name="button_input_selector"
+        width="380"
+        height="18">
+        <combo_box.item
+            label="South"
+            name="BUTTON_0"
+            value="BUTTON_SOUTH"/>
+        <combo_box.item
+            label="East"
+            name="BUTTON_1"
+            value="BUTTON_EAST"/>
+        <combo_box.item
+            label="West"
+            name="BUTTON_2"
+            value="BUTTON_WEST"/>
+        <combo_box.item
+            label="North"
+            name="BUTTON_3"
+            value="BUTTON_NORTH"/>
+        <combo_box.item
+            label="Select"
+            name="BUTTON_4"
+            value="BUTTON_SELECT"/>
+        <combo_box.item
+            label="Home"
+            name="BUTTON_5"
+            value="BUTTON_HOME"/>
+        <combo_box.item
+            label="Start"
+            name="BUTTON_6"
+            value="BUTTON_START"/>
+        <combo_box.item
+            label="L Stick"
+            name="BUTTON_7"
+            value="BUTTON_LEFT_STICK"/>
+        <combo_box.item
+            label="R Stick"
+            name="BUTTON_8"
+            value="BUTTON_RIGHT_STICK"/>
+        <combo_box.item
+            label="L Shoulder"
+            name="BUTTON_9"
+            value="BUTTON_LEFT_SHOULDER"/>
+        <combo_box.item
+            label="R Shoulder"
+            name="BUTTON_10"
+            value="BUTTON_RIGHT_SHOULDER"/>
+        <combo_box.item
+            label="DPad Up"
+            name="BUTTON_11"
+            value="BUTTON_DPAD_UP"/>
+        <combo_box.item
+            label="DPad Down"
+            name="BUTTON_12"
+            value="BUTTON_DPAD_DOWN"/>
+        <combo_box.item
+            label="DPad Left"
+            name="BUTTON_13"
+            value="BUTTON_DPAD_LEFT"/>
+        <combo_box.item
+            label="DPad Right"
+            name="BUTTON_14"
+            value="BUTTON_DPAD_RIGHT"/>
+        <combo_box.item
+            label="Misc / Quick access"
+            name="BUTTON_15"
+            value="BUTTON_MISC1"/>
+        <combo_box.item
+            label="Right paddle 1"
+            name="BUTTON_16"
+            value="BUTTON_PADDLE1"/>
+        <combo_box.item
+            label="Left paddle 1"
+            name="BUTTON_17"
+            value="BUTTON_PADDLE2"/>
+        <combo_box.item
+            label="Right paddle 2"
+            name="BUTTON_18"
+            value="BUTTON_PADDLE3"/>
+        <combo_box.item
+            label="Left paddle 2"
+            name="BUTTON_19"
+            value="BUTTON_PADDLE4"/>
+        <combo_box.item
+            label="Touchpad / Left pad click"
+            name="BUTTON_20"
+            value="BUTTON_TOUCHPAD"/>
+        <combo_box.item
+            label="Right pad click"
+            name="BUTTON_21"
+            value="BUTTON_MISC2"/>
+        <combo_box.item
+            label="Left stick touch"
+            name="BUTTON_22"
+            value="BUTTON_MISC3"/>
+        <combo_box.item
+            label="Right stick touch"
+            name="BUTTON_23"
+            value="BUTTON_MISC4"/>
+        <combo_box.item
+            label="Left grip touch"
+            name="BUTTON_24"
+            value="BUTTON_MISC5"/>
+        <combo_box.item
+            label="Right grip touch"
+            name="BUTTON_25"
+            value="BUTTON_MISC6"/>
+        <combo_box.item
+            label="BUTTON_26"
+            name="BUTTON_26"
+            value="BUTTON_26"/>
+        <combo_box.item
+            label="BUTTON_27"
+            name="BUTTON_27"
+            value="BUTTON_27"/>
+        <combo_box.item
+            label="BUTTON_28"
+            name="BUTTON_28"
+            value="BUTTON_28"/>
+        <combo_box.item
+            label="BUTTON_29"
+            name="BUTTON_29"
+            value="BUTTON_29"/>
+        <combo_box.item
+            label="LT"
+            name="BUTTON_30"
+            value="BUTTON_LEFT_TRIGGER"/>
+        <combo_box.item
+            label="RT"
+            name="BUTTON_31"
+            value="BUTTON_RIGHT_TRIGGER"/>
+        <combo_box.item
+            label="None"
+            name="BUTTON_NONE"
+            value="BUTTON_NONE"/>
+    </combo_box>
+    <!-- button_input_glyph_selector: the glyph counterpart of button_input_selector,
+         shown when editing the "Button" (icon) column.  Items are built
+         in C++ from button_input_selector's values; each item's label is the
+         fong glyph for that button (falling back to text where none exists). -->
+    <combo_box
+        name="button_input_glyph_selector"
+        width="380"
+        height="18"/>
+    <spinner
+        name="numeric_value_editor"
+        decimal_digits="0"
+        increment="1"
+        width="100"
+        height="18"/>
+</floater>

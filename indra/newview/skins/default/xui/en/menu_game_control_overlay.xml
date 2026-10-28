@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <SS:GameControl> right-click menu of the controller overlay -->
+<context_menu
+ layout="topleft"
+ name="Game Control Overlay Menu">
+    <menu_item_call
+     label="Controller options..."
+     layout="topleft"
+     name="options">
+        <on_click function="GameControlOverlay.Options" />
+    </menu_item_call>
+    <menu_item_check
+     label="Show in mouselook"
+     layout="topleft"
+     name="in_mouselook">
+        <on_check function="GameControlOverlay.InMouselook" />
+        <on_click function="GameControlOverlay.ToggleMouselook" />
+    </menu_item_check>
+    <menu_item_separator layout="topleft" />
+    <menu_item_call
+     label="Close"
+     layout="topleft"
+     name="close">
+        <on_click function="GameControlOverlay.Close" />
+    </menu_item_call>
+</context_menu>

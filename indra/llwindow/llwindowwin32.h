@@ -101,7 +101,7 @@ public:
     U32 getFSAASamples() override;
     bool restoreGamma() override;            // Restore original gamma table (before updating gamma)
     ESwapMethod getSwapMethod() override { return mSwapMethod; }
-    void gatherInput() override;
+    void gatherInput(bool app_has_focus) override;
     void delayInputProcessing() override;
     void swapBuffers() override;
 

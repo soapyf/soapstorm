@@ -48,6 +48,7 @@
 #include "llframetimer.h" // <SS:Nexii> pinned device retry
 #include "llfocusmgr.h"
 #include "llmoveview.h"
+#include "llgamecontrol.h"
 
 #if LL_WINDOWS && !LL_MESA_HEADLESS
 // Require DirectInput version 8
@@ -80,6 +81,8 @@ F32  LLViewerJoystick::sDelta[] = {0,0,0,0,0,0,0};
 
 
 #if LIB_NDOF
+static bool sNdofLibInitialized = false;
+
 std::ostream& operator<<(std::ostream& out, NDOF_Device* ptr)
 {
     if (! ptr)
@@ -267,48 +270,48 @@ void LLViewerJoystick::updateEnabled(bool autoenable)
     }
     if (!gSavedSettings.getBOOL("JoystickEnabled"))
     {
-        mOverrideCamera = false;
+        if (gAgentCamera.isUsingFlycam())
+        {
+            gAgentCamera.toggleFlycam();
+        }
     }
 }
 
-void LLViewerJoystick::setOverrideCamera(bool val)
+bool LLViewerJoystick::getOverrideCamera()
 {
-    if (!gSavedSettings.getBOOL("JoystickEnabled"))
-    {
-        mOverrideCamera = false;
-    }
-    else
-    {
-        mOverrideCamera = val;
-    }
-
-    if (mOverrideCamera)
-    {
-        gAgentCamera.changeCameraToDefault();
-    }
+    return gAgentCamera.isUsingFlycam();
 }
 
 // -----------------------------------------------------------------------------
 #if LIB_NDOF
 NDOF_HotPlugResult LLViewerJoystick::HotPlugAddCallback(NDOF_Device *dev)
 {
+    // Note: macOS only: hotplug callbacks never fire on Windows or Linux
     NDOF_HotPlugResult res = NDOF_DISCARD_HOTPLUGGED;
-    LLViewerJoystick* joystick(LLViewerJoystick::getInstance());
-    if (joystick->mDriverState == JDS_UNINITIALIZED)
+    if (dev)
     {
-        LL_INFOS("Joystick") << "HotPlugAddCallback: will use device:" << LL_ENDL;
+        LLViewerJoystick* joystick(LLViewerJoystick::getInstance());
+        if (joystick->mDriverState == JDS_UNINITIALIZED)
+        {
+            LL_INFOS("Joystick") << "HotPlugAddCallback: will use device: " << (void*)(dev) << LL_ENDL;
 
-        // <FS:ND> Disable for Linux till vs017 gets merged in to no having to support multiple version of libndofdev
+            // <FS:ND> Disable for Linux till vs017 gets merged in to no having to support multiple version of libndofdev
 #ifndef LL_LINUX
-        ndof_dump(stderr, dev);
+            ndof_dump(stderr, dev);
 #endif
-        // </FS:ND>
+            // </FS:ND>
 
-        joystick->mNdofDev = dev;
-        joystick->mDriverState = JDS_INITIALIZED;
-        res = NDOF_KEEP_HOTPLUGGED;
+            // POTENTIAL LEAK: libndofdev has no per-device free and we belive its memory is
+            // only released by ndof_libcleanup().  We don't want to free it ourselves for
+            // worry it might still be used later, so we drop it.
+            joystick->mNdofDev = dev;
+
+            joystick->mDriverState = JDS_INITIALIZED;
+            joystick->mDeviceIs3DConnexion = is3DConnexionDevice(dev->product);
+            res = NDOF_KEEP_HOTPLUGGED;
+        }
+        joystick->updateEnabled(true);
     }
-    joystick->updateEnabled(true);
     return res;
 }
 #endif
@@ -317,6 +320,7 @@ NDOF_HotPlugResult LLViewerJoystick::HotPlugAddCallback(NDOF_Device *dev)
 #if LIB_NDOF
 void LLViewerJoystick::HotPlugRemovalCallback(NDOF_Device *dev)
 {
+    // Note: macOS only: hotplug callbacks never fire on Windows or Linux
     LLViewerJoystick* joystick(LLViewerJoystick::getInstance());
     if (joystick->mNdofDev == dev)
     {
@@ -330,6 +334,13 @@ void LLViewerJoystick::HotPlugRemovalCallback(NDOF_Device *dev)
         // </FS:ND>
 
         joystick->mDriverState = JDS_UNINITIALIZED;
+        joystick->mDeviceIs3DConnexion = false;
+
+        // POTENTIAL LEAK: ndofdev_external.h doesn't say what becomes of 'dev' after this
+        // callback, so we don't free it or keep using it.  init() allocates a new struct if
+        // it needs one (and a replug hands us a new 'dev' via HotPlugAddCallback()).
+        // If libndofdev doesn't free 'dev' itself, its memory is lost until ndof_libcleanup().
+        joystick->mNdofDev = nullptr;
     }
     joystick->updateEnabled(true);
 }
@@ -337,18 +348,11 @@ void LLViewerJoystick::HotPlugRemovalCallback(NDOF_Device *dev)
 
 // -----------------------------------------------------------------------------
 LLViewerJoystick::LLViewerJoystick()
-:   mDriverState(JDS_UNINITIALIZED),
-    mNdofDev(NULL),
-    mResetFlag(false),
-    mCameraUpdated(true),
-    mOverrideCamera(false),
-    mJoystickRun(0)
 {
     for (int i = 0; i < 6; i++)
     {
         mAxes[i] = sDelta[i] = sLastDelta[i] = 0.0f;
     }
-
     memset(mBtn, 0, sizeof(mBtn));
 
     // factor in bandwidth? bandwidth = gViewerStats->mKBitStat
@@ -370,12 +374,11 @@ LLViewerJoystick::~LLViewerJoystick()
 void LLViewerJoystick::init(bool autoenable)
 {
 #if LIB_NDOF
-    static bool libinit = false;
     mDriverState = JDS_INITIALIZING;
 
     loadDeviceIdFromSettings();
 
-    if (!libinit)
+    if (!sNdofLibInitialized)
     {
         // Note: The HotPlug callbacks are not actually getting called on Windows
         if (ndof_libinit(HotPlugAddCallback,
@@ -387,14 +390,18 @@ void LLViewerJoystick::init(bool autoenable)
         else
         {
             // NB: ndof_libinit succeeds when there's no device
-            libinit = true;
-
-            // allocate memory once for an eventual device
-            mNdofDev = ndof_create();
+            sNdofLibInitialized = true;
         }
     }
 
-    if (libinit)
+    if (sNdofLibInitialized && !mNdofDev)
+    {
+        // allocate memory for an eventual device; also after a hot-unplug
+        // (see HotPlugRemovalCallback()) or a failed ndof_create()
+        mNdofDev = ndof_create();
+    }
+
+    if (sNdofLibInitialized)
     {
         if (mNdofDev)
         {
@@ -426,7 +433,7 @@ void LLViewerJoystick::init(bool autoenable)
                 }
                 else
                 {
-                    mDriverState = JDS_INITIALIZED;
+                    acceptInitializedDevice();
                 }
             }
 #endif
@@ -486,7 +493,7 @@ void LLViewerJoystick::init(bool autoenable)
     }
 
     LL_INFOS("Joystick") << "ndof: mDriverState=" << mDriverState << "; mNdofDev="
-            << mNdofDev << "; libinit=" << libinit << LL_ENDL;
+            << (void*)(mNdofDev) << "; libinit=" << sNdofLibInitialized << LL_ENDL;
 #endif
 }
 
@@ -499,6 +506,10 @@ void LLViewerJoystick::initDevice(LLSD &guid)
     std::function<bool(std::string&, LLSD&, void*)> osx_callback;
     mDriverState = JDS_INITIALIZING;
 
+    if (!mNdofDev)
+    {
+        return;
+    }
 #if LL_WINDOWS && !LL_MESA_HEADLESS
     // space navigator is marked as DI8DEVCLASS_GAMECTRL in ndof lib
     device_type = DI8DEVCLASS_GAMECTRL;
@@ -521,8 +532,8 @@ void LLViewerJoystick::initDevice(LLSD &guid)
             LL_WARNS() << "ndof_init_first FAILED" << LL_ENDL;
         }
         else
-    {
-            mDriverState = JDS_INITIALIZED;
+        {
+            acceptInitializedDevice();
         }
     }
 #endif
@@ -533,10 +544,10 @@ void LLViewerJoystick::initDevice(LLSD &guid)
         {
             LL_INFOS("Joystick") << "Failed to gather input devices. Falling back to ndof's init" << LL_ENDL;
             // Failed to gather devices from window, init first suitable one
-        void *preffered_device = NULL;
-        mLastDeviceUUID = LLSD();
-        initDevice(preffered_device);
-    }
+            void *preffered_device = NULL;
+            mLastDeviceUUID = LLSD();
+            initDevice(preffered_device);
+        }
     }
 
     if (mDriverState == JDS_INITIALIZING)
@@ -551,6 +562,11 @@ bool LLViewerJoystick::initDevice(void * preffered_device /*LPDIRECTINPUTDEVICE8
 {
 #if LIB_NDOF
     mLastDeviceUUID = guid;
+
+    if (!mNdofDev)
+    {
+        return false;
+    }
 
 #if LL_DARWIN
     if (guid.isMap())
@@ -589,6 +605,12 @@ bool LLViewerJoystick::initDevice(void * preffered_device /*LPDIRECTINPUTDEVICE8
 bool LLViewerJoystick::initDevice(void * preffered_device /* LPDIRECTINPUTDEVICE8* */)
 {
 #if LIB_NDOF
+    if (!mNdofDev)
+    {
+        mDriverState = JDS_UNINITIALIZED;
+        return false;
+    }
+
     // Different joysticks will return different ranges of raw values.
     // Since we want to handle every device in the same uniform way,
     // we initialize the mNdofDev struct and we set the range
@@ -615,22 +637,42 @@ bool LLViewerJoystick::initDevice(void * preffered_device /* LPDIRECTINPUTDEVICE
     }
     else
     {
-        mDriverState = JDS_INITIALIZED;
-        return true;
+        return acceptInitializedDevice();
     }
 #endif
     return false;
+}
+
+bool LLViewerJoystick::acceptInitializedDevice()
+{
+#if LIB_NDOF
+    // Linden Lab's viewer accepts only 3Dconnexion devices here and leaves every
+    // other controller to LLGameControl (SDL). Firestorm keeps driving any ndof joystick
+    // (FIRE-14344): the legacy joystick and game control read the same pad only when
+    // both are switched on.
+    mDeviceIs3DConnexion = is3DConnexionDevice(mNdofDev->product);
+    mDriverState = JDS_INITIALIZED;
+    if (mDeviceIs3DConnexion) // the viewer stats report these as 3DConnexion devices
+    {
+        mSessionDevices.try_emplace(ll_safe_string(mNdofDev->product), false);
+    }
+    return true;
+#else
+    return false;
+#endif
 }
 
 // -----------------------------------------------------------------------------
 void LLViewerJoystick::terminate()
 {
 #if LIB_NDOF
-    if (mNdofDev != NULL)
+    if (sNdofLibInitialized)
     {
         ndof_libcleanup(); // frees alocated memory in mNdofDev
+        sNdofLibInitialized = false;
         mDriverState = JDS_UNINITIALIZED;
         mNdofDev = NULL;
+        mDeviceIs3DConnexion = false;
         LL_INFOS("Joystick") << "Terminated connection with NDOF device." << LL_ENDL;
     }
 #endif
@@ -650,22 +692,40 @@ void LLViewerJoystick::updateStatus()
     }
     // </FS:Zi>
 
-    ndof_update(mNdofDev);
-
-    // <FS:Zi> FIRE-14344 - Add button preview and allow for more than 6 axes
-    // for (int i=0; i<6; i++)
-    for (int i = 0; i < MAX_JOYSTICK_AXES; i++)
+    if (mDriverState == JDS_INITIALIZED)
     {
-        mAxes[i] = (F32) mNdofDev->axes[i] / mNdofDev->axes_max;
-    }
+        ndof_update(mNdofDev);
 
-    // <FS:Zi> FIRE-14344 - Add button preview and allow for more than 6 axes
-    // for (int i=0; i<16; i++)
-    for (int i = 0; i < MAX_JOYSTICK_BUTTONS; i++)
-    {
-        mBtn[i] = mNdofDev->buttons[i];
-    }
+        // <FS:Zi> FIRE-14344 - Add button preview and allow for more than 6 axes
+        // for (int i=0; i<6; i++)
+        for (int i = 0; i < MAX_JOYSTICK_AXES; i++)
+        {
+            mAxes[i] = (F32) mNdofDev->axes[i] / mNdofDev->axes_max;
+        }
 
+        // <FS:Zi> FIRE-14344 - Add button preview and allow for more than 6 axes
+        // for (int i=0; i<16; i++)
+        for (int i = 0; i < MAX_JOYSTICK_BUTTONS; i++)
+        {
+            mBtn[i] = mNdofDev->buttons[i];
+        }
+
+        // Remember that this device produced real input, for the viewer stats.
+        // The threshold ignores small resting drift on the axes.
+        constexpr F32 USED_AXIS_THRESHOLD = 0.1f;
+        bool used = std::any_of(std::begin(mAxes), std::end(mAxes),
+                        [](F32 axis) { return fabsf(axis) > USED_AXIS_THRESHOLD; })
+                    || std::any_of(std::begin(mBtn), std::end(mBtn),
+                        [](long btn) { return btn != 0; });
+        if (used)
+        {
+            auto it = mSessionDevices.find(ll_safe_string(mNdofDev->product));
+            if (it != mSessionDevices.end())
+            {
+                it->second = true;
+            }
+        }
+    }
 #endif
 }
 
@@ -1070,7 +1130,7 @@ void LLViewerJoystick::moveAvatar(bool reset)
     F32 val, dom_mov = 0.f;
     U32 dom_axis = Z_I;
 #if LIB_NDOF
-    bool absolute = (gSavedSettings.getBOOL("Cursor3D") && mNdofDev->absolute);
+    bool absolute = mNdofDev != NULL && (gSavedSettings.getBOOL("Cursor3D") && mNdofDev->absolute);
 #else
     bool absolute = false;
 #endif
@@ -1218,10 +1278,6 @@ void LLViewerJoystick::moveAvatar(bool reset)
 void LLViewerJoystick::moveFlycam(bool reset)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_INPUT;
-    static LLQuaternion         sFlycamRotation;
-    static LLVector3d           sFlycamPosition;
-    static F32                  sFlycamZoom;
-
     if (!gFocusMgr.getAppHasFocus() || mDriverState != JDS_INITIALIZED
         || !gSavedSettings.getBOOL("JoystickEnabled") || !gSavedSettings.getBOOL("JoystickFlycamEnabled"))
     {
@@ -1242,11 +1298,15 @@ void LLViewerJoystick::moveFlycam(bool reset)
     bool in_build_mode = LLToolMgr::getInstance()->inBuildMode();
     if (reset || mResetFlag)
     {
-        sFlycamPosition = gAgentCamera.getCameraPositionGlobal();
-        sFlycamRotation = LLViewerCamera::getInstance()->getQuaternion();
-        sFlycamZoom = LLViewerCamera::getInstance()->getView();
+        gAgentCamera.resetFlycamToCurrentView();
 
-        resetDeltas(axis);
+        for (U32 i = 0; i < 6; i++)
+        {
+            mJoystickFlycamLastDelta[i] = -getJoystickAxis(axis[i]);
+            mJoystickFlycamDelta[i] = 0.f;
+        }
+        mJoystickFlycamLastDelta[6] = mJoystickFlycamDelta[6] = 0.f;
+        mResetFlag = false;
 
         return;
     }
@@ -1294,9 +1354,9 @@ void LLViewerJoystick::moveFlycam(bool reset)
         F32 tmp = cur_delta[i];
         if (absolute)
         {
-            cur_delta[i] = cur_delta[i] - sLastDelta[i];
+            cur_delta[i] = cur_delta[i] - mJoystickFlycamLastDelta[i];
         }
-        sLastDelta[i] = tmp;
+        mJoystickFlycamLastDelta[i] = tmp;
 
         if (cur_delta[i] > 0)
         {
@@ -1326,7 +1386,7 @@ void LLViewerJoystick::moveFlycam(bool reset)
             cur_delta[i] *= time;
         }
 
-        sDelta[i] = sDelta[i] + (cur_delta[i]-sDelta[i])*time*feather;
+        mJoystickFlycamDelta[i] = mJoystickFlycamDelta[i] + (cur_delta[i]-mJoystickFlycamDelta[i])*time*feather;
 
         is_zero = is_zero && (cur_delta[i] == 0.f);
 
@@ -1345,46 +1405,12 @@ void LLViewerJoystick::moveFlycam(bool reset)
         }
     }
 
-    sFlycamPosition += LLVector3d(sDelta[VX], sDelta[VY], sDelta[VZ]) * sFlycamRotation;
+    bool auto_level = gSavedSettings.getBOOL("AutoLeveling");
+    F32 auto_level_fraction = llmin(feather*time, 1.f);
+    bool zoom_direct = gSavedSettings.getBOOL("ZoomDirect");
+    F32 direct_view_value = mJoystickFlycamLastDelta[6]*axis_scale[6]+dead_zone[6];
 
-    LLMatrix3 rot_mat(sDelta[3], sDelta[4], sDelta[5]);
-    sFlycamRotation = LLQuaternion(rot_mat)*sFlycamRotation;
-
-    if (gSavedSettings.getBOOL("AutoLeveling"))
-    {
-        LLMatrix3 level(sFlycamRotation);
-
-        LLVector3 x = LLVector3(level.mMatrix[0]);
-        LLVector3 y = LLVector3(level.mMatrix[1]);
-        LLVector3 z = LLVector3(level.mMatrix[2]);
-
-        y.mV[2] = 0.f;
-        y.normVec();
-
-        level.setRows(x,y,z);
-        level.orthogonalize();
-
-        LLQuaternion quat(level);
-        sFlycamRotation = nlerp(llmin(feather*time,1.f), sFlycamRotation, quat);
-    }
-
-    if (gSavedSettings.getBOOL("ZoomDirect"))
-    {
-        sFlycamZoom = sLastDelta[6]*axis_scale[6]+dead_zone[6];
-    }
-    else
-    {
-        sFlycamZoom += sDelta[6];
-    }
-
-    LLMatrix3 mat(sFlycamRotation);
-
-    LLViewerCamera::getInstance()->setView(sFlycamZoom);
-    LLVector3 new_camera_pos = gAgent.getPosAgentFromGlobal(sFlycamPosition);
-    LLViewerCamera::getInstance()->setOrigin(new_camera_pos);
-    LLViewerCamera::getInstance()->mXAxis = LLVector3(mat.mMatrix[0]);
-    LLViewerCamera::getInstance()->mYAxis = LLVector3(mat.mMatrix[1]);
-    LLViewerCamera::getInstance()->mZAxis = LLVector3(mat.mMatrix[2]);
+    gAgentCamera.applyNdofFlycamFrameDelta(mJoystickFlycamDelta, auto_level, auto_level_fraction, zoom_direct, direct_view_value);
 }
 
 // -----------------------------------------------------------------------------
@@ -1393,12 +1419,15 @@ bool LLViewerJoystick::toggleFlycam()
     LL_PROFILE_ZONE_SCOPED_CATEGORY_INPUT;
     if (!gSavedSettings.getBOOL("JoystickEnabled") || !gSavedSettings.getBOOL("JoystickFlycamEnabled"))
     {
-        mOverrideCamera = false;
+        if (gAgentCamera.isUsingFlycam())
+        {
+            gAgentCamera.toggleFlycam();
+        }
         LLPanelStandStopFlying::clearStandStopFlyingMode(LLPanelStandStopFlying::SSFM_FLYCAM);
         return false;
     }
 
-    if (!mOverrideCamera)
+    if (!gAgentCamera.isUsingFlycam())
     {
         gAgentCamera.changeCameraToDefault();
     }
@@ -1412,8 +1441,8 @@ bool LLViewerJoystick::toggleFlycam()
         gAwayTriggerTimer.reset();
     }
 
-    mOverrideCamera = !mOverrideCamera;
-    if (mOverrideCamera)
+    gAgentCamera.toggleFlycam();
+    if (gAgentCamera.isUsingFlycam())
     {
         moveFlycam(true);
         LLPanelStandStopFlying::setStandStopFlyingMode(LLPanelStandStopFlying::SSFM_FLYCAM);
@@ -1456,7 +1485,7 @@ void LLViewerJoystick::scanJoystick()
 #if LL_WINDOWS
     // On windows, the flycam is updated syncronously with a timer, so there is
     // no need to update the status of the joystick here.
-    if (!mOverrideCamera)
+    if (!getOverrideCamera())
 #endif
     updateStatus();
 
@@ -1482,9 +1511,9 @@ void LLViewerJoystick::scanJoystick()
     }
 
     // <FS:PP> Speed optimisation
-    // if (!mOverrideCamera && !(LLToolMgr::getInstance()->inBuildMode() && gSavedSettings.getBOOL("JoystickBuildEnabled")))
+    // if (!getOverrideCamera() && !(LLToolMgr::getInstance()->inBuildMode() && gSavedSettings.getBOOL("JoystickBuildEnabled")))
     static LLCachedControl<bool> joystick_build_enabled(gSavedSettings, "JoystickBuildEnabled");
-    if (!mOverrideCamera && !(LLToolMgr::getInstance()->inBuildMode() && joystick_build_enabled()))
+    if (!getOverrideCamera() && !(LLToolMgr::getInstance()->inBuildMode() && joystick_build_enabled()))
     // </FS:PP>
     {
         moveAvatar();
@@ -1623,16 +1652,53 @@ std::string LLViewerJoystick::getDescription()
     return res;
 }
 
+// static
+bool LLViewerJoystick::is3DConnexionDevice(const std::string& full_name)
+{
+    // Linux (evdev) prefixes the product with the vendor, e.g. "3Dconnexion SpaceNavigator"
+    const std::string VENDOR_PREFIX("3Dconnexion ");
+    std::string device_name = full_name.compare(0, VENDOR_PREFIX.size(), VENDOR_PREFIX) == 0
+        ? full_name.substr(VENDOR_PREFIX.size())
+        : full_name;
+    bool answer = device_name.find("Space") == 0
+        && ( (device_name.find("SpaceNavigator") == 0)
+            || (device_name.find("SpaceExplorer") == 0)
+            || (device_name.find("SpaceTraveler") == 0)
+            || (device_name.find("SpacePilot") == 0)
+            || (device_name.find("SpaceMouse") == 0));
+    return answer;
+}
+
+LLSD LLViewerJoystick::getSessionStatsAsLLSD() const
+{
+    std::string current_device;
+#if LIB_NDOF
+    if (mNdofDev != nullptr && mDriverState == JDS_INITIALIZED)
+    {
+        current_device = ll_safe_string(mNdofDev->product);
+    }
+#endif
+
+    LLSD result;
+    result["enabled"] = gSavedSettings.getBOOL("JoystickEnabled");
+    LLSD& devices = result["devices"] = LLSD::emptyArray();
+    for (const auto& [name, used] : mSessionDevices)
+    {
+        LLSD entry;
+        entry["name"] = name;
+        entry["used"] = used;
+        entry["connected"] = (name == current_device);
+        devices.append(entry);
+    }
+    return result;
+}
+
 bool LLViewerJoystick::isLikeSpaceNavigator() const
 {
 #if LIB_NDOF
-    return (isJoystickInitialized()
-            && (strncmp(mNdofDev->product, "SpaceNavigator", 14) == 0
-                // <FS:Zi> FIRE-30846 - Add combined product string that is returned by some devices
-                || strncmp(mNdofDev->product, "3Dconnexion SpaceNavigator", 26) == 0
-                || strncmp(mNdofDev->product, "SpaceExplorer", 13) == 0
-                || strncmp(mNdofDev->product, "SpaceTraveler", 13) == 0
-                || strncmp(mNdofDev->product, "SpacePilot", 10) == 0));
+    return (mNdofDev != NULL
+            && isJoystickInitialized()
+            && is3DConnexionDevice(mNdofDev->product));
 #else
     return false;
 #endif

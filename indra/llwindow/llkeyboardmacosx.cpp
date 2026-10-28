@@ -278,7 +278,7 @@ MASK LLKeyboardMacOSX::currentMask(bool for_mouse_event)
         if (mask & MAC_CMD_KEY) result |= MASK_CONTROL;
     }
 
-    return result;
+    return result | mEmulatedMask; // OCOL: controller buttons bound to keys
 }
 
 void LLKeyboardMacOSX::scanKeyboard()

@@ -1284,6 +1284,17 @@
         <key>Value</key>
            <integer>0</integer>
         </map>
+    <key>OCOLGestureControllerButtons</key>
+        <map>
+        <key>Comment</key>
+            <string>Game controller button that plays each gesture: map of gesture inventory item id to button index (see LLGameControl::Button).</string>
+        <key>Persist</key>
+            <integer>1</integer>
+        <key>Type</key>
+            <string>LLSD</string>
+        <key>Value</key>
+            <map/>
+        </map>
     <key>FSCrouchToggle</key>
         <map>
         <key>Comment</key>

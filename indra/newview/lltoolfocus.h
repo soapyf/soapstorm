@@ -27,6 +27,7 @@
 #ifndef LL_LLTOOLFOCUS_H
 #define LL_LLTOOLFOCUS_H
 
+#include "llkeyboard.h"
 #include "lltool.h"
 
 class LLPickInfo;
@@ -74,6 +75,7 @@ protected:
     S32     mMouseUpX;  // needed for releaseMouse()
     S32     mMouseUpY;
     MASK    mMouseUpMask;
+    LLKeyPressState mKeyState;
 };
 
 

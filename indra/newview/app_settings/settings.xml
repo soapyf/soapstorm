@@ -5418,6 +5418,72 @@
       <key>Value</key>
       <integer>1</integer>
     </map>
+    <key>DebugShowControllerState</key>
+    <map>
+      <key>Comment</key>
+      <string>Display internal controller state values</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>GameControl</key>
+    <map>
+        <key>Comment</key>
+        <string>Game controller settings: global per-mode action mappings plus per-device hardware config. Empty means use built-in defaults.</string>
+        <key>Persist</key>
+        <integer>1</integer>
+        <key>Type</key>
+        <string>LLSD</string>
+        <key>Value</key>
+        <map/>
+    </map>
+    <key>GameControlPresets</key>
+    <map>
+      <key>Comment</key>
+      <string>Named game controller presets: name to a copy of GameControl's ModeMappings.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>LLSD</string>
+      <key>Value</key>
+      <map/>
+    </map>
+    <key>GameControlButtonStyle</key>
+    <map>
+      <key>Comment</key>
+      <string>Controller art and button icons in Game Controls and the overlay: -1 follows the connected controller, 0 Xbox, 1 Nintendo, 2 PlayStation 4, 3 PlayStation 5, 4 Steam Controller.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>-1</integer>
+    </map>
+    <key>GameControlOverlayInMouselook</key>
+    <map>
+      <key>Comment</key>
+      <string>Keep the controller overlay (Avatar &gt; Movement &gt; Controller Overlay) on screen in mouselook.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>GMDXInputOverlayInMouselook</key>
+    <map>
+      <key>Comment</key>
+      <string>Keep the keyboard and mouse overlay (Avatar &gt; Movement &gt; Keyboard &amp; mouse overlay) on screen in mouselook.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
     <key>EnableGestureSounds</key>
     <map>
       <key>Comment</key>

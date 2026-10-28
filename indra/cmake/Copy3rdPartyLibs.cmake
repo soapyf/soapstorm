@@ -62,6 +62,7 @@ if(WINDOWS)
     set(release_files
         #openjp2.dll # <FS:Ansariel> Only copy OpenJPEG dll if needed
         glod.dll # <FS:Beq> restore GLOD
+        SDL3.dll # game controllers (LLGameControl); the window itself is Win32
         )
 
     # <FS:Ansariel> Only copy OpenJPEG dll if needed
@@ -201,6 +202,7 @@ elseif(DARWIN)
         libndofdev.dylib
         libgrowl.dylib
         libgrowl++.dylib
+        libSDL3.dylib # game controllers (LLGameControl)
        )
 
     if (TARGET ll::discord_sdk)

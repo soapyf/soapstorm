@@ -30,6 +30,7 @@
 #include "llwindowsdl.h"
 
 #include "llwindowcallbacks.h"
+#include "llgamecontrol.h"
 #include "llkeyboardsdl.h"
 
 #include "llerror.h"
@@ -1225,7 +1226,7 @@ void LLWindowSDL::processMiscNativeEvents()
     }
 }
 
-void LLWindowSDL::gatherInput()
+void LLWindowSDL::gatherInput(bool app_has_focus)
 {
     // This is for the case where SDL is not driving the main event loop
     if(!gSDLMainHandled)
@@ -1235,8 +1236,13 @@ void LLWindowSDL::gatherInput()
         // Handle all outstanding SDL events
         while (SDL_PollEvent(&event))
         {
-            handleEvent(event);
+            handleEvent(event, app_has_focus);
         }
+    }
+
+    if (!app_has_focus)
+    {
+        LLGameControl::clearAllStates();
     }
 
     updateCursor();
@@ -1250,7 +1256,7 @@ void LLWindowSDL::gatherInput()
     }
 }
 
-SDL_AppResult LLWindowSDL::handleEvent(const SDL_Event& event)
+SDL_AppResult LLWindowSDL::handleEvent(const SDL_Event& event, bool app_has_focus)
 {
     switch(event.type)
     {
@@ -1454,6 +1460,7 @@ SDL_AppResult LLWindowSDL::handleEvent(const SDL_Event& event)
             break;
         }
         default:
+            LLGameControl::handleEvent(event, app_has_focus);
             break;
     }
 

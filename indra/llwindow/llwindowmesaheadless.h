@@ -74,7 +74,7 @@ public:
     void setFSAASamples(const U32 fsaa_samples) override { /* FSAA not supported yet on Mesa headless.*/ }
     U32  getFSAASamples() override { return 0; }
     //virtual ESwapMethod getSwapMethod() override { return mSwapMethod; }
-    void gatherInput() override {};
+    void gatherInput(bool app_has_focus) override {};
     void delayInputProcessing() override {};
     void swapBuffers() override;
 

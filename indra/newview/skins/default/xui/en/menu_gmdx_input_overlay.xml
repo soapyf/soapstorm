@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <GMDX> right-click menu of the keyboard and mouse overlay -->
+<context_menu
+ layout="topleft"
+ name="GMDX Input Overlay Menu">
+    <menu_item_check
+     label="Show in mouselook"
+     layout="topleft"
+     name="in_mouselook">
+        <on_check function="InputOverlay.InMouselook" />
+        <on_click function="InputOverlay.ToggleMouselook" />
+    </menu_item_check>
+    <menu_item_separator layout="topleft" />
+    <menu_item_call
+     label="Close"
+     layout="topleft"
+     name="close">
+        <on_click function="InputOverlay.Close" />
+    </menu_item_call>
+</context_menu>

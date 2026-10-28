@@ -627,6 +627,7 @@ https://www.firestormviewer.org/support for help fixing this problem.
 	<string name="ForceSitAvatar">Force your avatar to sit</string>
 	<string name="ChangeEnvSettings">Change your environment settings</string>
 	<string name="PrivilegedLandAccess">Sell land on your behalf.</string>
+	<string name="UseGameControlInputs">Use gamepad inputs.</string>
 	<string name="SnapshotSavedToDisk">Snapshot saved: [FILENAME]</string>
 	
 	<string name="NotConnected">Not Connected</string>

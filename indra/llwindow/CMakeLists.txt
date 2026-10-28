@@ -23,8 +23,11 @@ include(SDL3)
 
 set(llwindow_SOURCE_FILES
     llcursortypes.cpp
+    llgamecontrol.cpp
+    llgamecontroltranslator.cpp
     llkeyboard.cpp
     llkeyboardheadless.cpp
+    llsdl.cpp
     llwindowheadless.cpp
     llwindowcallbacks.cpp
     llwindow.cpp
@@ -34,8 +37,11 @@ set(llwindow_HEADER_FILES
     CMakeLists.txt
 
     llcursortypes.h
+    llgamecontrol.h
+    llgamecontroltranslator.h
     llkeyboard.h
     llkeyboardheadless.h
+    llsdl.h
     llwindowheadless.h
     llwindowcallbacks.h
     )
@@ -114,11 +120,11 @@ endif ()
 if (USE_SDL_WINDOW)
   list(APPEND viewer_SOURCE_FILES ${linux_SOURCE_FILES})
   list(APPEND viewer_HEADER_FILES ${linux_HEADER_FILES})
-
-  list(APPEND llwindow_LINK_LIBRARIES
-       ll::SDL3
-       )
 endif ()
+
+list(APPEND llwindow_LINK_LIBRARIES
+     ll::SDL3
+     )
 
 if (DARWIN)
   list(APPEND llwindow_SOURCE_FILES ${macosx_SOURCE_FILES})

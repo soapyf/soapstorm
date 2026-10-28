@@ -15,6 +15,10 @@
     Keyboard
   </floater.string>
   <floater.string
+   name="controller">
+    Game Controller
+  </floater.string>
+  <floater.string
    name="mouse">
     Mouse Buttons
   </floater.string>

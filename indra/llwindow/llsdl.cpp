@@ -24,6 +24,8 @@
  * $/LicenseInfo$
  */
 
+#include "linden_common.h"
+
 #include <initializer_list>
 #include <list>
 
@@ -121,9 +123,7 @@ void init_sdl(const std::string& app_name)
             {
                 {SDL_INIT_VIDEO,"SDL_INIT_VIDEO", false},
             };
-#endif // LL_LINUX
-    // We SDL_INIT_GAMECONTROLLER later in the startup process to make it
-    // more likely we'll catch initial SDL_CONTROLLERDEVICEADDED events.
+#endif // LL_SDL_WINDOW
 
     for (auto subSystem : initList)
     {
@@ -145,5 +145,14 @@ void quit_sdl()
 #if LL_WINDOWS && defined(LL_SDL_WINDOW)
     SDL_UnregisterApp();
 #endif
-    SDL_Quit();
+
+    // When SDL_MAIN_USE_CALLBACKS is in effect (gSDLMainHandled=true), the
+    // SDL framework owns SDL_Init/SDL_Quit around the SDL_App* callbacks.
+    // Calling SDL_Quit() here would run before SDL's own SDL_Quit at process
+    // exit — SDL3 makes this idempotent, but it's still the wrong owner.
+    // Only quit ourselves when we initialised SDL ourselves.
+    if (!gSDLMainHandled)
+    {
+        SDL_Quit();
+    }
 }

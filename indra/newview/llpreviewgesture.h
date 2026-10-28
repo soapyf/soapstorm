@@ -103,6 +103,7 @@ protected:
     void onVisibilityChanged ( const LLSD& new_visibility );
 
     void onCommitKeyorModifier();
+    void onCommitControllerButton(); // OCOL
 
     static std::string getLabel(std::vector<std::string> labels);
     static void updateLabel(LLScrollListItem* item);
@@ -140,6 +141,7 @@ private:
     LLLineEditor*   mReplaceEditor;
     LLComboBox*     mModifierCombo;
     LLComboBox*     mKeyCombo;
+    LLComboBox*     mControllerCombo; // OCOL: game controller button (local, per account)
 
     LLScrollListCtrl*   mLibraryList;
     LLButton*           mAddBtn;

@@ -1416,3 +1416,10 @@ char const* const _PREHASH_RegionSizeY = LLMessageStringTable::getInstance()->ge
 char const* const _PREHASH_SizeX = LLMessageStringTable::getInstance()->getString("SizeX");
 char const* const _PREHASH_SizeY = LLMessageStringTable::getInstance()->getString("SizeY");
 // </FS:CR> Aurora Sim
+char const* const _PREHASH_GameControlInput = LLMessageStringTable::getInstance()->getString("GameControlInput");
+char const* const _PREHASH_AxisData = LLMessageStringTable::getInstance()->getString("AxisData");
+char const* const _PREHASH_GameControlData = LLMessageStringTable::getInstance()->getString("GameControlData");
+char const* const _PREHASH_ActionMode = LLMessageStringTable::getInstance()->getString("ActionMode");
+char const* const _PREHASH_Axes = LLMessageStringTable::getInstance()->getString("Axes");
+char const* const _PREHASH_ModeAxes = LLMessageStringTable::getInstance()->getString("ModeAxes");
+char const* const _PREHASH_ModeButtons = LLMessageStringTable::getInstance()->getString("ModeButtons");

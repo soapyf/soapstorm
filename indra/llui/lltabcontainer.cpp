@@ -1404,7 +1404,6 @@ void LLTabContainer::removeTabPanel(LLPanel* child)
 
     bool has_focus = gFocusMgr.childHasKeyboardFocus(this);
 
-    // If the tab being deleted is the selected one, select a different tab.
     for(std::vector<LLTabTuple*>::iterator iter = mTabList.begin(); iter != mTabList.end(); ++iter)
     {
         LLTabTuple* tuple = *iter;
@@ -1442,6 +1441,7 @@ void LLTabContainer::removeTabPanel(LLPanel* child)
     // make sure we don't have more locked tabs than we have tabs
     mLockedTabCount = llmin(getTabCount(), mLockedTabCount);
 
+    // If the tab being deleted is the selected one, select a different tab.
     if (mCurrentTabIdx >= (S32)mTabList.size())
     {
         mCurrentTabIdx = static_cast<S32>(mTabList.size()) - 1;
@@ -1908,7 +1908,7 @@ void LLTabContainer::reshapeTuple(LLTabTuple* tuple)
     {
         S32 image_overlay_width = 0;
 
-        if(mCustomIconCtrlUsed)
+        if (mCustomIconCtrlUsed)
         {
             LLCustomButtonIconCtrl* button = dynamic_cast<LLCustomButtonIconCtrl*>(tuple->mButton);
             LLIconCtrl* icon_ctrl = button ? button->getIconCtrl() : NULL;

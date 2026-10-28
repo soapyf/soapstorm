@@ -180,6 +180,11 @@
     <file>opendyslexic.ttf</file>
   </font>
 
+  <font name="SecondLife-game-control"
+    comment="Game controller button and stick glyphs (based on PromptFont by Shinmera, OFL), used by the Game Controls preferences only; not a fallback, its glyphs sit on real arrow codepoints.">
+    <file>SecondLife-game-control.ttf</file>
+  </font>
+
   <font_size name="Scripting"
 	     comment="Size of script editor font (points, or 1/72 of an inch)"
 	     size="10.0"

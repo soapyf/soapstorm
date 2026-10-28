@@ -39,7 +39,11 @@ static const U32 ALLOW_MASK_MOUSE = 2;
 static const U32 ALLOW_KEYS = 4; //keyboard
 static const U32 ALLOW_MASK_KEYS = 8;
 static const U32 ALLOW_MASKS = 16;
-static const U32 DEFAULT_KEY_FILTER = ALLOW_MOUSE | ALLOW_MASK_MOUSE | ALLOW_KEYS | ALLOW_MASKS | ALLOW_MASK_KEYS;
+static const U32 ALLOW_CONTROLLER = 32; // OCOL: game controller buttons, sticks and triggers
+// <SS:GameControl> keys a menu shortcut uses. For a controller button that types a key: the typed
+// key goes through the same handling as the real one, so the menu gets it exactly when it would anyway.
+static const U32 ALLOW_MENU_KEYS = 64;
+static const U32 DEFAULT_KEY_FILTER = ALLOW_MOUSE | ALLOW_MASK_MOUSE | ALLOW_KEYS | ALLOW_MASKS | ALLOW_MASK_KEYS | ALLOW_CONTROLLER;
 
 
 class LLKeyBindResponderInterface
@@ -51,6 +55,8 @@ public:
     virtual void onDefaultKeyBind(bool all_modes) = 0;
     // returns true if parent failed to set key due to key being in use
     virtual bool onSetKeyBind(EMouseClickType click, KEY key, MASK mask, bool all_modes) = 0;
+    // OCOL: a game controller input was chosen (see LLGameControl::ActionType)
+    virtual bool onSetControllerBind(U8 action_type, U8 action, bool all_modes) { return false; }
 };
 
 class LLSetKeyBindDialog : public LLModalDialog
@@ -77,11 +83,17 @@ public:
     static void onClickTimeout(void* user_data, MASK mask);
 
     static bool isRecording() { return sRecordKeys; }
+    // <SS:GameControl> A key press also arrives as a typed character, after the key itself
+    // was recorded and the dialog closed; that character must not reach whatever has focus
+    // next (in Preferences, the search box). True while recording and for the frame a
+    // recorded key-down came in.
+    static bool consumesTypedChar();
 
     class Updater;
 
 private:
     bool recordAndHandleKey(KEY key, MASK mask, bool down);
+    void recordController();
     void setKeyBind(EMouseClickType click, KEY key, MASK mask, bool all_modes);
     LLKeyBindResponderInterface *pParent;
     LLCheckBoxCtrl *pCheckBox;
@@ -90,8 +102,11 @@ private:
     U32 mKeyFilterMask;
     Updater *pUpdater;
     KEY mLastMaskKey;
+    U32 mLastControllerButtons; // OCOL
+    U32 mLastControllerAxes; // OCOL: bit per half-axis past the threshold
 
     static bool sRecordKeys; // for convinience and not to check instance each time
+    static U32 sRecordedKeyFrame; // <SS:GameControl/> frame of the last recorded key-down
 
     // drawFrustum
 private:

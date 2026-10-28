@@ -16017,6 +16017,42 @@ Folder names cannot contain / or \.
   </notification>
   <!-- </FS:Amy> Favorite Wearables folders -->
 
+  <!-- <SS:GameControl> -->
+  <notification
+   icon="alertmodal.tga"
+   name="GameControlResetAll"
+   type="alertmodal">
+Unbind every controller input in every mode and put toggles and stick tuning back to normal? Presets, including the ready-made layouts, and dead zones are kept.
+    <tag>confirm</tag>
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Cancel"
+     yestext="Clear all"/>
+  </notification>
+  <notification
+   icon="alertmodal.tga"
+   label="Save controller preset"
+   name="GameControlSavePreset"
+   type="alertmodal">
+    <unique/>
+Name this set of controller bindings. Saving over an existing name replaces it.
+    <tag>confirm</tag>
+    <form name="form">
+      <input name="message" type="text">
+      </input>
+      <button
+       default="true"
+       index="0"
+       name="OK"
+       text="Save"/>
+      <button
+       index="1"
+       name="Cancel"
+       text="Cancel"/>
+    </form>
+  </notification>
+  <!-- </SS:GameControl> -->
+
   <!-- <GMDX> mini-map marks and zones, region maps -->
   <notification
    icon="alertmodal.tga"
@@ -16106,5 +16142,4 @@ You already have a map of [REGION]. Replace it with the imported one?
      yestext="Replace"/>
   </notification>
   <!-- </GMDX> -->
-
 </notifications>

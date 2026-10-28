@@ -28,6 +28,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llagent.h"
+#include "lltoolcomp.h" // <SS:GameControl/> gyro aim
 
 #include "fsvatshost.h" // VATs editor
 
@@ -135,6 +136,14 @@ const F32 AUTOPILOT_HEIGHT_ADJUST_DISTANCE = 8.f;           // meters
 const F32 AUTOPILOT_MIN_TARGET_HEIGHT_OFF_GROUND = 1.f; // meters
 const F32 AUTOPILOT_MAX_TIME_NO_PROGRESS_WALK = 1.5f;       // seconds
 const F32 AUTOPILOT_MAX_TIME_NO_PROGRESS_FLY = 2.5f;        // seconds. Flying is less presize, needs a bit more time
+
+// Ground-sit requests that do not originate from a click on the ground (e.g. the
+// game-control/keyboard "toggle sit" action) have no target position to check
+// against, so refuse them outright when the ground below the agent is farther
+// than this away, rather than snapping the agent down onto distant terrain.
+const F32 MAX_SIT_ON_GROUND_DISTANCE = 30.f;                // meters
+static bool sOverlaySkippedInMouselook = false; // <GMDX> controller overlay kept up in mouselook
+static bool sInputOverlaySkippedInMouselook = false; // <GMDX> keyboard and mouse overlay, likewise
 
 const F32 MAX_VELOCITY_AUTO_LAND_SQUARED = 4.f * 4.f;
 const F64 CHAT_AGE_FAST_RATE = 3.0;
@@ -507,7 +516,7 @@ LLAgent::LLAgent() :
     mCurrentFidget(0),
     mFirstLogin(false),
     mOutfitChosen(false),
-
+    mCrouch(false),
     mVoiceConnected(false),
 
     // <FS:Ansariel> [Legacy Bake]
@@ -908,6 +917,7 @@ void LLAgent::moveUp(S32 direction)
         // <FS:Ansariel> Chalice Yao's crouch toggle
         gAgentCamera.resetView(true, false, true);
         // </FS:Ansariel>
+        mCrouch = false;
     }
     else if (direction < 0)
     {
@@ -974,6 +984,11 @@ void LLAgent::movePitch(F32 mag)
     {
         setControlFlags(AGENT_CONTROL_PITCH_NEG);
     }
+}
+
+bool LLAgent::isCrouching() const
+{
+    return mCrouch && !getFlying();
 }
 
 // Does this parcel allow you to fly?
@@ -1062,6 +1077,7 @@ void LLAgent::setFlying(bool fly, bool fail_sound)
         {
             add(LLStatViewer::FLY, 1);
         }
+        mCrouch = false;
         setControlFlags(AGENT_CONTROL_FLY);
     }
     else
@@ -1549,6 +1565,16 @@ LLVector3d LLAgent::getPosGlobalFromAgent(const LLVector3 &pos_agent) const
     return pos_agent_d + mAgentOriginGlobal;
 }
 
+static void finish_sit_on_ground(bool success, void*)
+{
+    if (success)
+    {
+        gAgent.setFlying(false);
+        gAgent.clearControlFlags(AGENT_CONTROL_STAND_UP); // might have been set by autopilot
+        gAgent.setControlFlags(AGENT_CONTROL_SIT_ON_GROUND);
+    }
+}
+
 void LLAgent::sitDown()
 {
 // [RLVa:KB] - Checked: RLVa-1.2.1
@@ -1557,6 +1583,33 @@ void LLAgent::sitDown()
 // [/RLVa:KB]
 
     setControlFlags(AGENT_CONTROL_SIT_ON_GROUND);
+}
+
+// Linden Lab's bf43fb63d4 made sitDown() walk to the terrain below first and refuse
+// when it is far away. That would refuse a menu or keyboard ground sit on a skybox
+// floor, so sitDown() keeps sitting where the avatar stands and the game controller's
+// sit uses this instead.
+void LLAgent::sitDownNearby()
+{
+// [RLVa:KB] - Checked: RLVa-1.2.1
+    if (!RlvActions::canGroundSit())
+        return;
+// [/RLVa:KB]
+
+    // Sit on the ground directly beneath (or above) the agent's current position.
+    // Refuse if that spot is too far away, and otherwise walk/fly there first,
+    // rather than snapping straight down onto it (e.g. terrain far below a flying
+    // agent) as AGENT_CONTROL_SIT_ON_GROUND would do if sent immediately.
+    LLVector3d pos_global = getPositionGlobal();
+    LLVector3d sit_spot_global = pos_global;
+    sit_spot_global.mdV[VZ] = LLWorld::getInstance()->resolveLandHeightGlobal(pos_global);
+
+    if (dist_vec(pos_global, sit_spot_global) > MAX_SIT_ON_GROUND_DISTANCE)
+    {
+        return;
+    }
+
+    startAutoPilotGlobal(sit_spot_global, "Sit", NULL, finish_sit_on_ground, NULL, 0.7f);
 }
 
 //-----------------------------------------------------------------------------
@@ -2596,9 +2649,9 @@ bool LLAgent::needsRenderAvatar()
         return mShowAvatar && mOutfitChosen;
     }
 
-//  if (gAgentCamera.cameraMouselook() && !LLVOAvatar::sVisibleInFirstPerson)
+//  if (gAgentCamera.isHidingAvatarForFirstPerson() && !LLVOAvatar::sVisibleInFirstPerson)
 // [RLVa:KB] - Checked: RLVa-2.0.2
-    if ( (gAgentCamera.cameraMouselook() && !LLVOAvatar::sVisibleInFirstPerson) || (gRlvHandler.hasBehaviour(RLV_BHVR_SHOWSELF)) )
+    if ( (gAgentCamera.isHidingAvatarForFirstPerson() && !LLVOAvatar::sVisibleInFirstPerson) || (gRlvHandler.hasBehaviour(RLV_BHVR_SHOWSELF)) )
 // [/RLVa:KB]
     {
         return false;
@@ -2616,9 +2669,9 @@ bool LLAgent::needsRenderHead()
         return mShowAvatar;
     }
 // [RLVa:KB] - Checked: RLVa-2.0.2
-    return ((LLVOAvatar::sVisibleInFirstPerson && LLPipeline::sReflectionRender) || (mShowAvatar && !gAgentCamera.cameraMouselook())) && (!gRlvHandler.hasBehaviour(RLV_BHVR_SHOWSELFHEAD));
+    return ((LLVOAvatar::sVisibleInFirstPerson && LLPipeline::sReflectionRender) || (mShowAvatar && !gAgentCamera.isHidingAvatarForFirstPerson())) && (!gRlvHandler.hasBehaviour(RLV_BHVR_SHOWSELFHEAD));
 // [/RLVa:KB]
-//  return (LLVOAvatar::sVisibleInFirstPerson && LLPipeline::sReflectionRender) || (mShowAvatar && !gAgentCamera.cameraMouselook());
+//  return (LLVOAvatar::sVisibleInFirstPerson && LLPipeline::sReflectionRender) || (mShowAvatar && !gAgentCamera.isHidingAvatarForFirstPerson());
 }
 
 //-----------------------------------------------------------------------------
@@ -2821,6 +2874,16 @@ void LLAgent::endAnimationUpdateUI()
                 skip_list.insert(tmp);
             }
             // </FS:LO>
+            // <GMDX> the overlays kept up in mouselook weren't pushed, so they aren't popped
+            if (sOverlaySkippedInMouselook && LLFloaterReg::findInstance("game_control_overlay"))
+            {
+                skip_list.insert(LLFloaterReg::findInstance("game_control_overlay"));
+            }
+            if (sInputOverlaySkippedInMouselook && LLFloaterReg::findInstance("gmdx_input_overlay"))
+            {
+                skip_list.insert(LLFloaterReg::findInstance("gmdx_input_overlay"));
+            }
+            // </GMDX>
             // <FS:Ansariel> Skip restoring conversations and radar floater
             if (gSavedSettings.getBOOL("FSShowConvoAndRadarInML"))
             {
@@ -2991,6 +3054,21 @@ void LLAgent::endAnimationUpdateUI()
         {
             skip_list.insert(LLFloaterReg::findInstance("stats"));
         }
+        // <SS:GameControl> the controller overlay, when it is set to show in mouselook
+        // (<GMDX> remembered, so leaving mouselook skips it too and doesn't pop it to
+        // the hidden state it never was pushed from)
+        sOverlaySkippedInMouselook = gSavedSettings.getBOOL("GameControlOverlayInMouselook");
+        if (sOverlaySkippedInMouselook)
+        {
+            skip_list.insert(LLFloaterReg::findInstance("game_control_overlay"));
+        }
+        // <GMDX> and the keyboard and mouse overlay, likewise
+        sInputOverlaySkippedInMouselook = gSavedSettings.getBOOL("GMDXInputOverlayInMouselook");
+        if (sInputOverlaySkippedInMouselook)
+        {
+            skip_list.insert(LLFloaterReg::findInstance("gmdx_input_overlay"));
+        }
+        // </GMDX>
         // <FS:LO> //FIRE-6385: Show all script dialogs still when entering mouselook
         for (LLFloater* tmp : LLFloaterReg::getFloaterList("script_floater"))
         {
@@ -6171,6 +6249,521 @@ bool LLAgent::getPhantom() const
     return mPhantom;
 }
 // </FS> Phantom mode
+
+static U64 g_lastUpdateTime { 0 };
+static F32 g_deltaTime { 0.0f };
+static S32 g_lastUpdateFrame { 0 };
+static S32 g_deltaFrame { 0 };
+
+void LLAgent::updateGameControlMode()
+{
+    // Frame delta for the controller and the flycam, measured every frame. Linden Lab
+    // measured it in applyExternalActions(), which runs only while a controller drives
+    // the avatar, so a keyboard or 3D mouse flycam integrated with a delta of 0 and the
+    // first controller frame got the whole time since. Clamped to 0.1 s so a hitch
+    // does not throw the flycam.
+    {
+        U64 now = LLFrameTimer::getTotalTime();
+        g_deltaTime = g_lastUpdateTime ? llmin(F32(now - g_lastUpdateTime) / (F32)(USEC_PER_SEC), 0.1f) : 0.f;
+        g_lastUpdateTime = now;
+
+        S32 frame_count = LLFrameTimer::getFrameCount();
+        g_deltaFrame = frame_count - g_lastUpdateFrame;
+        g_lastUpdateFrame = frame_count;
+    }
+
+    // Auto-derive the active mode from avatar/camera state.  Cursor mode takes
+    // precedence over Flycam: toggling the mouse cursor on while Flycam is engaged
+    // reports CONTROL_MODE_CURSOR (so the left stick drives the on-screen cursor)
+    // while isUsingFlycam() stays true underneath -- LLAgent::updateFlycam() keeps
+    // driving the camera every frame regardless of the reported mode (it is gated
+    // on LLAgentCamera's own flycam state directly, not on AgentControlMode), and
+    // LLGameControl::setFlycamEngaged() below tells the input-mapping lookup to
+    // let Flycam's own axis/button config (Pan/Tilt/Boom/...) keep driving
+    // whatever physical inputs Cursor mode's own mouse-cursor actions don't claim.
+    // This is how a single Cursor mode ends up with two flavors -- "other axes"
+    // control the avatar/camera depending on whether Flycam is concurrently
+    // engaged -- without needing a distinct mode of its own.
+    // Next: mouselook (the camera mode can be entered while sitting too, so it is
+    // checked ahead of Captive), then sitting/controls-taken maps to Captive,
+    // otherwise the normal Avatar mode.
+    LLGameControl::AgentControlMode mode;
+    if (mUsingMouseCursor)
+    {
+        mode = LLGameControl::CONTROL_MODE_CURSOR;
+    }
+    else if (isUsingFlycam())
+    {
+        mode = LLGameControl::CONTROL_MODE_FLYCAM;
+    }
+    else if (gAgentCamera.cameraMouselook())
+    {
+        mode = LLGameControl::CONTROL_MODE_MOUSELOOK;
+    }
+    else if (isSitting())
+    {
+        mode = LLGameControl::CONTROL_MODE_CAPTIVE;
+    }
+    else
+    {
+        mode = LLGameControl::CONTROL_MODE_AVATAR;
+    }
+    LLGameControl::setFlycamEngaged(isUsingFlycam());
+    LLGameControl::setAgentControlMode(mode);
+    gAgentCamera.updateFlycamCursorVisibility(mode);
+}
+
+void LLAgent::applyExternalActions(const LLGameControl::AgentActions& actions)
+{
+    llassert(LLCoros::on_main_thread_main_coro());
+    // Valid whenever game control is driving avatar or flycam: in FlyCam mode this
+    // only services the flycam on/off toggle (movement bits are ignored below).
+    assert(LLGameControl::isEnabled()
+        && (LLGameControl::willControlAvatar() || LLGameControl::willControlFlycam()));
+
+    // Process the non-flag actions first (see AgentActions comment in
+    // llgamecontrol.h).  Each bit in mMiscActionBits is already edge-triggered
+    // by LLGameControllerManager::computeAgentActions() (set only on the
+    // frame the bound button transitions from not-pressed to pressed), so no
+    // further debouncing is needed here -- just react to the bit directly.
+    const U32 misc_actions = actions.mMiscActionBits;
+
+    if (misc_actions & LLGameControl::AVATAR_ACTION_TOGGLE_FLY)
+    {
+        setFlying(!getFlying());
+    }
+
+    if (misc_actions & LLGameControl::AVATAR_ACTION_TOGGLE_FLYCAM)
+    {
+        toggleFlycam();
+    }
+
+    if (misc_actions & LLGameControl::AVATAR_ACTION_TOGGLE_SIT)
+    {
+        if (isSitting())
+        {
+            standUp();
+        }
+        else if (LLViewerObject* seat = find_nearby_seat())
+        {
+            handle_object_sit(seat, LLVector3::zero);
+        }
+        else
+        {
+            sitDownNearby();
+        }
+    }
+
+    if (misc_actions & LLGameControl::AVATAR_ACTION_TOGGLE_SPEAK)
+    {
+        LLVoiceClient::getInstance()->toggleUserPTTState();
+    }
+
+    if (misc_actions & LLGameControl::AVATAR_ACTION_TOGGLE_MOUSELOOK)
+    {
+        // Mirrors LLViewMouselook's "View.Mouselook" toggle.
+        if (!gAgentCamera.cameraMouselook())
+        {
+            gAgentCamera.changeCameraToMouselook();
+        }
+        else
+        {
+            gAgentCamera.changeCameraToDefault();
+        }
+    }
+
+    if (misc_actions & LLGameControl::AVATAR_ACTION_TOGGLE_MOUSE_CURSOR)
+    {
+        toggleMouseCursorMode();
+    }
+
+    if (misc_actions & LLGameControl::AVATAR_ACTION_ESCAPE)
+    {
+        resetToAvatarMode();
+    }
+
+    // CONTROL_MODE_CURSOR: drive the actual on-screen cursor from
+    // actions.mMouseCursorDX/DY (the analog deflection of whatever's bound to "Mouse
+    // left/right"/"Mouse up/down") BEFORE the click dispatch below, so a synthesized
+    // click lands wherever the stick just moved the cursor to, in the same frame.
+    if (LLGameControl::getAgentControlMode() == LLGameControl::CONTROL_MODE_CURSOR)
+    {
+        constexpr F32 MOUSE_CURSOR_PIXELS_PER_SEC = 1200.f;
+        U64 mouse_cursor_now = LLFrameTimer::getTotalTime();
+        F32 mouse_cursor_dt = (mLastMouseCursorUpdate == 0)
+            ? 0.f : F32(mouse_cursor_now - mLastMouseCursorUpdate) / (F32)(USEC_PER_SEC);
+        mLastMouseCursorUpdate = mouse_cursor_now;
+
+        if (actions.mMouseCursorDX != 0.f || actions.mMouseCursorDY != 0.f)
+        {
+            LLCoordGL cursor_pos = gViewerWindow->getCurrentMouse();
+            S32 new_x = cursor_pos.mX + ll_round(actions.mMouseCursorDX * MOUSE_CURSOR_PIXELS_PER_SEC * mouse_cursor_dt);
+            // LLCoordGL's Y increases upward, but mMouseCursorDY is in screen-frame
+            // (Y increases downward, same as CURSOR_DY/CURSOR_PY on the wire), so it
+            // subtracts here rather than adds.
+            S32 new_y = cursor_pos.mY - ll_round(actions.mMouseCursorDY * MOUSE_CURSOR_PIXELS_PER_SEC * mouse_cursor_dt);
+            gViewerWindow->moveCursorTo(new_x, new_y);
+        }
+    }
+    else
+    {
+        mLastMouseCursorUpdate = 0;
+    }
+
+    // Simulated mouse buttons (see llgamecontrol.h's AvatarMouseButton) are
+    // level-triggered: actions.mMouseButtonBits reflects which buttons are
+    // currently held, so the press/release edges are found here by diffing
+    // against last frame's value. Each edge is dispatched through
+    // LLViewerWindow exactly like a real mouse click, at the current cursor
+    // position, so it drives hover/pick/pie-menu/tool-manager the same way a
+    // hardware click would (e.g. touching/grabbing objects, walk-to-clicked,
+    // pie menu on right click).
+    U32 mouse_pressed_edges  = actions.mMouseButtonBits & ~mPrevMouseButtonBits;
+    U32 mouse_released_edges = ~actions.mMouseButtonBits & mPrevMouseButtonBits;
+    mPrevMouseButtonBits = actions.mMouseButtonBits;
+
+    if (mouse_pressed_edges & LLGameControl::AVATAR_MOUSE_BUTTON_LEFT)
+    {
+        gViewerWindow->handleMouseDown(gViewerWindow->getWindow(), gViewerWindow->getCurrentMouse(), MASK_NONE);
+    }
+    if (mouse_released_edges & LLGameControl::AVATAR_MOUSE_BUTTON_LEFT)
+    {
+        gViewerWindow->handleMouseUp(gViewerWindow->getWindow(), gViewerWindow->getCurrentMouse(), MASK_NONE);
+    }
+    if (mouse_pressed_edges & LLGameControl::AVATAR_MOUSE_BUTTON_RIGHT)
+    {
+        gViewerWindow->handleRightMouseDown(gViewerWindow->getWindow(), gViewerWindow->getCurrentMouse(), MASK_NONE);
+    }
+    if (mouse_released_edges & LLGameControl::AVATAR_MOUSE_BUTTON_RIGHT)
+    {
+        gViewerWindow->handleRightMouseUp(gViewerWindow->getWindow(), gViewerWindow->getCurrentMouse(), MASK_NONE);
+    }
+
+    // actions.mIsRunning is derived purely from how hard the controller's own
+    // movement axes are pushed (see computeAgentActions()'s analog hysteresis).
+    // Only let it drive the agent's running state while the controller is
+    // actually supplying movement this frame -- otherwise an idle-but-connected
+    // controller would fight the keyboard (e.g. clobbering double-tap-to-run)
+    // every frame even though the player is moving with the keyboard instead.
+    constexpr U32 CONTROLLER_MOVEMENT_FLAGS = AGENT_CONTROL_AT_POS | AGENT_CONTROL_AT_NEG
+                                             | AGENT_CONTROL_LEFT_POS | AGENT_CONTROL_LEFT_NEG;
+    // Running goes through RLVa's temporary run, which sends it. Act only when the
+    // controller's own run request changes: under Always Run or an RLVa @temprun
+    // restriction getRunning() can't follow the request, and comparing against it
+    // resent a reliable SetAlwaysRun every frame. Letting go of the stick ends a run
+    // the controller started.
+    const bool controller_wants_run = (actions.mControlFlags & CONTROLLER_MOVEMENT_FLAGS) && actions.mIsRunning;
+    if (controller_wants_run != mControllerRunRequest && !getAlwaysRun())
+    {
+        mControllerRunRequest = controller_wants_run;
+        if (controller_wants_run)
+        {
+            setTempRun();
+        }
+        else
+        {
+            clearTempRun();
+        }
+    }
+
+    mExternalActionFlags = actions.mControlFlags;
+
+    // <SS:GameControl> Gyro aim turns the view by an angle, the way the mouse does
+    // (LLToolGun::handleHover), not by a rate like the stick, so the stick still covers
+    // big turns while the gyro fine-tunes. Aiming down sights or zoomed scales it by the
+    // same ratio the mouse sensitivity settings give the mouse.
+    if (gAgentCamera.cameraMouselook() && (actions.mGyroYaw != 0.f || actions.mGyroPitch != 0.f))
+    {
+        static LLCachedControl<F32> mouse_sens(gSavedSettings, "MouseSensitivity");
+        static LLCachedControl<F32> mouse_sens_zoomed(gSavedSettings, "MouseSensitivityZoomed");
+        static LLCachedControl<F32> mouse_sens_ads(gSavedSettings, "FSADSMouseSensitivity");
+        LLToolCompGun* gun = LLToolCompGun::getInstance();
+        F32 scale = 1.f;
+        if (gun->isADS() || gun->isZoomed())
+        {
+            const F32 base = clamp_rescale((F32)mouse_sens, 0.f, 100.f, 0.05f, 2.75f);
+            const F32 aimed = clamp_rescale((F32)(gun->isADS() ? mouse_sens_ads : mouse_sens_zoomed), 0.f, 100.f, 0.05f, 2.75f);
+            scale = aimed / llmax(base, 0.01f);
+        }
+        pitch(-actions.mGyroPitch * scale); // pad tipped up looks up
+        LLVector3 skyward = getReferenceUpVector();
+        rotate(actions.mGyroYaw * scale, skyward.mV[VX], skyward.mV[VY], skyward.mV[VZ]);
+    }
+
+    // <GMDX> A trackpad used as a mouse: in mouselook (and OTS) it turns the view the
+    // way LLToolGun turns it for the mouse, scaled by the field of view and by the
+    // aim-down-sights or zoomed ratio; anywhere else it moves the cursor.
+    if (actions.mPadDX != 0.f || actions.mPadDY != 0.f)
+    {
+        if (gAgentCamera.cameraMouselook())
+        {
+            constexpr F32 RADIANS_PER_PAD_WIDTH = 1.6f; // about the default mouse sensitivity over 700 px
+            F32 scale = RADIANS_PER_PAD_WIDTH * LLViewerCamera::getInstance()->getView() / DEFAULT_FIELD_OF_VIEW;
+            LLToolCompGun* gun = LLToolCompGun::getInstance();
+            if (gun->isADS() || gun->isZoomed())
+            {
+                static LLCachedControl<F32> mouse_sens(gSavedSettings, "MouseSensitivity");
+                static LLCachedControl<F32> mouse_sens_zoomed(gSavedSettings, "MouseSensitivityZoomed");
+                static LLCachedControl<F32> mouse_sens_ads(gSavedSettings, "FSADSMouseSensitivity");
+                const F32 base = clamp_rescale((F32)mouse_sens, 0.f, 100.f, 0.05f, 2.75f);
+                const F32 aimed = clamp_rescale((F32)(gun->isADS() ? mouse_sens_ads : mouse_sens_zoomed), 0.f, 100.f, 0.05f, 2.75f);
+                scale *= aimed / llmax(base, 0.01f);
+            }
+            pitch(actions.mPadDY * scale); // finger up (-y) looks up
+            LLVector3 skyward = getReferenceUpVector();
+            rotate(-actions.mPadDX * scale, skyward.mV[VX], skyward.mV[VY], skyward.mV[VZ]);
+        }
+        else
+        {
+            constexpr F32 PIXELS_PER_PAD_WIDTH = 900.f;
+            LLCoordGL cursor_pos = gViewerWindow->getCurrentMouse();
+            // LLCoordGL's Y increases upward; the pad's downward
+            gViewerWindow->moveCursorTo(cursor_pos.mX + ll_round(actions.mPadDX * PIXELS_PER_PAD_WIDTH),
+                                        cursor_pos.mY - ll_round(actions.mPadDY * PIXELS_PER_PAD_WIDTH));
+        }
+    }
+
+    // (the frame deltas are measured every frame in updateGameControlMode())
+    U64 now = LLFrameTimer::getTotalTime();
+    S32 frame_count = LLFrameTimer::getFrameCount();
+
+    if (isUsingFlycam())
+    {
+        // Flycam will be updated later by exernal context
+        return;
+    }
+
+    S32 direction = (S32)(mExternalActionFlags & AGENT_CONTROL_AT_POS)
+        - (S32)((mExternalActionFlags & AGENT_CONTROL_AT_NEG) >> 1);
+    if (direction != 0)
+    {
+        moveAt(direction);
+    }
+
+    static U32 last_non_fly_frame = 0;
+    static U64 last_non_fly_time = 0;
+    direction = (S32)(mExternalActionFlags & AGENT_CONTROL_UP_POS)
+        - (S32)((mExternalActionFlags & AGENT_CONTROL_UP_NEG) >> 1);
+    if (direction != 0)
+    {
+        // HACK: this auto-fly logic based on original code still extant in llviewerinput.cpp::agent_jump()
+        // but has been cleaned up.
+        // TODO?: DRY this logic
+        if (direction > 0)
+        {
+            if (!getFlying()
+                && !upGrabbed()
+                && gSavedSettings.getBOOL("AutomaticFly"))
+            {
+                constexpr F32 FLY_TIME = 0.5f;
+                constexpr U32 FLY_FRAMES = 4;
+                F32 delta_time = (F32)(now - last_non_fly_time) / (F32)(USEC_PER_SEC);
+                U32 delta_frames = frame_count - last_non_fly_frame;
+                if( delta_time > FLY_TIME
+                    && delta_frames > FLY_FRAMES)
+                {
+                    setFlying(true);
+                }
+            }
+        }
+        else
+        {
+            last_non_fly_frame = frame_count;
+            last_non_fly_time = now;
+        }
+
+        moveUp(direction);
+    }
+    else if (!getFlying())
+    {
+        last_non_fly_frame = frame_count;
+        last_non_fly_time = now;
+    }
+
+    direction = (S32)(mExternalActionFlags & AGENT_CONTROL_LEFT_POS)
+        - (S32)((mExternalActionFlags & AGENT_CONTROL_LEFT_NEG) >> 1);
+    if (direction != 0)
+    {
+        moveLeft(direction);
+    }
+
+    direction = (S32)(mExternalActionFlags & AGENT_CONTROL_YAW_POS)
+        - (S32)((mExternalActionFlags & AGENT_CONTROL_YAW_NEG) >> 1);
+    // The "Slow".."Fast" preferences slider scales Mouselook's turn/look speed
+    // and Avatar's turn speed.
+    F32 turn_speed_factor = 1.0f;
+    F32 look_speed_factor = 1.0f;
+    LLGameControl::AgentControlMode control_mode = LLGameControl::getAgentControlMode();
+    if (control_mode == LLGameControl::CONTROL_MODE_MOUSELOOK)
+    {
+        turn_speed_factor = LLGameControl::getSpeedFactor(LLGameControl::getModeName(control_mode));
+        look_speed_factor = turn_speed_factor;
+    }
+    else if (control_mode == LLGameControl::CONTROL_MODE_AVATAR)
+    {
+        turn_speed_factor = LLGameControl::getSpeedFactor(LLGameControl::getModeName(control_mode));
+    }
+
+    if (direction != 0)
+    {
+        F32 sign = (direction < 0 ? -1.0f : 1.0f);
+        // actions.mYawAmplitude is the analog stick deflection ([-1, 1]) that
+        // set this flag; use its magnitude to modulate turn speed instead of
+        // always snapping to full rate
+        moveYaw(sign * fabs(actions.mYawAmplitude) * turn_speed_factor);
+    }
+
+    {
+        F32 pitch_sign = ((mExternalActionFlags & AGENT_CONTROL_PITCH_POS) > 0 ? 1.0f : 0.0f)
+            - ((mExternalActionFlags & AGENT_CONTROL_PITCH_NEG) > 0 ? 1.0f : 0.0f);
+        // Same analog modulation as yaw above, via actions.mPitchAmplitude.
+        movePitch(pitch_sign * fabs(actions.mPitchAmplitude) * look_speed_factor);
+    }
+
+    // actions.mZoomAmplitude ([-1, 1], from "Zoom +/-"/"Zoom +"/"Zoom -") drives the
+    // camera's field-of-view zoom. Positive amplitude zooms in (narrows the FOV);
+    if (actions.mZoomAmplitude != 0.f)
+    {
+        constexpr F32 FOV_ZOOM_RATE = 1.2f;
+        F32 fov_scale = powf(FOV_ZOOM_RATE, -actions.mZoomAmplitude * g_deltaTime);
+        LLViewerCamera* camera = LLViewerCamera::getInstance();
+        camera->setDefaultFOV(camera->getDefaultFOV() * fov_scale);
+        gSavedSettings.setF32("CameraAngle", camera->getView());
+    }
+
+    // actions.mScrollAmplitude ([-1, 1], from "Scroll +/-"/"Scroll +"/"Scroll -")
+    // moves the camera toward/away from the avatar the same way the mousewheel does,
+    // so the third-person/follow-cam distance persists once the avatar moves (unlike
+    // the keyboard's camera in/out keys, which unlock the view from the avatar).
+    // Positive amplitude scrolls in (camera moves closer); scrollCamera()'s clicks
+    // are positive-out like the mousewheel's.
+    if (actions.mScrollAmplitude != 0.f)
+    {
+        constexpr F32 SCROLL_CLICKS_PER_SECOND = 8.f;
+        gAgentCamera.scrollCamera(-actions.mScrollAmplitude * SCROLL_CLICKS_PER_SECOND * g_deltaTime);
+    }
+
+    if (mExternalActionFlags & AGENT_CONTROL_STOP)
+    {
+        setControlFlags(AGENT_CONTROL_STOP);
+    }
+
+    // HACK: AGENT_CONTROL_NUDGE_AT_POS is used to toggle running
+    if ((mExternalActionFlags & AGENT_CONTROL_NUDGE_AT_POS) > 0)
+    {
+        if (mToggleRun)
+        {
+            // RLVa's temporary run, which also sends it
+            if (getRunning())
+            {
+                clearTempRun();
+            }
+            else
+            {
+                setTempRun();
+            }
+        }
+        mToggleRun = false;
+    }
+    else
+    {
+        mToggleRun = true;
+    }
+
+    if ((mExternalActionFlags & AGENT_CONTROL_SIT_ON_GROUND) > 0
+        && isAgentAvatarValid() && !isSitting() && !getFlying() && !gAgentAvatarp->mInAir)
+    {
+        // "Sit": only sit if currently standing; a no-op otherwise
+        // (already sitting, flying, or airborne).
+        sitDownNearby();
+    }
+    else if ((mExternalActionFlags & AGENT_CONTROL_STAND_UP) > 0 && isSitting())
+    {
+        // "Stand up": only stand if currently sitting.
+        standUp();
+    }
+}
+
+bool LLAgent::isUsingFlycam() const
+{
+    return gAgentCamera.isUsingFlycam();
+}
+
+void LLAgent::toggleFlycam()
+{
+// [RLVa:KB] - the flycam bypasses updateCamera(), so it would escape the camera
+// distance limits; it can still be turned off
+    if (!isUsingFlycam() && RlvActions::isRlvEnabled() && RlvActions::isCameraDistanceClamped())
+    {
+        return;
+    }
+// [/RLVa:KB]
+    gAgentCamera.toggleFlycam();
+    // the Stand / Stop flying bar's Flycam button, as the 3D mouse's flycam keeps it
+    if (isUsingFlycam())
+    {
+        LLPanelStandStopFlying::setStandStopFlyingMode(LLPanelStandStopFlying::SSFM_FLYCAM);
+    }
+    else
+    {
+        LLPanelStandStopFlying::clearStandStopFlyingMode(LLPanelStandStopFlying::SSFM_FLYCAM);
+        LLViewerJoystick::getInstance()->setNeedsReset(true);
+    }
+}
+
+void LLAgent::setFlycamKeyInput(U8 channel, F32 value)
+{
+    gAgentCamera.setFlycamKeyInput(channel, value);
+}
+
+void LLAgent::setFlycamKeyUnroll(bool unroll)
+{
+    gAgentCamera.setFlycamKeyUnroll(unroll);
+}
+
+bool LLAgent::isCameraExternallyDriven() const
+{
+    // Both flycam input sources now share one toggle state on LLAgentCamera --
+    // LLViewerJoystick::getOverrideCamera() forwards to the same flag.
+    return gAgentCamera.isUsingFlycam();
+}
+
+void LLAgent::toggleMouseCursorMode()
+{
+    mUsingMouseCursor = !mUsingMouseCursor;
+    mLastMouseCursorUpdate = 0; // avoid a jump from a stale delta-time baseline
+}
+
+void LLAgent::resetToAvatarMode()
+{
+    if (mUsingMouseCursor)
+    {
+        toggleMouseCursorMode();
+    }
+    if (isUsingFlycam())
+    {
+        toggleFlycam();
+    }
+    if (gAgentCamera.cameraMouselook())
+    {
+        gAgentCamera.changeCameraToDefault();
+    }
+}
+
+void LLAgent::pressGameControlButton(U8 button_index)
+{
+    mGameControlButtonsFromKeys |= (1U << button_index);
+}
+
+void LLAgent::releaseGameControlButton(U8 button_index)
+{
+    mGameControlButtonsFromKeys &= ~(1U << button_index);
+}
+
+void LLAgent::updateFlycam()
+{
+    gAgentCamera.updateFlycam(g_deltaTime);
+}
 
 /********************************************************************************/
 

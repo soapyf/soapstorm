@@ -28,6 +28,7 @@
 
 #include "llwindowmacosx.h"
 
+#include "llgamecontrol.h"
 #include "llkeyboardmacosx.h"
 #include "llwindowcallbacks.h"
 #include "llpreeditor.h"
@@ -990,9 +991,10 @@ bool LLWindowMacOSX::getFullscreen()
     return mFullscreen;
 }
 
-void LLWindowMacOSX::gatherInput()
+void LLWindowMacOSX::gatherInput(bool app_has_focus)
 {
     updateCursor();
+    LLGameControl::processEvents(app_has_focus);
 }
 
 bool LLWindowMacOSX::getPosition(LLCoordScreen *position)

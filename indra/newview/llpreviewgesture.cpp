@@ -36,6 +36,7 @@
 #include "lldatapacker.h"
 #include "lldelayedgestureerror.h"
 #include "llfloaterreg.h"
+#include "llgamecontrol.h"
 #include "llgesturemgr.h"
 #include "llinventorydefines.h"
 #include "llinventoryfunctions.h"
@@ -308,6 +309,7 @@ LLPreviewGesture::LLPreviewGesture(const LLSD& key)
     mTriggerEditor(NULL),
     mModifierCombo(NULL),
     mKeyCombo(NULL),
+    mControllerCombo(NULL),
     mLibraryList(NULL),
     mAddBtn(NULL),
     mUpBtn(NULL),
@@ -385,6 +387,22 @@ bool LLPreviewGesture::postBuild()
     combo = getChild<LLComboBox>( "key_combo");
     combo->setCommitCallback(boost::bind(&LLPreviewGesture::onCommitKeyorModifier, this));
     mKeyCombo = combo;
+
+    // OCOL: game controller button. Stored locally per account rather than in the
+    // gesture asset, so it applies right away and doesn't need saving.
+    combo = getChild<LLComboBox>("controller_combo");
+    combo->add(NONE_LABEL, LLSD(-1));
+    for (U8 button = 0; button < LLGameControl::BUTTON_21; ++button)
+    {
+        combo->add(LLGameControl::buttonDisplayName(button), LLSD((S32)button));
+    }
+    for (U8 button : { LLGameControl::BUTTON_LEFT_TRIGGER, LLGameControl::BUTTON_RIGHT_TRIGGER })
+    {
+        combo->add(LLGameControl::buttonDisplayName(button), LLSD((S32)button));
+    }
+    combo->setValue(LLSD(-1));
+    combo->setCommitCallback(boost::bind(&LLPreviewGesture::onCommitControllerButton, this));
+    mControllerCombo = combo;
 
     list = getChild<LLScrollListCtrl>("library_list");
     list->setCommitCallback(onCommitLibrary, this);
@@ -646,6 +664,7 @@ void LLPreviewGesture::refresh()
         mReplaceEditor->setEnabled(false);
         mModifierCombo->setEnabled(false);
         mKeyCombo->setEnabled(false);
+        mControllerCombo->setEnabled(false);
         mLibraryList->setEnabled(false);
         mAddBtn->setEnabled(false);
         mUpBtn->setEnabled(false);
@@ -709,6 +728,7 @@ void LLPreviewGesture::refresh()
 
     mModifierCombo->setEnabled(true);
     mKeyCombo->setEnabled(true);
+    mControllerCombo->setEnabled(true);
 
     mAddBtn->setEnabled(modifiable && have_library);
     mUpBtn->setEnabled(modifiable && have_step && step_index > 0);
@@ -972,6 +992,8 @@ void LLPreviewGesture::loadUIFromGesture(LLMultiGesture* gesture)
 
     // <FS:Ansariel> Allow CTRL-F10 shortcut for gestures
     //mKeyCombo->setEnabledByValue(LLKeyboard::stringFromKey(KEY_F10), gesture->mMask != MASK_CONTROL);
+
+    mControllerCombo->setValue(LLSD(LLGestureMgr::instance().getControllerButton(mItemUUID)));
 
     // Make UI steps for each gesture step
     size_t i;
@@ -1367,6 +1389,11 @@ LLMultiGesture* LLPreviewGesture::createGesture()
     return gesture;
 }
 
+
+void LLPreviewGesture::onCommitControllerButton()
+{
+    LLGestureMgr::instance().setControllerButton(mItemUUID, mControllerCombo->getValue().asInteger());
+}
 
 void LLPreviewGesture::onCommitKeyorModifier()
 {

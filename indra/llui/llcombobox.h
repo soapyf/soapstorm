@@ -148,6 +148,7 @@ public:
     LLScrollListItem* findItemByValue(const std::string& value) const;
     std::vector<LLScrollListItem*> getAllData() const;
     LLScrollListItem* getItemByValue(const LLSD& value); // <FS:Ansariel> Get items by value
+    std::vector<LLScrollListItem*> getAllData() const;
 
     void            sortByName(bool ascending = true); // Sort the entries in the combobox by name
 
