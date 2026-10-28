@@ -842,15 +842,13 @@ bool LLLocalMeshFile::readLastModified(const std::string& filename, std::time_t&
         return false;
     }
 
-    std::error_code ec;
-    auto file_time = std::filesystem::last_write_time(std::filesystem::path(fsyspath(filename)), ec);
-    if (ec)
+    llstat st;
+    if (LLFile::stat(filename, &st) == 0)
     {
-        return false;
+        last_modified = st.st_mtime;
+        return true;
     }
-
-    last_modified = std::chrono::system_clock::to_time_t(std::chrono::clock_cast<std::chrono::system_clock>(file_time));
-    return true;
+    return false;
 }
 
 void LLLocalMeshFile::discoverLodFilenames(const std::array<std::string, LOCAL_NUM_LODS>& seed_filenames,

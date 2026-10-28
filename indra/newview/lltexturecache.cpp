@@ -2465,7 +2465,7 @@ S32 LLTextureCache::bodySize(const LLUUID& id, const std::string& filename, LLVo
         S32 packed = 0;
         if (strata->objectSize(id, packed)) return packed;
     }
-    return LLAPRFile::size(filename, pool);
+    return (S32)LLFile::size(filename);
 }
 
 S32 LLTextureCache::readBody(const LLUUID& id, const std::string& filename, S32 offset, U8* dst, S32 bytes, LLVolatileAPRPool* pool)
@@ -2479,7 +2479,7 @@ S32 LLTextureCache::readBody(const LLUUID& id, const std::string& filename, S32 
         //
         // An object mid-pack can be in the index and on disk at the same time, and the crash rule guarantees the loose copy is the authoritative one whenever both exist - which is the other reason this direction of fallback is the correct one.
     }
-    return LLAPRFile::readEx(filename, dst, offset, bytes, pool);
+    return (S32)LLFile::read(filename, dst, offset, bytes);
 }
 
 bool LLTextureCache::writeBody(const LLUUID& id, const std::string& filename, const U8* src, S32 bytes)
@@ -2489,7 +2489,7 @@ bool LLTextureCache::writeBody(const LLUUID& id, const std::string& filename, co
         // restore_bytes is FALSE, and that is the whole difference between this tenant and the asset one: the caller is about to write the complete body, so handing the old payload back to the loose file would only be overwritten a syscall later. The record is revoked either way, which is what matters.
         strata->prepareForWrite(id, LLAssetType::AT_TEXTURE, filename, false);
     }
-    return LLAPRFile::writeEx(filename, const_cast<U8*>(src), 0, bytes, getLocalAPRFilePool()) > 0;
+    return (S32)LLFile::write(filename, src, 0, bytes) > 0;
 }
 
 void LLTextureCache::forgetBody(const LLUUID& id)
@@ -2551,7 +2551,7 @@ LLTextureCache::ESSJ2CProbe LLTextureCache::ssProbeJ2C(const LLUUID& id, bool wa
 
     // The first record's worth lives in texture.cache at a fixed stride, exactly as the HEADER stage reads it. A texture smaller than one record occupies a whole padded record, so the read is clamped to what the asset actually is rather than to the record size.
     const S32 header_bytes = llmin(total, (S32)TEXTURE_CACHE_ENTRY_SIZE);
-    const S32 header_read  = LLAPRFile::readEx(mHeaderDataFileName, &out_data[0], idx * TEXTURE_CACHE_ENTRY_SIZE, header_bytes, pool);
+    const S32 header_read  = (S32)LLFile::read(mHeaderDataFilePath, &out_data[0], idx * TEXTURE_CACHE_ENTRY_SIZE, header_bytes);
     if (header_read != header_bytes)
     {
         LL_WARNS("Squeeze") << "promotion read of " << id << " got " << header_read << " of " << header_bytes
