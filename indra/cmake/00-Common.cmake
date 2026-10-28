@@ -99,7 +99,7 @@ set(CMAKE_CONFIGURATION_TYPES "RelWithDebInfo;Release" CACHE STRING "Supported b
 # No effect on GCC or Clang builds, where the equivalent (-fno-stack-protector) is already applied to everything in the LINUX block below.
 function(ss_hot_loop_codegen target)
   if (WINDOWS AND TARGET ${target})
-    target_compile_options(${target} PRIVATE /GS-)
+    target_compile_options(${target} PRIVATE /GS- /wd4652 /wd4653)
   endif ()
 endfunction()
 
@@ -169,6 +169,8 @@ if (WINDOWS)
           /Gw
           /MP
           /permissive-
+          /wd4652
+          /wd4653
       )
 
   # <SS:Nexii> /fp:contract was here and is deliberately NOT set. Do not add it back without reading this.
