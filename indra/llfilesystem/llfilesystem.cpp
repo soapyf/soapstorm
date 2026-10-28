@@ -228,7 +228,7 @@ bool LLFileSystem::write(const U8* buffer, S32 bytes)
     // <SS:Nexii> Strata - hand the object back to the loose tier before writing a byte of it. This is the gate that makes an append-only volume safe for a cache llmeshrepository.cpp patches in place: APPEND and READ_WRITE need the old bytes back because they address into them, while a plain WRITE is about to truncate and so takes the cheaper path that simply drops them. When the object is not packed - which is every newly fetched asset, and so the overwhelming majority of calls - this is one hash lookup.
     if (SSStrataStore* strata = SSStrataStore::live())
     {
-        strata->prepareForWrite(mFileID, mFileType, filename, mMode != LLFileSystem::WRITE);
+        strata->prepareForWrite(mFileID, mFileType, mPath, mMode != LLFileSystem::WRITE);
     }
     // </SS:Nexii>
 
