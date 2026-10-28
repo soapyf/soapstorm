@@ -46,6 +46,7 @@ public:
     bool    handleDoubleClick( S32 x, S32 y, MASK mask ) override;
     void    reshape(S32 width, S32 height, bool called_from_parent = true) override;
     void    draw() override;
+    void    handleReshape(const LLRect& new_rect, bool by_user) override; // <GMDX>
 
     // <FS:Ansariel> FIRE-1825: Minimap floater background transparency
     F32 getCurrentTransparency() override;
@@ -58,6 +59,19 @@ private:
     void setMinimized(bool) override;
     void stretchMiniMap(S32 width,S32 height);
     // </FS:Ansariel>
+
+    // <GMDX> Show Whole Region (GMDXMiniMapWholeRegion): its compass replaces the direction
+    // letters, and the floater keeps the map's square shape
+    void setDirectionsVisible(bool visible);
+    void makeSquare();
+    bool isUserResizing() const;   // a resize handle of this floater has the mouse
+    void fitAfterResize();
+    bool mDirectionsHidden = false;
+    LLRect mDragStartRect;         // the rect when a resize drag began (empty: no drag)
+    boost::signals2::scoped_connection mWholeRegionConn;
+    boost::signals2::scoped_connection mCompassStyleConn;
+    boost::signals2::scoped_connection mRotateConn;
+    // </GMDX>
 
     LLTextBox*      mTextBoxEast;
     LLTextBox*      mTextBoxNorth;

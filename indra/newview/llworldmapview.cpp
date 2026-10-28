@@ -28,6 +28,8 @@
 
 #include "llworldmapview.h"
 
+#include "gmdxregioncapture.h"   // <GMDX> region maps on the World Map
+
 #include "indra_constants.h"
 #include "llui.h"
 #include "llmath.h"     // clampf()
@@ -437,6 +439,41 @@ void LLWorldMapView::draw()
     drawMipmap(width, height);
 #endif //OPENSIM
 // </FS:CR> Aurora Sim
+    // <GMDX> region maps (gmdxregioncapture.h) over the server's tiles (GMDXWorldMapUseCapturedMaps)
+    {
+        auto region_rect = [&](U64 handle, F64 size, F32& left, F32& bottom, F32& right, F32& top)
+        {
+            const LLVector3d origin = from_region_handle(handle);
+            const LLVector3 sw = globalPosToView(origin);
+            const LLVector3 ne = globalPosToView(origin + LLVector3d(size, size, 0.0));
+            left = sw.mV[VX]; bottom = sw.mV[VY]; right = ne.mV[VX]; top = ne.mV[VY];
+        };
+        GMDXRegionCapture::forEachWorldMapTexture(
+            [&](U64 handle)
+            {
+                F32 l, b, r, t;
+                region_rect(handle, REGION_WIDTH_METERS, l, b, r, t);   // (a var-region's own width once loaded)
+                return r >= 0.f && l <= (F32)width && t >= 0.f && b <= (F32)height && r - l >= 2.f;
+            },
+            [&](U64 handle, LLViewerTexture* tex, F32 region_width)
+            {
+                F32 l, b, r, t;
+                region_rect(handle, region_width, l, b, r, t);
+                LLGLSUIDefault gls_ui;
+                gGL.getTexUnit(0)->bind(tex);
+                gGL.color4f(1.f, 1.f, 1.f, 1.f);
+                gGL.begin(LLRender::TRIANGLES);
+                gGL.texCoord2f(0.f, 1.f); gGL.vertex3f(l, t, 0.f);
+                gGL.texCoord2f(0.f, 0.f); gGL.vertex3f(l, b, 0.f);
+                gGL.texCoord2f(1.f, 0.f); gGL.vertex3f(r, b, 0.f);
+                gGL.texCoord2f(0.f, 1.f); gGL.vertex3f(l, t, 0.f);
+                gGL.texCoord2f(1.f, 0.f); gGL.vertex3f(r, b, 0.f);
+                gGL.texCoord2f(1.f, 1.f); gGL.vertex3f(r, t, 0.f);
+                gGL.end();
+            });
+        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+    }
+    // </GMDX>
 
     // Draw per sim overlayed information (names, mature, offline...)
     static LLCachedControl<bool> show_for_sale(gSavedSettings, "MapShowLandForSale");

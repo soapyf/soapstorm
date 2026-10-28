@@ -797,6 +797,10 @@
     <color
      name="MapFrustumColor"
      reference="White_10" />
+    <!-- <GMDX> mini-map Show > Physical Objects Only: the physical objects' dots and trails -->
+    <color
+     name="GMDXMapPhysicalColor"
+     value="1 0.6 0.1 1" />
 
     <color
      name="MapParcelOutlineColor"

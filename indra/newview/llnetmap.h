@@ -34,6 +34,7 @@
 #include "v4color.h"
 #include "llpointer.h"
 #include "llcoord.h"
+#include "llrect.h" // <GMDX>
 
 class LLColor4U;
 class LLImageRaw;
@@ -78,6 +79,7 @@ public:
     /*virtual*/ bool    handleMouseDown(S32 x, S32 y, MASK mask);
     /*virtual*/ bool    handleMouseUp(S32 x, S32 y, MASK mask);
     /*virtual*/ bool    handleHover( S32 x, S32 y, MASK mask );
+    void                onMouseLeave(S32 x, S32 y, MASK mask) override; // <GMDX> cursor coordinates
     /*virtual*/ bool    handleToolTip( S32 x, S32 y, MASK mask);
     /*virtual*/ void    reshape(S32 width, S32 height, bool called_from_parent = true);
 
@@ -107,6 +109,11 @@ public:
 
     // <FS:Ansariel> Synchronize double click handling throughout instances
     void            performDoubleClickAction(LLVector3d pos_global);
+
+    // <GMDX> "Show Whole Region" (GMDXMiniMapWholeRegion) as last drawn: the agent's region
+    // fitted to the view (LLFloaterMap keeps the floater square and hides its direction letters).
+    bool            isWholeRegion() const { return mFitRegion; }
+    // </GMDX>
 
     // <FS:Ansariel> Mark avatar feature
     static bool     hasAvatarMarkColor(const LLUUID& avatar_id) { return sAvatarMarksMap.find(avatar_id) != sAvatarMarksMap.end(); }
@@ -146,6 +153,77 @@ private:
 //  void            createObjectImage();
 
     static bool     outsideSlop(S32 x, S32 y, S32 start_x, S32 start_y, S32 slop);
+
+    // <GMDX> (gmdxnetmap.cpp, but updateScaleDerived) Show Whole Region
+    void            updateScaleDerived();   // pixels per meter, dot size, object layer texels per meter
+    void            updateWholeRegion(LLViewerRegion* region, LLRectf& fit_square);   // per frame, before drawing
+    void            drawRadarBackground();
+    void            drawWholeRegionCompass(const LLRectf& fit_square);
+    // A textured quad in map pixels, or its part on the round radar's disc (radius > 0) around the origin.
+    static void     drawMapQuad(F32 x0, F32 y0, F32 x1, F32 y1, F32 u0, F32 v0, F32 u1, F32 v1, F32 radar_radius);
+    void            addGMDXMenuCallbacks(LLUICtrl::CommitCallbackRegistry::ScopedRegistrar& commitRegistrar,
+                                         LLUICtrl::EnableCallbackRegistry::ScopedRegistrar& enableRegistrar);
+    LLVector3d      mapCenterGlobal() const;
+    void            clampFitView(F32 region_width);
+    LLVector2       mapPan() const { return mFitRegion ? mFitPan : mCurPan; }
+    bool            fitPanAt(S32 x, S32 y) const;   // zoomed in, a plain drag here pans the region
+    // Only Render Physical Objects
+    void            drawPhysicalObjects(const LLVector3& map_center_agent, F32 pixels_per_meter, const LLViewerRegion* only_region);
+    // Marks (gmdxminimapmarks.h) and the coordinates under the cursor
+    void            drawMarks();
+    void            drawCursorCoordinates();
+    bool            onMap(const LLVector3& pos_local) const;   // inside the drawn map (Whole Region: its square / disc)
+    LLUUID          markAt(S32 x, S32 y);                       // the mark drawn under (x, y), or null
+    void            copyPopupPosition(bool slurl);
+    void            addMarkAtPopup(S32 color);
+    // Zones: Draw Zone puts the map in a drawing mode (mDrawKind: GMDXMapZone::Kind, -1 = off)
+    void            drawZones();          // the saved zones: under the avatars
+    void            drawZonePreview();    // the zone being drawn and its hint: over everything
+    std::vector<LLVector2> zoneOutline(S32 kind, const std::vector<LLVector3d>& points);   // in view coordinates
+    LLUUID          zoneAt(S32 x, S32 y);
+    void            startZone(S32 kind);
+    void            finishZone();
+    // Right-click a dot > Dot Colour: "0".."5" (the mark colours), "custom" (the colour picker),
+    // "clear"; for the closest avatar of the last right-click
+    void            setAvatarDotColor(const std::string& which);
+    void            destroyDotColorSwatch();
+    void            updateGMDXPopupItems(LLMenuGL* menu, S32 x, S32 y);
+
+    S32             mDrawKind = -1;
+    std::vector<LLVector3d> mDrawPoints;
+    LLVector3d      mDrawCursor;
+    bool            mDrawDrag = false;
+    LLUUID          mPopupZone;             // the zone the menu was opened on
+    LLUUID          mPopupMark;             // the mark the menu was opened on
+    bool            mCursorInside = false;
+    S32             mCursorX = 0, mCursorY = 0;
+    class LLColorSwatchCtrl* mDotColorSwatch = nullptr;   // hidden: the colour picker's owner
+    LLUUID          mDotColorAvatar;        // whose colour the picker sets
+    bool            mDotColorHad = false;   // its own colour before the picker opened, to restore on cancel
+    LLColor4        mDotColorBefore;
+
+    // Show Whole Region, as last drawn: the map centre (the region's centre, at the camera's height)
+    // and scale replace the camera position and mScale.
+    bool            mFitRegion = false;
+    F32             mFitPixelsPerMeter = 0.f;
+    LLVector3d      mFitCenterGlobal;
+    LLVector2       mFitPan;                // the fitted square's offset from the view centre (heading tape room)
+    // Zoom: 1 = the whole region; the view's centre in region metres (clamped so the view stays
+    // inside the region); the region they belong to; the zoom-1 scale and the map's square in view
+    // coordinates (for the wheel / drag handlers).
+    F32             mFitZoom = 1.f;
+    LLVector2       mFitViewCenter;
+    U64             mFitRegionHandle = 0;
+    F32             mFitBasePixelsPerMeter = 0.f;
+    LLRectf         mFitMapRect;
+    // Camera at top = the radar: centred on the agent, turned with the camera, cut to a disc of this
+    // radius (view pixels) around the map centre; 0 = not the round radar.
+    F32             mRadarRadius = 0.f;
+    bool            mRadarSquare = false;   // the square one: turned inside mFitMapRect
+    bool            radarOn() const { return mRadarRadius > 0.f || mRadarSquare; }
+    LLVector2       radarCenter() const;    // the disc's centre in view coordinates
+    LLVector2       toRadarRim(const LLVector2& p) const;   // p, pulled in to the rim when outside the disc / square
+    // </GMDX>
 
 //  bool            mUpdateNow;
 // [SL:KB] - Patch: World-MinimapOverlay | Checked: 2012-06-20 (Catznip-3.3)
