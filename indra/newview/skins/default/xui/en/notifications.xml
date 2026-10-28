@@ -3471,6 +3471,114 @@ See https://wiki.secondlife.com/wiki/Adding_Spelling_Dictionaries
     </form>
   </notification>
 
+  <!-- GunMetal-DX loadouts (gmdxloadouts.cpp, gmdxfloaterloadouts.cpp, gmdxweaponsorter.cpp) -->
+  <notification
+   icon="alertmodal.tga"
+   label="Loadouts"
+   name="GMDXLoadoutName"
+   type="alertmodal">
+    [TITLE]
+    <tag>confirm</tag>
+    <form name="form">
+      <input name="message" type="text">
+        [NAME]
+      </input>
+      <button
+       default="true"
+       index="0"
+       name="OK"
+       text="OK"/>
+      <button
+       index="1"
+       name="Cancel"
+       text="Cancel"/>
+    </form>
+  </notification>
+  <notification
+   icon="alertmodal.tga"
+   label="Loadouts"
+   name="GMDXLoadoutDelete"
+   type="alertmodal">
+    Move the loadout "[NAME]" to the Trash? The weapons in it stay where they are.
+    <tag>confirm</tag>
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Cancel"
+     yestext="Delete"/>
+  </notification>
+  <notification
+   icon="alertmodal.tga"
+   label="Import weapons"
+   name="GMDXImportTrash"
+   type="alertmodal">
+    Move [COUNT] older and duplicate versions to the Trash? You can still take them back out of the Trash until it is emptied.
+    <tag>confirm</tag>
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Cancel"
+     yestext="Move to Trash"/>
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="GMDXLoadoutShared"
+   type="notifytip">
+    "[NAME]" is in your Notecards folder. Give it to anyone; they drop it on their Loadouts window to add the loadout.
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="GMDXLoadoutImported"
+   type="notifytip">
+    Added loadout "[NAME]": all [TOTAL] weapons found in your Equipment.
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="GMDXLoadoutImportedMissing"
+   type="notifytip">
+    Added loadout "[NAME]" with [FOUND] of [TOTAL] weapons. Not in your Equipment: [MISSING]
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="GMDXLoadoutNotecardBad"
+   type="notifytip">
+    That notecard isn't a loadout (or couldn't be read).
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="GMDXHotkeyInUse"
+   type="notifytip">
+    [KEY] is already a menu shortcut. Pick another key.
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="GMDXHotkeyBad"
+   type="notifytip">
+    [KEY] can't be a quick-swap key. Pick another key.
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="GMDXHotkeySlots"
+   type="notifytip">
+    Select one of the first four slots: those have quick-swap keys.
+  </notification>
+  <notification
+   icon="alertmodal.tga"
+   label="Remove weapon"
+   name="GMDXRemoveWeapon"
+   type="alertmodal">
+    Remove [NAME] from Equipment? It goes to Outdated (take it back out any time), comes off if you wear it, and leaves every loadout that has it.
+    <tag>confirm</tag>
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Cancel"
+     yestext="Remove"/>
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="GMDXLoadoutFolderExists"
+   type="notifytip">
+    Equipment already has a folder named "[NAME]". Rename or move that folder first.
+  </notification>
+
   <notification
  icon="alertmodal.tga"
  label="Save Wearable"

@@ -1,0 +1,412 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <GMDX> Loadouts: swap single weapons, keep loadouts, edit the categories (gmdxfloaterloadouts.cpp) -->
+<floater
+ positioning="centered"
+ can_minimize="true"
+ can_resize="true"
+ height="430"
+ min_height="340"
+ min_width="560"
+ layout="topleft"
+ name="floater_gmdx_loadouts"
+ save_rect="true"
+ single_instance="true"
+ title="LOADOUTS"
+ width="660">
+    <string name="empty">(empty)</string>
+    <string name="nothing_on">(nothing on [CAT])</string>
+    <string name="layer_empty">No weapons here yet: put them in Equipment/[CAT], or use Categories &gt; Scan now.</string>
+    <string name="worn_suffix">(worn)</string>
+    <string name="no_key">-</string>
+    <string name="drop_notecard">Add this loadout</string>
+    <string name="parts_heading">Wear with this weapon:</string>
+    <string name="remove_weapon">Remove from Equipment...</string>
+    <string name="no_loadout">No loadout worn</string>
+    <string name="loadout_worn">Loadout: [NAME] (worn)</string>
+    <string name="loadout_changed">Loadout: [NAME] ([COUNT] changed, not saved)</string>
+    <string name="worn_now">Worn now</string>
+    <string name="missing">Missing: [NAME]</string>
+    <string name="save_as_title">Save what you wear on these layers as a new loadout:</string>
+    <string name="rename_title">Rename loadout:</string>
+    <string name="copy_title">Copy loadout as:</string>
+    <string name="add_category_title">New category (a folder in Equipment):</string>
+    <string name="rename_category_title">Rename category and its folder:</string>
+    <tab_container
+     name="tabs"
+     follows="all"
+     layout="topleft"
+     left="8"
+     top="4"
+     right="-8"
+     height="420"
+     tab_height="20"
+     tab_min_width="96"
+     tab_position="top">
+
+        <panel
+         name="equipment_panel"
+         left="0"
+         top="0"
+         width="644"
+         height="400"
+         label="Equipment"
+         follows="all"
+         layout="topleft">
+            <scroll_list
+             name="layer_list"
+             follows="left|top|bottom"
+             layout="topleft"
+             left="6"
+             top="8"
+             width="210"
+             bottom="-40"
+             draw_heading="false"
+             multi_select="false"
+             tool_tip="What you wear on each layer. Pick a layer to see its weapons. A dot: it differs from the loadout you wore.">
+                <columns name="layer" relative_width="0.42" />
+                <columns name="worn" relative_width="0.58" />
+            </scroll_list>
+            <scroll_list
+             name="weapon_list"
+             follows="all"
+             layout="topleft"
+             left="226"
+             top="8"
+             right="-6"
+             bottom="-40"
+             draw_heading="false"
+             multi_select="false"
+             tool_tip="Double-click a weapon to wear it on this layer. Your loadout stays as it is. Right-click for its parts, or to remove it.">
+                <columns name="weapon" relative_width="0.78" />
+                <columns name="version" relative_width="0.22" />
+            </scroll_list>
+            <text
+             name="loadout_status"
+             type="string"
+             length="1"
+             follows="left|bottom|right"
+             layout="topleft"
+             left="6"
+             bottom="-12"
+             height="16"
+             right="-370"
+             use_ellipses="true">
+                No loadout worn
+            </text>
+            <button
+             name="revert_btn"
+             follows="right|bottom"
+             layout="topleft"
+             right="-286"
+             bottom="-8"
+             height="23"
+             width="76"
+             label="Revert"
+             tool_tip="Put the worn loadout's weapons back on" />
+            <button
+             name="update_btn"
+             follows="right|bottom"
+             layout="topleft"
+             right="-176"
+             bottom="-8"
+             height="23"
+             width="106"
+             label="Update loadout"
+             tool_tip="Save what you wear on these layers into the worn loadout" />
+            <button
+             name="save_new_btn"
+             follows="right|bottom"
+             layout="topleft"
+             right="-96"
+             bottom="-8"
+             height="23"
+             width="76"
+             label="Save as..."
+             tool_tip="Save what you wear on these layers as a new loadout" />
+            <button
+             name="wear_btn"
+             follows="right|bottom"
+             layout="topleft"
+             right="-6"
+             bottom="-8"
+             height="23"
+             width="80"
+             label="Wear"
+             tool_tip="Wear the selected weapon on this layer (or double-click it)" />
+        </panel>
+
+        <panel
+         name="loadouts_panel"
+         left="0"
+         top="0"
+         width="644"
+         height="400"
+         label="Loadouts"
+         follows="all"
+         layout="topleft">
+            <scroll_list
+             name="loadout_list"
+             follows="left|top|bottom"
+             layout="topleft"
+             left="6"
+             top="8"
+             width="210"
+             bottom="-68"
+             draw_heading="false"
+             multi_select="false">
+                <columns name="name" relative_width="1" />
+            </scroll_list>
+            <button
+             name="new_btn"
+             follows="left|bottom"
+             layout="topleft"
+             left="6"
+             bottom="-40"
+             height="23"
+             width="46"
+             label="New"
+             tool_tip="Save what you wear on these layers as a new loadout" />
+            <button
+             name="rename_btn"
+             follows="left|bottom"
+             layout="topleft"
+             left_pad="4"
+             top_delta="0"
+             height="23"
+             width="62"
+             label="Rename"
+             tool_tip="Rename the selected loadout" />
+            <button
+             name="copy_btn"
+             follows="left|bottom"
+             layout="topleft"
+             left_pad="4"
+             top_delta="0"
+             height="23"
+             width="46"
+             label="Copy"
+             tool_tip="Make a copy of the selected loadout" />
+            <button
+             name="delete_btn"
+             follows="left|bottom"
+             layout="topleft"
+             left_pad="4"
+             top_delta="0"
+             height="23"
+             width="44"
+             label="Delete"
+             tool_tip="Move the selected loadout to the Trash" />
+            <text
+             name="loadout_name"
+             type="string"
+             length="1"
+             font="SansSerifBold"
+             follows="left|top|right"
+             layout="topleft"
+             left="226"
+             top="8"
+             right="-6"
+             height="18"
+             use_ellipses="true" />
+            <scroll_list
+             name="slot_list"
+             follows="all"
+             layout="topleft"
+             left="226"
+             top="30"
+             right="-6"
+             bottom="-68"
+             draw_heading="true"
+             multi_select="false"
+             tool_tip="Click a layer to choose its item">
+                <columns name="layer" label="Category" relative_width="0.32" />
+                <columns name="item" label="Weapon" relative_width="0.68" />
+            </scroll_list>
+            <text
+             name="loadout_hint"
+             type="string"
+             length="1"
+             follows="left|right|bottom"
+             layout="topleft"
+             left="226"
+             bottom="-44"
+             right="-6"
+             height="16"
+             use_ellipses="true">
+                Equip swaps only these layers. Everything else you wear stays on.
+            </text>
+            <button
+             name="share_btn"
+             follows="left|bottom"
+             layout="topleft"
+             left="226"
+             bottom="-8"
+             height="23"
+             width="80"
+             label="Share..."
+             tool_tip="Write the selected loadout to a notecard (in Notecards) to give to others. A notecard dropped on this window becomes a loadout of your own weapons." />
+            <check_box
+             name="close_check"
+             control_name="GMDXLoadoutCloseOnEquip"
+             follows="left|bottom"
+             layout="topleft"
+             left="6"
+             bottom="-10"
+             height="16"
+             width="200"
+             label="Close after equipping" />
+            <text
+             name="worn_text"
+             type="string"
+             length="1"
+             follows="right|bottom"
+             layout="topleft"
+             right="-102"
+             bottom="-12"
+             height="16"
+             width="120"
+             halign="right" />
+            <button
+             name="equip_btn"
+             follows="right|bottom"
+             layout="topleft"
+             right="-6"
+             bottom="-8"
+             height="23"
+             width="90"
+             label="Equip"
+             tool_tip="Wear this loadout (Enter)" />
+        </panel>
+
+        <panel
+         name="categories_panel"
+         left="0"
+         top="0"
+         width="644"
+         height="400"
+         label="Categories"
+         follows="all"
+         layout="topleft">
+            <scroll_list
+             name="category_list"
+             follows="all"
+             layout="topleft"
+             left="6"
+             top="8"
+             right="-6"
+             bottom="-104"
+             draw_heading="true"
+             multi_select="false">
+                <columns name="slot" label="Slot" relative_width="0.08" />
+                <columns name="name" label="Name" relative_width="0.24" />
+                <columns name="key" label="Quick swap key" relative_width="0.2" />
+                <columns name="folder" label="Inventory folder" relative_width="0.38" />
+                <columns name="items" label="Items" relative_width="0.1" />
+            </scroll_list>
+            <button
+             name="add_cat_btn"
+             follows="left|bottom"
+             layout="topleft"
+             left="6"
+             bottom="-76"
+             height="23"
+             width="66"
+             label="Add..."
+             tool_tip="Add a category (and its folder)" />
+            <button
+             name="rename_cat_btn"
+             follows="left|bottom"
+             layout="topleft"
+             left_pad="4"
+             top_delta="0"
+             height="23"
+             width="76"
+             label="Rename..."
+             tool_tip="Rename the category and its folder" />
+            <button
+             name="up_btn"
+             follows="left|bottom"
+             layout="topleft"
+             left_pad="4"
+             top_delta="0"
+             height="23"
+             width="28"
+             image_overlay="Arrow_Up"
+             tool_tip="Move up: the order sets the slot numbers (each slot has its quick-swap key)" />
+            <button
+             name="down_btn"
+             follows="left|bottom"
+             layout="topleft"
+             left_pad="4"
+             top_delta="0"
+             height="23"
+             width="28"
+             image_overlay="Arrow_Down"
+             tool_tip="Move down" />
+            <button
+             name="key_btn"
+             follows="left|bottom"
+             layout="topleft"
+             left_pad="4"
+             top_delta="0"
+             height="23"
+             width="60"
+             label="Key..."
+             tool_tip="Set the quick-swap key of the selected slot (slots 1-4)" />
+            <button
+             name="remove_cat_btn"
+             follows="right|bottom"
+             layout="topleft"
+             right="-6"
+             bottom="-76"
+             height="23"
+             width="76"
+             label="Remove"
+             tool_tip="Stop using this category. Its folder and items stay in your inventory." />
+            <text
+             name="watch_label"
+             type="string"
+             length="1"
+             follows="left|bottom"
+             layout="topleft"
+             left="6"
+             bottom="-48"
+             height="16"
+             width="190">
+                Offer to sort new items named:
+            </text>
+            <line_editor
+             name="watch_edit"
+             follows="left|right|bottom"
+             layout="topleft"
+             left="200"
+             bottom="-44"
+             height="22"
+             right="-96"
+             tool_tip="Tags your group puts on its weapons, separated by commas, e.g. [Ash]. When an object or folder with one arrives, you are offered to move it into Equipment, or to replace an older version of it. Empty: off." />
+            <button
+             name="scan_btn"
+             follows="right|bottom"
+             layout="topleft"
+             right="-6"
+             bottom="-44"
+             height="22"
+             width="84"
+             label="Scan now"
+             tool_tip="Offer every item in your inventory that has one of these tags and is not sorted yet" />
+            <text
+             name="categories_hint"
+             type="string"
+             length="1"
+             follows="left|right|bottom"
+             layout="topleft"
+             left="6"
+             bottom="-6"
+             right="-6"
+             height="28"
+             wrap="true">
+                Each category is a folder in Equipment. Put weapons in it, or in group folders inside it (Rifles, Shotguns). A folder inside a group is one weapon made of its objects, like a gun and its holster.
+            </text>
+        </panel>
+    </tab_container>
+</floater>

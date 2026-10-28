@@ -102,6 +102,8 @@ public:
 
     virtual bool hasAccelerator(const KEY &key, const MASK &mask) const;
     virtual bool handleAcceleratorKey(KEY key, MASK mask);
+    // <GMDX> rebinding at run time (Loadouts > Categories > Key...); KEY_NONE clears it
+    void setAccelerator(KEY key, MASK mask) { mAcceleratorKey = key; mAcceleratorMask = mask; buildDrawLabel(); }
 
     LLColor4 getHighlightBgColor() { return mHighlightBackground.get(); }
 

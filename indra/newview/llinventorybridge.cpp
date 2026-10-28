@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "llinventorybridge.h"
 
+#include "gmdxloadouts.h" // <GMDX> the loadouts' Equipment / Loadouts / Outdated folders, shown like system folders
 #include "gmdxregioncapture.h" // <GMDX> Use as Region Map
 
 // external projects
@@ -2827,6 +2828,10 @@ void LLFolderBridge::update()
 // Can be destroyed (or moved to trash)
 bool LLFolderBridge::isItemRemovable(bool check_worn) const
 {
+    if (GMDXLoadouts::folderKind(mUUID)) // <GMDX> protected like a system folder
+    {
+        return false;
+    }
     if (!get_is_category_and_children_removable(getInventoryModel(), mUUID, check_worn))
     {
         return false;
@@ -3225,6 +3230,20 @@ bool LLFolderBridge::dragCategoryIntoFolder(LLInventoryCategory* inv_cat,
                 }
             }
         }
+        // <GMDX> The loadouts' Equipment / Loadouts / Outdated folders are not thrown away by dragging
+        // either (Delete already refuses: isItemRemovable), nor is a folder holding one of them.
+        if (is_movable && move_is_into_trash)
+        {
+            for (int f = 0; f < GMDXLoadouts::FOLDER_COUNT; ++f)
+            {
+                const LLUUID own = GMDXLoadouts::instance().folder(GMDXLoadouts::EFolder(f));
+                if (own.notNull() && (own == cat_id || model->isObjectDescendentOf(own, cat_id)))
+                {
+                    is_movable = false;
+                }
+            }
+        }
+        // </GMDX>
         // <FS:Ansariel> FIRE-1392: Allow dragging all asset types into Landmarks folder
         //if (is_movable && move_is_into_landmarks)
         //{
@@ -4311,6 +4330,10 @@ void LLFolderBridge::determineFolderType()
 
 bool LLFolderBridge::isItemRenameable() const
 {
+    if (GMDXLoadouts::folderKind(mUUID)) // <GMDX> protected like a system folder
+    {
+        return false;
+    }
     return get_is_category_renameable(getInventoryModel(), mUUID);
 }
 
@@ -4363,6 +4386,15 @@ LLUIImagePtr LLFolderBridge::getIconOpen() const
 
 LLUIImagePtr LLFolderBridge::getFolderIcon(bool is_open) const
 {
+    // <GMDX> the loadouts' own folders: their own icons
+    if (int kind = GMDXLoadouts::folderKind(mUUID))
+    {
+        static const char* const names[GMDXLoadouts::FOLDER_COUNT][2] = { { "GMDX_Inv_EquipmentClosed", "GMDX_Inv_EquipmentOpen" },
+                                                                         { "GMDX_Inv_LoadoutsClosed", "GMDX_Inv_LoadoutsOpen" },
+                                                                         { "GMDX_Inv_OutdatedClosed", "GMDX_Inv_OutdatedOpen" } };
+        return LLUI::getUIImage(names[kind - 1][is_open ? 1 : 0]);
+    }
+    // </GMDX>
     LLFolderType::EType preferred_type = getPreferredType();
     return LLUI::getUIImage(LLViewerFolderType::lookupIconName(preferred_type, is_open));
 }
@@ -5736,6 +5768,12 @@ EInventorySortGroup LLFolderBridge::getSortGroup() const
     //</FS:KC>
 
     if(LLFolderType::lookupIsProtectedType(preferred_type))
+    {
+        return SG_SYSTEM_FOLDER;
+    }
+
+    // <GMDX> the loadouts' own folders sort with the system folders, like #Firestorm and #RLV
+    if (sFSSortFSFoldersToTopPt && GMDXLoadouts::folderKind(mUUID))
     {
         return SG_SYSTEM_FOLDER;
     }

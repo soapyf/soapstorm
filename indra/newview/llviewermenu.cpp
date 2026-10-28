@@ -33,6 +33,9 @@
 
 #include "llviewermenu.h"
 
+#include "gmdxloadouts.h" // <GMDX> loadouts quick swap
+#include "llcallbacklist.h" // <GMDX> doOnIdleOneTime for the quick swap menu
+
 // linden library includes
 #include "llavatarnamecache.h"  // IDEVO (I Are Not Men!)
 #include "llcombobox.h"
@@ -802,6 +805,8 @@ void init_menus()
 
     // tooltips are on top of EVERYTHING, including menus
     gViewerWindow->getRootView()->sendChildToFront(gToolTipView);
+
+    GMDXLoadouts::applyHotkeys(); // <GMDX> the quick-swap keys the user set
 }
 
 ///////////////////
@@ -13785,6 +13790,14 @@ void initialize_menus()
     view_listener_t::addMenu(new LLCheckControl(), "CheckControl");
     view_listener_t::addMenu(new LLGoToObject(), "GoToObject");
     commit.add("PayObject", boost::bind(&handle_give_money_dialog));
+    // <GMDX> Loadouts quick swap (Alt+1..4). Next frame: right after a shortcut fires, the menu bar
+    // closes every open menu.
+    commit.add("GMDX.QuickSwap", [](LLUICtrl*, const LLSD& slot)
+    {
+        const S32 index = slot.asInteger();
+        doOnIdleOneTime([index] { GMDXLoadouts::instance().showQuickMenu(index); });
+    });
+    // </GMDX>
 
     // <FS:Ansariel> Control enhancements
     view_listener_t::addMenu(new LLTogglePerAccountControl(), "TogglePerAccountControl");

@@ -2650,6 +2650,11 @@ void LLPanelMainInventory::onCustomAction(const LLSD& userdata)
         getCurrentFilter().toggleSearchVisibilityOutfits();
     }
 
+    if (command_name == "toggle_search_gmdx_outdated") // <GMDX>
+    {
+        getCurrentFilter().toggleSearchVisibilityGMDXOutdated();
+    }
+
     if (command_name == "toggle_search_trash")
     {
         getCurrentFilter().toggleSearchVisibilityTrash();
@@ -2924,6 +2929,11 @@ bool LLPanelMainInventory::isActionChecked(const LLSD& userdata)
     if (command_name == "toggle_search_outfits")
     {
         return (getCurrentFilter().getSearchVisibilityTypes() & LLInventoryFilter::VISIBILITY_OUTFITS) != 0;
+    }
+
+    if (command_name == "toggle_search_gmdx_outdated") // <GMDX>
+    {
+        return (getCurrentFilter().getSearchVisibilityTypes() & LLInventoryFilter::VISIBILITY_GMDX_NO_OUTDATED) == 0;
     }
 
     if (command_name == "toggle_search_trash")

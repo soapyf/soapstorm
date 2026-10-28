@@ -1806,6 +1806,56 @@
         </menu_item_check>
         <menu_item_separator />
         <menu_item_check
+         label="Loadouts..."
+         name="Loadouts"
+         shortcut="L">
+            <menu_item_check.on_check
+             function="Floater.Visible"
+             parameter="gmdx_loadouts" />
+            <menu_item_check.on_click
+             function="Floater.Toggle"
+             parameter="gmdx_loadouts" />
+        </menu_item_check>
+        <menu
+         create_jump_keys="true"
+         label="Quick Swap"
+         name="Quick Swap"
+         tear_off="false">
+            <menu_item_call
+             label="Slot 1"
+             name="Quick Swap 1"
+             shortcut="alt|1">
+                <menu_item_call.on_click
+                 function="GMDX.QuickSwap"
+                 parameter="0" />
+            </menu_item_call>
+            <menu_item_call
+             label="Slot 2"
+             name="Quick Swap 2"
+             shortcut="alt|2">
+                <menu_item_call.on_click
+                 function="GMDX.QuickSwap"
+                 parameter="1" />
+            </menu_item_call>
+            <menu_item_call
+             label="Slot 3"
+             name="Quick Swap 3"
+             shortcut="alt|3">
+                <menu_item_call.on_click
+                 function="GMDX.QuickSwap"
+                 parameter="2" />
+            </menu_item_call>
+            <menu_item_call
+             label="Slot 4"
+             name="Quick Swap 4"
+             shortcut="alt|4">
+                <menu_item_call.on_click
+                 function="GMDX.QuickSwap"
+                 parameter="3" />
+            </menu_item_call>
+        </menu>
+        <menu_item_separator />
+        <menu_item_check
          label="Hit Marker Options"
          name="Hit Marker Options">
             <menu_item_check.on_check

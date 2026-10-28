@@ -211,6 +211,8 @@
 #include "fsfloatergroupviewer.h"
 #include "fsfloaterhitmarker.h"
 #include "fsfloaterkillfeed.h"
+#include "gmdxfloaterloadouts.h"
+#include "gmdxweaponsorter.h"
 #include "fsfloaterimport.h"
 #include "fsfloaterim.h"
 #include "fsfloaterimcontainer.h"
@@ -658,6 +660,10 @@ void LLViewerFloaterReg::registerFloaters()
     LLFloaterReg::add("fs_kill_feed", "floater_fs_kill_feed.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterKillFeed>);
     LLFloaterReg::add("fs_hit_marker", "floater_fs_hit_marker.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterHitMarker>);
     LLFloaterReg::add("fs_hit_marker_emojis", "floater_fs_hit_marker_emojis.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterHitMarkerEmojis>);
+    LLFloaterReg::add("gmdx_loadouts", "floater_gmdx_loadouts.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<GMDXFloaterLoadouts>);
+    LLFloaterReg::add("gmdx_loadout_toast", "floater_gmdx_loadout_toast.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<GMDXFloaterLoadoutToast>);
+    LLFloaterReg::add("gmdx_weapon_import", "floater_gmdx_weapon_import.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<GMDXFloaterWeaponImport>);
+    LLFloaterReg::add("gmdx_weapon_sort", "floater_gmdx_weapon_sort.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<GMDXFloaterWeaponSort>);
     LLFloaterReg::add("fs_ads_options", "floater_fs_ads_options.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloater>);
     LLFloaterReg::add("fs_ots_options", "floater_fs_ots_options.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloater>);
     LLFloaterReg::add("fs_export", "floater_fs_export.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<FSFloaterObjectExport>);

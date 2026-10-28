@@ -39,6 +39,17 @@
      function="Inventory.GearDefault.Check"
      parameter="toggle_search_library" />
   </menu_item_check>
+  <menu_item_check
+   label="Search Outdated"
+   layout="topleft"
+   name="search_gmdx_outdated">
+    <on_click
+     function="Inventory.GearDefault.Custom.Action"
+     parameter="toggle_search_gmdx_outdated" />
+    <on_check
+     function="Inventory.GearDefault.Check"
+     parameter="toggle_search_gmdx_outdated" />
+  </menu_item_check>
   <menu_item_separator
    layout="topleft" />
   <menu_item_check

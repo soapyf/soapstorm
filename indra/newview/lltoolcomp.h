@@ -258,7 +258,14 @@ public:
     // per frame; consumed by the post-process pass in LLPipeline::renderVignette.
     F32                     getADSVignetteAmount();
 
+    // <GMDX> Release the mouse to the UI while staying in mouselook (the loadouts' quick-swap
+    // menu); a click in the world, or recaptureMouse(), takes it back.
+    void                    freeMouseForUI();
+    void                    recaptureMouse();
+    bool                    isMouseFreed() const { return mMouseFreed; }
+
 protected:
+    bool                mMouseFreed = false; // <GMDX>
 
     LLToolGun*          mGun;
     LLToolGrabBase*     mGrab;
