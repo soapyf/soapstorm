@@ -378,18 +378,20 @@ bool LLPanelMainInventory::postBuild()
             {
                 LLSD recent_items = savedFilterState.get(
                     mRecentPanel->getFilter().getName());
-                // <FS:Ansariel> Fix wrong param type
-                //LLInventoryFilter::Params p;
-                LLInventoryPanel::InventoryState p;
-                // </FS:Ansariel>
+                LLInventoryFilter::Params p;
                 LLParamSDParser parser;
                 parser.readSD(recent_items, p);
-                // <FS:Ansariel> Fix wrong param type
-                //mRecentPanel->getFilter().fromParams(p);
-                mRecentPanel->getFilter().fromParams(p.filter);
-                // </FS:Ansariel>
-                // <FS:Ansariel> We do that earlier already
-                //mRecentPanel->setSortOrder(gSavedSettings.getU32(LLInventoryPanel::RECENTITEMS_SORT_ORDER));
+                mRecentPanel->getFilter().fromParams(p);
+
+                // Restore sort order if it was saved
+                if (p.order.isProvided())
+                {
+                    mRecentPanel->setSortOrder(p.order());
+                }
+                else
+                {
+                    mRecentPanel->setSortOrder(gSavedSettings.getU32(LLInventoryPanel::RECENTITEMS_SORT_ORDER));
+                }
 
                 // </FS:Ansariel> Recent items panel doesn't filter empty folders until filter floater has been opened
                 LLInventoryFilter& recent_filter = mRecentPanel->getFilter();
@@ -399,6 +401,7 @@ bool LLPanelMainInventory::postBuild()
         }
         if(mActivePanel)
         {
+            // 'all items' tab
             if(savedFilterState.has(mActivePanel->getFilter().getName()))
             {
                 LLSD items = savedFilterState.get(mActivePanel->getFilter().getName());
@@ -2647,6 +2650,11 @@ void LLPanelMainInventory::onCustomAction(const LLSD& userdata)
         getCurrentFilter().toggleSearchVisibilityOutfits();
     }
 
+    if (command_name == "toggle_search_gmdx_outdated") // <GMDX>
+    {
+        getCurrentFilter().toggleSearchVisibilityGMDXOutdated();
+    }
+
     if (command_name == "toggle_search_trash")
     {
         getCurrentFilter().toggleSearchVisibilityTrash();
@@ -2921,6 +2929,11 @@ bool LLPanelMainInventory::isActionChecked(const LLSD& userdata)
     if (command_name == "toggle_search_outfits")
     {
         return (getCurrentFilter().getSearchVisibilityTypes() & LLInventoryFilter::VISIBILITY_OUTFITS) != 0;
+    }
+
+    if (command_name == "toggle_search_gmdx_outdated") // <GMDX>
+    {
+        return (getCurrentFilter().getSearchVisibilityTypes() & LLInventoryFilter::VISIBILITY_GMDX_NO_OUTDATED) == 0;
     }
 
     if (command_name == "toggle_search_trash")

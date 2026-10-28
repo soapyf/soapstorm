@@ -102,6 +102,8 @@ public:
 
     virtual bool hasAccelerator(const KEY &key, const MASK &mask) const;
     virtual bool handleAcceleratorKey(KEY key, MASK mask);
+    // <GMDX> rebinding at run time (Loadouts > Categories > Key...); KEY_NONE clears it
+    void setAccelerator(KEY key, MASK mask) { mAcceleratorKey = key; mAcceleratorMask = mask; buildDrawLabel(); }
 
     LLColor4 getHighlightBgColor() { return mHighlightBackground.get(); }
 
@@ -392,6 +394,7 @@ public:
         Optional<U32>                   preferred_width;
         Optional<LLUIColor>             bg_color;
         Optional<S32>                   shortcut_pad;
+        Optional<EnableCallbackParam>   on_visible; // <FS:Ansariel> Optional on_visible callback for menus
 
         Params()
         :   jump_key("jump_key", KEY_NONE),
@@ -405,7 +408,8 @@ public:
             scrollable("scrollable", false),
             max_scrollable_items("max_scrollable_items", U32_MAX),
             preferred_width("preferred_width", U32_MAX),
-            shortcut_pad("shortcut_pad")
+            shortcut_pad("shortcut_pad"),
+            on_visible("on_visible") // <FS:Ansariel> Optional on_visible callback for menus
         {
             addSynonym(bg_visible, "opaque");
             addSynonym(bg_color, "color");
@@ -627,6 +631,8 @@ private:
     bool            mCreateJumpKeys;
     S32             mShortcutPad;
     bool            mResetScrollPositionOnShow;
+
+    enable_signal_t mVisibleSignal; // <FS:Ansariel> Optional on_visible callback for menus
 }; // end class LLMenuGL
 
 

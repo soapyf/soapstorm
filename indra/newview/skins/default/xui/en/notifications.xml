@@ -425,6 +425,17 @@ Initialization with the Marketplace failed because of a system or network error.
     </notification>
 
     <notification
+        icon="alertmodal.tga"
+        name="CannotPasteFolderIntoSelf"
+        type="alertmodal">
+        You cannot paste a folder into itself or into one of its subfolders.
+        <tag>fail</tag>
+        <usetemplate
+          name="okbutton"
+          yestext="OK"/>
+    </notification>
+
+    <notification
      icon="notifytip.tga"
      name="InvalidKeystroke"
      type="notifytip">
@@ -3460,6 +3471,114 @@ See https://wiki.secondlife.com/wiki/Adding_Spelling_Dictionaries
     </form>
   </notification>
 
+  <!-- GunMetal-DX loadouts (gmdxloadouts.cpp, gmdxfloaterloadouts.cpp, gmdxweaponsorter.cpp) -->
+  <notification
+   icon="alertmodal.tga"
+   label="Loadouts"
+   name="GMDXLoadoutName"
+   type="alertmodal">
+    [TITLE]
+    <tag>confirm</tag>
+    <form name="form">
+      <input name="message" type="text">
+        [NAME]
+      </input>
+      <button
+       default="true"
+       index="0"
+       name="OK"
+       text="OK"/>
+      <button
+       index="1"
+       name="Cancel"
+       text="Cancel"/>
+    </form>
+  </notification>
+  <notification
+   icon="alertmodal.tga"
+   label="Loadouts"
+   name="GMDXLoadoutDelete"
+   type="alertmodal">
+    Move the loadout "[NAME]" to the Trash? The weapons in it stay where they are.
+    <tag>confirm</tag>
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Cancel"
+     yestext="Delete"/>
+  </notification>
+  <notification
+   icon="alertmodal.tga"
+   label="Import weapons"
+   name="GMDXImportTrash"
+   type="alertmodal">
+    Move [COUNT] older and duplicate versions to the Trash? You can still take them back out of the Trash until it is emptied.
+    <tag>confirm</tag>
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Cancel"
+     yestext="Move to Trash"/>
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="GMDXLoadoutShared"
+   type="notifytip">
+    "[NAME]" is in your Notecards folder. Give it to anyone; they drop it on their Loadouts window to add the loadout.
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="GMDXLoadoutImported"
+   type="notifytip">
+    Added loadout "[NAME]": all [TOTAL] weapons found in your Equipment.
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="GMDXLoadoutImportedMissing"
+   type="notifytip">
+    Added loadout "[NAME]" with [FOUND] of [TOTAL] weapons. Not in your Equipment: [MISSING]
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="GMDXLoadoutNotecardBad"
+   type="notifytip">
+    That notecard isn't a loadout (or couldn't be read).
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="GMDXHotkeyInUse"
+   type="notifytip">
+    [KEY] is already a menu shortcut. Pick another key.
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="GMDXHotkeyBad"
+   type="notifytip">
+    [KEY] can't be a quick-swap key. Pick another key.
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="GMDXHotkeySlots"
+   type="notifytip">
+    Select one of the first four slots: those have quick-swap keys.
+  </notification>
+  <notification
+   icon="alertmodal.tga"
+   label="Remove weapon"
+   name="GMDXRemoveWeapon"
+   type="alertmodal">
+    Remove [NAME] from Equipment? It goes to Outdated (take it back out any time), comes off if you wear it, and leaves every loadout that has it.
+    <tag>confirm</tag>
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Cancel"
+     yestext="Remove"/>
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="GMDXLoadoutFolderExists"
+   type="notifytip">
+    Equipment already has a folder named "[NAME]". Rename or move that folder first.
+  </notification>
+
   <notification
  icon="alertmodal.tga"
  label="Save Wearable"
@@ -4133,7 +4252,6 @@ Local Data you are deleting is shared between multiple grids, are you sure you w
 Your character will appear in a moment.
 
 Use arrow keys to walk.
-Press the F1 key at any time for help or to learn more about [CURRENT_GRID].
 Please choose the male or female avatar. You can change your mind later.
     <usetemplate
      name="okcancelbuttons"
@@ -6024,6 +6142,17 @@ You won't receive any more notifications that you're about to visit a region wit
 
   <notification
    icon="alertmodal.tga"
+   name="RegionTPAccessBlocked_NotifyAdultsOnly"
+   type="alertmodal">
+    <tag>fail</tag>
+    The region you are trying to visit is rated [REGIONMATURITY_CAP], which is not available on your account type.
+    <usetemplate
+     name="okbutton"
+     yestext="OK"/>
+  </notification>
+
+  <notification
+   icon="alertmodal.tga"
    name="LandClaimAccessBlocked"
    type="alertmodal">
     The land you're trying to claim has a maturity rating exceeding your current preferences.  You can change your preferences using Avatar &gt; Preferences &gt; General.
@@ -7601,6 +7730,27 @@ URL: [AUDIOURL]
    type="notifytip">
 [MESSAGE]
   </notification>
+
+  <notification
+   icon="notifytip.tga"
+   name="ExternalEditorServerStarted"
+   type="notifytip">
+External editor server started on port [PORT].
+  </notification>
+
+  <notification
+   icon="notifytip.tga"
+   name="ExternalEditorServerFailed"
+   type="notifytip">
+Failed to start external editor server on port [PORT].
+  </notification>
+
+  <notification
+   icon="notifytip.tga"
+   name="ExternalEditorServerStopped"
+   type="notifytip">
+External editor server stopped.
+  </notification>
   
   <notification
    icon="notifytip.tga"
@@ -8261,7 +8411,7 @@ Message from [NAME]:
    type="notify">
     <unique/>
 This land has damage enabled.
-You can be hurt here. If you die, you will be teleported to your home location.
+You can be hurt here. If you die, you might be teleported to your home location, region telehub or parcel landing point.
   </notification>
 
   <notification
@@ -13861,19 +14011,6 @@ able to add a payment method at checkout.
        text="Cancel"/>
     </form>
   </notification>
-  
-<!-- <FS:Zi> Add float LSL color entry widgets -->
-  <notification
-   icon="notify.tga"
-   name="LSLColorCopiedToClipboard"
-   type="alertmodal">
-The LSL color string has been copied to your clipboard. You can now paste it into your script to use it.
-   <form name="form">
-      <ignore name="ignore"
-       text="An LSL color string was copied to my clipboard"/>
-    </form>
-  </notification>
-  <!-- <FS:Zi> Add float LSL color entry widgets -->
 
   <!-- <FS:HG> FIRE-6340, FIRE-6567 - Setting Bandwidth issues-->
   <!-- <FS:TS> FIRE-6795: Remove warning at every login -->
@@ -15915,4 +16052,94 @@ Name this set of controller bindings. Saving over an existing name replaces it.
     </form>
   </notification>
   <!-- </SS:GameControl> -->
+
+  <!-- <GMDX> mini-map marks and zones, region maps -->
+  <notification
+   icon="alertmodal.tga"
+   name="GMDXMinimapMarkName"
+   type="alertmodal">
+Name the mark:
+    <form name="form">
+      <input name="name" type="text" width="260">
+[NAME]
+      </input>
+      <button
+       default="true"
+       index="0"
+       name="OK"
+       text="Add Mark"/>
+      <button
+       index="1"
+       name="Cancel"
+       text="Cancel"/>
+    </form>
+  </notification>
+
+  <notification
+   icon="alertmodal.tga"
+   name="GMDXMinimapMarkRename"
+   type="alertmodal">
+Rename the mark:
+    <form name="form">
+      <input name="name" type="text" width="260">
+[NAME]
+      </input>
+      <button
+       default="true"
+       index="0"
+       name="OK"
+       text="Rename"/>
+      <button
+       index="1"
+       name="Cancel"
+       text="Cancel"/>
+    </form>
+  </notification>
+
+  <notification
+   icon="alertmodal.tga"
+   name="GMDXMinimapZoneName"
+   type="alertmodal">
+Name the zone (leave it empty for no label):
+    <form name="form">
+      <input name="name" type="text" width="260">
+[NAME]
+      </input>
+      <button
+       default="true"
+       index="0"
+       name="OK"
+       text="OK"/>
+      <button
+       index="1"
+       name="Cancel"
+       text="Cancel"/>
+    </form>
+  </notification>
+
+  <notification
+   icon="notifytip.tga"
+   name="GMDXRegionMapMessage"
+   type="notifytip">
+[MESSAGE]
+  </notification>
+
+  <notification
+   icon="notifytip.tga"
+   name="GMDXRegionMapImported"
+   type="notifytip">
+Map of [REGION] imported. The mini-map shows it while you are there.
+  </notification>
+
+  <notification
+   icon="alertmodal.tga"
+   name="GMDXRegionMapReplace"
+   type="alertmodal">
+You already have a map of [REGION]. Replace it with the imported one?
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Keep Mine"
+     yestext="Replace"/>
+  </notification>
+  <!-- </GMDX> -->
 </notifications>

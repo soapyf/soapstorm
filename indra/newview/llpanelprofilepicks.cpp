@@ -43,6 +43,7 @@
 #include "llpanelavatar.h"
 #include "llpanelprofile.h"
 #include "llparcel.h"
+#include "llregionhandle.h"
 #include "llstartup.h"
 #include "lltabcontainer.h"
 #include "lltextbox.h"
@@ -51,6 +52,7 @@
 #include "lltexturectrl.h"
 #include "lltrans.h"
 #include "llviewergenericmessage.h" // send_generic_message
+#include "llviewernetwork.h" // <FS/> Access to GridManager
 #include "llviewerparcelmgr.h"
 #include "llviewerregion.h"
 
@@ -691,6 +693,7 @@ bool LLPanelProfilePick::postBuild()
 {
     mPickName = getChild<LLLineEditor>("pick_name");
     mPickDescription = getChild<LLTextEditor>("pick_desc");
+    mPickLocation = getChild<LLLineEditor>("pick_location");
     mSaveButton = getChild<LLButton>("save_changes_btn");
     mCreateButton = getChild<LLButton>("create_changes_btn");
     mCancelButton = getChild<LLButton>("cancel_changes_btn");
@@ -725,9 +728,18 @@ bool LLPanelProfilePick::postBuild()
     mPickDescription->setKeystrokeCallback(boost::bind(&LLPanelProfilePick::onPickChanged, this, _1));
     mPickDescription->setFocusReceivedCallback(boost::bind(&LLPanelProfilePick::onDescriptionFocusReceived, this));
 
-    getChild<LLUICtrl>("pick_location")->setEnabled(false);
+    mPickLocation->setEnabled(false);
 
     return true;
+}
+
+void LLPanelProfilePick::reshape(S32 width, S32 height, bool called_from_parent)
+{
+    LLPanelProfilePropertiesProcessorTab::reshape(width, height, called_from_parent);
+    if (mPickLocation)
+    {
+        mPickLocation->setCursor(0);
+    }
 }
 
 void LLPanelProfilePick::onDescriptionFocusReceived()
@@ -844,7 +856,14 @@ void LLPanelProfilePick::reparseDescription(const std::string& desc)
 
 void LLPanelProfilePick::setPickLocation(const std::string& location)
 {
-    getChild<LLUICtrl>("pick_location")->setValue(location);
+    mPickLocation->setValue(location);
+    // Pick location can be set with a long 'substitute' value or
+    // just a long value.
+    // If user sets cursor at the end, application of the substitute
+    // value can shift text from visible are to the left. When text
+    // gets restored or set, text position isn't, so just drop cursor
+    // position.
+    mPickLocation->setCursor(0);
     mPickLocationStr = location;
     mLastRequestTimer.reset();
 }
@@ -1026,6 +1045,27 @@ void LLPanelProfilePick::sendParcelInfoRequest()
 
 void LLPanelProfilePick::processParcelInfo(const LLParcelData& parcel_data)
 {
+    // Region might have moved since the pick was saved; refresh the stored global position
+    // using the parcel info so map/teleport use the current location.
+    // <FS:TJ> Fix pick locations only in SL as OS VarRegions and HyperGridding complicate checking if a region has moved
+    if (LLGridManager::getInstance()->isInSecondLife())
+    {
+    // </FS:TJ>
+        LLVector3d parcel_pos(parcel_data.global_x, parcel_data.global_y, parcel_data.global_z);
+        U64 old_region_handle = to_region_handle(getPosGlobal());
+        U64 new_region_handle = to_region_handle(parcel_pos);
+        if (old_region_handle != new_region_handle)
+        {
+            F32 old_origin_x, old_origin_y;
+            from_region_handle(old_region_handle, &old_origin_x, &old_origin_y);
+            LLVector3d local_offset = getPosGlobal() - LLVector3d(old_origin_x, old_origin_y, 0.0);
+
+            F32 new_origin_x, new_origin_y;
+            from_region_handle(new_region_handle, &new_origin_x, &new_origin_y);
+            setPosGlobal(LLVector3d(new_origin_x, new_origin_y, 0.0) + local_offset);
+        }
+    } // <FS:TJ/>
+
     setPickLocation(createLocationText(LLStringUtil::null, parcel_data.name, parcel_data.sim_name, getPosGlobal()));
 
     // We have received parcel info for the requested ID so clear it now.

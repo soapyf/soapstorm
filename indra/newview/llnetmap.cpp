@@ -97,6 +97,11 @@
 
 #include "llviewernetwork.h" // <FS/> Access to GridManager
 
+// <GMDX> GunMetal-DX's additions (gmdxnetmap.cpp): dot colours and zones; region maps
+#include "gmdxminimapmarks.h"
+#include "gmdxregioncapture.h"
+// </GMDX>
+
 static LLDefaultChildRegistry::Register<LLNetMap> r1("net_map");
 
 constexpr F32 LLNetMap::MAP_SCALE_MIN = 32;
@@ -166,6 +171,8 @@ LLNetMap::LLNetMap (const Params & p)
 
 LLNetMap::~LLNetMap()
 {
+    destroyDotColorSwatch(); // <GMDX>
+
     auto menu = static_cast<LLMenuGL*>(mPopupMenuHandle.get());
     if (menu)
     {
@@ -261,6 +268,7 @@ bool LLNetMap::postBuild()
     enableRegistrar.add("Minimap.VisibleFreezeEject", boost::bind(&LLNetMap::canFreezeEject, this));
     enableRegistrar.add("Minimap.VisibleKickTeleportHome", boost::bind(&LLNetMap::canKickTeleportHome, this));
 // [/SL:KB]
+    addGMDXMenuCallbacks(commitRegistrar, enableRegistrar); // <GMDX> (gmdxnetmap.cpp)
 
 // [SL:KB] - Patch: World-MinimapOverlay | Checked: 2012-06-20 (Catznip-3.3)
     mParcelMgrConn = LLViewerParcelMgr::instance().setCollisionUpdateCallback(boost::bind(&LLNetMap::refreshParcelOverlay, this));
@@ -281,23 +289,7 @@ void LLNetMap::setScale( F32 scale )
     // <FS:Ansariel> Synchronize scale throughout instances
     sScale = scale;
 
-    if (mObjectImagep.notNull())
-    {
-        F32 width = (F32)(getRect().getWidth());
-        F32 height = (F32)(getRect().getHeight());
-        F32 diameter = sqrt(width * width + height * height);
-        F32 region_widths = diameter / mScale;
-// <FS:CR> Aurora Sim
-        //F32 meters = region_widths * LLWorld::getInstance()->getRegionWidthInMeters();
-        F32 meters = region_widths * REGION_WIDTH_METERS;
-// </FS:CR> Aurora Sim
-        F32 num_pixels = (F32)mObjectImagep->getWidth();
-        mObjectMapTPM = num_pixels / meters;
-        mObjectMapPixels = diameter;
-    }
-
-    mPixelsPerMeter = mScale / REGION_WIDTH_METERS;
-    mDotRadius = llmax(DOT_SCALE * mPixelsPerMeter, MIN_DOT_RADIUS);
+    updateScaleDerived(); // <GMDX> (moved there: Show Whole Region has its own scale)
 
     // <FS:Ansariel> Fixing borked minimap zoom level persistance
     //gSavedSettings.setF32("MiniMapScale", mScale);
@@ -309,6 +301,29 @@ void LLNetMap::setScale( F32 scale )
 //  mUpdateNow = true;
 }
 
+// <GMDX> The values that follow the scale, from mScale or, in Show Whole Region, from the
+// fitted scale (which never touches mScale / MiniMapScale).
+void LLNetMap::updateScaleDerived()
+{
+    if (mObjectImagep.notNull())
+    {
+        F32 width = (F32)(getRect().getWidth());
+        F32 height = (F32)(getRect().getHeight());
+        F32 diameter = sqrt(width * width + height * height);
+        F32 region_widths = diameter / mScale;
+// <FS:CR> Aurora Sim
+        //F32 meters = region_widths * LLWorld::getInstance()->getRegionWidthInMeters();
+        F32 meters = mFitRegion ? diameter / mFitPixelsPerMeter : region_widths * REGION_WIDTH_METERS;
+// </FS:CR> Aurora Sim
+        F32 num_pixels = (F32)mObjectImagep->getWidth();
+        mObjectMapTPM = num_pixels / meters;
+        mObjectMapPixels = diameter;
+    }
+
+    mPixelsPerMeter = mFitRegion ? mFitPixelsPerMeter : mScale / REGION_WIDTH_METERS;
+    mDotRadius = llmax(DOT_SCALE * mPixelsPerMeter, MIN_DOT_RADIUS);
+}
+// </GMDX>
 
 ///////////////////////////////////////////////////////////////////////////////////
 
@@ -357,6 +372,16 @@ void LLNetMap::draw()
     }
 // [/SL:KB]
 
+    // <GMDX> Show Whole Region (gmdxnetmap.cpp); the map's opacity (mini-map menu, Map Opacity)
+    LLViewerRegion* current_region = gAgent.getRegion();
+    static LLCachedControl<bool> physical_only(gSavedSettings, "GMDXMiniMapPhysicalOnly", false);
+    static LLUICachedControl<bool> rotate_map("MiniMapRotate", true);
+    LLRectf fit_square;
+    updateWholeRegion(current_region, fit_square);
+    static LLCachedControl<F32> s_map_opacity(gSavedSettings, "GMDXMiniMapOpacity", 1.f);
+    const F32 map_opacity = llclamp((F32)s_map_opacity, 0.1f, 1.f);
+    // </GMDX>
+
     static LLUICachedControl<bool> auto_center("MiniMapAutoCenter", true);
     bool auto_centering = auto_center && !mPanning;
     mCentering = mCentering && !mPanning;
@@ -376,7 +401,7 @@ void LLNetMap::draw()
     auto menu = static_cast<LLMenuGL*>(mPopupMenuHandle.get());
     if (menu)
     {
-        bool can_recenter_map = !(centered || mCentering || auto_centering);
+        bool can_recenter_map = !(centered || mCentering || auto_centering || mFitRegion); // <GMDX> no pan in Show Whole Region
         menu->setItemEnabled("Re-center map", can_recenter_map);
     }
     updateAboutLandPopupButton();
@@ -397,7 +422,12 @@ void LLNetMap::draw()
     gGL.translatef(offset.mV[0], offset.mV[1], offset.mV[2]);
 
     {
-        LLLocalClipRect clip(getLocalRect());
+        // <GMDX> Show Whole Region: the map stays inside its square (zoomed in, the region is bigger)
+        //LLLocalClipRect clip(getLocalRect());
+        LLLocalClipRect clip(mFitRegion ? LLRect(ll_round(mFitMapRect.mLeft), ll_round(mFitMapRect.mTop),
+                                                 ll_round(mFitMapRect.mRight), ll_round(mFitMapRect.mBottom))
+                                        : getLocalRect());
+        // </GMDX>
         {
             gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
@@ -405,19 +435,29 @@ void LLNetMap::draw()
 
             // Draw background rectangle
             LLColor4 background_color = mBackgroundColor.get();
+            background_color.mV[VALPHA] *= map_opacity; // <GMDX> GMDXMiniMapOpacity
             gGL.color4fv( background_color.mV );
+            // <GMDX> the round radar: its disc
+            if (mRadarRadius > 0.f)
+            {
+                drawRadarBackground();
+            }
+            else
+            // </GMDX>
             gl_rect_2d(0, getRect().getHeight(), getRect().getWidth(), 0);
         }
 
         // region 0,0 is in the middle
-        S32 center_sw_left = getRect().getWidth() / 2 + llfloor(mCurPan.mV[VX]);
-        S32 center_sw_bottom = getRect().getHeight() / 2 + llfloor(mCurPan.mV[VY]);
+        // <GMDX> mapPan(): Show Whole Region has no pan of its own
+        const LLVector2 pan = mapPan();
+        S32 center_sw_left = getRect().getWidth() / 2 + llfloor(pan.mV[VX]);
+        S32 center_sw_bottom = getRect().getHeight() / 2 + llfloor(pan.mV[VY]);
+        // </GMDX>
 
         gGL.pushMatrix();
 
         gGL.translatef( (F32) center_sw_left, (F32) center_sw_bottom, 0.f);
 
-        static LLUICachedControl<bool> rotate_map("MiniMapRotate", true);
         if( rotate_map )
         {
             // rotate subsequent draws to agent rotation
@@ -430,15 +470,33 @@ void LLNetMap::draw()
         //S32 region_width = ll_round(LLWorld::getInstance()->getRegionWidthInMeters());
         S32 region_width = ll_round(REGION_WIDTH_METERS);
 // </FS:CR> Aurora Sim
-        const F32 scale_pixels_per_meter = mScale / region_width;
+        // <GMDX> Show Whole Region: its own scale, centred on the region instead of the camera
+        //const F32 scale_pixels_per_meter = mScale / region_width;
+        const F32 scale_pixels_per_meter = mFitRegion ? mFitPixelsPerMeter : mScale / region_width;
+        const F32 tile_pixels = scale_pixels_per_meter * region_width;   // a 256 m map tile (mScale outside Whole Region)
+        const LLVector3 map_center_agent_base = mFitRegion ? gAgent.getPosAgentFromGlobal(mFitCenterGlobal)
+                                                           : gAgentCamera.getCameraPositionAgent();
+        // the region, in map pixels from the map centre (the view's centre may be off the region's
+        // middle when zoomed): the layers are cut to it
+        const F32 fit_x0 = mFitRegion ? -mFitViewCenter.mV[VX] * scale_pixels_per_meter : 0.f;
+        const F32 fit_y0 = mFitRegion ? -mFitViewCenter.mV[VY] * scale_pixels_per_meter : 0.f;
+        const F32 fit_x1 = mFitRegion ? fit_x0 + current_region->getWidth() * scale_pixels_per_meter : 0.f;
+        const F32 fit_y1 = mFitRegion ? fit_y0 + current_region->getWidth() * scale_pixels_per_meter : 0.f;
+        // </GMDX>
 
         for (LLWorld::region_list_t::const_iterator iter = LLWorld::getInstance()->getRegionList().begin();
              iter != LLWorld::getInstance()->getRegionList().end(); ++iter)
         {
             LLViewerRegion* regionp = *iter;
+            // <GMDX> only the agent's region in Show Whole Region
+            if (mFitRegion && regionp != current_region)
+            {
+                continue;
+            }
+            // </GMDX>
             // Find x and y position relative to camera's center.
             LLVector3 origin_agent = regionp->getOriginAgent();
-            LLVector3 rel_region_pos = origin_agent - gAgentCamera.getCameraPositionAgent();
+            LLVector3 rel_region_pos = origin_agent - map_center_agent_base; // <GMDX> the map's centre
             F32 relative_x = rel_region_pos.mV[0] * scale_pixels_per_meter;
             F32 relative_y = rel_region_pos.mV[1] * scale_pixels_per_meter;
 
@@ -449,24 +507,34 @@ void LLNetMap::draw()
             //F32 top =     bottom + mScale ;
             //F32 right =       left + mScale ;
             const F32 real_width(regionp->getWidth());
-            F32 top =       bottom + (real_width / region_width) * mScale ;
-            F32 right =     left + (real_width / region_width) * mScale ;
+            F32 top =       bottom + (real_width / region_width) * tile_pixels ; // <GMDX> tile_pixels
+            F32 right =     left + (real_width / region_width) * tile_pixels ;
 // </FS:CR> Aurora Sim
 
+            // <GMDX> map_opacity (GMDXMiniMapOpacity)
             if (regionp == gAgent.getRegion())
             {
-                gGL.color4f(1.f, 1.f, 1.f, 1.f);
+                gGL.color4f(1.f, 1.f, 1.f, map_opacity);
             }
             else
             {
-                gGL.color4f(0.8f, 0.8f, 0.8f, 1.f);
+                gGL.color4f(0.8f, 0.8f, 0.8f, map_opacity);
             }
 
             if (!regionp->isAlive())
             {
-                gGL.color4f(1.f, 0.5f, 0.5f, 1.f);
+                gGL.color4f(1.f, 0.5f, 0.5f, map_opacity);
             }
+            // </GMDX>
 
+            // <GMDX> a region map (gmdxregioncapture.h) covers the whole region, var-regions too
+            if (LLViewerTexture* region_map = GMDXRegionCapture::getMinimapTexture(regionp))
+            {
+                gGL.getTexUnit(0)->bind(region_map);
+                drawMapQuad(left, bottom, right, top, 0.f, 0.f, 1.f, 1.f, mRadarRadius);
+            }
+            else
+            // </GMDX>
             // <FS> [FIRE-35147] OpenSim regions can be greater than 256x256 and need to be accounted for
             if (!LLGridManager::getInstance()->isInSecondLife())
             {
@@ -480,10 +548,12 @@ void LLNetMap::draw()
                     {
                         const F32                  y = (F32)(i / scaled_width);
                         const F32                  x = (F32)(i - y * scaled_width);
-                        const F32                  local_left(left + x * mScale);
-                        const F32                  local_right(local_left + mScale);
-                        const F32                  local_bottom(bottom + y * mScale);
-                        const F32                  local_top(local_bottom + mScale);
+                        // <GMDX> tile_pixels: the map's scale (mScale outside Show Whole Region)
+                        const F32                  local_left(left + x * tile_pixels);
+                        const F32                  local_right(local_left + tile_pixels);
+                        const F32                  local_bottom(bottom + y * tile_pixels);
+                        const F32                  local_top(local_bottom + tile_pixels);
+                        // </GMDX>
                         LLPointer<LLViewerTexture> pRegionImage = tiles[(U64)(x * scaled_width + y)];
                         if (pRegionImage.isNull())
                             continue;
@@ -491,23 +561,7 @@ void LLNetMap::draw()
                         if (pRegionImage->hasGLTexture())
                         {
                             gGL.getTexUnit(0)->bind(pRegionImage);
-                            gGL.begin(LLRender::TRIANGLES);
-                            {
-                                gGL.texCoord2f(0.f, 1.f);
-                                gGL.vertex2f(local_left, local_top);
-                                gGL.texCoord2f(0.f, 0.f);
-                                gGL.vertex2f(local_left, local_bottom);
-                                gGL.texCoord2f(1.f, 0.f);
-                                gGL.vertex2f(local_right, local_bottom);
-
-                                gGL.texCoord2f(0.f, 1.f);
-                                gGL.vertex2f(local_left, local_top);
-                                gGL.texCoord2f(1.f, 0.f);
-                                gGL.vertex2f(local_right, local_bottom);
-                                gGL.texCoord2f(1.f, 1.f);
-                                gGL.vertex2f(local_right, local_top);
-                            }
-                            gGL.end();
+                            drawMapQuad(local_left, local_bottom, local_right, local_top, 0.f, 0.f, 1.f, 1.f, mRadarRadius); // <GMDX> (cut to the radar's disc)
                         }
                         pRegionImage->setBoostLevel(LLViewerTexture::BOOST_MAP_VISIBLE);
                     }
@@ -518,23 +572,7 @@ void LLNetMap::draw()
             {
                 // Draw using texture.
                 gGL.getTexUnit(0)->bind(regionp->getLand().getSTexture());
-                gGL.begin(LLRender::TRIANGLES);
-                {
-                    gGL.texCoord2f(0.f, 1.f);
-                    gGL.vertex2f(left, top);
-                    gGL.texCoord2f(0.f, 0.f);
-                    gGL.vertex2f(left, bottom);
-                    gGL.texCoord2f(1.f, 0.f);
-                    gGL.vertex2f(right, bottom);
-
-                    gGL.texCoord2f(0.f, 1.f);
-                    gGL.vertex2f(left, top);
-                    gGL.texCoord2f(1.f, 0.f);
-                    gGL.vertex2f(right, bottom);
-                    gGL.texCoord2f(1.f, 1.f);
-                    gGL.vertex2f(right, top);
-                }
-                gGL.end();
+                drawMapQuad(left, bottom, right, top, 0.f, 0.f, 1.f, 1.f, mRadarRadius); // <GMDX> (cut to the radar's disc)
             }
             gGL.flush();
         }
@@ -550,8 +588,21 @@ void LLNetMap::draw()
         posCenter.mV[VY] -= mCurPan.mV[VY];
         posCenter.mV[VZ] = 0.f;
         LLVector3d posCenterGlobal = viewPosToGlobal(llfloor(posCenter.mV[VX]), llfloor(posCenter.mV[VY]));
+        // <GMDX> Show Whole Region: the layers are centred on the region (the view's centre when zoomed)
+        if (mFitRegion)
+        {
+            posCenterGlobal = mFitCenterGlobal;
+        }
+        // </GMDX>
 
         static LLCachedControl<bool> s_fShowObjects(gSavedSettings, "MiniMapObjects") ;
+        // <GMDX> Only Render Physical Objects: the object layer is not built or drawn
+        if (s_fShowObjects && physical_only)
+        {
+            mUpdateObjectImage = true;   // a fresh layer when it is turned off again
+        }
+        else
+        // </GMDX>
         if ( (s_fShowObjects) && ((mUpdateObjectImage) || (map_timer.getElapsedTimeF32() > 0.5f)) )
         {
             mUpdateObjectImage = false;
@@ -595,6 +646,12 @@ void LLNetMap::draw()
                     itRegion != LLWorld::getInstance()->getRegionList().end(); ++itRegion)
             {
                 const LLViewerRegion* pRegion = *itRegion; LLColor4U clrOverlay;
+                // <GMDX> only the agent's region in Show Whole Region
+                if (mFitRegion && pRegion != current_region)
+                {
+                    continue;
+                }
+                // </GMDX>
                 if (pRegion->isAlive())
                     clrOverlay = map_parcel_outline_color.get();
                 else
@@ -608,7 +665,7 @@ void LLNetMap::draw()
 
         LLVector3 map_center_agent = gAgent.getPosAgentFromGlobal(mObjectImageCenterGlobal);
         LLVector3 camera_position = gAgentCamera.getCameraPositionAgent();
-        map_center_agent -= camera_position;
+        map_center_agent -= map_center_agent_base; // <GMDX> relative to the map's centre (the region's in Show Whole Region)
         map_center_agent.mV[VX] *= scale_pixels_per_meter;
         map_center_agent.mV[VY] *= scale_pixels_per_meter;
 
@@ -616,29 +673,41 @@ void LLNetMap::draw()
         F32 image_half_width = 0.5f*mObjectMapPixels;
         F32 image_half_height = 0.5f*mObjectMapPixels;
 
+        // <GMDX> Draws a layer image centred at `center` (map pixels from the map centre). In Show
+        // Whole Region only the part over the region's square, so nothing outside the region shows
+        // (the layers hold the neighbours too), and on the round radar only the part on its disc.
+        auto draw_layer = [&](const LLVector3& center)
+        {
+            F32 x0 = center.mV[VX] - image_half_width;
+            F32 x1 = center.mV[VX] + image_half_width;
+            F32 y0 = center.mV[VY] - image_half_height;
+            F32 y1 = center.mV[VY] + image_half_height;
+            F32 u0 = 0.f, u1 = 1.f, v0 = 0.f, v1 = 1.f;
+            if (mFitRegion)
+            {
+                const F32 cx0 = llmax(x0, fit_x0), cx1 = llmin(x1, fit_x1);
+                const F32 cy0 = llmax(y0, fit_y0), cy1 = llmin(y1, fit_y1);
+                if (cx0 >= cx1 || cy0 >= cy1)
+                {
+                    return;
+                }
+                u0 = (cx0 - x0) / (x1 - x0);
+                u1 = (cx1 - x0) / (x1 - x0);
+                v0 = (cy0 - y0) / (y1 - y0);
+                v1 = (cy1 - y0) / (y1 - y0);
+                x0 = cx0; x1 = cx1; y0 = cy0; y1 = cy1;
+            }
+            drawMapQuad(x0, y0, x1, y1, u0, v0, u1, v1, mRadarRadius);
+        };
+        // </GMDX>
+
 // [SL:KB] - Patch: World-MinimapOverlay | Checked: 2012-07-26 (Catznip-3.3)
-        if (s_fShowObjects)
+        if (s_fShowObjects && !physical_only) // <GMDX> Only Render Physical Objects
         {
             gGL.color4f(1.f, 1.f, 1.f, 1.f);
             gGL.getTexUnit(0)->bind(mObjectImagep);
 // [/SL:KB]
-            gGL.begin(LLRender::TRIANGLES);
-            {
-                gGL.texCoord2f(0.f, 1.f);
-                gGL.vertex2f(map_center_agent.mV[VX] - image_half_width, image_half_height + map_center_agent.mV[VY]);
-                gGL.texCoord2f(0.f, 0.f);
-                gGL.vertex2f(map_center_agent.mV[VX] - image_half_width, map_center_agent.mV[VY] - image_half_height);
-                gGL.texCoord2f(1.f, 0.f);
-                gGL.vertex2f(image_half_width + map_center_agent.mV[VX], map_center_agent.mV[VY] - image_half_height);
-
-                gGL.texCoord2f(0.f, 1.f);
-                gGL.vertex2f(map_center_agent.mV[VX] - image_half_width, image_half_height + map_center_agent.mV[VY]);
-                gGL.texCoord2f(1.f, 0.f);
-                gGL.vertex2f(image_half_width + map_center_agent.mV[VX], map_center_agent.mV[VY] - image_half_height);
-                gGL.texCoord2f(1.f, 1.f);
-                gGL.vertex2f(image_half_width + map_center_agent.mV[VX], image_half_height + map_center_agent.mV[VY]);
-            }
-            gGL.end();
+            draw_layer(map_center_agent); // <GMDX>
 // [SL:KB] - Patch: World-MinimapOverlay | Checked: 2012-07-26 (Catznip-3.3)
         }
 // [/SL:KB]
@@ -646,27 +715,13 @@ void LLNetMap::draw()
 // [SL:KB] - Patch: World-MinimapOverlay | Checked: 2012-06-20 (Catznip-3.3)
         if (s_fShowPropertyLines)
         {
-            map_center_agent = gAgent.getPosAgentFromGlobal(mParcelImageCenterGlobal) - camera_position;
-            map_center_agent.mV[VX] *= mScale / region_width;
-            map_center_agent.mV[VY] *= mScale / region_width;
+            map_center_agent = gAgent.getPosAgentFromGlobal(mParcelImageCenterGlobal) - map_center_agent_base; // <GMDX>
+            map_center_agent.mV[VX] *= scale_pixels_per_meter; // <GMDX> the map's scale
+            map_center_agent.mV[VY] *= scale_pixels_per_meter;
 
             gGL.color4f(1.f, 1.f, 1.f, 1.f);
             gGL.getTexUnit(0)->bind(mParcelImagep);
-            gGL.begin(LLRender::TRIANGLES);
-                gGL.texCoord2f(0.f, 1.f);
-                gGL.vertex2f(map_center_agent.mV[VX] - image_half_width, image_half_height + map_center_agent.mV[VY]);
-                gGL.texCoord2f(0.f, 0.f);
-                gGL.vertex2f(map_center_agent.mV[VX] - image_half_width, map_center_agent.mV[VY] - image_half_height);
-                gGL.texCoord2f(1.f, 0.f);
-                gGL.vertex2f(image_half_width + map_center_agent.mV[VX], map_center_agent.mV[VY] - image_half_height);
-
-                gGL.texCoord2f(0.f, 1.f);
-                gGL.vertex2f(map_center_agent.mV[VX] - image_half_width, image_half_height + map_center_agent.mV[VY]);
-                gGL.texCoord2f(1.f, 0.f);
-                gGL.vertex2f(image_half_width + map_center_agent.mV[VX], map_center_agent.mV[VY] - image_half_height);
-                gGL.texCoord2f(1.f, 1.f);
-                gGL.vertex2f(image_half_width + map_center_agent.mV[VX], image_half_height + map_center_agent.mV[VY]);
-            gGL.end();
+            draw_layer(map_center_agent); // <GMDX>
         }
 // [/SL:KB]
 
@@ -678,6 +733,13 @@ void LLNetMap::draw()
         //  regionp->renderPropertyLinesOnMinimap(scale_pixels_per_meter, map_parcel_outline_color.get().mV);
         //}
         // </FS:Ansariel>
+
+        // <GMDX> Only Render Physical Objects: every frame, from the live objects
+        if (s_fShowObjects && physical_only)
+        {
+            drawPhysicalObjects(map_center_agent_base, scale_pixels_per_meter, mFitRegion ? current_region : nullptr);
+        }
+        // </GMDX>
 
         gGL.popMatrix();
 
@@ -699,6 +761,9 @@ void LLNetMap::draw()
         static LLCachedControl<F32> fsMinimapPickScale(gSavedSettings, "FSMinimapPickScale");
         F32 min_pick_dist_squared = (mDotRadius * fsMinimapPickScale) * (mDotRadius * fsMinimapPickScale);
         // </FS:Ansariel>
+        LLVector2 closest_pos;   // <GMDX> the picked dot, ringed
+
+        drawZones(); // <GMDX> zone fills and outlines under the avatars (cut to the radar's disc)
 
         LLVector3 pos_map;
         uuid_vec_t avatar_ids;
@@ -745,8 +810,22 @@ void LLNetMap::draw()
             {
                 continue;
             }
+            // <GMDX> Show Whole Region: only the avatars in the region
+            if (mFitRegion && !current_region->pointInRegionGlobal(sorted_positions[i]))
+            {
+                continue;
+            }
+            // </GMDX>
 
             pos_map = globalPosToView(sorted_positions[i]);
+            // <GMDX> the radar: avatars past the disc / square wait on its rim, in their direction
+            if (radarOn())
+            {
+                const LLVector2 rim = toRadarRim(LLVector2(pos_map.mV[VX], pos_map.mV[VY]));
+                pos_map.mV[VX] = rim.mV[VX];
+                pos_map.mV[VY] = rim.mV[VY];
+            }
+            // </GMDX>
 
             // <FS:CR>
             //LLColor4 color = LLAvatarActions::isFriend(uuid) ? map_avatar_friend_color : map_avatar_color;
@@ -830,6 +909,7 @@ void LLNetMap::draw()
                         closest_dist_squared = dist_to_cursor_squared;
                         mClosestAgentToCursor = uuid;
                         mClosestAgentPosition = sorted_positions[i];
+                        closest_pos.set(pos_map.mV[VX], pos_map.mV[VY]);   // <GMDX>
                     }
                     mClosestAgentsToCursor.push_back(uuid);
                 }
@@ -863,6 +943,11 @@ void LLNetMap::draw()
                 drawTracking( LLTracker::getTrackedPositionGlobal(), map_track_color );
             }
         }
+
+        // <GMDX> the zone being drawn, then the marks (gmdxnetmap.cpp)
+        drawZonePreview();
+        drawMarks();
+        // </GMDX>
 
         // Draw dot for self avatar position
         static LLUIColor self_tag_color = LLUIColorTable::instance().getColor("MapAvatarSelfColor", LLColor4::yellow); // <FS:CR> FIRE-1061
@@ -898,17 +983,37 @@ void LLNetMap::draw()
 // <FS:CR> Opensim
                 //drawRing(20.0, pos_map, map_chat_ring_color);
                 //drawRing(100.0, pos_map, map_shout_ring_color);
-                if (fs_whisper_ring) drawRing((F32)LFSimFeatureHandler::getInstance()->whisperRange(), pos_map, map_whisper_ring_color);
-                if (fs_chat_ring) drawRing((F32)LFSimFeatureHandler::getInstance()->sayRange(), pos_map, map_chat_ring_color);
-                if (fs_shout_ring) drawRing((F32)LFSimFeatureHandler::getInstance()->shoutRange(), pos_map, map_shout_ring_color);
+                // <GMDX> the radar: only the rings inside its disc (they are centred on it)
+                const F32 ring_max = mRadarRadius > 0.f ? mRadarRadius / mPixelsPerMeter : F32_MAX;
+                const F32 whisper_range = (F32)LFSimFeatureHandler::getInstance()->whisperRange();
+                const F32 say_range = (F32)LFSimFeatureHandler::getInstance()->sayRange();
+                const F32 shout_range = (F32)LFSimFeatureHandler::getInstance()->shoutRange();
+                if (fs_whisper_ring && whisper_range <= ring_max) drawRing(whisper_range, pos_map, map_whisper_ring_color);
+                if (fs_chat_ring && say_range <= ring_max) drawRing(say_range, pos_map, map_chat_ring_color);
+                if (fs_shout_ring && shout_range <= ring_max) drawRing(shout_range, pos_map, map_shout_ring_color);
+                // </GMDX>
 // </FS:CR> Opensim
             }
         }
 
+        // <GMDX> the dot under the cursor (the one a right-click picks): a white ring over a dark halo
+        if (local_mouse && mClosestAgentToCursor.notNull() && mClosestAgentToCursor != gAgent.getID())
+        {
+            gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+            gGL.pushMatrix();
+            gGL.translatef(closest_pos.mV[VX], closest_pos.mV[VY], 0.f);
+            const F32 r = mDotRadius + 3.f;
+            const LLColor4 halo(0.05f, 0.06f, 0.07f, 0.6f), ring(1.f, 1.f, 1.f, 0.95f);
+            gl_washer_2d(r + 2.5f, r - 1.f, 32, halo, halo);
+            gl_washer_2d(r + 1.f, r, 32, ring, ring);
+            gGL.popMatrix();
+        }
+        // </GMDX>
+
         // Draw frustum
 // <FS:CR> Aurora Sim
         //F32 meters_to_pixels = mScale/ LLWorld::getInstance()->getRegionWidthInMeters();
-        F32 meters_to_pixels = mScale/ REGION_WIDTH_METERS;
+        F32 meters_to_pixels = mPixelsPerMeter; // <GMDX> (Show Whole Region's scale too)
 // </FS:CR> Aurora Sim
 
         F32 horiz_fov = LLViewerCamera::getInstance()->getView() * LLViewerCamera::getInstance()->getAspect();
@@ -917,6 +1022,20 @@ void LLNetMap::draw()
 
         F32 ctr_x = (F32)center_sw_left;
         F32 ctr_y = (F32)center_sw_bottom;
+        // <GMDX> Show Whole Region: the map is centred on the region, the cone starts at the camera,
+        // and on the round radar it ends at the disc's rim
+        if (mFitRegion)
+        {
+            const LLVector3 camera_view = globalPosToView(gAgentCamera.getCameraPositionGlobal());
+            ctr_x = camera_view.mV[VX];
+            ctr_y = camera_view.mV[VY];
+            if (mRadarRadius > 0.f)
+            {
+                const F32 from_center = (LLVector2(ctr_x, ctr_y) - radarCenter()).length();
+                far_clip_pixels = llclamp(mRadarRadius - from_center, 0.f, far_clip_pixels);
+            }
+        }
+        // </GMDX>
 
         constexpr F32 steps_per_circle = 40.0f;
         constexpr F32 steps_per_radian = steps_per_circle / F_TWO_PI;
@@ -953,6 +1072,11 @@ void LLNetMap::draw()
     gGL.popMatrix();
     gGL.popUIMatrix();
 
+    // <GMDX> Show Whole Region's compass; the coordinates under the cursor (gmdxnetmap.cpp)
+    drawWholeRegionCompass(fit_square);
+    drawCursorCoordinates();
+    // </GMDX>
+
     LLUICtrl::draw();
 }
 
@@ -967,14 +1091,14 @@ void LLNetMap::reshape(S32 width, S32 height, bool called_from_parent)
 
 LLVector3 LLNetMap::globalPosToView(const LLVector3d& global_pos)
 {
-    LLVector3d camera_position = gAgentCamera.getCameraPositionGlobal();
+    LLVector3d camera_position = mapCenterGlobal(); // <GMDX> the region's centre in Show Whole Region
 
     LLVector3d relative_pos_global = global_pos - camera_position;
     LLVector3 pos_local;
     pos_local.setVec(relative_pos_global);  // convert to floats from doubles
 
 // <FS:CR> Aurora Sim
-    mPixelsPerMeter = mScale / REGION_WIDTH_METERS;
+    mPixelsPerMeter = mFitRegion ? mFitPixelsPerMeter : mScale / REGION_WIDTH_METERS; // <GMDX> Show Whole Region's scale
 // </FS:CR> Aurora Sim
     pos_local.mV[VX] *= mPixelsPerMeter;
     pos_local.mV[VY] *= mPixelsPerMeter;
@@ -988,8 +1112,11 @@ LLVector3 LLNetMap::globalPosToView(const LLVector3d& global_pos)
         pos_local.rotVec( rot );
     }
 
-    pos_local.mV[VX] += getRect().getWidth() / 2 + mCurPan.mV[VX];
-    pos_local.mV[VY] += getRect().getHeight() / 2 + mCurPan.mV[VY];
+    // <GMDX> mapPan(): Show Whole Region has no pan of its own
+    const LLVector2 pan = mapPan();
+    pos_local.mV[VX] += getRect().getWidth() / 2 + pan.mV[VX];
+    pos_local.mV[VY] += getRect().getHeight() / 2 + pan.mV[VY];
+    // </GMDX>
 
     return pos_local;
 }
@@ -999,7 +1126,7 @@ void LLNetMap::drawRing(const F32 radius, const LLVector3 pos_map, const LLUICol
 {
 // <FS:CR> Aurora Sim
     //F32 meters_to_pixels = mScale / LLWorld::getInstance()->getRegionWidthInMeters();
-    F32 meters_to_pixels = mScale / REGION_WIDTH_METERS;
+    F32 meters_to_pixels = mPixelsPerMeter; // <GMDX> (Show Whole Region's scale too)
 // </FS:CR> Aurora Sim
     F32 radius_pixels = radius * meters_to_pixels;
 
@@ -1014,6 +1141,14 @@ void LLNetMap::drawTracking(const LLVector3d& pos_global, const LLColor4& color,
                             bool draw_arrow )
 {
     LLVector3 pos_local = globalPosToView(pos_global);
+    // <GMDX> the radar, and the Whole Region map: on its rim / edge when past it
+    if (radarOn() || mFitRegion)
+    {
+        const LLVector2 rim = toRadarRim(LLVector2(pos_local.mV[VX], pos_local.mV[VY]));
+        LLWorldMapView::drawTrackingDot(rim.mV[VX], rim.mV[VY], color, pos_local.mV[VZ]);
+        return;
+    }
+    // </GMDX>
     if( (pos_local.mV[VX] < 0) ||
         (pos_local.mV[VY] < 0) ||
         (pos_local.mV[VX] >= getRect().getWidth()) ||
@@ -1099,8 +1234,10 @@ void LLNetMap::updateAboutLandPopupButton()
 
 LLVector3d LLNetMap::viewPosToGlobal( S32 x, S32 y )
 {
-    x -= ll_round(getRect().getWidth() / 2 + mCurPan.mV[VX]);
-    y -= ll_round(getRect().getHeight() / 2 + mCurPan.mV[VY]);
+    // <GMDX> Show Whole Region: its own pan, scale and centre
+    const LLVector2 pan = mapPan();
+    x -= ll_round(getRect().getWidth() / 2 + pan.mV[VX]);
+    y -= ll_round(getRect().getHeight() / 2 + pan.mV[VY]);
 
     LLVector3 pos_local( (F32)x, (F32)y, 0 );
 
@@ -1115,18 +1252,40 @@ LLVector3d LLNetMap::viewPosToGlobal( S32 x, S32 y )
 
 // <FS:CR> Aurora Sim
     //pos_local *= ( LLWorld::getInstance()->getRegionWidthInMeters() / mScale );
-    pos_local *= ( REGION_WIDTH_METERS / mScale );
+    pos_local *= mFitRegion ? 1.f / mFitPixelsPerMeter : ( REGION_WIDTH_METERS / mScale ); // <GMDX>
 // </FS:CR> Aurora Sim
 
     LLVector3d pos_global;
     pos_global.setVec( pos_local );
-    pos_global += gAgentCamera.getCameraPositionGlobal();
+    pos_global += mapCenterGlobal(); // <GMDX>
+    // </GMDX>
 
     return pos_global;
 }
 
 bool LLNetMap::handleScrollWheel(S32 x, S32 y, S32 clicks)
 {
+    // <GMDX> Show Whole Region: its own zoom, 1 (the whole region) to 8, toward the point under the
+    // cursor; MiniMapScale is left alone. Zooming back out to 1 shows the whole region again.
+    if (mFitRegion)
+    {
+        LLViewerRegion* region = gAgent.getRegion();
+        if (!region || mFitBasePixelsPerMeter <= 0.f
+            || (gSavedSettings.getBOOL("MiniMapRotate") && gSavedSettings.getS32("GMDXMiniMapRotateView") == 2))   // (the turning whole region: always whole)
+        {
+            return true;
+        }
+        const F32 old_ppm = mFitBasePixelsPerMeter * mFitZoom;
+        mFitZoom = llclamp(mFitZoom * (F32)pow(MAP_SCALE_ZOOM_FACTOR, -clicks), 1.f, 8.f);
+        const F32 new_ppm = mFitBasePixelsPerMeter * mFitZoom;
+        // keep the point under the cursor where it is
+        const LLVector2 cursor((F32)x - mFitMapRect.getCenterX(), (F32)y - mFitMapRect.getCenterY());
+        const LLVector2 under = mFitViewCenter + cursor / old_ppm;
+        mFitViewCenter = under - cursor / new_ppm;
+        clampFitView(region->getWidth());
+        return true;
+    }
+    // </GMDX>
     // note that clicks are reversed from what you'd think: i.e. > 0  means zoom out, < 0 means zoom in
     F32 new_scale = mScale * (F32)pow(MAP_SCALE_ZOOM_FACTOR, -clicks);
     F32 old_scale = mScale;
@@ -1675,6 +1834,37 @@ void LLNetMap::createParcelImage()
 
 bool LLNetMap::handleMouseDown(S32 x, S32 y, MASK mask)
 {
+    // <GMDX> drawing a zone: a rectangle / circle is dragged out, a polygon's corners clicked
+    if (mDrawKind >= 0)
+    {
+        const LLVector3d p = viewPosToGlobal(x, y);
+        mDrawCursor = p;
+        if (mDrawKind == GMDXMapZone::POLYGON)
+        {
+            if (mDrawPoints.size() >= 3)
+            {
+                const LLVector3 first = globalPosToView(mDrawPoints.front());
+                if (fabsf(first.mV[VX] - (F32)x) < 8.f && fabsf(first.mV[VY] - (F32)y) < 8.f) { finishZone(); return true; }
+            }
+            mDrawPoints.push_back(p);
+            return true;
+        }
+        mDrawPoints.assign(1, p);
+        mDrawDrag = true;
+        gFocusMgr.setMouseCapture(this);
+        return true;
+    }
+    // Show Whole Region, zoomed in: a plain drag pans the region
+    if (fitPanAt(x, y))
+    {
+        gFocusMgr.setMouseCapture(this);
+        mStartPan     = mCurPan;
+        mMouseDown.mX = x;
+        mMouseDown.mY = y;
+        return true;
+    }
+    if (mFitRegion) return false;   // (no other pan in Show Whole Region)
+    // </GMDX>
     // <FS:Ansariel> FIRE-32339: Mini map can't be dragged anymore
     if (!(mask & MASK_SHIFT)) return false;
 
@@ -1689,6 +1879,27 @@ bool LLNetMap::handleMouseDown(S32 x, S32 y, MASK mask)
 
 bool LLNetMap::handleMouseUp(S32 x, S32 y, MASK mask)
 {
+    // <GMDX> a dragged rectangle / circle ends here (a click without a drag draws nothing)
+    if (mDrawKind >= 0)
+    {
+        if (mDrawDrag)
+        {
+            mDrawDrag = false;
+            if (hasMouseCapture()) gFocusMgr.setMouseCapture(NULL);
+            const LLVector3 a = globalPosToView(mDrawPoints.front());
+            if (fabsf(a.mV[VX] - (F32)x) + fabsf(a.mV[VY] - (F32)y) >= 4.f)
+            {
+                mDrawPoints.push_back(viewPosToGlobal(x, y));
+                finishZone();
+            }
+            else
+            {
+                mDrawPoints.clear();
+            }
+        }
+        return true;
+    }
+    // </GMDX>
     if (abs(mMouseDown.mX - x) < 3 && abs(mMouseDown.mY - y) < 3)
     {
         handleClick(x, y, mask);
@@ -1778,6 +1989,16 @@ void LLNetMap::handleShowProfile(const LLSD& sdParam) const
 
 bool LLNetMap::handleRightMouseDown(S32 x, S32 y, MASK mask)
 {
+    // <GMDX> drawing a zone: right-click finishes a polygon (3+ corners) or cancels
+    if (mDrawKind >= 0)
+    {
+        if (mDrawKind == GMDXMapZone::POLYGON && mDrawPoints.size() >= 3) finishZone();
+        else { mDrawKind = -1; mDrawPoints.clear(); }
+        if (hasMouseCapture()) gFocusMgr.setMouseCapture(NULL);
+        mDrawDrag = false;
+        return true;
+    }
+    // </GMDX>
     auto menu = static_cast<LLMenuGL*>(mPopupMenuHandle.get());
     if (menu)
     {
@@ -1860,6 +2081,7 @@ bool LLNetMap::handleRightMouseDown(S32 x, S32 y, MASK mask)
         menu->setItemVisible("Reconnect Region", is_blocked);
         menu->setItemEnabled("Reconnect Region", is_blocked);
 
+        updateGMDXPopupItems(menu, x, y); // <GMDX>
 // [/SL:KB]
         menu->buildDrawLabels();
         menu->updateParent(LLMenuGL::sMenuContainer);
@@ -1885,6 +2107,21 @@ bool LLNetMap::handleClick(S32 x, S32 y, MASK mask)
 
 bool LLNetMap::handleDoubleClick(S32 x, S32 y, MASK mask)
 {
+    // <GMDX> drawing a polygon: a double-click puts the last corner and finishes
+    if (mDrawKind >= 0)
+    {
+        if (mDrawKind == GMDXMapZone::POLYGON)
+        {
+            const LLVector3 last = mDrawPoints.empty() ? LLVector3(-1000.f, -1000.f, 0.f) : globalPosToView(mDrawPoints.back());
+            if (fabsf(last.mV[VX] - (F32)x) + fabsf(last.mV[VY] - (F32)y) >= 4.f)   // (the click before it put a corner there)
+            {
+                mDrawPoints.push_back(viewPosToGlobal(x, y));
+            }
+            if (mDrawPoints.size() >= 3) finishZone();
+        }
+        return true;
+    }
+    // </GMDX>
     LLVector3d pos_global = viewPosToGlobal(x, y);
 
     // <FS:Ansariel> Synchronize double click handling throughout instances
@@ -1951,6 +2188,17 @@ bool LLNetMap::outsideSlop( S32 x, S32 y, S32 start_x, S32 start_y, S32 slop )
 
 bool LLNetMap::handleHover( S32 x, S32 y, MASK mask )
 {
+    // <GMDX> the coordinates under the cursor; the zone being drawn follows it
+    mCursorInside = true;
+    mCursorX = x;
+    mCursorY = y;
+    if (mDrawKind >= 0)
+    {
+        mDrawCursor = viewPosToGlobal(x, y);
+        gViewerWindow->setCursor(UI_CURSOR_CROSS);
+        return true;
+    }
+    // </GMDX>
     if (hasMouseCapture())
     {
         if (mPanning || outsideSlop(x, y, mMouseDown.mX, mMouseDown.mY, MOUSE_DRAG_SLOP))
@@ -1966,13 +2214,26 @@ bool LLNetMap::handleHover( S32 x, S32 y, MASK mask )
                             static_cast<F32>(gViewerWindow->getCurrentMouseDY()));
 
             // Set pan to value at start of drag + offset
+            if (mFitRegion)   // <GMDX> Show Whole Region, zoomed in: the view moves over the region
+            {
+                const F32 ppm = mFitBasePixelsPerMeter * mFitZoom;
+                if (ppm > 0.f)
+                {
+                    mFitViewCenter -= delta / ppm;
+                }
+                if (LLViewerRegion* region = gAgent.getRegion())
+                {
+                    clampFitView(region->getWidth());
+                }
+            }
+            else // </GMDX>
             mCurPan += delta;
 
             gViewerWindow->moveCursorToCenter();
         }
     }
 
-    if (mask & MASK_SHIFT)
+    if (mFitRegion ? fitPanAt(x, y) : (mask & MASK_SHIFT)) // <GMDX> Show Whole Region: where a drag pans
     {
         // If shift is held, change the cursor to hint that the map can be
         // dragged. However, holding shift is not required to drag the map.
@@ -2111,6 +2372,11 @@ LLColor4 LLNetMap::getAvatarColor(const LLUUID& avatar_id)
         }
     }
 
+    // <GMDX> this account's own colour for the dot (right-click a dot > Dot Colour, kept in
+    // gmdx_minimap_marks.json), over its group / contact set colour
+    GMDXMinimapMarks::avatarColor(avatar_id, color);
+    // </GMDX>
+
     // Mark Avatars with special colors. A mark is an explicit per-avatar override,
     // so it is applied last and wins over contact set and group tinting.
     if (auto found = sAvatarMarksMap.find(avatar_id); found != sAvatarMarksMap.end())
@@ -2195,6 +2461,13 @@ bool LLNetMap::isMapOrientationChecked(const LLSD &userdata)
         return rotate_map;
     }
 
+    // <GMDX> Show Whole Region: how it turns (GMDXMiniMapRotateView)
+    const S32 view = gSavedSettings.getS32("GMDXMiniMapRotateView");
+    if (command_name == "rotate_round") return rotate_map && view == 0;
+    if (command_name == "rotate_square") return rotate_map && view == 1;
+    if (command_name == "rotate_whole") return rotate_map && view == 2;
+    // </GMDX>
+
     return false;
 }
 
@@ -2209,6 +2482,13 @@ void LLNetMap::setMapOrientation(const LLSD &userdata)
     {
         gSavedSettings.setBOOL("MiniMapRotate", true);
     }
+    // <GMDX> Show Whole Region: how it turns
+    else if (command_name == "rotate_round" || command_name == "rotate_square" || command_name == "rotate_whole")
+    {
+        gSavedSettings.setBOOL("MiniMapRotate", true);
+        gSavedSettings.setS32("GMDXMiniMapRotateView", command_name == "rotate_round" ? 0 : command_name == "rotate_square" ? 1 : 2);
+    }
+    // </GMDX>
 }
 
 void LLNetMap::popupShowAboutLand(const LLSD &userdata)

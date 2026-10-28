@@ -956,6 +956,15 @@
          function="Inventory.DoToSelected"
          parameter="save_as" />
     </menu_item_call>
+    <!-- <GMDX> a region map shared from GunMetal-DX (gmdxregioncapture.h) -->
+    <menu_item_call
+     label="Use as Region Map"
+     layout="topleft"
+     name="Use as Region Map">
+        <menu_item_call.on_click
+         function="Inventory.DoToSelected"
+         parameter="use_region_map" />
+    </menu_item_call>
   <menu_item_call
  label="Save to"
  layout="topleft"

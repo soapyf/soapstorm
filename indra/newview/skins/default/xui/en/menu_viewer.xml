@@ -1530,6 +1530,15 @@
                  function="RLV.EnableIfNot"
                  parameter="setenv" />
             </menu_item_check>
+            <menu_item_check
+             label="Mute/unmute sound"
+             name="toggle_sound"
+             shortcut="control|alt|shift|M">
+                <menu_item_check.on_click
+                 function="World.ToggleMasterAudio"/>
+                <menu_item_check.on_check
+                 function="World.IsMasterAudioMuted"/>
+             </menu_item_check>
             <menu_item_separator/>
             <menu
              label="Bulk Import"
@@ -1821,6 +1830,56 @@
         </menu_item_check>
         <menu_item_separator />
         <menu_item_check
+         label="Loadouts..."
+         name="Loadouts"
+         shortcut="L">
+            <menu_item_check.on_check
+             function="Floater.Visible"
+             parameter="gmdx_loadouts" />
+            <menu_item_check.on_click
+             function="Floater.Toggle"
+             parameter="gmdx_loadouts" />
+        </menu_item_check>
+        <menu
+         create_jump_keys="true"
+         label="Quick Swap"
+         name="Quick Swap"
+         tear_off="false">
+            <menu_item_call
+             label="Slot 1"
+             name="Quick Swap 1"
+             shortcut="alt|1">
+                <menu_item_call.on_click
+                 function="GMDX.QuickSwap"
+                 parameter="0" />
+            </menu_item_call>
+            <menu_item_call
+             label="Slot 2"
+             name="Quick Swap 2"
+             shortcut="alt|2">
+                <menu_item_call.on_click
+                 function="GMDX.QuickSwap"
+                 parameter="1" />
+            </menu_item_call>
+            <menu_item_call
+             label="Slot 3"
+             name="Quick Swap 3"
+             shortcut="alt|3">
+                <menu_item_call.on_click
+                 function="GMDX.QuickSwap"
+                 parameter="2" />
+            </menu_item_call>
+            <menu_item_call
+             label="Slot 4"
+             name="Quick Swap 4"
+             shortcut="alt|4">
+                <menu_item_call.on_click
+                 function="GMDX.QuickSwap"
+                 parameter="3" />
+            </menu_item_call>
+        </menu>
+        <menu_item_separator />
+        <menu_item_check
          label="Hit Marker Options"
          name="Hit Marker Options">
             <menu_item_check.on_check
@@ -2104,7 +2163,7 @@
                function="Object.EnableScriptInfo" />
           </menu_item_call>
           <menu_item_call
-             label="Recompile Scripts (Mono)"
+             label="Recompile LSL Scripts (Mono)"
              name="Mono">
             <menu_item_call.on_click
                function="Tools.SelectedScriptAction"
@@ -2113,13 +2172,31 @@
                function="EditableSelectedMono" />
           </menu_item_call>
           <menu_item_call
-             label="Recompile Scripts (LSL)"
+             label="Recompile LSL Scripts (Legacy LSL)"
              name="LSL">
             <menu_item_call.on_click
                function="Tools.SelectedScriptAction"
                parameter="compile lsl" />
             <menu_item_call.on_enable
                function="EditableSelected" />
+          </menu_item_call>
+          <menu_item_call
+             label="Recompile LSL Scripts (LSL on Lua)"
+             name="LSL on Luau">
+            <menu_item_call.on_click
+               function="Tools.SelectedScriptAction"
+               parameter="compile lsl-luau" />
+            <menu_item_call.on_enable
+               function="EditableSelectedLua" />
+          </menu_item_call>
+          <menu_item_call
+             label="Recompile Lua Scripts"
+             name="Lua">
+            <menu_item_call.on_click
+               function="Tools.SelectedScriptAction"
+               parameter="compile lua" />
+            <menu_item_call.on_enable
+               function="EditableSelectedLua" />
           </menu_item_call>
           <menu_item_call
              label="Reset Scripts"
@@ -2140,13 +2217,13 @@
                function="EditableSelected" />
           </menu_item_call>
           <menu_item_call
-             label="Set Scripts to Not Running"
-             name="Set Scripts to Not Running">
+              label="Set Scripts to Not Running"
+              name="Set Scripts to Not Running">
             <menu_item_call.on_click
-               function="Tools.SelectedScriptAction"
-               parameter="stop" />
+                function="Tools.SelectedScriptAction"
+                parameter="stop" />
             <menu_item_call.on_enable
-               function="EditableSelected" />
+                function="EditableSelected" />
           </menu_item_call>
           <menu_item_call
              label="Remove Scripts From Selection"
@@ -2157,6 +2234,17 @@
             <menu_item_call.on_enable
                function="EditableSelected" />
           </menu_item_call>          
+          <menu_item_separator/>
+          <menu_item_check
+              label="Script Editor Server"
+              name="Script Editor Server">
+            <menu_item_check.on_check
+                function="Tools.CheckScriptEditorServer" />
+            <menu_item_check.on_click
+                function="Tools.ToggleScriptEditorServer" />
+            <menu_item_check.on_enable
+                function="Tools.EnableScriptEditorServer" />
+          </menu_item_check>
         </menu>
 
       <menu
@@ -2830,17 +2918,6 @@
              parameter="WebLaunchExternalTarget,https://teamup.com/ksxdajnbw9mvw7cbwz" />
         </menu_item_call>
 
-        <menu_item_check
-         label="Guidebook"
-         name="How To">
-            <menu_item_check.on_click
-             function="Help.ToggleHowTo"
-             parameter="" />
-            <menu_item_check.on_check
-             function="Floater.Visible"
-             parameter="guidebook" />
-        </menu_item_check>
-
 <!--       <menu_item_call
          label="Second Life Help"
          name="Second Life Help">
@@ -2871,7 +2948,6 @@
              function="Floater.Show"
              parameter="hud" />
         </menu_item_call>
-		<menu_item_separator/>
         <menu_item_call
              label="Knowledge Base"
              name="Knowledge Base">
@@ -5110,6 +5186,16 @@
                 <menu_item_check.on_click
                  function="ToggleControl"
                  parameter="CollectFontVertexBuffers" />
+            </menu_item_check>
+            <menu_item_check
+             label="Collect UI Image Vertex Buffers"
+             name="Collect UI Image Vertex Buffers">
+                <menu_item_check.on_check
+                 function="CheckControl"
+                 parameter="CollectUIImageVertexBuffers" />
+                <menu_item_check.on_click
+                 function="ToggleControl"
+                 parameter="CollectUIImageVertexBuffers" />
             </menu_item_check>
           <menu_item_separator />
           <menu_item_check

@@ -42,6 +42,7 @@
 #include "lltoolgrab.h"
 #include "lltoolgun.h"
 #include "lltoolmgr.h"
+#include "llfocusmgr.h"
 #include "lltoolselectrect.h"
 #include "lltoolplacer.h"
 #include "llviewerinput.h"
@@ -792,6 +793,14 @@ bool LLToolCompGun::handleHover(S32 x, S32 y, MASK mask)
         }
     }
     
+    // <GMDX> Mouse released to the UI (the loadouts' quick-swap menu): plain cursor, no steering
+    if (mMouseFreed)
+    {
+        gViewerWindow->setCursor(UI_CURSOR_ARROW);
+        return true;
+    }
+    // </GMDX>
+
     // *NOTE: This hack is here to make mouselook kick in again after
     // item selected from context menu.
     if ( mCur == mNull && !gPopupMenuView->getVisible() )
@@ -828,6 +837,16 @@ bool LLToolCompGun::handleHover(S32 x, S32 y, MASK mask)
 
 bool LLToolCompGun::handleMouseDown(S32 x, S32 y, MASK mask)
 {
+    // <GMDX> A click in the world while the mouse is released takes mouselook back; the click
+    // itself is consumed (no grab, no fire).
+    if (mMouseFreed)
+    {
+        gFocusMgr.setKeyboardFocus(nullptr);
+        recaptureMouse();
+        return true;
+    }
+    // </GMDX>
+
     // if the left button is grabbed, don't put up the pie menu
     if (gAgent.leftButtonGrabbed() && gViewerInput.isLMouseHandlingDefault(MODE_FIRST_PERSON))
     {
@@ -845,6 +864,11 @@ bool LLToolCompGun::handleMouseDown(S32 x, S32 y, MASK mask)
 
 bool LLToolCompGun::handleDoubleClick(S32 x, S32 y, MASK mask)
 {
+    if (mMouseFreed) // <GMDX>
+    {
+        return true;
+    }
+
     // if the left button is grabbed, don't put up the pie menu
     if (gAgent.leftButtonGrabbed() && gViewerInput.isLMouseHandlingDefault(MODE_FIRST_PERSON))
     {
@@ -862,6 +886,11 @@ bool LLToolCompGun::handleDoubleClick(S32 x, S32 y, MASK mask)
 
 bool LLToolCompGun::handleRightMouseDown(S32 x, S32 y, MASK mask)
 {
+    if (mMouseFreed) // <GMDX>
+    {
+        return true;
+    }
+
     mRMBDownTimer.reset(); // measure this press's duration (to tell a tap from a hold)
 
     // Returning true will suppress the context menu
@@ -1050,8 +1079,40 @@ void    LLToolCompGun::handleSelect()
     setMouseCapture(true);
 }
 
+// <GMDX> Release the mouse to the UI while staying in mouselook (the loadouts' quick-swap menu);
+// a click in the world, or recaptureMouse(), takes it back.
+void LLToolCompGun::freeMouseForUI()
+{
+    if (mMouseFreed || !gAgentCamera.cameraMouselook())
+    {
+        return;
+    }
+    mMouseFreed = true;
+    // Deselecting the gun shows the cursor and stops clipping; dropping capture lets the
+    // UI under the cursor get mouse events again.
+    setCurrentTool(mNull);
+    setMouseCapture(false);
+    gViewerWindow->showCursor();
+}
+
+void LLToolCompGun::recaptureMouse()
+{
+    if (!mMouseFreed)
+    {
+        return;
+    }
+    mMouseFreed = false;
+    if (gAgentCamera.cameraMouselook() && LLToolMgr::getInstance()->getCurrentTool() == this)
+    {
+        setCurrentTool(mGun);
+        setMouseCapture(true);
+    }
+}
+// </GMDX>
+
 void    LLToolCompGun::handleDeselect()
 {
+    mMouseFreed = false; // <GMDX>
     // Only end ADS on a GENUINE exit out of mouselook input. An ADS-driven
     // OTS<->mouselook switch ALSO deselects this tool (deferred), but stays in a
     // mouselook input mode (MOUSELOOK or OTS); clearing ADS there would wipe the

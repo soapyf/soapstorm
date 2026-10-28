@@ -4,7 +4,7 @@
  *
  * $LicenseInfo:firstyear=2001&license=viewerlgpl$
  * Second Life Viewer Source Code
- * Copyright (C) 2010, Linden Research, Inc.
+ * Copyright (C) 2026, Linden Research, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -26,6 +26,9 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llinventorybridge.h"
+
+#include "gmdxloadouts.h" // <GMDX> the loadouts' Equipment / Loadouts / Outdated folders, shown like system folders
+#include "gmdxregioncapture.h" // <GMDX> Use as Region Map
 
 // external projects
 #include "lltransfersourceasset.h"
@@ -291,11 +294,27 @@ const std::string& LLInvFVBridge::getName() const
 
 const std::string& LLInvFVBridge::getDisplayName() const
 {
-    if(mDisplayName.empty())
+    if(mSearchableName.empty())
     {
-        buildDisplayName();
+        // first request of display name, build search string and cache it for later use
+        buildSearchableName();
     }
-    return mDisplayName;
+
+    LLInventoryModel* model = getInventoryModel();
+    if (model)
+    {
+        LLViewerInventoryCategory* cat = model->getCategory(mUUID);
+        if (cat)
+        {
+            return cat->getDisplayName();
+        }
+        LLViewerInventoryItem* item = model->getItem(mUUID);
+        if (item)
+        {
+            return item->getName();
+        }
+    }
+    return LLStringUtil::null;
 }
 
 std::string LLInvFVBridge::getSearchableDescription() const
@@ -2288,22 +2307,22 @@ PermissionMask LLItemBridge::getPermissionMask() const
 }
 
 // virtual
-void LLItemBridge::buildDisplayName() const
+void LLItemBridge::buildSearchableName() const
 {
-    if (getItem())
+    LLViewerInventoryItem* item = getItem();
+    if (item)
     {
-        mDisplayName.assign(getItem()->getName());
+        // for items, display name matches item name
+        mSearchableName.assign(item->getName());
     }
     else
     {
-        mDisplayName.assign(LLStringUtil::null);
+        mSearchableName.assign(LLStringUtil::null);
     }
-
-    mSearchableName.assign(mDisplayName);
     mSearchableName.append(getLabelSuffix());
     LLStringUtil::toUpper(mSearchableName);
 
-    // Name set, so trigger a sort
+    // Searchable and name set, so trigger a sort
     LLInventorySort sorter = static_cast<LLFolderViewModelInventory&>(mRootViewModel).getSorter();
     if (mParent && !sorter.isByDate())
     {
@@ -2680,39 +2699,17 @@ void LLFolderBridge::selectItem()
     }
 }
 
-void LLFolderBridge::buildDisplayName() const
+void LLFolderBridge::buildSearchableName() const
 {
-    LLFolderType::EType preferred_type = getPreferredType();
-
-    // *TODO: to be removed when database supports multi language. This is a
-    // temporary attempt to display the inventory folder in the user locale.
-    // mantipov: *NOTE: be sure this code is synchronized with LLFriendCardsManager::findChildFolderUUID
-    //      it uses the same way to find localized string
-
-    // HACK: EXT - 6028 ([HARD CODED]? Inventory > Library > "Accessories" folder)
-    // Translation of Accessories folder in Library inventory folder
-    bool accessories = false;
-    if(getName() == "Accessories")
+    LLViewerInventoryCategory* cat = gInventory.getCategory(getUUID());
+    if (cat)
     {
-        //To ensure that Accessories folder is in Library we have to check its parent folder.
-        //Due to parent LLFolderViewFloder is not set to this item yet we have to check its parent via Inventory Model
-        LLInventoryCategory* cat = gInventory.getCategory(getUUID());
-        if(cat)
-        {
-            const LLUUID& parent_folder_id = cat->getParentUUID();
-            accessories = (parent_folder_id == gInventory.getLibraryRootFolderID());
-        }
+        mSearchableName.assign(cat->getDisplayName());
     }
-
-    //"Accessories" inventory category has folder type FT_NONE. So, this folder
-    //can not be detected as protected with LLFolderType::lookupIsProtectedType
-    mDisplayName.assign(getName());
-    if (accessories || LLFolderType::lookupIsProtectedType(preferred_type))
+    else
     {
-        LLTrans::findString(mDisplayName, std::string("InvFolder ") + getName(), LLSD());
+        mSearchableName.assign(LLStringUtil::null);
     }
-
-    mSearchableName.assign(mDisplayName);
     mSearchableName.append(getLabelSuffix());
     LLStringUtil::toUpper(mSearchableName);
 
@@ -2726,6 +2723,8 @@ void LLFolderBridge::buildDisplayName() const
 
 std::string LLFolderBridge::getLabelSuffix() const
 {
+    // Folders, unlike items, have context dependent suffixes
+    // that may change as the folder is loaded
     static LLCachedControl<bool> xui_debug(gSavedSettings, "DebugShowXUINames", 0);
 
     if (mIsLoading && mTimeSinceRequestStart.getElapsedTimeF32() >= FOLDER_LOADING_MESSAGE_DELAY)
@@ -2829,6 +2828,10 @@ void LLFolderBridge::update()
 // Can be destroyed (or moved to trash)
 bool LLFolderBridge::isItemRemovable(bool check_worn) const
 {
+    if (GMDXLoadouts::folderKind(mUUID)) // <GMDX> protected like a system folder
+    {
+        return false;
+    }
     if (!get_is_category_and_children_removable(getInventoryModel(), mUUID, check_worn))
     {
         return false;
@@ -3227,6 +3230,20 @@ bool LLFolderBridge::dragCategoryIntoFolder(LLInventoryCategory* inv_cat,
                 }
             }
         }
+        // <GMDX> The loadouts' Equipment / Loadouts / Outdated folders are not thrown away by dragging
+        // either (Delete already refuses: isItemRemovable), nor is a folder holding one of them.
+        if (is_movable && move_is_into_trash)
+        {
+            for (int f = 0; f < GMDXLoadouts::FOLDER_COUNT; ++f)
+            {
+                const LLUUID own = GMDXLoadouts::instance().folder(GMDXLoadouts::EFolder(f));
+                if (own.notNull() && (own == cat_id || model->isObjectDescendentOf(own, cat_id)))
+                {
+                    is_movable = false;
+                }
+            }
+        }
+        // </GMDX>
         // <FS:Ansariel> FIRE-1392: Allow dragging all asset types into Landmarks folder
         //if (is_movable && move_is_into_landmarks)
         //{
@@ -4193,7 +4210,7 @@ void LLFolderBridge::performAction(LLInventoryModel* model, std::string action)
     // <FS:Ansariel> Show folder in new window option
     else if ("show_in_new_window" == action)
     {
-        LLFloaterReg::showInstance("fs_partial_inventory", LLSD().with("start_folder_id", mUUID).with("start_folder_name", mDisplayName));
+        LLFloaterReg::showInstance("fs_partial_inventory", LLSD().with("start_folder_id", mUUID).with("start_folder_name", mSearchableName));
     }
     // </FS:Ansariel>
 
@@ -4313,6 +4330,10 @@ void LLFolderBridge::determineFolderType()
 
 bool LLFolderBridge::isItemRenameable() const
 {
+    if (GMDXLoadouts::folderKind(mUUID)) // <GMDX> protected like a system folder
+    {
+        return false;
+    }
     return get_is_category_renameable(getInventoryModel(), mUUID);
 }
 
@@ -4365,6 +4386,15 @@ LLUIImagePtr LLFolderBridge::getIconOpen() const
 
 LLUIImagePtr LLFolderBridge::getFolderIcon(bool is_open) const
 {
+    // <GMDX> the loadouts' own folders: their own icons
+    if (int kind = GMDXLoadouts::folderKind(mUUID))
+    {
+        static const char* const names[GMDXLoadouts::FOLDER_COUNT][2] = { { "GMDX_Inv_EquipmentClosed", "GMDX_Inv_EquipmentOpen" },
+                                                                         { "GMDX_Inv_LoadoutsClosed", "GMDX_Inv_LoadoutsOpen" },
+                                                                         { "GMDX_Inv_OutdatedClosed", "GMDX_Inv_OutdatedOpen" } };
+        return LLUI::getUIImage(names[kind - 1][is_open ? 1 : 0]);
+    }
+    // </GMDX>
     LLFolderType::EType preferred_type = getPreferredType();
     return LLUI::getUIImage(LLViewerFolderType::lookupIconName(preferred_type, is_open));
 }
@@ -4583,6 +4613,17 @@ void LLFolderBridge::perform_pasteFromClipboard()
         }
         else
         {
+            // Check that no folder is being pasted into itself or into one of its descendants
+            for (const LLUUID& item_id : objects)
+            {
+                LLInventoryCategory* cat = model->getCategory(item_id);
+                if (cat && (item_id == mUUID || model->isObjectDescendentOf(mUUID, item_id)))
+                {
+                    LLNotificationsUtil::add("CannotPasteFolderIntoSelf");
+                    return;
+                }
+            }
+
             // Check that all items can be moved into that folder : for the moment, only stock folder mismatch is checked
             for (std::vector<LLUUID>::const_iterator iter = objects.begin(); iter != objects.end(); ++iter)
             {
@@ -5727,6 +5768,12 @@ EInventorySortGroup LLFolderBridge::getSortGroup() const
     //</FS:KC>
 
     if(LLFolderType::lookupIsProtectedType(preferred_type))
+    {
+        return SG_SYSTEM_FOLDER;
+    }
+
+    // <GMDX> the loadouts' own folders sort with the system folders, like #Firestorm and #RLV
+    if (sFSSortFSFoldersToTopPt && GMDXLoadouts::folderKind(mUUID))
     {
         return SG_SYSTEM_FOLDER;
     }
@@ -6981,6 +7028,17 @@ void LLTextureBridge::buildContextMenu(LLMenuGL& menu, U32 flags)
             {
                 disabled_items.push_back(std::string("Save As"));
             }
+            // <GMDX> a region map someone shared from GunMetal-DX (gmdxregioncapture.h); saved to disk like Save As
+            const LLViewerInventoryItem* item = getItem();
+            if (item && GMDXRegionCapture::isMapTexture(item->getDescription()))
+            {
+                items.push_back(std::string("Use as Region Map"));
+                if (!canSaveTexture())
+                {
+                    disabled_items.push_back(std::string("Use as Region Map"));
+                }
+            }
+            // </GMDX>
         }
         items.push_back(std::string("Wearable And Object Separator")); // <FS:Ansariel> Add separator
 
@@ -7015,6 +7073,16 @@ void LLTextureBridge::performAction(LLInventoryModel* model, std::string action)
             preview_texture->saveAs();
         }
     }
+    // <GMDX>
+    else if ("use_region_map" == action)
+    {
+        const LLViewerInventoryItem* item = getItem();
+        if (item && canSaveTexture())
+        {
+            GMDXRegionCapture::useMapTexture(item->getAssetUUID(), item->getName(), item->getDescription());
+        }
+    }
+    // </GMDX>
     else if ("save_selected_as" == action)
     {
         openItem();
@@ -7315,18 +7383,29 @@ void LLCallingCardBridge::refreshFolderViewItem()
 
 void LLCallingCardBridge::checkSearchBySuffixChanges()
 {
-    if (!mDisplayName.empty())
+    if (!mSearchableName.empty())
     {
-        // changes in mDisplayName are processed by rename function and here it will be always same
+        LLViewerInventoryItem* item = getItem();
+        if (!item)
+        {
+            // checkSearchBySuffixChanges is only used by friend list
+            // so if item is not found, we removed the calling card or
+            // are no longer friends.
+            mSearchableName.clear();
+            return;
+        }
+
+        // changes in display name are processed by rename function and here it will be always same
         // suffixes are also of fixed length, and we are processing change of one at a time,
         // so it should be safe to use length (note: mSearchableName is capitalized)
-        auto old_length = mSearchableName.length();
-        auto new_length = mDisplayName.length() + getLabelSuffix().length();
+        size_t old_length = mSearchableName.length();
+        const std::string& display_name = item->getName();
+        size_t new_length = display_name.length() + getLabelSuffix().length();
         if (old_length == new_length)
         {
             return;
         }
-        mSearchableName.assign(mDisplayName);
+        mSearchableName.assign(display_name);
         mSearchableName.append(getLabelSuffix());
         LLStringUtil::toUpper(mSearchableName);
         if (new_length<old_length)
@@ -8028,8 +8107,8 @@ void LLObjectBridge::performAction(LLInventoryModel* model, std::string action)
         if(item && gInventory.isObjectDescendentOf(object_id, gInventory.getRootFolderID()))
         {
             // <FS> Firestorm's replace on double click
-            // static LLCachedControl<bool> replace_item(gSavedSettings, "InventoryAddAttachmentBehavior", false);
-            // rez_attachment(item, NULL, ("attach" == action) ? replace_item() : true); // Replace if "Wear"ing.
+            //static LLCachedControl<U32> add_attachment_behavior(gSavedSettings, "InventoryAddAttachmentBehavior", 0);
+            //rez_attachment(item, NULL, ("attach" == action) ? (add_attachment_behavior() == 1) : true); // Replace if "Wear"ing.
             static LLCachedControl<bool> replace_item(gSavedSettings, "FSDoubleClickAddInventoryObjects", false);
             rez_attachment(item, NULL, ("attach" == action) ? !replace_item : true); // Replace if "Wear"ing.
             // </FS>
@@ -8382,7 +8461,7 @@ bool LLObjectBridge::renameItem(const std::string& new_name)
         new_item->updateServer(false);
         model->updateItem(new_item);
         model->notifyObservers();
-        buildDisplayName();
+        buildSearchableName();
 
         if (isAgentAvatarValid())
         {
@@ -8404,6 +8483,15 @@ bool LLObjectBridge::renameItem(const std::string& new_name)
 // +=================================================+
 // |        LLLSLTextBridge                          |
 // +=================================================+
+
+LLUIImagePtr LLLSLTextBridge::getIcon() const
+{
+    // Pass the item's flags so the script subtype (e.g. SST_LUA) is honored
+    // and the correct icon (Inv_Script vs Inv_Script_Luau) is selected.
+    LLInventoryItem* item = getItem();
+    U32 misc_flag = item ? item->getFlags() : 0;
+    return LLInventoryIcon::getIcon(LLAssetType::AT_LSL_TEXT, LLInventoryType::IT_LSL, misc_flag, false);
+}
 
 void LLLSLTextBridge::openItem()
 {
@@ -9296,8 +9384,8 @@ void LLObjectBridgeAction::attachOrDetach()
     else
     {
         // <FS:Ansariel> Double-click add/replace option
-        //static LLCachedControl<bool> inventory_linking(gSavedSettings, "InventoryAddAttachmentBehavior", false);
-        //LLAppearanceMgr::instance().wearItemOnAvatar(mUUID, true, inventory_linking()); // Don't replace if adding.
+        //static LLCachedControl<U32> add_attachment_behavior(gSavedSettings, "InventoryAddAttachmentBehavior", 0);
+        //LLAppearanceMgr::instance().wearItemOnAvatar(mUUID, true, add_attachment_behavior() == 1); // Don't replace if adding.
         static LLCachedControl<bool> replace_item(gSavedSettings, "FSDoubleClickAddInventoryObjects", false);
         LLAppearanceMgr::instance().wearItemOnAvatar(mUUID, true, !replace_item); // Don't replace if adding.
         // </FS>

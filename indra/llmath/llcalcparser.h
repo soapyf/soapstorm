@@ -31,6 +31,13 @@
 #define BOOST_SPIRIT_THREADSAFE
 #endif
 
+#include "llpreprocessor.h"
+
+#if defined(LL_GNUC) && GCC_VERSION >= 130000
+#   pragma GCC diagnostic push
+#   pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
+
 #include <boost/spirit/include/classic_attribute.hpp>
 #include <boost/spirit/include/classic_core.hpp>
 #include <boost/spirit/include/classic_error_handling.hpp>
@@ -38,6 +45,10 @@
 #include <boost/spirit/include/phoenix1_binders.hpp>
 #include <boost/spirit/include/classic_symbols.hpp>
 using namespace boost::spirit::classic;
+
+#if defined(LL_GNUC) && GCC_VERSION >= 130000
+#   pragma GCC diagnostic pop
+#endif
 
 #include "llcalc.h"
 #include "llmath.h"
@@ -202,7 +213,6 @@ private:
 
     LLCalc::calc_map_t* mConstants;
     LLCalc::calc_map_t* mVariables;
-//  LLCalc::calc_map_t* mUserVariables;
 
     F32&        mResult;
 };

@@ -6823,6 +6823,10 @@ version 2.0
         {   CreationDate    S32         }
         {   CRC             U32         }
     }
+    {
+        NewScriptInfo Variable
+        {   TemplateID      LLUUID      }
+    }
 }
 
 // Create inventory

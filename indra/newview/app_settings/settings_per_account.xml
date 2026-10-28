@@ -1563,6 +1563,80 @@
         <key>Value</key>
             <integer>1</integer>
         </map>
+    <key>GMDXLoadoutCategories</key>
+    <map>
+      <key>Comment</key>
+      <string>GunMetal-DX loadouts: the categories in slot order, separated by |. Each is a folder in Equipment; quick swap (Alt+1..4 by default) opens slots 1 to 4.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>String</string>
+      <key>Value</key>
+      <string>Layer 1|Layer 2|Layer 3|Utility</string>
+    </map>
+    <key>GMDXLoadoutWatchTags</key>
+    <map>
+      <key>Comment</key>
+      <string>GunMetal-DX weapon sorter: tags (comma separated, any case, e.g. [Ash]) a group puts on its weapons. An object or folder that arrives with one is offered for Equipment, or to replace an older version there. Empty: off.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>String</string>
+      <key>Value</key>
+      <string></string>
+    </map>
+    <key>GMDXFolderEquipment</key>
+    <map>
+      <key>Comment</key>
+      <string>Id of the inventory folder GunMetal-DX loadouts use as Equipment (shown like a system folder). Empty: found by name, or made, on first use.</string>
+      <key>HideFromEditor</key>
+      <integer>1</integer>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>String</string>
+      <key>Value</key>
+      <string></string>
+    </map>
+    <key>GMDXFolderLoadouts</key>
+    <map>
+      <key>Comment</key>
+      <string>Id of the inventory folder GunMetal-DX loadouts use as Loadouts (shown like a system folder). Empty: found by name, or made, on first use.</string>
+      <key>HideFromEditor</key>
+      <integer>1</integer>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>String</string>
+      <key>Value</key>
+      <string></string>
+    </map>
+    <key>GMDXFolderOutdated</key>
+    <map>
+      <key>Comment</key>
+      <string>Id of the inventory folder GunMetal-DX loadouts use as Outdated (shown like a system folder). Empty: found by name, or made, on first use.</string>
+      <key>HideFromEditor</key>
+      <integer>1</integer>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>String</string>
+      <key>Value</key>
+      <string></string>
+    </map>
+    <key>GMDXLoadoutWorn</key>
+    <map>
+      <key>Comment</key>
+      <string>Folder id of the loadout last equipped (or saved from what is worn), in Loadouts.</string>
+      <key>HideFromEditor</key>
+      <integer>1</integer>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>String</string>
+      <key>Value</key>
+      <string></string>
+    </map>
     <key>FSCurrentAOState</key>
         <map>
             <key>Comment</key>

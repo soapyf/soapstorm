@@ -201,7 +201,7 @@ MASK LLKeyboardWin32::updateModifiers(const U32 mask)
 
 
 // mask is ignored, except for extended flag -- we poll the modifier keys for the other flags
-bool LLKeyboardWin32::handleKeyDown(const U16 key, MASK mask)
+bool LLKeyboardWin32::handleKeyDown(const LLKeyboard::NATIVE_KEY_TYPE key, MASK mask)
 {
     KEY     translated_key;
     U32     translated_mask;
@@ -218,7 +218,7 @@ bool LLKeyboardWin32::handleKeyDown(const U16 key, MASK mask)
 }
 
 // mask is ignored, except for extended flag -- we poll the modifier keys for the other flags
-bool LLKeyboardWin32::handleKeyUp(const U16 key, MASK mask)
+bool LLKeyboardWin32::handleKeyUp(const LLKeyboard::NATIVE_KEY_TYPE key, MASK mask)
 {
     KEY     translated_key;
     U32     translated_mask;

@@ -251,13 +251,7 @@ elseif(LINUX)
     # have to deal with
     if (NOT USESYSTEMLIBS)
       set(release_files
-        #libdb-5.1.so
         libopenal.so
-        #libopenjp2.so
-        libuuid.so.16
-        libuuid.so.16.0.22
-        #libfontconfig.so.1.10.1 # <FS:PC> fontconfig and freetype should be taken from the
-        #libfontconfig.so.1      #         user's system, and not be packaged with the viewer
         libaprutil-1.so.0
         libapr-1.so.0
        )
@@ -269,16 +263,10 @@ elseif(LINUX)
 
      if( USE_AUTOBUILD_3P )
          list( APPEND release_files
-
-
-                 #libopenjp2.so
-                 libuuid.so.16
-                 libuuid.so.16.0.22
-
-
-                 libgmodule-2.0.a
-                 libgobject-2.0.a
-                 )
+                libSDL3.so
+                libSDL3.so.0
+                libSDL3.so.0.2.24
+                )
      endif()
 
     if (TARGET ll::fmodstudio)

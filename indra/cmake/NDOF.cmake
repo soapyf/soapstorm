@@ -19,7 +19,12 @@ if (NDOF)
       ndofdev
       PATHS "${ARCH_PREBUILT_DIRS_RELEASE}" REQUIRED NO_DEFAULT_PATH)
 
-  target_link_libraries(ll::ndof INTERFACE ${NDOF_LIBRARY})
+  if (LINUX)
+    include(SDL3)
+    target_link_libraries(ll::ndof INTERFACE ${NDOF_LIBRARY} ll::SDL3)
+  else()
+    target_link_libraries(ll::ndof INTERFACE ${NDOF_LIBRARY})
+  endif()
 
   if (LINUX)
     # open-libndofdev is built against SDL3, so it needs SDL3's symbols.

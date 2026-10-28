@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- <GMDX> Offers to sort a newly received weapon into Equipment (gmdxweaponsorter.cpp) -->
+<floater
+ positioning="centered"
+ can_minimize="false"
+ can_resize="false"
+ height="150"
+ layout="topleft"
+ name="floater_gmdx_weapon_sort"
+ save_rect="true"
+ single_instance="true"
+ title="NEW WEAPON"
+ width="440">
+    <string name="update_of">Looks like an update of [OLD] in [WHERE]. Replace moves the old one to Outdated and puts the new one in its place in your loadouts.</string>
+    <string name="move_into">Move it into your equipment:</string>
+    <string name="no_group">(no group)</string>
+    <string name="more">[COUNT] waiting</string>
+    <text
+     name="item_text"
+     type="string"
+     length="1"
+     font="SansSerifBold"
+     follows="left|top|right"
+     layout="topleft"
+     left="10"
+     top="8"
+     right="-10"
+     height="16"
+     use_ellipses="true" />
+    <text
+     name="match_text"
+     type="string"
+     length="1"
+     follows="left|top|right"
+     layout="topleft"
+     left="10"
+     top="28"
+     right="-10"
+     height="44"
+     wrap="true" />
+    <combo_box
+     name="cat_combo"
+     follows="left|top"
+     layout="topleft"
+     left="10"
+     top="80"
+     height="23"
+     width="160"
+     tool_tip="Category (layer)" />
+    <combo_box
+     name="group_combo"
+     follows="left|top"
+     layout="topleft"
+     left_pad="8"
+     top_delta="0"
+     height="23"
+     width="180"
+     tool_tip="Group folder inside the category" />
+    <text
+     name="count_text"
+     type="string"
+     length="1"
+     follows="left|bottom"
+     layout="topleft"
+     left="10"
+     bottom="-12"
+     height="16"
+     width="84" />
+    <button
+     name="table_btn"
+     follows="left|bottom"
+     layout="topleft"
+     left="96"
+     bottom="-8"
+     height="23"
+     width="54"
+     label="Table..."
+     tool_tip="Sort everything waiting in the importer's table instead, one row per weapon with its versions grouped" />
+    <button
+     name="skip_btn"
+     follows="right|bottom"
+     layout="topleft"
+     right="-10"
+     bottom="-8"
+     height="23"
+     width="80"
+     label="Not now"
+     tool_tip="Leave it where it is (Categories > Scan now asks again)" />
+    <button
+     name="keep_btn"
+     follows="right|bottom"
+     layout="topleft"
+     right="-96"
+     bottom="-8"
+     height="23"
+     width="86"
+     label="Keep both"
+     tool_tip="Put it beside the old one; loadouts keep the old one" />
+    <button
+     name="replace_btn"
+     follows="right|bottom"
+     layout="topleft"
+     right="-188"
+     bottom="-8"
+     height="23"
+     width="100"
+     label="Replace old"
+     tool_tip="New one takes the old one's place; old one goes to Outdated" />
+    <button
+     name="move_btn"
+     follows="right|bottom"
+     layout="topleft"
+     right="-96"
+     bottom="-8"
+     height="23"
+     width="86"
+     label="Move"
+     tool_tip="Move it into the chosen category and group" />
+</floater>

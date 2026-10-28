@@ -690,6 +690,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           sparse-checkout: |
+            requirements.txt
             fsutils/download_list.py
             fsutils/build_config.json
             fsutils/build_config.py
@@ -697,8 +698,13 @@ jobs:
           ref: ${{ github.head_ref || github.ref_name || 'master' }}
           fetch-depth: 1
 
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
       - name: Install python requirements
-        run: pip install --break-system-packages discord-webhook pytz requests || pip install discord-webhook pytz requests
+        run: python -m pip install -r requirements.txt
 
       - name: Download artifacts
         uses: actions/download-artifact@v8

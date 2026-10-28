@@ -344,13 +344,13 @@ void LLInventoryGalleryContextMenu::doToSelected(const LLSD& userdata)
     }
     else if ("copy_slurl" == action)
     {
-        boost::function<void(LLLandmark*)> copy_slurl_cb = [](LLLandmark* landmark)
+        std::function<void(LLLandmark*)> copy_slurl_cb = [](LLLandmark* landmark)
         {
             LLVector3d global_pos;
             landmark->getGlobalPos(global_pos);
             if (!global_pos.isExactlyZero())
             {
-                boost::function<void(std::string& slurl)> copy_slurl_to_clipboard_cb = [](const std::string& slurl)
+                std::function<void(std::string& slurl)> copy_slurl_to_clipboard_cb = [](const std::string& slurl)
                 {
                     // <FS:Zi> FIRE-31645 - Copy SLURL can fail, let the user know
                     if (slurl.empty())

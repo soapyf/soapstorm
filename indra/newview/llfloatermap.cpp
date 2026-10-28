@@ -44,6 +44,8 @@
 #include "lltextbox.h"
 #include "llfloaterworldmap.h"
 #include "llagent.h"
+#include "gmdxminimapcompass.h" // <GMDX>
+#include "llfocusmgr.h" // <GMDX>
 
 //
 // Constants
@@ -130,6 +132,27 @@ bool LLFloaterMap::postBuild()
     // keep onscreen
     gFloaterView->adjustToFitScreen(this, false);
 
+    // <GMDX> Show Whole Region keeps the mini-map square: squared when it is turned on, and when
+    // the compass style or the rotation changes (the heading tape adds its strip above the map)
+    mWholeRegionConn = gSavedSettings.getControl("GMDXMiniMapWholeRegion")->getSignal()->connect(
+        [this](LLControlVariable*, const LLSD& value, const LLSD&)
+        {
+            if (value.asBoolean())
+            {
+                makeSquare();
+            }
+        });
+    auto resquare = [this](LLControlVariable*, const LLSD&, const LLSD&)
+    {
+        if (gSavedSettings.getBOOL("GMDXMiniMapWholeRegion"))
+        {
+            makeSquare();
+        }
+    };
+    mCompassStyleConn = gSavedSettings.getControl("GMDXMiniMapCompassStyle")->getSignal()->connect(resquare);
+    mRotateConn = gSavedSettings.getControl("MiniMapRotate")->getSignal()->connect(resquare);   // (the tape is north-up only)
+    // </GMDX>
+
     return true;
 }
 
@@ -208,7 +231,7 @@ void LLFloaterMap::setDirectionPos(LLTextBox *text_box, F32 rotation)
 
 void LLFloaterMap::updateMinorDirections()
 {
-    if (mTextBoxNorthEast == NULL)
+    if (mTextBoxNorthEast == NULL || mDirectionsHidden) // <GMDX> hidden in Show Whole Region
     {
         return;
     }
@@ -223,9 +246,126 @@ void LLFloaterMap::updateMinorDirections()
     mTextBoxSouthEast->setVisible(show_minors);
 }
 
+// <GMDX> The floater-edge direction letters; hidden in Show Whole Region, whose compass
+// (gmdxminimapcompass.h) draws its own.
+void LLFloaterMap::setDirectionsVisible(bool visible)
+{
+    mDirectionsHidden = !visible;
+    mTextBoxNorth->setVisible(visible);
+    mTextBoxEast->setVisible(visible);
+    mTextBoxWest->setVisible(visible);
+    mTextBoxSouth->setVisible(visible);
+    if (visible)
+    {
+        updateMinorDirections();
+    }
+    else
+    {
+        mTextBoxNorthEast->setVisible(false);
+        mTextBoxNorthWest->setVisible(false);
+        mTextBoxSouthWest->setVisible(false);
+        mTextBoxSouthEast->setVisible(false);
+    }
+}
+
+// Squares the floater (Show Whole Region shows a square region, plus the heading tape's strip),
+// keeping its top edge and the side nearer its parent's edge where they are.
+void LLFloaterMap::makeSquare()
+{
+    if (isMinimized())
+    {
+        return;
+    }
+    LLRect rect = getRect();
+    const S32 extra = (S32)GMDXMinimapCompass::getTopReserve() + MAP_PADDING_TOP + MAP_PADDING_BOTTOM - MAP_PADDING_LEFT - MAP_PADDING_RIGHT;
+    const S32 side = llmax(llmin(rect.getWidth(), rect.getHeight() - extra), getMinWidth(), getMinHeight());
+    const LLView* parent = getParent();
+    const bool keep_right = parent && rect.getCenterX() > parent->getRect().getWidth() / 2;
+    if (keep_right)
+    {
+        rect.mLeft = rect.mRight - side;
+    }
+    else
+    {
+        rect.mRight = rect.mLeft + side;
+    }
+    rect.mBottom = rect.mTop - side - extra;
+    setShape(rect, true);
+}
+
+// While the user drags a resize handle the floater resizes freely (the map stays square, centred
+// inside it), and when the drag ends it snaps to the map's size, anchored at the edges the drag
+// did not move. (Squaring on every resize event fights the resize handle: it carries the
+// difference into the next event, and the size flips between two values while dragging.)
+bool LLFloaterMap::isUserResizing() const
+{
+    const LLView* capture = dynamic_cast<const LLView*>(gFocusMgr.getMouseCapture());
+    return capture && capture->hasAncestor(this);
+}
+
+void LLFloaterMap::handleReshape(const LLRect& new_rect, bool by_user)
+{
+    static LLCachedControl<bool> whole_region(gSavedSettings, "GMDXMiniMapWholeRegion", false);
+    if (by_user && whole_region && !isMinimized() && isUserResizing() && mDragStartRect.isEmpty())
+    {
+        mDragStartRect = getRect();   // a drag begins: remember where it started (see draw)
+    }
+    LLFloater::handleReshape(new_rect, by_user);
+}
+
+// After a resize drag in Show Whole Region: fit the floater to the map's square, keeping the edges
+// the drag did not move.
+void LLFloaterMap::fitAfterResize()
+{
+    const LLRect start = mDragStartRect;
+    mDragStartRect = LLRect();
+    if (isMinimized())
+    {
+        return;
+    }
+    LLRect rect = getRect();
+    const S32 extra = (S32)GMDXMinimapCompass::getTopReserve() + MAP_PADDING_TOP + MAP_PADDING_BOTTOM - MAP_PADDING_LEFT - MAP_PADDING_RIGHT;
+    const S32 side = llmax(llmin(rect.getWidth(), rect.getHeight() - extra), getMinWidth(), getMinHeight());
+    if (rect.getWidth() == side && rect.getHeight() == side + extra)
+    {
+        return;
+    }
+    if (rect.mLeft != start.mLeft && rect.mRight == start.mRight)
+    {
+        rect.mLeft = rect.mRight - side;
+    }
+    else
+    {
+        rect.mRight = rect.mLeft + side;
+    }
+    if (rect.mTop != start.mTop && rect.mBottom == start.mBottom)
+    {
+        rect.mTop = rect.mBottom + side + extra;
+    }
+    else
+    {
+        rect.mBottom = rect.mTop - side - extra;   // the top stays when neither or both moved
+    }
+    setShape(rect, false);
+}
+// </GMDX>
+
 // virtual
 void LLFloaterMap::draw()
 {
+    // <GMDX> Show Whole Region: a resize drag that just ended snaps the floater to the map, and
+    // the map's compass replaces the direction letters
+    if (!mDragStartRect.isEmpty() && !isUserResizing())
+    {
+        fitAfterResize();
+    }
+    if (mMap->isWholeRegion() != mDirectionsHidden)
+    {
+        setDirectionsVisible(!mMap->isWholeRegion());
+    }
+    if (!mDirectionsHidden) // (hidden letters are not moved)
+    {
+    // </GMDX>
     F32 rotation = 0;
 
     static LLUICachedControl<bool> rotate_map("MiniMapRotate", true);
@@ -244,6 +384,7 @@ void LLFloaterMap::draw()
     setDirectionPos( mTextBoxNorthWest, rotation + F_PI_BY_TWO +        F_PI_BY_TWO / 2);
     setDirectionPos( mTextBoxSouthWest, rotation + F_PI +               F_PI_BY_TWO / 2);
     setDirectionPos( mTextBoxSouthEast, rotation + F_PI + F_PI_BY_TWO + F_PI_BY_TWO / 2);
+    } // <GMDX>
 
     // Note: we can't just gAgent.check cameraMouselook() because the transition states are wrong.
     if(gAgentCamera.cameraMouselook())
