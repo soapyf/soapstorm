@@ -522,7 +522,7 @@ bool LLTextureCacheRemoteWorker::doRead()
         {
             // No body, we're done.
             mDataSize = llmax(TEXTURE_CACHE_ENTRY_SIZE - mOffset, 0);
-            LL_DEBUGS() << "No body file for: " << file_path << LL_ENDL;
+            LL_DEBUGS() << "No body file for: " << filename << LL_ENDL;
         }
         // Nothing else to do at that point...
         done = true;
