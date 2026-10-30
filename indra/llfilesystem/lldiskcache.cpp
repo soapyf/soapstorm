@@ -34,11 +34,27 @@
 #include "llapp.h"
 #include "llassettype.h"
 #include "lldir.h"
+#include "fsyspath.h"
 #include <boost/filesystem.hpp>
 #include <chrono>
 
 #include "lldiskcache.h"
 #include "ssstrata.h"   // <SS:Nexii/> Strata asset volumes
+
+// <SS:Nexii> purge() keeps every path it collects as UTF-8, because the packer opens them through LLFile, which takes UTF-8. boost's path::string() returns the ANSI code page on Windows instead, so on a profile such as C:\Users\Jos\u00e9 the packer could not open a single loose file and Strata silently never packed anything. These two helpers are the only places a purge path crosses between the two encodings.
+namespace
+{
+    std::string ss_utf8_path(const boost::filesystem::path& p)
+    {
+        return fsyspath(std::filesystem::path(p.native())).string();
+    }
+
+    boost::filesystem::path ss_native_path(const std::string& utf8)
+    {
+        return boost::filesystem::path(fsyspath(utf8).native());
+    }
+}
+// </SS:Nexii>
 
  /**
   * The prefix inserted at the start of a cache file filename to
@@ -169,7 +185,7 @@ void LLDiskCache::purge()
             }
             if (boost::filesystem::is_regular_file(*iter, ec) && !ec.failed())
             {
-                const std::string file_path = (*iter).path().string();
+                const std::string file_path = ss_utf8_path((*iter).path());
                 if (file_path.find(CACHE_FILENAME_PREFIX) != std::string::npos)
                 {
                     // Both of these used to `continue` without advancing the iterator, so a single file whose size or timestamp could not be read spun this loop forever on the purge thread. Advancing first is what makes a per-file failure cost one file rather than the session.
@@ -263,10 +279,20 @@ void LLDiskCache::purge()
     const uintmax_t target_size = (uintmax_t)(mMaxSizeBytes * (mLowPercent / 100));
     LL_INFOS("LLDiskCache") << "Purging cache to a maximum of " << target_size << " bytes" << LL_ENDL;
 
+    // freed is what the budget no longer carries, which includes files that were already gone when we got to them. deleted_bytes and reclaimed_bytes are what this pass actually removed, so the summary never claims credit for a file somebody else deleted.
     uintmax_t freed = 0;
+    uintmax_t deleted_bytes = 0;
+    uintmax_t missing_bytes = 0;
+    uintmax_t reclaimed_bytes = 0;
     U32 del = 0;
     U32 skip = 0;
+    U32 failed = 0;
+    U32 missing = 0;
     U32 volumes_killed = 0;
+
+    // One byte per loose file, so the debug listing can say what happened to each one without keeping a second copy of every path.
+    enum : U8 { SS_PURGE_KEEP = 0, SS_PURGE_DELETE, SS_PURGE_FAILED, SS_PURGE_MISSING };
+    std::vector<U8> outcome(loose.size(), (U8)SS_PURGE_KEEP);
     size_t li = 0;
     bool first_reclaim = true;
     ESSStrataReclaimVerdict last_verdict = SSSTRATA_RECLAIM_NOT_NEEDED;
@@ -288,7 +314,7 @@ void LLDiskCache::purge()
             if (loose[li].mPinned)
             {
                 // A static asset is never dropped, and its timestamp is pushed forward so it sorts to the back next time rather than being re-examined at the head of every pass.
-                boost::filesystem::last_write_time(loose[li].mPath, std::time(nullptr), ec);
+                boost::filesystem::last_write_time(ss_native_path(loose[li].mPath), std::time(nullptr), ec);
                 ec.clear();
                 ++skip;
             }
@@ -309,6 +335,7 @@ void LLDiskCache::purge()
             if (last_verdict == SSSTRATA_RECLAIM_RAN)
             {
                 freed += (uintmax_t)got;
+                reclaimed_bytes += (uintmax_t)got;
                 ++volumes_killed;
                 asked_day = 0x10000u;   // the coldest volume is a different one now, so the same day is worth offering again
                 continue;
@@ -333,18 +360,30 @@ void LLDiskCache::purge()
         }
 
         SSStrataLooseFile& lf = loose[li];
-        boost::filesystem::remove(lf.mPath, ec);
+        const bool removed = boost::filesystem::remove(ss_native_path(lf.mPath), ec);
         if (ec.failed())
         {
+            // Locked or otherwise refused. The file is still on disk, so it stays in the budget and the drain moves on to the next candidate.
             LL_WARNS() << "Failed to delete cache file " << lf.mPath << ": " << ec.message() << LL_ENDL;
             ec.clear();
+            outcome[li] = SS_PURGE_FAILED;
+            ++failed;
+        }
+        else if (removed)
+        {
+            freed += lf.mSize;
+            deleted_bytes += lf.mSize;
+            outcome[li] = SS_PURGE_DELETE;
+            ++del;
         }
         else
         {
+            // Already gone - a concurrent remove got there between the scan and here. It no longer counts against the budget, but this pass did not delete it.
             freed += lf.mSize;
-            ++del;
+            missing_bytes += lf.mSize;
+            outcome[li] = SS_PURGE_MISSING;
+            ++missing;
         }
-        lf.mPath.clear();
         ++li;
     }
 
@@ -354,25 +393,51 @@ void LLDiskCache::purge()
     if (mEnableCacheDebugInfo)
     {
         // Logged afterwards so it does not affect the time measurement - logging thousands of file results can take hundreds of milliseconds.
-        for (const SSStrataLooseFile& lf : loose)
+        // The running total starts with any volume kills already applied, so the last line agrees with the governed size reported below.
+        uintmax_t detail_remaining = governed_total > reclaimed_bytes ? governed_total - reclaimed_bytes : 0;
+        for (size_t i = 0; i < loose.size(); ++i)
         {
             if (!LLApp::isRunning()) return;
 
-            const char* action = lf.mPacked ? "PACKED" : (lf.mPath.empty() ? "DELETE" : (lf.mPinned ? "STATIC" : "KEEP"));
+            const SSStrataLooseFile& lf = loose[i];
+            const char* action = "KEEP";
+            if (lf.mPacked)                             action = "PACKED";
+            else if (outcome[i] == SS_PURGE_DELETE)     action = "DELETE";
+            else if (outcome[i] == SS_PURGE_FAILED)     action = "FAILED";
+            else if (outcome[i] == SS_PURGE_MISSING)    action = "MISSING";
+            else if (lf.mPinned)                        action = "STATIC";
+
+            if (outcome[i] == SS_PURGE_DELETE || outcome[i] == SS_PURGE_MISSING)
+            {
+                detail_remaining -= llmin(detail_remaining, (uintmax_t)lf.mSize);
+            }
+
             std::ostringstream line;
-            line << action << "  " << lf.mTime << "  " << lf.mSize << "  " << (lf.mPath.empty() ? std::string("(deleted)") : lf.mPath);
+            line << action << "  " << lf.mTime << "  " << lf.mSize << "  " << lf.mPath
+                 << " (" << detail_remaining << "/" << mMaxSizeBytes << ")";
             LL_INFOS() << line.str() << LL_ENDL;
         }
     }
 
+    const size_t handled = (size_t)del + skip + failed + missing + packed_files;
     const uintmax_t newCacheSize = updateCacheSize(governed_total > freed ? governed_total - freed : 0);
     LL_INFOS("LLDiskCache") << "Total governed size after purge is " << newCacheSize << LL_ENDL;
     LL_INFOS("LLDiskCache") << "Cache purge took " << execute_time << " ms to execute for " << loose.size() << " loose files" << LL_ENDL;
-    LL_INFOS("LLDiskCache") << "Deleted: " << del << " files, killed: " << volumes_killed << " volumes, skipped (static): " << skip
-                            << ", kept: " << (loose.size() > (size_t)(del + skip + packed_files) ? loose.size() - (size_t)(del + skip + packed_files) : (size_t)0) << LL_ENDL;
-    LL_INFOS("LLDiskCache") << "Total of " << freed << " bytes removed." << LL_ENDL;
+    // This line's format is matched by the upstream tests in llfilesystem/tests, so the Strata-only figures go on a line of their own rather than into it.
+    LL_INFOS("LLDiskCache") << "Deleted: " << del << " Skipped: " << skip << " Kept: " << (loose.size() > handled ? loose.size() - handled : (size_t)0)
+                            << " Failed: " << failed << " Missing: " << missing << LL_ENDL;
+    if (missing)
+    {
+        LL_INFOS("LLDiskCache") << "Already absent files account for " << missing_bytes << " bytes." << LL_ENDL;
+    }
+    if (newCacheSize > target_size)
+    {
+        LL_DEBUGS("LLDiskCache") << "Purge target not reached; protected, locked or still-warm data remains." << LL_ENDL;
+    }
+    LL_INFOS("LLDiskCache") << "Total of " << (deleted_bytes + reclaimed_bytes) << " bytes removed." << LL_ENDL;
     if (strata)
     {
+        LL_INFOS("LLDiskCache") << "Strata: killed " << volumes_killed << " volumes (" << reclaimed_bytes << " bytes), " << packed_files << " files packed this pass" << LL_ENDL;
         LL_INFOS("LLDiskCache") << strata->metricsString() << LL_ENDL;
     }
 }
@@ -492,7 +557,7 @@ void LLDiskCache::clearCache()
         {
             if (boost::filesystem::is_regular_file(*iter, ec) && !ec.failed())
             {
-                if ((*iter).path().string().find(CACHE_FILENAME_PREFIX) != std::string::npos)
+                if (ss_utf8_path((*iter).path()).find(CACHE_FILENAME_PREFIX) != std::string::npos)
                 {
                     boost::filesystem::remove(*iter, ec);
                     if (ec.failed())
@@ -533,8 +598,9 @@ void LLDiskCache::removeOldVFSFiles()
         {
             if (boost::filesystem::is_regular_file(*iter, ec) && !ec.failed())
             {
-                if (((*iter).path().string().find(CACHE_FORMAT) != std::string::npos) ||
-                    ((*iter).path().string().find(DB_FORMAT) != std::string::npos))
+                const std::string file_name = ss_utf8_path((*iter).path());
+                if ((file_name.find(CACHE_FORMAT) != std::string::npos) ||
+                    (file_name.find(DB_FORMAT) != std::string::npos))
                 {
                     boost::filesystem::remove(*iter, ec);
                     if (ec.failed())
@@ -602,7 +668,7 @@ uintmax_t LLDiskCache::dirFileSize(const std::string& dir, bool force)
         {
             if (boost::filesystem::is_regular_file(*iter, ec) && !ec.failed())
             {
-                if ((*iter).path().string().find(CACHE_FILENAME_PREFIX) != std::string::npos)
+                if (ss_utf8_path((*iter).path()).find(CACHE_FILENAME_PREFIX) != std::string::npos)
                 {
                     uintmax_t file_size = boost::filesystem::file_size(*iter, ec);
                     if (!ec.failed())
