@@ -372,6 +372,15 @@ S32 LLFileSystem::tell() const
 S32 LLFileSystem::getSize() const
 {
     LL_PROFILE_ZONE_COLOR(tracy::Color::Gold); // <FS:Beq> measure cache performance
+    // <SS:Nexii> Strata - the size is a field of the index record, so this costs a hash lookup where the loose path costs two stats. getSize is called on every seek, so it is one of the hottest things in this file.
+    SSStrataStore* strata = SSStrataStore::live();
+    S32 packed_size = 0;
+    if (strata && strata->objectSize(mFileID, packed_size))
+    {
+        return packed_size;
+    }
+    // </SS:Nexii>
+
     return narrow(LLFile::size(mPath));
 }
 
@@ -397,8 +406,7 @@ bool LLFileSystem::rename(const LLUUID& new_id, const LLAssetType::EType new_typ
 bool LLFileSystem::remove() const
 {
     LL_PROFILE_ZONE_COLOR(tracy::Color::Gold); // <FS:Beq> measure cache performance
-    LLFile::remove(mPath);
-    return true;
+    return LLFileSystem::removeFile(mFileID, mFileType);
 }
 
 void LLFileSystem::updateFileAccessTime()
