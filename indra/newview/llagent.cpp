@@ -1289,6 +1289,14 @@ void LLAgent::setRegion(LLViewerRegion *regionp)
 
         // Pass new region along to metrics components that care about this level of detail.
         LLAppViewer::metricsUpdateRegion(regionp->getHandle());
+
+        const std::string& region_name = regionp->getName();
+        if (!region_name.empty() && gDebugInfo["CurrentRegion"].asString() != region_name)
+        {
+            LL_INFOS("LLViewerRegion") << "Entering region [" << region_name << "]" << LL_ENDL;
+            gDebugInfo["CurrentRegion"] = region_name;
+            LLAppViewer::instance()->writeDebugInfo(true, true);
+        }
     }
 
     mRegionp = regionp;

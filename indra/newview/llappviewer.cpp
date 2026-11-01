@@ -4244,7 +4244,7 @@ bool LLAppViewer::initWindow()
     return true;
 }
 
-void LLAppViewer::writeDebugInfo(bool isStatic)
+void LLAppViewer::writeDebugInfo(bool isStatic, bool async)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_LOGGING; // <FS:Beq/> improve instrumentation 
     // <FS:Beq> Linux snapshots report context outside the crash handler.
@@ -4270,6 +4270,27 @@ void LLAppViewer::writeDebugInfo(bool isStatic)
     debug_filename = ( isStatic
         ? getStaticDebugFile()
         : getDynamicDebugFile() );
+
+    if (async && !LLApp::isExiting() && !LLApp::isError())
+    {
+        auto general_queue = LL::WorkQueue::getInstance("General");
+        if (general_queue)
+        {
+            std::string filename = *debug_filename;
+            LLSD debug_snapshot = isStatic ? gDebugInfo : gDebugInfo["Dynamic"];
+            general_queue->post(
+                [filename = std::move(filename), debug_snapshot = std::move(debug_snapshot)]()
+                {
+                    LL_PROFILE_ZONE_NAMED_CATEGORY_LOGGING("writeDebugInfo - async");
+                    static std::mutex sWriteDebugMutex;
+                    std::lock_guard<std::mutex> lock(sWriteDebugMutex);
+                    LL_INFOS() << "Writing debug file " << filename << LL_ENDL;
+                    llofstream out_file(filename.c_str());
+                    LLSDSerialize::toPrettyXML(debug_snapshot, out_file);
+                });
+            return;
+        }
+    }
 
     LL_INFOS() << "Writing debug file " << *debug_filename << LL_ENDL;
     llofstream out_file(debug_filename->c_str());
@@ -4429,27 +4450,33 @@ LLSD LLAppViewer::getViewerInfo() const
     info["GRAPHICS_CARD_MEMORY_DETECTED"] = gGLManager.mVRAMDetected; // <FS:Beq/> allow detected hardware to be overridden.
 
 #if LL_WINDOWS
-    std::string drvinfo;
+    static std::string sCachedDrvInfo;
+    static bool sDrvInfoQueried = false;
+    if (!sDrvInfoQueried)
+    {
+        sDrvInfoQueried = true;
+        if (gGLManager.mIsIntel)
+        {
+            sCachedDrvInfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_INTEL);
+        }
+        else if (gGLManager.mIsNVIDIA)
+        {
+            sCachedDrvInfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_NVIDIA);
+        }
+        else if (gGLManager.mIsAMD)
+        {
+            sCachedDrvInfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_AMD);
+        }
 
-    if (gGLManager.mIsIntel)
-    {
-        drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_INTEL);
-    }
-    else if (gGLManager.mIsNVIDIA)
-    {
-        drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_NVIDIA);
-    }
-    else if (gGLManager.mIsAMD)
-    {
-        drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_AMD);
+        if (sCachedDrvInfo.empty())
+        {
+            // Generic/substitute windows driver? Unknown vendor?
+            LL_WARNS("DriverVersion") << "Vendor based driver search failed, searching for any driver" << LL_ENDL;
+            sCachedDrvInfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_ANY);
+        }
     }
 
-    if (drvinfo.empty())
-    {
-        // Generic/substitute windows driver? Unknown vendor?
-        LL_WARNS("DriverVersion") << "Vendor based driver search failed, searching for any driver" << LL_ENDL;
-        drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_ANY);
-    }
+    const std::string& drvinfo = sCachedDrvInfo;
 
     if (!drvinfo.empty())
     {
@@ -4925,7 +4952,7 @@ void LLAppViewer::writeSystemInfo()
         }
     }
 
-    writeDebugInfo(); // Save out debug_info.log early, in case of crash.
+    writeDebugInfo(true, true); // Save out debug_info.log early, in case of crash.
 }
 
 #ifdef LL_WINDOWS
@@ -7885,7 +7912,7 @@ void LLAppViewer::handleLoginComplete()
     LLScriptRecoverQueue::recoverIfNeeded();
 // [/SL:KB]
 
-    writeDebugInfo();
+    writeDebugInfo(true, true);
 
     // <FS:AO> Warn users cache purge will affect usability
     if (mPurgeCache)

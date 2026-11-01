@@ -126,9 +126,18 @@ namespace
 void newRegionEntry(LLViewerRegion& region)
 {
     LL_PROFILE_ZONE_SCOPED; // <FS:Beq/> improve instrumentation
-    LL_INFOS("LLViewerRegion") << "Entering region [" << region.getName() << "]" << LL_ENDL;
-    gDebugInfo["CurrentRegion"] = region.getName();
-    LLAppViewer::instance()->writeDebugInfo();
+    if (gAgent.getRegion() && gAgent.getRegion() != &region)
+    {
+        return;
+    }
+    const std::string& region_name = region.getName();
+    if (region_name.empty() || gDebugInfo["CurrentRegion"].asString() == region_name)
+    {
+        return;
+    }
+    LL_INFOS("LLViewerRegion") << "Entering region [" << region_name << "]" << LL_ENDL;
+    gDebugInfo["CurrentRegion"] = region_name;
+    LLAppViewer::instance()->writeDebugInfo(true, true);
 }
 
 } // anonymous namespace
@@ -1043,6 +1052,11 @@ void LLViewerRegion::setRegionNameAndZone   (const std::string& name_zone)
 
     LLStringUtil::stripNonprintable(mName);
     LLStringUtil::stripNonprintable(mZoning);
+
+    if (gAgent.getRegion() == this)
+    {
+        newRegionEntry(*this);
+    }
 }
 
 bool LLViewerRegion::canManageEstate() const

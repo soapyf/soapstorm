@@ -119,7 +119,7 @@ public:
     bool quitRequested() { return mQuitRequested; }
     bool logoutRequestSent() { return mLogoutRequestSent; }
     bool isSecondInstance() { return mSecondInstance; }
-    void writeDebugInfo(bool isStatic=true);
+    void writeDebugInfo(bool isStatic=true, bool async=false);
 
     void setServerReleaseNotesURL(const std::string& url) { mServerReleaseNotesURL = url; }
     LLSD getViewerInfo() const;

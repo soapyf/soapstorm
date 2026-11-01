@@ -3631,7 +3631,13 @@ bool LLViewerLODTexture::scaleDown()
     {
         if (ssBC7IsResident())
         {
-            ssBC7ServeRequest(this, mDesiredDiscardLevel);
+            const bool unfocused_visible = !gFocusMgr.getAppHasFocus() &&
+                                           gViewerWindow &&
+                                           !gViewerWindow->getWindow()->getMinimized();
+            if (!unfocused_visible && ssBC7ServeReadsInFlight() < 8)
+            {
+                ssBC7ServeRequest(this, mDesiredDiscardLevel);
+            }
         }
         return false;
     }

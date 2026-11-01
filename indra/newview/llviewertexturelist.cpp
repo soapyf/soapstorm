@@ -937,6 +937,8 @@ void LLViewerTextureList::clearFetchingRequests()
 }
 
 extern bool gCubeSnapshot;
+static U32 sLazyFlushCountThisFrame = 0;
+constexpr U32 MAX_LAZY_FLUSH_PER_FRAME = 32;
 
 void LLViewerTextureList::updateImageDecodePriority(LLViewerFetchedTexture* imagep, bool flush_images)
 {
@@ -1085,9 +1087,10 @@ void LLViewerTextureList::updateImageDecodePriority(LLViewerFetchedTexture* imag
     // Flush formatted images using a lazy flush
     //
     S32 num_refs = imagep->getNumRefs();
-    if (num_refs <= min_refs && flush_images)
+    if (num_refs <= min_refs)
     {
-        if (imagep->getLastReferencedTimer()->getElapsedTimeF32() > lazy_flush_timeout)
+        if (flush_images && sLazyFlushCountThisFrame < MAX_LAZY_FLUSH_PER_FRAME &&
+            imagep->getLastReferencedTimer()->getElapsedTimeF32() > lazy_flush_timeout)
         {
             // If the worker thread is actively holding the lock to decode, defer deletion
             if (imagep->hasFetcher() && LLAppViewer::getTextureFetch() && LLAppViewer::getTextureFetch()->isRequestLocked(imagep->getID()))
@@ -1098,6 +1101,7 @@ void LLViewerTextureList::updateImageDecodePriority(LLViewerFetchedTexture* imag
             }
 
             // Remove the unused image from the image list
+            ++sLazyFlushCountThisFrame;
             deleteImage(imagep);
             return;
         }
@@ -1351,6 +1355,7 @@ F32 LLViewerTextureList::updateImagesFetchTextures(F32 max_time)
     }
 
     LLTimer timer;
+    sLazyFlushCountThisFrame = 0;
 
     for (auto& imagep : entries)
     {

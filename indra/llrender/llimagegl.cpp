@@ -1407,6 +1407,7 @@ void LLImageGL::generateTextures(S32 numTextures, U32 *textures)
 
 constexpr int DELETE_DELAY = 3; // number of frames to wait before deleting textures
 static std::vector<U32> sFreeList[DELETE_DELAY+1];
+static std::vector<U32> sReadyFreeList;
 
 // static
 void LLImageGL::updateClass()
@@ -1419,9 +1420,19 @@ void LLImageGL::updateClass()
 
     if (!sFreeList[idx].empty())
     {
-        free_tex_images((GLsizei) sFreeList[idx].size(), sFreeList[idx].data());
-        glDeleteTextures((GLsizei)sFreeList[idx].size(), sFreeList[idx].data());
+        sReadyFreeList.insert(sReadyFreeList.end(), sFreeList[idx].begin(), sFreeList[idx].end());
         sFreeList[idx].resize(0);
+    }
+
+    if (!sReadyFreeList.empty())
+    {
+        constexpr size_t MAX_DELETE_PER_FRAME = 64;
+        const size_t delete_count = llmin(sReadyFreeList.size(), MAX_DELETE_PER_FRAME);
+        const size_t start_offset = sReadyFreeList.size() - delete_count;
+        U32* delete_ptr = sReadyFreeList.data() + start_offset;
+        free_tex_images((GLsizei)delete_count, delete_ptr);
+        glDeleteTextures((GLsizei)delete_count, delete_ptr);
+        sReadyFreeList.resize(start_offset);
     }
 }
 
