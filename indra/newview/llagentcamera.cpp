@@ -910,6 +910,14 @@ void LLAgentCamera::cameraOrbitAround(const F32 radians)
     }
     else if (mFocusOnAvatar && (mCameraMode == CAMERA_MODE_THIRD_PERSON || mCameraMode == CAMERA_MODE_FOLLOW))
     {
+        if (mSitCameraEnabled && isAgentAvatarValid() && gAgentAvatarp->isSitting())
+        {
+            // If sitting on a scripted camera object, gAgent.yaw() won't affect the view.
+            // Unlock camera from avatar so orbit offset can take effect.
+            setFocusOnAvatar(false, false);
+            cameraOrbitAround(radians);
+            return;
+        }
         gAgent.yaw(radians);
     }
     else
@@ -934,6 +942,14 @@ void LLAgentCamera::cameraOrbitOver(const F32 angle)
     }
     else if (mFocusOnAvatar && mCameraMode == CAMERA_MODE_THIRD_PERSON)
     {
+        if (mSitCameraEnabled && isAgentAvatarValid() && gAgentAvatarp->isSitting())
+        {
+            // If sitting on a scripted camera object, gAgent.pitch() won't affect the view.
+            // Unlock camera from avatar so orbit offset can take effect.
+            setFocusOnAvatar(false, false);
+            cameraOrbitOver(angle);
+            return;
+        }
         gAgent.pitch(angle);
     }
     else
@@ -941,12 +957,14 @@ void LLAgentCamera::cameraOrbitOver(const F32 angle)
         LLVector3 camera_offset_unit(mCameraFocusOffsetTarget);
         camera_offset_unit.normalize();
 
-        F32 angle_from_up = acos( camera_offset_unit * gAgent.getReferenceUpVector() );
+        const LLVector3 world_up = LLVector3::z_axis;
+        F32 dot = llclamp(camera_offset_unit * world_up, -1.f, 1.f);
+        F32 angle_from_up = acosf(dot);
 
         // Compute unrolled pitch axis perpendicular to line of sight and world up.
         // Using unrolled vector avoids gimbal lock / pitch twisting caused by post-roll LeftAxis.
-        LLVector3 unrolled_left = camera_offset_unit % gAgent.getReferenceUpVector();
-        if (unrolled_left.isNull() || !unrolled_left.isFinite())
+        LLVector3 unrolled_left = camera_offset_unit % world_up;
+        if (unrolled_left.magVecSquared() < 1e-6f || !unrolled_left.isFinite())
         {
             unrolled_left = LLVector3(0.f, 1.f, 0.f);
         }
@@ -982,8 +1000,9 @@ void LLAgentCamera::resetCameraOrbit()
     LLVector3 camera_offset_unit(mCameraFocusOffsetTarget);
     camera_offset_unit.normalize();
 
-    LLVector3 unrolled_left = camera_offset_unit % gAgent.getReferenceUpVector();
-    if (unrolled_left.isNull() || !unrolled_left.isFinite())
+    const LLVector3 world_up = LLVector3::z_axis;
+    LLVector3 unrolled_left = camera_offset_unit % world_up;
+    if (unrolled_left.magVecSquared() < 1e-6f || !unrolled_left.isFinite())
     {
         unrolled_left = LLVector3(0.f, 1.f, 0.f);
     }
@@ -3367,7 +3386,17 @@ void LLAgentCamera::setFocusOnAvatar(bool focus_on_avatar, bool animate, bool re
     else if (mFocusOnAvatar && !focus_on_avatar)
     {
         // keep camera focus point consistent, even though it is now unlocked
-        setFocusGlobal(gAgent.getPositionGlobal() + calcThirdPersonFocusOffset(), gAgent.getID());
+        if (mSitCameraEnabled && isAgentAvatarValid() && gAgentAvatarp->isSitting() && mSitCameraReferenceObject.notNull())
+        {
+            LLVector3 object_pos = mSitCameraReferenceObject->getRenderPosition();
+            LLQuaternion object_rot = mSitCameraReferenceObject->getRenderRotation();
+            LLVector3 target_pos = object_pos + (mSitCameraFocus * object_rot);
+            setFocusGlobal(gAgent.getPosGlobalFromAgent(target_pos), mSitCameraReferenceObject->getID());
+        }
+        else
+        {
+            setFocusGlobal(gAgent.getPositionGlobal() + calcThirdPersonFocusOffset(), gAgent.getID());
+        }
         mAllowChangeToFollow = false;
     }
 

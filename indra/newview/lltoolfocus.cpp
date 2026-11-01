@@ -509,15 +509,9 @@ bool LLToolCamera::handleHover(S32 x, S32 y, MASK mask)
             {
                 const F32 RADIANS_PER_PIXEL = 360.f * DEG_TO_RAD / gViewerWindow->getWorldViewWidthScaled();
 
-                const F32 rot = gAgentCamera.getRollAngle();
-                const F32 cos_r = cosf(rot);
-                const F32 sin_r = sinf(rot);
-                const F32 left_input = -(F32)dx * cos_r - (F32)dy * sin_r;
-                const F32 up_input   =  (F32)dx * sin_r - (F32)dy * cos_r;
-
-                if (left_input != 0.f)
+                if (dx != 0 && mOutsideSlopX)
                 {
-                    gAgentCamera.cameraOrbitAround( left_input * RADIANS_PER_PIXEL );
+                    gAgentCamera.cameraOrbitAround( -(F32)dx * RADIANS_PER_PIXEL );
                 }
 
                 const F32 IN_FACTOR = 0.99f;
@@ -526,7 +520,7 @@ bool LLToolCamera::handleHover(S32 x, S32 y, MASK mask)
                 {
                     if (mMouseSteering)
                     {
-                        gAgentCamera.cameraOrbitOver( up_input * RADIANS_PER_PIXEL );
+                        gAgentCamera.cameraOrbitOver( -(F32)dy * RADIANS_PER_PIXEL );
                     }
                     else
                     {
