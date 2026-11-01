@@ -28,6 +28,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fsyspath.h"
+// Portable filesystem timestamp conversion, including Apple's libc++.
+#include "fsfiletime.h"
 #include "llcallbacklist.h"
 #include "lleventtimer.h"
 #include "llmeshrepository.h"
@@ -842,13 +844,15 @@ bool LLLocalMeshFile::readLastModified(const std::string& filename, std::time_t&
         return false;
     }
 
-    llstat st;
-    if (LLFile::stat(filename, &st) == 0)
+    std::error_code ec;
+    auto file_time = std::filesystem::last_write_time(std::filesystem::path(fsyspath(filename)), ec);
+    if (ec)
     {
-        last_modified = st.st_mtime;
-        return true;
+        return false;
     }
-    return false;
+
+    last_modified = fs_file_time_to_time_t(file_time);
+    return true;
 }
 
 void LLLocalMeshFile::discoverLodFilenames(const std::array<std::string, LOCAL_NUM_LODS>& seed_filenames,

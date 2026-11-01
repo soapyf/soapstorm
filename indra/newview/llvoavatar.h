@@ -1195,7 +1195,7 @@ public:
     bool            isTyping() const { return mTyping; }
 private:
     bool            mVisibleChat = false;
-    bool            mVisibleTyping;
+    bool            mVisibleTyping = false;
 
     //--------------------------------------------------------------------
     // Lip synch morphs

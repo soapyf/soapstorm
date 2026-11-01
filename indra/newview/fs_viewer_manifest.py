@@ -24,6 +24,26 @@ class FSViewerManifest:
     def fs_is_avx2(self):
         return self.args['avx2'] == 'ON' 
 
+    def fs_mac_dmg_template(self):
+        """Select and validate the DMG artwork for this channel and flavor."""
+        prefix = 'firestormos' if self.fs_is_opensim() else 'firestorm'
+        template = os.path.join('installers', 'darwin',
+                                '%s-%s-dmg' % (prefix, self.channel_type()))
+        print("Trying template directory", template)
+        if not os.path.isdir(self.src_path_of(template)):
+            # Alpha, Manual and Profiling have no dedicated artwork. Use the
+            # release template for the same flavor, not the obsolete release-dmg.
+            template = os.path.join('installers', 'darwin', '%s-release-dmg' % prefix)
+            print("Not found, trying template directory", template)
+
+        missing = [self.src_path_of(os.path.join(template, name))
+                   for name in ('background.png', '_DS_Store', '_VolumeIcon.icns',
+                                'Applications-alias.r')
+                   if not os.path.isfile(self.src_path_of(os.path.join(template, name)))]
+        if missing:
+            raise FileNotFoundError("Missing macOS DMG template assets: " + ', '.join(missing))
+        return template
+
     def fs_splice_grid_substitution_strings( self, subst_strings ):
         ret = subst_strings
 
@@ -209,6 +229,14 @@ class FSViewerManifest:
         import subprocess
         from shutil import move
 
+        # bin/ also contains JSON, certificates, CEF data and plugin directories.
+        # dump_syms accepts ELF binaries, regardless of their filename suffix.
+        if not isfile(aFile):
+            return
+        with open(aFile, "rb") as binary:
+            if binary.read(4) != b"\x7fELF":
+                return
+
         dumpSym = join( self.args["build"], "..", "packages", "bin", "dump_syms" )
         if not isfile( dumpSym ):
             return
@@ -218,39 +246,27 @@ class FSViewerManifest:
             return
 
         symbolFile = aFile +".sym"
-
         try:
-            with open( symbolFile, "w") as outfile:
-                subprocess.call( [dumpSym, aFile ], stdout=outfile, stderr=subprocess.DEVNULL )
-        except Exception:
-            return
+            with open(symbolFile, "w") as outfile:
+                result = subprocess.run([dumpSym, aFile], stdout=outfile,
+                                        stderr=subprocess.PIPE, text=True)
+            if result.returncode:
+                raise RuntimeError("dump_syms failed for %s (exit %s): %s" %
+                                   (aFile, result.returncode, result.stderr.strip()))
+            if result.stderr:
+                print("dump_syms diagnostics for %s: %s" % (aFile, result.stderr.strip()))
 
-        if not isfile( symbolFile ):
-            return
-
-        try:
-            firstline = open( symbolFile ).readline().strip()
-        except Exception:
-            return
-
-        parts = firstline.split(" ")
-        if len(parts) == 5 and parts[0] == "MODULE":
-            module, os, bitness, hash, filename = parts
-            symbolDir = join( "symbols", filename, hash )
-            try:
-                makedirs( symbolDir )
-            except Exception:
-                pass
-            try:
-                move( symbolFile, symbolDir )
-            except Exception:
-                pass
-
-        if isfile( symbolFile ):
-            try:
-                remove( symbolFile )
-            except Exception:
-                pass
+            with open(symbolFile) as symbols:
+                header = symbols.readline().strip().split(" ", 4)
+            if len(header) != 5 or header[0] != "MODULE":
+                raise RuntimeError("dump_syms produced no valid MODULE record for %s" % aFile)
+            _, platform, bitness, module_id, filename = header
+            symbolDir = join("symbols", filename, module_id)
+            makedirs(symbolDir, exist_ok=True)
+            move(symbolFile, join(symbolDir, filename + ".sym"))
+        finally:
+            if isfile(symbolFile):
+                remove(symbolFile)
 
     def fs_save_breakpad_symbols(self, osname):
         from glob import glob
@@ -279,6 +295,6 @@ class FSViewerManifest:
             for a in self.args:
                 print("%s: %s" % (a, self.args[a]))
 
-            fTar = tarfile.open( symbolsName, "w:bz2")
-            fTar.add("symbols", arcname=".")
-            fTar.add( join( self.args["dest"], "build_data.json" ), arcname="build_data.json" )
+            with tarfile.open(symbolsName, "w:bz2") as fTar:
+                fTar.add("symbols", arcname=".")
+                fTar.add(join(self.args["dest"], "build_data.json"), arcname="build_data.json")
