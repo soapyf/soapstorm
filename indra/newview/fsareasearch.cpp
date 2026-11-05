@@ -2218,6 +2218,7 @@ bool FSPanelAreaSearchList::onContextMenuItemClick(const LLSD& userdata)
     case 'e': // edit
     case 'd': // delete
     case 'r': // return
+    case 'o': // o_return_separate
     {
         // select the objects first
         LLSelectMgr::getInstance()->deselectAll();
@@ -2230,7 +2231,7 @@ bool FSPanelAreaSearchList::onContextMenuItemClick(const LLSD& userdata)
             if (objectp)
             {
                 LLSelectMgr::getInstance()->selectObjectAndFamily(objectp);
-                if (c == 'r')
+                if (c == 'r' || c == 'o')
                 {
                     // need to set permissions for object return
                     LLSelectNode* node = LLSelectMgr::getInstance()->getSelection()->findNode(objectp);
@@ -2266,11 +2267,12 @@ bool FSPanelAreaSearchList::onContextMenuItemClick(const LLSD& userdata)
             handle_object_delete();
             break;
         case 'r': // return
+        case 'o': // o_return_separate
             if (RlvActions::isRlvEnabled() && !rlvCanDeleteOrReturn())
             {
                 break;
             }
-            handle_object_return();
+            handle_object_return(c == 'o');
             break;
         default:
             break;
@@ -2300,7 +2302,8 @@ void FSPanelAreaSearchList::touchObject(LLViewerObject* objectp)
 void FSPanelAreaSearchList::buyObject(FSObjectProperties& details, LLViewerObject* objectp)
 {
     LLSelectMgr::getInstance()->deselectAll();
-    LLSelectMgr::getInstance()->selectObjectAndFamily(objectp);
+    // FIRE-36992: Ignore the build selection filters (select only owned, movable or copyable objects), buying needs the selection
+    LLSelectMgr::getInstance()->selectObjectAndFamily(objectp, false, true);
 
     if (LLSelectNode* node = LLSelectMgr::getInstance()->getSelection()->findNode(objectp))
     {
@@ -2326,7 +2329,8 @@ void FSPanelAreaSearchList::sitOnObject(FSObjectProperties& details, LLViewerObj
     if ( (!RlvActions::isRlvEnabled()) || (RlvActions::canSit(objectp)) )
     {
         LLSelectMgr::getInstance()->deselectAll();
-        LLSelectMgr::getInstance()->selectObjectAndFamily(objectp);
+        // FIRE-36992: Ignore the build selection filters (select only owned, movable or copyable objects), sitting needs the selection
+        LLSelectMgr::getInstance()->selectObjectAndFamily(objectp, false, true);
         LLSelectNode* node = LLSelectMgr::getInstance()->getSelection()->findNode(objectp);
         if (node)
         {
