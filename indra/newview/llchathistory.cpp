@@ -189,6 +189,37 @@ public:
             LLFloaterSidePanelContainer::showPanel("people", "panel_people",
                 LLSD().with("people_panel_tab_name", "blocked_panel").with("blocked_to_select", getAvatarId()));
         }
+        else if (level == "block_group")
+        {
+            LLUUID owner_id = mObjectData["owner_id"].asUUID();
+            if (owner_id.notNull())
+            {
+                std::string group_name;
+                if (!gCacheName || !gCacheName->getGroupName(owner_id, group_name) || group_name.empty())
+                {
+                    group_name = LLTrans::getString("MuteGroup");
+                }
+                LLMute mute(owner_id, group_name, LLMute::GROUP);
+                LLMuteList::getInstance()->add(mute);
+
+                LLFloaterSidePanelContainer::showPanel("people", "panel_people",
+                    LLSD().with("people_panel_tab_name", "blocked_panel").with("blocked_to_select", owner_id));
+            }
+        }
+        else if (level == "unblock_group")
+        {
+            LLUUID owner_id = mObjectData["owner_id"].asUUID();
+            if (owner_id.notNull())
+            {
+                std::string group_name;
+                if (gCacheName)
+                {
+                    gCacheName->getGroupName(owner_id, group_name);
+                }
+                LLMute mute(owner_id, group_name, LLMute::GROUP);
+                LLMuteList::getInstance()->remove(mute);
+            }
+        }
         else if (level == "report_abuse")
         {
             std::string time_string;
@@ -256,6 +287,41 @@ public:
         }
     }
 
+    bool isGroupOwned()
+    {
+        if (mObjectData["group_owned"].asBoolean())
+        {
+            return true;
+        }
+        LLUUID owner_id = mObjectData["owner_id"].asUUID();
+        if (owner_id.isNull())
+        {
+            return false;
+        }
+        LLViewerObject* obj = gObjectList.findObject(getAvatarId());
+        if (obj && (obj->flagObjectGroupOwned() || obj->permGroupOwner()))
+        {
+            mObjectData["group_owned"] = true;
+            return true;
+        }
+        std::string name;
+        bool is_group = false;
+        if (gCacheName && gCacheName->getIfThere(owner_id, name, is_group))
+        {
+            if (is_group)
+            {
+                mObjectData["group_owned"] = true;
+            }
+            return is_group;
+        }
+        if (gAgent.isInGroup(owner_id))
+        {
+            mObjectData["group_owned"] = true;
+            return true;
+        }
+        return false;
+    }
+
     bool onObjectIconContextMenuItemVisible(const LLSD& userdata)
     {
         std::string level = userdata.asString();
@@ -266,6 +332,16 @@ public:
         else if (level == "not_blocked")
         {
             return !LLMuteList::getInstance()->isMuted(getAvatarId(), mFrom, LLMute::flagTextChat);
+        }
+        else if (level == "is_group_owned_not_blocked")
+        {
+            LLUUID owner_id = mObjectData["owner_id"].asUUID();
+            return isGroupOwned() && owner_id.notNull() && !LLMuteList::getInstance()->isMuted(owner_id, LLMute::flagTextChat);
+        }
+        else if (level == "is_group_owned_blocked")
+        {
+            LLUUID owner_id = mObjectData["owner_id"].asUUID();
+            return isGroupOwned() && owner_id.notNull() && LLMuteList::getInstance()->isMuted(owner_id, LLMute::flagTextChat);
         }
         else if (level == "obj_zoom_in")
         {
@@ -931,6 +1007,7 @@ public:
             payload["object_id"]    = chat.mFromID;
             payload["name"]         = chat.mFromName;
             payload["owner_id"]     = chat.mOwnerID;
+            payload["group_owned"]  = chat.mOwnerIsGroup;
             payload["slurl"]        = LLWeb::escapeURL(slurl);
 
             mObjectData = payload;

@@ -1035,9 +1035,10 @@ void LLMuteList::onAccountNameChanged(const LLUUID& id, const std::string& usern
         mute_set_t::iterator mute_it = mMutes.find(mute);
         if (mute_it != mMutes.end()
             && mute_it->mName != mute.mName
-            && mute_it->mType == LLMute::AGENT) // just in case, it is std::set, not map
+            && (mute_it->mType == LLMute::AGENT || mute_it->mType == LLMute::GROUP)) // just in case, it is std::set, not map
         {
             // existing mute, but name changed, copy data
+            mute.mType = mute_it->mType;
             mute.mFlags = mute_it->mFlags;
 
             // erase old variant

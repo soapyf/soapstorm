@@ -46,6 +46,28 @@
          function="ObjectIcon.Visible"
          parameter="is_blocked" />
     </menu_item_call>
+    <menu_item_call
+     label="Block All Objects Deeded to Group..."
+     layout="topleft"
+     name="Block Group Objects">
+        <menu_item_call.on_click
+         function="ObjectIcon.Action"
+         parameter="block_group" />
+        <menu_item_call.on_visible
+         function="ObjectIcon.Visible"
+         parameter="is_group_owned_not_blocked" />
+    </menu_item_call>
+    <menu_item_call
+     label="Unblock Deeded Objects from Group"
+     layout="topleft"
+     name="Unblock Group Objects">
+        <menu_item_call.on_click
+         function="ObjectIcon.Action"
+         parameter="unblock_group" />
+        <menu_item_call.on_visible
+         function="ObjectIcon.Visible"
+         parameter="is_group_owned_blocked" />
+    </menu_item_call>
     <menu_item_separator
      layout="topleft" />
     <menu_item_call

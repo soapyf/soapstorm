@@ -3432,6 +3432,26 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
         // object inspect for an object that is chatting with you
         LLSD args;
         chat.mOwnerID = owner_id;
+        if (chat.mSourceType == CHAT_SOURCE_OBJECT)
+        {
+            if (chatter)
+            {
+                chat.mOwnerIsGroup = chatter->flagObjectGroupOwned() || chatter->permGroupOwner();
+            }
+            else
+            {
+                std::string temp_name;
+                bool is_group = false;
+                if (gCacheName && gCacheName->getIfThere(owner_id, temp_name, is_group))
+                {
+                    chat.mOwnerIsGroup = is_group;
+                }
+                else if (gAgent.isInGroup(owner_id))
+                {
+                    chat.mOwnerIsGroup = true;
+                }
+            }
+        }
 
         // <FS:PP> FIRE-10178: Keyword Alerts in group IM do not work unless the group is in the foreground (notification on receipt of local chat)
         if (FSKeywords::getInstance()->chatContainsKeyword(chat, true))

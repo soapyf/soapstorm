@@ -1800,6 +1800,7 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
             if (!chat_from_system && nearby_chat)
             {
                 chat.mOwnerID = from_id;
+                chat.mOwnerIsGroup = from_group;
                 LLSD args;
                 args["slurl"] = location;
 

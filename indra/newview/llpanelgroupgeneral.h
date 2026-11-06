@@ -115,6 +115,7 @@ private:
     LLComboBox      *mComboActiveTitle;
     LLComboBox      *mComboMature;
     LLCheckBoxCtrl  *mCtrlReceiveGroupChat; // <exodus/>
+    LLCheckBoxCtrl  *mCtrlReceiveDeededChat;
 
     // Group nameplate tinting
     LLColorSwatchCtrl* mGroupColorSwatch { nullptr };

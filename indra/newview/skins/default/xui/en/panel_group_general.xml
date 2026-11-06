@@ -298,6 +298,17 @@ Hover your mouse over the options for more help.
          width="300" />
         <!-- </exodus> -->
 
+        <check_box
+         height="16"
+         font="SansSerifSmall"
+         label="Allow deeded objects to message me"
+         layout="topleft"
+         left="0"
+         name="receive_deeded_chat"
+         tool_tip="Sets whether you want to receive chat and messages from objects deeded to this group."
+         top_pad="5"
+         width="300" />
+
          <text
          name="active_title_label"
          left="0"

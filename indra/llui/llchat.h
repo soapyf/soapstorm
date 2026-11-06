@@ -89,6 +89,7 @@ public:
         mFromID(),
         mNotifId(),
         mOwnerID(),
+        mOwnerIsGroup(false),
         mSourceType(CHAT_SOURCE_AGENT),
         mChatType(CHAT_TYPE_NORMAL),
         mAudible(CHAT_AUDIBLE_FULLY),
@@ -111,6 +112,7 @@ public:
     LLUUID          mFromID;    // agent id or object id
     LLUUID          mNotifId;
     LLUUID          mOwnerID;
+    bool            mOwnerIsGroup;
     EChatSourceType mSourceType;
     EChatType       mChatType;
     EChatAudible    mAudible;
