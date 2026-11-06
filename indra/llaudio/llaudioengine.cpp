@@ -2235,3 +2235,14 @@ void LLAudioEngine::removeAudioData(const LLUUID& audio_uuid)
     }
 }
 // </FS:Ansariel>
+
+//
+// LLAudioBuffer implementation
+//
+
+
+LLAudioBuffer::LLAudioBuffer() :
+    mInUse(false),
+    mAudioDatap(nullptr)
+{
+}
