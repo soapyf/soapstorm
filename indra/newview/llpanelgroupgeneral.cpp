@@ -228,11 +228,16 @@ bool LLPanelGroupGeneral::postBuild()
     mCtrlReceiveDeededChat = getChild<LLCheckBoxCtrl>("receive_deeded_chat", recurse);
     if(mCtrlReceiveDeededChat)
     {
-        mCtrlReceiveDeededChat->setCommitCallback(onCommitUserOnly, this);
-        mCtrlReceiveDeededChat->setEnabled(data.mID.notNull());
-        if(data.mID.notNull())
+        mCtrlReceiveDeededChat->setCommitCallback(onCommitDeededChat, this);
+        mCtrlReceiveDeededChat->setVisible(true);
+        mCtrlReceiveDeededChat->setEnabled(mGroupID.notNull());
+        if(mGroupID.notNull())
         {
-            mCtrlReceiveDeededChat->set(!LLMuteList::getInstance()->isMuted(data.mID, LLMute::flagTextChat));
+            mCtrlReceiveDeededChat->set(!LLMuteList::getInstance()->isMuted(mGroupID, LLMute::flagTextChat));
+        }
+        else
+        {
+            mCtrlReceiveDeededChat->set(true);
         }
     }
 
@@ -330,6 +335,53 @@ void LLPanelGroupGeneral::onCommitUserOnly(LLUICtrl* ctrl, void* data)
     self->notifyObservers();
 }
 
+// static
+void LLPanelGroupGeneral::onCommitDeededChat(LLUICtrl* ctrl, void* data)
+{
+    LLPanelGroupGeneral* self = (LLPanelGroupGeneral*)data;
+    if (!self || !self->mCtrlReceiveDeededChat || self->mGroupID.isNull())
+    {
+        return;
+    }
+
+    bool allow = self->mCtrlReceiveDeededChat->get();
+    bool is_blocked = LLMuteList::getInstance()->isMuted(self->mGroupID, LLMute::flagTextChat);
+    if (!allow && !is_blocked)
+    {
+        std::string group_name;
+        if (!gCacheName || !gCacheName->getGroupName(self->mGroupID, group_name) || group_name.empty())
+        {
+            LLGroupMgrGroupData* gdatap = LLGroupMgr::getInstance()->getGroupData(self->mGroupID);
+            if (gdatap && !gdatap->mName.empty())
+            {
+                group_name = gdatap->mName;
+            }
+            else if (!self->mGroupName.empty())
+            {
+                group_name = self->mGroupName;
+            }
+            else
+            {
+                group_name = LLTrans::getString("MuteGroup");
+            }
+        }
+        LLMute mute(self->mGroupID, group_name, LLMute::GROUP);
+        LLMuteList::getInstance()->add(mute);
+    }
+    else if (allow && is_blocked)
+    {
+        std::string group_name;
+        if (gCacheName)
+        {
+            gCacheName->getGroupName(self->mGroupID, group_name);
+        }
+        LLMute mute(self->mGroupID, group_name, LLMute::GROUP);
+        LLMuteList::getInstance()->remove(mute);
+    }
+
+    self->mCtrlReceiveDeededChat->resetDirty();
+}
+
 
 // static
 void LLPanelGroupGeneral::onCommitEnrollment(LLUICtrl* ctrl, void* data)
@@ -406,9 +458,13 @@ void LLPanelGroupGeneral::draw()
 {
     LLPanelGroupTab::draw();
 
-    if (mCtrlReceiveDeededChat && !mChanged && mGroupID.notNull())
+    if (mCtrlReceiveDeededChat && mGroupID.notNull())
     {
-        mCtrlReceiveDeededChat->set(!LLMuteList::getInstance()->isMuted(mGroupID, LLMute::flagTextChat));
+        bool is_allowed = !LLMuteList::getInstance()->isMuted(mGroupID, LLMute::flagTextChat);
+        if (mCtrlReceiveDeededChat->get() != is_allowed)
+        {
+            mCtrlReceiveDeededChat->set(is_allowed);
+        }
     }
 
     // <FS:Ansariel> Re-add group member list on general panel
@@ -725,10 +781,11 @@ void LLPanelGroupGeneral::update(LLGroupChange gc)
 
     if (mCtrlReceiveDeededChat)
     {
-        mCtrlReceiveDeededChat->setVisible(is_member);
-        if (is_member)
+        mCtrlReceiveDeededChat->setVisible(true);
+        mCtrlReceiveDeededChat->setEnabled(mGroupID.notNull());
+        if (mGroupID.notNull())
         {
-            mCtrlReceiveDeededChat->setEnabled(mAllowEdit);
+            mCtrlReceiveDeededChat->set(!LLMuteList::getInstance()->isMuted(mGroupID, LLMute::flagTextChat));
         }
     }
 
@@ -811,8 +868,7 @@ void LLPanelGroupGeneral::updateChanged()
         mCtrlListGroup,
         mActiveTitleLabel,
         mComboActiveTitle,
-        mCtrlReceiveGroupChat, // <exodus/>
-        mCtrlReceiveDeededChat
+        mCtrlReceiveGroupChat // <exodus/>
     };
 
     mChanged = false;
@@ -924,8 +980,7 @@ void    LLPanelGroupGeneral::resetDirty()
         mCtrlListGroup,
         mActiveTitleLabel,
         mComboActiveTitle,
-        mCtrlReceiveGroupChat, // <exodus/>
-        mCtrlReceiveDeededChat
+        mCtrlReceiveGroupChat // <exodus/>
     };
 
     for( size_t i=0; i<LL_ARRAY_SIZE(check_list); i++ )
@@ -1015,11 +1070,16 @@ void LLPanelGroupGeneral::setGroupID(const LLUUID& id)
     mCtrlReceiveDeededChat = getChild<LLCheckBoxCtrl>("receive_deeded_chat");
     if (mCtrlReceiveDeededChat)
     {
-        if(data.mID.notNull())
+        mCtrlReceiveDeededChat->setVisible(true);
+        mCtrlReceiveDeededChat->setEnabled(mGroupID.notNull());
+        if(mGroupID.notNull())
         {
-            mCtrlReceiveDeededChat->set(!LLMuteList::getInstance()->isMuted(data.mID, LLMute::flagTextChat));
+            mCtrlReceiveDeededChat->set(!LLMuteList::getInstance()->isMuted(mGroupID, LLMute::flagTextChat));
         }
-        mCtrlReceiveDeededChat->setEnabled(data.mID.notNull());
+        else
+        {
+            mCtrlReceiveDeededChat->set(true);
+        }
     }
 
     mCtrlShowInGroupList->setEnabled(data.mID.notNull());
