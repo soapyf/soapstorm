@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- Region map capture: how high the map reaches, then Capture (llregionmapcapture.cpp; ported from GunMetal-DX, v0.3.0 cf5f1f4) -->
+<floater
+ positioning="centered"
+ can_minimize="false"
+ can_resize="false"
+ height="216"
+ layout="topleft"
+ name="floater_region_map_capture"
+ save_rect="true"
+ single_instance="true"
+ title="CAPTURE REGION MAP"
+ width="400">
+    <string name="reach">The map shows everything below [CEILING] m. You are at [ALT] m.</string>
+    <string name="reach_hills">The map shows everything below [CEILING] m (the region's highest hill). You are at [ALT] m.</string>
+    <text
+     name="intro_text"
+     type="string"
+     length="1"
+     follows="left|top|right"
+     layout="topleft"
+     left="10"
+     top="8"
+     right="-10"
+     height="30"
+     wrap="true">
+Height above you that the map includes. On the ground, 50 m clears most roofs and trees; in a skybox, lower it so the roof stays out.
+    </text>
+    <slider
+     name="ceiling_slider"
+     control_name="SLRegionMapCeilingOffset"
+     decimal_digits="0"
+     follows="left|top|right"
+     height="16"
+     increment="1"
+     initial_value="50"
+     label="Height above me (m)"
+     label_width="130"
+     layout="topleft"
+     left="10"
+     max_val="200"
+     min_val="0"
+     top_pad="8"
+     width="380" />
+    <text
+     name="reach_text"
+     type="string"
+     length="1"
+     follows="left|top|right"
+     layout="topleft"
+     left="10"
+     top_pad="10"
+     right="-10"
+     height="30"
+     wrap="true" />
+    <check_box
+     name="shadows_check"
+     control_name="SLRegionMapShadows"
+     follows="left|top"
+     height="16"
+     label="Shadows"
+     layout="topleft"
+     left="10"
+     top_pad="4"
+     width="380" />
+    <check_box
+     name="ocol_water_check"
+     control_name="SLRegionMapOcolWater"
+     follows="left|top"
+     height="16"
+     label="Map-style water (shaded by depth, not the in-world water)"
+     layout="topleft"
+     left="10"
+     top_pad="4"
+     width="380" />
+    <check_box
+     name="lossless_check"
+     control_name="SLRegionMapLossless"
+     follows="left|top"
+     height="16"
+     label="Full quality: exactly lossless (about 27 MB instead of 14 MB)"
+     layout="topleft"
+     left="10"
+     top_pad="4"
+     width="380" />
+    <button
+     name="capture_btn"
+     follows="right|bottom"
+     height="23"
+     label="Capture..."
+     layout="topleft"
+     right="-100"
+     bottom="-10"
+     width="85" />
+    <button
+     name="cancel_btn"
+     follows="right|bottom"
+     height="23"
+     label="Cancel"
+     layout="topleft"
+     right="-10"
+     bottom="-10"
+     width="85" />
+</floater>

@@ -35,6 +35,7 @@ uniform mat4 modelview_delta;  // should be transform from last camera space to 
 uniform mat4 inv_modelview_delta;
 
 vec4 getPositionWithDepth(vec2 pos_screen, float depth);
+vec3 getViewDir(vec3 pos);
 
 float random (vec2 uv)
 {
@@ -330,7 +331,8 @@ collectedColor = vec4(1, 0, 1, 1);
 
     float depth = -viewPos.z;
 
-    vec3 rayDirection = normalize(reflect(viewPos, normalize(n)));
+    vec3 viewDir = getViewDir(viewPos);
+    vec3 rayDirection = normalize(reflect(viewDir, normalize(n)));
 
     vec2 uv2 = tc * screen_res;
     float c = (uv2.x + uv2.y) * 0.125;
@@ -338,7 +340,7 @@ collectedColor = vec4(1, 0, 1, 1);
 
     vec2 screenpos = 1 - abs(tc * 2 - 1);
     float vignette = clamp((abs(screenpos.x) * abs(screenpos.y)) * 16,0, 1);
-    vignette *= clamp((dot(normalize(viewPos), n) * 0.5 + 0.5) * 5.5 - 0.8, 0, 1);
+    vignette *= clamp((dot(viewDir, n) * 0.5 + 0.5) * 5.5 - 0.8, 0, 1);
 
     float zFar = 128.0;
     vignette *= clamp(1.0+(viewPos.z/zFar), 0.0, 1.0);

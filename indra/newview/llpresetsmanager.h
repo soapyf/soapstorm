@@ -80,6 +80,7 @@ public:
     bool deletePreset(const std::string& subdirectory, std::string name);
     bool isCameraDirty();
     static void setCameraDirty(bool dirty);
+    static void setIgnoreChangeSignal(bool ignore) { mIgnoreChangedSignal = ignore; }
 
     void createCameraDefaultPresets();
 

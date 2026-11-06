@@ -85,7 +85,7 @@ bool gmdx_get_region_map_image(LLViewerRegion* regionp, std::function<void(LLPoi
 
     // A captured region map (gmdxregioncapture.h) wins over the server's tile while the mini-map
     // shows captured maps; the 4096 px PNG is decoded on a worker thread, done runs here later.
-    static LLCachedControl<bool> use_captured(gSavedSettings, "GMDXMinimapUseCapturedMaps", true);
+    static LLCachedControl<bool> use_captured(gSavedSettings, "SLRegionMapUseCaptured", true);
     if (use_captured && GMDXRegionCapture::loadCapturedImage(regionp, done))
     {
         return true;

@@ -28,6 +28,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llnetmap.h"
+#include "llminimapterrain.h"
 
 // Library includes (should move below)
 #include "indra_constants.h"
@@ -571,8 +572,19 @@ void LLNetMap::draw()
             else
             {
                 // Draw using texture.
-                gGL.getTexUnit(0)->bind(regionp->getLand().getSTexture());
-                drawMapQuad(left, bottom, right, top, 0.f, 0.f, 1.f, 1.f, mRadarRadius); // <GMDX> (cut to the radar's disc)
+                // LL's terrain composite with its water layer, or the map tile once loaded
+                // (SLMiniMapUseMapTile), instead of the map tile only (white while missing).
+                LLViewerTexture* water_tex = nullptr;
+                LLViewerTexture* land_tex = regionp->getLand().getMinimapTerrain().getTexture(water_tex);
+                for (LLViewerTexture* tex : { land_tex, water_tex })
+                {
+                    if (!tex)
+                    {
+                        continue;
+                    }
+                    gGL.getTexUnit(0)->bind(tex);
+                    drawMapQuad(left, bottom, right, top, 0.f, 0.f, 1.f, 1.f, mRadarRadius); // <GMDX> (cut to the radar's disc)
+                }
             }
             gGL.flush();
         }

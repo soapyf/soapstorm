@@ -26,25 +26,41 @@
 #include "gmdxregioncapture.h"
 
 #include "llagent.h"
+#include "llagentcamera.h"
 #include "llappviewer.h"
 #include "lldate.h"
 #include "lldir.h"
+#include "llenvironment.h"
 #include "llfile.h"
+#include "llfloaterpreference.h"
+#include "llfloaterreg.h"
 #include "llimagej2c.h"
 #include "llimagepng.h"
+#include "llmeshrepository.h"
 #include "llnotificationsutil.h"
+#include "llpresetsmanager.h"
 #include "llregionhandle.h"
 #include "llsdjson.h"
+#include "llstartup.h"
+#include "llsurface.h"
+#include "lltextbox.h"
+#include "lltexturefetch.h"
 #include "lluri.h"
+#include "llversioninfo.h"
+#include "llviewercamera.h"
 #include "llviewercontrol.h"
+#include "llviewerdisplay.h"
 #include "llviewermenufile.h"   // LLFilePickerReplyThread
 #include "llviewernetwork.h"
+#include "llviewerobjectlist.h"
 #include "llviewerregion.h"
 #include "llviewertexture.h"
+#include "llviewertexturelist.h"
 #include "llviewerwindow.h"
 #include "llwindow.h"
 #include "llworld.h"
 #include "llworldmap.h"
+#include "pipeline.h"
 #include "rlvactions.h"
 #include "workqueue.h"
 
@@ -53,8 +69,59 @@
 #include <map>
 #include <sstream>
 
+bool GMDXRegionCapture::sLodOn = false;
+F32  GMDXRegionCapture::sLodBox[4] = {0.f, 0.f, 0.f, 0.f};
+U32  GMDXRegionCapture::sLodEpoch = 0;
+
 namespace
 {
+constexpr S32 kMapSize       = 4096;   // output px (square)
+constexpr S32 kGuardPx       = 16;     // per tile side, rendered and cropped away
+inline F32 eyeAbove(F32)     { return 50.f; } // m above ceiling
+constexpr F32 kFloorMargin   = 2.f;    // m below the lowest land / water
+constexpr F32 kFarMargin     = 32.f;   // m past the farthest corner
+constexpr F32 kNetFarMax     = 512.f;  // the simulator's object range cap
+constexpr S32 kProbeSize     = 512;    // preparation render px
+constexpr F64 kProbeEvery    = 1.5;    // s
+constexpr F64 kMinPrepare    = 6.0;    // s before loading signals are believed
+constexpr F64 kSettleHold    = 5.0;    // s signals must hold
+constexpr S32 kMeshPendingOk = 2;
+constexpr S32 kTexPendingOk  = 8;
+constexpr F32 kSettleTimeout = 180.f;
+
+// Windows that snapshot settings and write the snapshot back as saved values:
+const char* openGraphicsWindow()
+{
+    static const char* const kNames[] = { "preferences", "performance", "save_pref_preset" };
+    for (const char* n : kNames)
+        if (LLFloaterReg::instanceVisible(n)) return n;
+    return nullptr;
+}
+
+// Overridden settings must not clear active graphics preset
+struct PresetsQuiet
+{
+    PresetsQuiet()  { if (LLPresetsManager::instanceExists()) LLPresetsManager::setIgnoreChangeSignal(true); }
+    ~PresetsQuiet() { if (LLPresetsManager::instanceExists()) LLPresetsManager::setIgnoreChangeSignal(false); }
+};
+
+S32 texturesUnsettled()
+{
+    if (LLTextureFetch* fetch = LLAppViewer::getTextureFetch())
+    {
+        return fetch->getNumHTTPRequests();
+    }
+    return 0;
+}
+
+enum class Stage { Idle, Confirm, Prepare, Render, Save };
+
+struct Override
+{
+    std::string name;
+    LLSD original, original_saved, value;
+};
+
 // A shared map file (exportMap / importMap): this line, one line of JSON (the sidecar's fields +
 // grid, region_grid_x / region_grid_y, payload "j2c" / "png", payload_size), then the image file.
 const std::string kShareMagic = "GMDXMAP1\n";
@@ -100,7 +167,502 @@ struct GMDXRegionCaptureState
     std::map<U64, MapTex> maps;
     F64 next_prune = 0.0;
 
+    Stage stage = Stage::Idle;
+    U64 handle = 0;
+    LLUUID region_id;
+    std::string region_name;
+    F32 width = 256.f;
+    F32 ceiling = 0.f, floor = 0.f;
+    F32 water = 0.f;
+    bool ocol_water = false;
+    bool shadows = true;
+    F32 far_needed = 0.f, far_reach = 0.f;
+    std::vector<Override> overrides;
+    F64 start = 0.0, settled_since = -1.0, next_probe = 0.0, count_at = 0.0, next_log = 0.0;
+    S32 count = -1;
+    U32 probes = 0;
+    bool timed_out = false;
+    S32 tiles = 4, tile_px = kMapSize / 4, next = 0;
+    U32 aa = 0;
+    F32 time = 0.f;
+    LLPointer<LLImageRaw> image;
+    LLNotificationPtr progress;
+    std::string stop_request;
+    bool far_capped_told = false;
+    S32 textures = 0;
+    F64 next_tex_scan = 0.0;
+
     static GMDXRegionCaptureState& get() { static GMDXRegionCaptureState s; return s; }
+
+    // ---- why a capture cannot run now ("" = it can) ----
+    static std::string blocked()
+    {
+        if (LLStartUp::getStartupState() < STATE_STARTED || gDisconnected || !gAgent.getRegion())
+            return "You need to be in a region.";
+        if (RlvActions::isRlvEnabled()
+            && (RlvActions::hasBehaviour(RLV_BHVR_SETSPHERE) || RlvActions::hasBehaviour(RLV_BHVR_SHOWMINIMAP)
+                || RlvActions::hasBehaviour(RLV_BHVR_SHOWLOC)
+                || RlvActions::hasBehaviour(RLV_BHVR_SETCAM_TEXTURES) || RlvActions::hasBehaviour(RLV_BHVR_SETCAM_AVDISTMAX)
+                || RlvActions::hasBehaviour(RLV_BHVR_SETCAM_ORIGINDISTMAX)))
+            return "Region maps are not available under your current RLV restrictions.";
+        if (openGraphicsWindow())
+            return "Close Preferences and the graphics settings windows first: they would save the capture's "
+                   "temporary settings as yours.";
+        return std::string();
+    }
+
+    static F32 farNeeded(const LLViewerRegion* region)
+    {
+        const LLVector3 o = region->getOriginAgent();
+        const LLVector3 from[2] = { gAgent.getPositionAgent(), gAgentCamera.getCameraPositionAgent() };
+        const F32 w = region->getWidth();
+        F32 d2 = 0.f;
+        for (const LLVector3& a : from)
+            for (int c = 0; c < 4; ++c)
+            {
+                const F32 dx = o.mV[VX] + ((c & 1) ? w : 0.f) - a.mV[VX];
+                const F32 dy = o.mV[VY] + ((c & 2) ? w : 0.f) - a.mV[VY];
+                d2 = llmax(d2, dx * dx + dy * dy);
+            }
+        return ceilf(sqrtf(d2) + kFarMargin);
+    }
+
+    static F32 netFarCap()
+    {
+        if (gSavedSettings.controlExists("SLNetDrawDistanceMax"))
+        {
+            const F32 s = gSavedSettings.getF32("SLNetDrawDistanceMax");
+            return s > 0.f ? llmin(s, kNetFarMax) : kNetFarMax;
+        }
+        return kNetFarMax;
+    }
+
+    void setOverride(const char* name, const LLSD& value)
+    {
+        LLControlVariablePtr c = gSavedSettings.getControl(name);
+        if (c.isNull() || llsd_equals(c->getValue(), value)) return;
+        overrides.push_back({ name, c->getValue(), c->getSaveValue(), value });
+        c->setValue(value, false);
+        overrides.back().value = c->getValue();
+    }
+
+    void restoreAll()
+    {
+        PresetsQuiet quiet;
+        for (auto it = overrides.rbegin(); it != overrides.rend(); ++it)
+        {
+            LLControlVariablePtr c = gSavedSettings.getControl(it->name);
+            if (c.isNull() || !llsd_equals(c->getValue(), it->value)) continue;
+            if (llsd_equals(it->original, it->original_saved))
+            {
+                c->setValue(it->original, true);
+            }
+            else
+            {
+                if (!llsd_equals(c->getSaveValue(), it->original_saved)) c->setValue(it->original_saved, true);
+                c->setValue(it->original, false);
+            }
+        }
+        if (!overrides.empty()) LL_INFOS("RegionMap") << "restored " << overrides.size() << " settings" << LL_ENDL;
+        overrides.clear();
+        if (GMDXRegionCapture::sLodOn) ++GMDXRegionCapture::sLodEpoch;
+        GMDXRegionCapture::sLodOn = false;
+    }
+
+    void applyOverrides()
+    {
+        PresetsQuiet quiet;
+        if (far_needed > gSavedSettings.getF32("RenderFarClip")) setOverride("RenderFarClip", LLSD((F64)far_needed));
+        setOverride("SceneLoadFrontPixelThreshold", LLSD(0.0));
+        setOverride("SceneLoadRearPixelThreshold", LLSD(0.0));
+        setOverride("RenderTerrainLODFactor", LLSD(4.0));
+        setOverride("RenderTreeLODFactor", LLSD(2.0));
+        setOverride("RenderDeferredSSAO", LLSD(false));
+        setOverride("RenderScreenSpaceReflections", LLSD(false));
+        setOverride("RenderDepthOfField", LLSD(false));
+        setOverride("RenderGlow", LLSD(false));
+        if (!shadows)
+        {
+            setOverride("RenderShadowDetail", LLSD(0));
+        }
+        else
+        {
+            if (gSavedSettings.getS32("RenderShadowDetail") < 1) setOverride("RenderShadowDetail", LLSD(1));
+            if (gSavedSettings.getU32("RenderShadowResolution") < 2048) setOverride("RenderShadowResolution", LLSD(2048));
+        }
+    }
+
+    void setLodBox(const LLViewerRegion* region)
+    {
+        const LLVector3 o = region->getOriginAgent();
+        GMDXRegionCapture::sLodBox[0] = o.mV[VX];
+        GMDXRegionCapture::sLodBox[1] = o.mV[VY];
+        GMDXRegionCapture::sLodBox[2] = o.mV[VX] + width;
+        GMDXRegionCapture::sLodBox[3] = o.mV[VY] + width;
+    }
+
+    void stop(const std::string& why)
+    {
+        LL_INFOS("RegionMap") << "capture of " << region_name << " stopped: " << why << LL_ENDL;
+        restoreAll();
+        image = nullptr;
+        stage = Stage::Idle;
+        if (progress) { LLNotificationsUtil::cancel(progress); progress.reset(); }
+        LLSD args;
+        args["REGION"] = region_name;
+        args["REASON"] = why;
+        LLNotificationsUtil::add("RegionMapStopped", args);
+    }
+
+    void begin()
+    {
+        LLViewerRegion* region = gAgent.getRegion();
+        std::string why = blocked();
+        if (why.empty() && (!region || region->getHandle() != handle)) why = "You left the region.";
+        stage = Stage::Idle;
+        if (!why.empty()) { message(why); return; }
+        if (!LLEnvironment::instance().getIsSunUp())
+        {
+            LLSD args;
+            args["REGION"] = region->getName();
+            LLNotificationsUtil::add("RegionMapNight", args);
+            return;
+        }
+        region_id = region->getRegionID();
+        region_name = region->getName();
+        width = llmax(region->getWidth(), 16.f);
+        ceiling = GMDXRegionCapture::ceilingFor(region);
+        water = region->getWaterHeight();
+        ocol_water = gSavedSettings.getBOOL("SLRegionMapOcolWater");
+        shadows = gSavedSettings.getBOOL("SLRegionMapShadows");
+        floor = llmin(region->getLand().getMinZ(), water) - kFloorMargin;
+        ceiling = llmax(ceiling, floor + 1.f);
+        far_needed = farNeeded(region);
+        far_reach = llmin(far_needed, netFarCap());
+        applyOverrides();
+        setLodBox(region);
+        GMDXRegionCapture::sLodOn = true;
+        ++GMDXRegionCapture::sLodEpoch;
+        const F64 now = LLFrameTimer::getElapsedSeconds();
+        start = now;
+        settled_since = -1.0;
+        next_probe = now;
+        next_log = now + 10.0;
+        count = -1;
+        count_at = now;
+        probes = 0;
+        timed_out = false;
+        stage = Stage::Prepare;
+        LL_INFOS("RegionMap") << "capturing " << region_name << " (" << width << " m): ceiling " << ceiling
+                              << " m, floor " << floor << " m, draw distance " << far_needed << " m (simulator "
+                              << far_reach << " m), " << overrides.size() << " settings overridden" << LL_ENDL;
+        far_capped_told = false;
+        textures = 0;
+        next_tex_scan = now;
+        stop_request.clear();
+        const F32 s_timeout = kSettleTimeout;
+        showProgress(llformat("loading the whole region (up to %.0f s), then rendering it. Everything above %.0f m "
+                              "is left out.", llmax((F32)s_timeout, (F32)(kMinPrepare + kSettleHold)), ceiling));
+    }
+
+    void showProgress(const std::string& phase)
+    {
+        if (progress) { LLNotificationsUtil::cancel(progress); progress.reset(); }
+        LLSD args;
+        args["REGION"] = region_name;
+        args["PHASE"] = phase;
+        progress = LLNotificationsUtil::add("RegionMapProgress", args, LLSD(),
+            [](const LLSD& n, const LLSD& r)
+            {
+                GMDXRegionCaptureState& s = get();
+                if (LLNotificationsUtil::getSelectedOption(n, r) != 0) return;
+                s.progress.reset();
+                if (s.stage == Stage::Prepare || s.stage == Stage::Render) s.stop("cancelled");
+            });
+    }
+
+    bool renderWithoutAvatars(const LLRegionOrthoView& v, std::vector<U8>& rgb, std::vector<F32>* depth = nullptr) const
+    {
+        const U32 types[] = { LLPipeline::RENDER_TYPE_AVATAR, LLPipeline::RENDER_TYPE_PARTICLES,
+                              ocol_water ? (U32)LLPipeline::RENDER_TYPE_WATER : 0u };
+        bool off[3] = {};
+        for (int k = 0; k < 3; ++k)
+            if (types[k] && (off[k] = gPipeline.hasRenderType(types[k]))) LLPipeline::toggleRenderTypeControl(types[k]);
+        const bool ok = glRenderRegionOrthoView(v, rgb, depth);
+        for (int k = 0; k < 3; ++k)
+            if (off[k]) LLPipeline::toggleRenderTypeControl(types[k]);
+        return ok;
+    }
+
+    void paintOcolWater(std::vector<U8>& rgb, const std::vector<F32>& depth, S32 w, F32 ppm) const
+    {
+        constexpr F32 SATURATION = 0.4f, SHORE_GLOW = 0.05f;
+        static const F32 tint[4] = { 0.30f, 0.46f, 0.48f, 0.35f };
+        static const F32 shallow[3] = { 0.36f, 0.72f, 0.74f }, deep[3] = { 0.05f, 0.17f, 0.33f };
+        const F32 span = ceiling - floor;
+        auto Z = [&](S32 x, S32 y)
+        {
+            x = llclamp(x, 0, w - 1); y = llclamp(y, 0, w - 1);
+            return floor + depth[(size_t)y * w + x] * span;
+        };
+        LLVector3 sun = LLEnvironment::instance().getSunDirection();
+        if (sun.normalize() < 0.5f) sun.set(0.f, 0.f, 1.f);
+        const S32 s = llmax(1, ll_round(0.5f * ppm));
+        const F32 run = 2.f * s / ppm;
+        for (S32 y = 0; y < w; ++y)
+            for (S32 x = 0; x < w; ++x)
+            {
+                const F32 d = water - Z(x, y);
+                if (d <= 0.f) continue;
+                const F32 dzdx = (Z(x + s, y) - Z(x - s, y)) / run, dzdy = (Z(x, y + s) - Z(x, y - s)) / run;
+                const F32 lam = llmax(0.f, (-dzdx * sun.mV[VX] - dzdy * sun.mV[VY] + sun.mV[VZ])
+                                           / sqrtf(dzdx * dzdx + dzdy * dzdy + 1.f));
+                const F32 relief = 0.85f + 0.15f * lam;
+                const F32 td = powf(llclamp(d / 14.f, 0.f, 1.f), 0.6f);
+                const F32 tp = powf(llclamp(llmax(d, 4.f) / 14.f, 0.f, 1.f), 0.6f);
+                const F32 foam = llclamp(1.f - d / 0.6f, 0.f, 1.f) * 0.35f;
+                F32 band = llclamp(1.f - d / 4.f, 0.f, 1.f);
+                band = band * band * (3.f - 2.f * band) * tint[3];
+                F32 c[3];
+                for (S32 k = 0; k < 3; ++k)
+                {
+                    F32 f = (shallow[k] + (deep[k] - shallow[k]) * td) * relief;
+                    f = f * (1.f - foam) + foam;
+                    const F32 p = (shallow[k] + (deep[k] - shallow[k]) * tp) * relief;
+                    c[k] = p + (f - p) * SHORE_GLOW;
+                    c[k] += (tint[k] - c[k]) * band;
+                }
+                const F32 l = 0.2126f * c[0] + 0.7152f * c[1] + 0.0722f * c[2];
+                const F32 see = 0.5f * llclamp(1.f - d / 3.f, 0.f, 1.f);
+                U8* px = rgb.data() + ((size_t)y * w + x) * 3;
+                for (S32 k = 0; k < 3; ++k)
+                {
+                    const F32 wc = l + (c[k] - l) * SATURATION;
+                    px[k] = (U8)llclamp(ll_round((wc + (px[k] / 255.f - wc) * see) * 255.f), 0, 255);
+                }
+            }
+    }
+
+    LLRegionOrthoView view(const LLViewerRegion* region, F32 x0, F32 y0, F32 x1, F32 y1, S32 w, S32 h) const
+    {
+        const LLVector3 o = region->getOriginAgent();
+        LLRegionOrthoView v;
+        v.eye.set(o.mV[VX] + 0.5f * width, o.mV[VY] + 0.5f * width, ceiling + eyeAbove(width));
+        v.left = o.mV[VX] + x0 - v.eye.mV[VX];
+        v.right = o.mV[VX] + x1 - v.eye.mV[VX];
+        v.bottom = o.mV[VY] + y0 - v.eye.mV[VY];
+        v.top = o.mV[VY] + y1 - v.eye.mV[VY];
+        v.ceiling = ceiling;
+        v.floor = floor;
+        v.demand_ppm = (F32)kMapSize / width;
+        v.shadows = shadows;
+        v.width = w;
+        v.height = h;
+        return v;
+    }
+
+    void prepareTick(LLViewerRegion* region)
+    {
+        const F64 now = LLFrameTimer::getElapsedSeconds();
+        setLodBox(region);
+        if (now >= next_probe)
+        {
+            next_probe = now + kProbeEvery;
+            S32 pw = kProbeSize, ph = kProbeSize;
+            if (gViewerWindow)
+            {
+                pw = llclamp(gViewerWindow->getWorldViewWidthRaw(), 64, 4096);
+                ph = llclamp(gViewerWindow->getWorldViewHeightRaw(), 64, 4096);
+            }
+            const F32 bw = pw > ph ? width * pw / ph : width, bh = ph > pw ? width * ph / pw : width;
+            LLRegionOrthoView v = view(region, 0.5f * (width - bw), 0.5f * (width - bh), 0.5f * (width + bw),
+                                       0.5f * (width + bh), pw, ph);
+            v.time = (F32)LLFrameTimer::getElapsedSeconds();
+            std::vector<U8> rgb;
+            if (renderWithoutAvatars(v, rgb)) ++probes;
+        }
+        const S32 n = gObjectList.getNumObjects();
+        if (count < 0 || abs(n - count) > llmax(4, count / 200)) { count = n; count_at = now; }
+        const F32 far_target = llmin(far_reach, gAgentCamera.mDrawDistance);
+        if (gAgentCamera.mDrawDistance + 1.f < far_needed && !far_capped_told)
+        {
+            far_capped_told = true;
+            LL_WARNS("RegionMap") << "draw distance held at " << gAgentCamera.mDrawDistance << " m (needed "
+                                  << far_needed << " m)" << LL_ENDL;
+            message(llformat("Draw distance is capped at %.0f m, so the parts of %s farther "
+                             "than that from you may be missing from the map.", gAgentCamera.mDrawDistance,
+                             region_name.c_str()));
+        }
+        const bool far_ok = gAgentCamera.mDrawDistance + 1.f >= far_target;
+        const bool objects_ok = now - count_at >= kSettleHold;
+        const S32 meshes = LLMeshRepoThread::sActiveHeaderRequests + LLMeshRepoThread::sActiveLODRequests
+                         + (S32)LLMeshRepository::sLODPending;
+        if (now >= next_tex_scan) { next_tex_scan = now + 1.0; textures = texturesUnsettled(); }
+        const bool ok = far_ok && objects_ok && meshes <= kMeshPendingOk && textures <= kTexPendingOk
+                     && probes >= 3 && now - start >= kMinPrepare;
+        if (!ok) settled_since = -1.0;
+        else if (settled_since < 0.0) settled_since = now;
+        const F32 s_timeout = kSettleTimeout;
+        timed_out = now - start >= llmax((F64)(F32)s_timeout, kMinPrepare + kSettleHold);
+        if (now >= next_log || timed_out || (settled_since >= 0.0 && now - settled_since >= kSettleHold))
+        {
+            next_log = now + 10.0;
+            LL_INFOS("RegionMap") << "preparing " << region_name << " " << (S32)(now - start) << " s: far "
+                                  << gAgentCamera.mDrawDistance << "/" << far_target << " m, objects " << n
+                                  << (objects_ok ? " (steady)" : "")
+                                  << ", mesh requests " << meshes << ", world textures loading " << textures
+                                  << ", preparation renders " << probes << LL_ENDL;
+        }
+        if (timed_out || (settled_since >= 0.0 && now - settled_since >= kSettleHold)) startRender();
+    }
+
+    void startRender()
+    {
+        if (!LLEnvironment::instance().getIsSunUp()) { stop("the sun went down"); return; }
+        S32 n = 4;
+        image = new LLImageRaw(kMapSize, kMapSize, 3);
+        if (image->isBufferInvalid()) { stop("not enough free memory for the map"); return; }
+        tiles = n;
+        tile_px = kMapSize / n;
+        aa = 0;
+        next = 0;
+        time = (F32)LLFrameTimer::getElapsedSeconds();
+        stage = Stage::Render;
+        LL_INFOS("RegionMap") << "rendering " << region_name << ": " << n << " x " << n << " tiles of "
+                              << tile_px + 2 * kGuardPx << " px"
+                              << (timed_out ? " (loading timed out)" : "") << LL_ENDL;
+        showProgress(llformat("rendering %d x %d tiles%s.", n, n,
+                              timed_out ? " (the region had not finished loading in time)" : ""));
+    }
+
+    void renderTick(LLViewerRegion* region)
+    {
+        const S32 i = next % tiles, j = next / tiles;
+        const F32 ppm = (F32)kMapSize / width;
+        const S32 px0 = i * tile_px - kGuardPx, py0 = j * tile_px - kGuardPx;
+        const S32 w = tile_px + 2 * kGuardPx;
+        LLRegionOrthoView v = view(region, px0 / ppm, py0 / ppm, (px0 + w) / ppm, (py0 + w) / ppm, w, w);
+        v.time = time;
+        v.frames = 2;
+        v.aa_frames = aa;
+        std::vector<U8> rgb;
+        std::vector<F32> depth;
+        if (!renderWithoutAvatars(v, rgb, ocol_water ? &depth : nullptr) || rgb.size() < (size_t)w * w * 3)
+        {
+            stop("a map tile could not be rendered");
+            return;
+        }
+        if (ocol_water && depth.size() >= (size_t)w * w)
+        {
+            paintOcolWater(rgb, depth, w, ppm);
+        }
+        U8* out = image->getData();
+        for (S32 r = 0; r < tile_px; ++r)
+        {
+            const U8* src = rgb.data() + ((size_t)(r + kGuardPx) * w + kGuardPx) * 3;
+            U8* dst = out + ((size_t)(j * tile_px + r) * kMapSize + (size_t)i * tile_px) * 3;
+            std::memcpy(dst, src, (size_t)tile_px * 3);
+        }
+        if (++next < tiles * tiles) return;
+        save();
+    }
+
+    void save()
+    {
+        restoreAll();
+        showProgress("saving the map.");
+        stage = Stage::Save;
+        const std::string dir = mapDir();
+        {
+            const std::string& delim = gDirUtilp->getDirDelimiter();
+            LLFile::mkdir(gDirUtilp->getOSUserAppDir() + delim + "region_maps");
+            LLFile::mkdir(dir);
+        }
+        const std::string j2c_path = mapPath(handle, "j2c"), json_path = mapPath(handle, "json");
+        const std::string old_png = mapPath(handle, "png");
+        const bool lossless = gSavedSettings.getBOOL("SLRegionMapLossless");
+        LLSD meta;
+        meta["region_name"] = region_name;
+        meta["region_id"] = region_id;
+        meta["region_width"] = width;
+        meta["image_size"] = kMapSize;
+        meta["captured_utc"] = LLDate::now().asString();
+        meta["ceiling"] = ceiling;
+        meta["floor"] = floor;
+        meta["ocol_water"] = ocol_water;
+        meta["shadows"] = shadows;
+        meta["grid"] = grid_id();
+        meta["viewer"] = LLVersionInfo::instance().getChannelAndVersion();
+        meta["fully_loaded"] = !timed_out;
+        const std::string json = boost::json::serialize(LlsdToJson(meta));
+        LLPointer<LLImageRaw> raw = image;
+        image = nullptr;
+        const U64 h = handle;
+        const F32 w = width;
+        const std::string name = region_name;
+        LL::WorkQueue::ptr_t main_queue = LL::WorkQueue::getInstance("mainloop");
+        LL::WorkQueue::ptr_t general = LL::WorkQueue::getInstance("General");
+        auto work = [raw, j2c_path, json_path, json, old_png, lossless]() -> std::string
+        {
+            try
+            {
+                LLPointer<LLImageJ2C> j2c = new LLImageJ2C();
+                j2c->setReversible(lossless);
+                if (!lossless) j2c->setMaxBytes((S32)(raw->getDataSize() / 3.5f));
+                if (!j2c->encode(raw, 0.f)) return "the map image could not be encoded";
+                const std::string j2c_tmp = j2c_path + ".tmp";
+                {
+                    llofstream f(j2c_tmp, std::ios::out | std::ios::binary | std::ios::trunc);
+                    if (!f.is_open()) return "cannot write " + j2c_tmp;
+                    f.write((const char*)j2c->getData(), j2c->getDataSize());
+                    f.close();
+                    if (f.fail()) { LLFile::remove(j2c_tmp, ENOENT); return "cannot write " + j2c_tmp; }
+                }
+                LLFile::remove(j2c_path, ENOENT);
+                if (LLFile::rename(j2c_tmp, j2c_path) != 0) { LLFile::remove(j2c_tmp, ENOENT); return "cannot replace " + j2c_path; }
+                const std::string json_tmp = json_path + ".tmp";
+                {
+                    llofstream j(json_tmp, std::ios::out | std::ios::trunc);
+                    if (j.is_open()) j << json << "\n";
+                }
+                LLFile::remove(json_path, ENOENT);
+                if (LLFile::rename(json_tmp, json_path) != 0) LLFile::remove(json_tmp, ENOENT);
+                LLFile::remove(old_png, ENOENT);
+                return std::string();
+            }
+            catch (const std::exception& e) { return e.what(); }
+            catch (...) { return "unknown error"; }
+        };
+        auto done = [raw, h, w, name, j2c_path](std::string err)
+        {
+            GMDXRegionCaptureState& s = get();
+            s.stage = Stage::Idle;
+            if (s.progress) { LLNotificationsUtil::cancel(s.progress); s.progress.reset(); }
+            LLSD args;
+            args["REGION"] = name;
+            if (!err.empty())
+            {
+                LL_WARNS("RegionMap") << "map of " << name << " not saved: " << err << LL_ENDL;
+                args["REASON"] = err;
+                LLNotificationsUtil::add("RegionMapStopped", args);
+                return;
+            }
+            LL_INFOS("RegionMap") << "map of " << name << " saved: " << j2c_path << LL_ENDL;
+            if (gSavedSettings.getBOOL("SLRegionMapUseCaptured")) s.maps[h] = MapTex{ minimapTexture(raw) };
+            else s.maps.erase(h);
+            args["PATH"] = j2c_path;
+            LLNotificationsUtil::add("RegionMapSaved", args);
+        };
+        bool posted = false;
+        if (main_queue && general)
+        {
+            posted = main_queue->postTo(general, work, [done](std::string err)
+                {
+                    if (!LLApp::isExiting()) done(err);
+                });
+        }
+        if (!posted) done(work());
+    }
 
     // ---- paths ----
     static std::string mapDir()
@@ -220,9 +782,339 @@ struct GMDXRegionCaptureState
     }
 };
 
+bool glRenderRegionOrthoView(const LLRegionOrthoView& view, std::vector<U8>& rgb, std::vector<F32>* depth)
+{
+    if (view.width <= 0 || view.height <= 0 || !(view.right > view.left) || !(view.top > view.bottom) || !(view.ceiling > view.floor))
+        return false;
+
+    // Save camera state
+    LLViewerCamera* cam = LLViewerCamera::getInstance();
+    const LLVector3 saved_origin = cam->getOrigin();
+    const LLVector3 saved_x = cam->getXAxis();
+    const LLVector3 saved_y = cam->getYAxis();
+    const LLVector3 saved_z = cam->getZAxis();
+    const bool saved_ortho = cam->getOrtho();
+    const F32 saved_focus = cam->getOrthoFocusDist();
+    const F32 saved_near = cam->getNear();
+    const F32 saved_far = cam->getFar();
+    const F32 saved_aspect = cam->getAspect();
+    const F32 saved_fov = cam->getView();
+    const LLRect saved_rect = gViewerWindow->getWorldViewRectRaw();
+    const S32 orig_w = LLPipeline::sRenderDeferred ? gPipeline.mRT->deferredScreen.getWidth() : gViewerWindow->getWorldViewWidthRaw();
+    const S32 orig_h = LLPipeline::sRenderDeferred ? gPipeline.mRT->deferredScreen.getHeight() : gViewerWindow->getWorldViewHeightRaw();
+
+    const bool prev_draw_ui = gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI);
+    if (prev_draw_ui)
+    {
+        LLPipeline::toggleRenderDebugFeature(LLPipeline::RENDER_DEBUG_FEATURE_UI);
+    }
+    const bool prev_hide_hud = LLPipeline::sShowHUDAttachments;
+    LLPipeline::sShowHUDAttachments = false;
+    const S32 prev_shadows = LLPipeline::RenderShadowDetail;
+    if (!view.shadows)
+    {
+        LLPipeline::RenderShadowDetail = 0;
+    }
+
+    // Setup camera
+    const F32 tile_w = view.right - view.left;
+    const F32 tile_h = view.top - view.bottom;
+    const F32 tile_cx = view.eye.mV[VX] + 0.5f * (view.left + view.right);
+    const F32 tile_cy = view.eye.mV[VY] + 0.5f * (view.bottom + view.top);
+    const F32 eye_z = view.eye.mV[VZ];
+    const F32 zn = llmax(eye_z - view.ceiling, 0.01f);
+    const F32 zf = eye_z - view.floor;
+
+    cam->setOrigin(LLVector3(tile_cx, tile_cy, eye_z));
+    cam->lookDir(LLVector3(0.f, 0.f, -1.f), LLVector3(0.f, 1.f, 0.f));
+    cam->setNear(zn);
+    cam->setFar(zf);
+    const F32 half_height = 0.5f * tile_h;
+    cam->setOrthoMode(true, half_height / tanf(cam->getView() * 0.5f));
+    cam->setAspect((F32)view.width / (F32)view.height);
+    cam->calcProjection(zf);
+
+    LLRenderTarget scratch;
+    if (!scratch.allocate(view.width, view.height, GL_RGBA, true))
+    {
+        LLPipeline::RenderShadowDetail = prev_shadows;
+        if (prev_draw_ui && !gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
+            LLPipeline::toggleRenderDebugFeature(LLPipeline::RENDER_DEBUG_FEATURE_UI);
+        if (prev_hide_hud) LLPipeline::sShowHUDAttachments = true;
+        cam->setOrigin(saved_origin);
+        cam->setAxes(saved_x, saved_y, saved_z);
+        cam->setNear(saved_near);
+        cam->setFar(saved_far);
+        cam->setOrthoMode(saved_ortho, saved_focus);
+        cam->setAspect(saved_aspect);
+        cam->setViewNoBroadcast(saved_fov);
+        cam->calcProjection(saved_far);
+        return false;
+    }
+
+    if (!gPipeline.allocateScreenBuffer(view.width, view.height))
+    {
+        LLPipeline::RenderShadowDetail = prev_shadows;
+        scratch.release();
+        gPipeline.allocateScreenBuffer(orig_w, orig_h);
+        if (prev_draw_ui && !gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
+            LLPipeline::toggleRenderDebugFeature(LLPipeline::RENDER_DEBUG_FEATURE_UI);
+        if (prev_hide_hud) LLPipeline::sShowHUDAttachments = true;
+        cam->setOrigin(saved_origin);
+        cam->setAxes(saved_x, saved_y, saved_z);
+        cam->setNear(saved_near);
+        cam->setFar(saved_far);
+        cam->setOrthoMode(saved_ortho, saved_focus);
+        cam->setAspect(saved_aspect);
+        cam->setViewNoBroadcast(saved_fov);
+        cam->calcProjection(saved_far);
+        return false;
+    }
+
+    gViewerWindow->setWorldViewRectRaw(LLRect(0, view.height, view.width, 0));
+    scratch.bindTarget();
+    glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+
+    const U32 passes = llmax(view.frames, 1u);
+    for (U32 i = 0; i < passes; ++i)
+    {
+        gDisplaySwapBuffers = false;
+        const bool do_rebuild = true;
+        const F32 zoom = 1.0f;
+        const U32 subfield = 0;
+        const bool for_snapshot = true;
+        display(do_rebuild, zoom, subfield, for_snapshot);
+    }
+
+    rgb.resize((size_t)view.width * view.height * 3);
+    glReadBuffer(GL_BACK);
+    glReadPixels(0, 0, view.width, view.height, GL_RGB, GL_UNSIGNED_BYTE, rgb.data());
+
+    if (depth)
+    {
+        depth->resize((size_t)view.width * view.height);
+        std::vector<F32> raw_depth((size_t)view.width * view.height);
+
+        GLint prev_read_fbo = 0;
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read_fbo);
+
+        GLuint depth_fbo = 0;
+        if (LLPipeline::sRenderDeferred && gPipeline.mRT && gPipeline.mRT->deferredScreen.isComplete())
+        {
+            depth_fbo = gPipeline.mRT->deferredScreen.getFBO();
+        }
+        else if (gPipeline.mRT && gPipeline.mRT->screen.isComplete())
+        {
+            depth_fbo = gPipeline.mRT->screen.getFBO();
+        }
+
+        if (depth_fbo != 0)
+        {
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, depth_fbo);
+        }
+
+        glReadPixels(0, 0, view.width, view.height, GL_DEPTH_COMPONENT, GL_FLOAT, raw_depth.data());
+
+        if (depth_fbo != 0)
+        {
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read_fbo);
+        }
+
+        for (size_t idx = 0; idx < raw_depth.size(); ++idx)
+        {
+            const F32 z_win = raw_depth[idx];
+            (*depth)[idx] = 1.0f - z_win;
+        }
+    }
+
+    gDisplaySwapBuffers = false;
+    gDepthDirty = true;
+    scratch.flush();
+    scratch.release();
+    gViewerWindow->setWorldViewRectRaw(saved_rect);
+    gPipeline.allocateScreenBuffer(orig_w, orig_h);
+    gPipeline.resetDrawOrders();
+
+    if (prev_draw_ui && !gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
+    {
+        LLPipeline::toggleRenderDebugFeature(LLPipeline::RENDER_DEBUG_FEATURE_UI);
+    }
+    if (prev_hide_hud)
+    {
+        LLPipeline::sShowHUDAttachments = true;
+    }
+
+    cam->setOrigin(saved_origin);
+    cam->setAxes(saved_x, saved_y, saved_z);
+    cam->setNear(saved_near);
+    cam->setFar(saved_far);
+    cam->setOrthoMode(saved_ortho, saved_focus);
+    cam->setAspect(saved_aspect);
+    cam->setViewNoBroadcast(saved_fov);
+    cam->calcProjection(saved_far);
+
+    LLPipeline::RenderShadowDetail = prev_shadows;
+
+    return true;
+}
+
+namespace
+{
+class LLFloaterRegionMapCapture : public LLFloater
+{
+public:
+    LLFloaterRegionMapCapture(const LLSD& key) : LLFloater(key) {}
+    bool postBuild() override
+    {
+        mReach = getChild<LLTextBox>("reach_text");
+        getChild<LLUICtrl>("capture_btn")->setCommitCallback([this](LLUICtrl*, const LLSD&)
+            {
+                closeFloater();
+                GMDXRegionCapture::requestCapture();
+            });
+        getChild<LLUICtrl>("cancel_btn")->setCommitCallback([this](LLUICtrl*, const LLSD&) { closeFloater(); });
+        return true;
+    }
+    void draw() override
+    {
+        if (LLViewerRegion* region = gAgent.getRegion())
+        {
+            bool hills = false;
+            const F32 ceiling = GMDXRegionCapture::ceilingFor(region, &hills);
+            LLStringUtil::format_map_t args;
+            args["[CEILING]"] = llformat("%.0f", ceiling);
+            args["[ALT]"] = llformat("%.0f", gAgent.getPositionAgent().mV[VZ]);
+            mReach->setText(getString(hills ? "reach_hills" : "reach", args));
+        }
+        getChildView("capture_btn")->setEnabled(GMDXRegionCapture::canCapture());
+        LLFloater::draw();
+    }
+private:
+    LLTextBox* mReach = nullptr;
+};
+}
+
+F32 GMDXRegionCapture::ceilingFor(const LLViewerRegion* region, bool* hills)
+{
+    static LLCachedControl<F32> s_ceiling(gSavedSettings, "SLRegionMapCeilingOffset", 50.f);
+    const F32 mine = gAgent.getPositionAgent().mV[VZ] + llmax((F32)s_ceiling, 0.f);
+    const F32 land = region ? region->getLand().getMaxZ() + 1.f : mine;
+    if (hills) *hills = land > mine;
+    return llmax(mine, land);
+}
+
+LLFloater* GMDXRegionCapture::buildWindow(const LLSD& key)
+{
+    return new LLFloaterRegionMapCapture(key);
+}
+
+void GMDXRegionCapture::openWindow()
+{
+    LLFloaterReg::showInstance("region_map_capture");
+}
+
+void GMDXRegionCapture::requestCapture()
+{
+    GMDXRegionCaptureState& s = GMDXRegionCaptureState::get();
+    if (s.stage != Stage::Idle)
+    {
+        GMDXRegionCaptureState::message("A region map capture is already running.");
+        return;
+    }
+    const std::string why = GMDXRegionCaptureState::blocked();
+    if (!why.empty()) { GMDXRegionCaptureState::message(why); return; }
+    LLViewerRegion* region = gAgent.getRegion();
+    if (!region) return;
+    LLSD args;
+    args["REGION"] = region->getName();
+    if (!LLEnvironment::instance().getIsSunUp())
+    {
+        LLNotificationsUtil::add("RegionMapNight", args);
+        return;
+    }
+    const F32 needed = GMDXRegionCaptureState::farNeeded(region);
+    const F32 cap = GMDXRegionCaptureState::netFarCap();
+    args["DISTANCE"] = llformat("%.0f", llmax(needed, gSavedSettings.getF32("RenderFarClip")));
+    args["CEILING"] = llformat("%.0f", GMDXRegionCapture::ceilingFor(region));
+    args["PARTIAL"] = needed > cap
+        ? llformat("\n\nThe simulator sends objects only up to %.0f m away, so the parts of the region farther than that "
+                   "from you may be missing. Stand nearer the middle of the region for a complete map.", cap)
+        : std::string();
+    s.stage = Stage::Confirm;
+    s.handle = region->getHandle();
+    LLNotificationsUtil::add("RegionMapConfirm", args, LLSD(),
+        [](const LLSD& n, const LLSD& r)
+        {
+            GMDXRegionCaptureState& st = GMDXRegionCaptureState::get();
+            if (st.stage != Stage::Confirm) return;
+            st.stage = Stage::Idle;
+            if (LLNotificationsUtil::getSelectedOption(n, r) == 0) st.begin();
+        });
+}
+
+bool GMDXRegionCapture::canCapture()
+{
+    return GMDXRegionCaptureState::get().stage == Stage::Idle && GMDXRegionCaptureState::blocked().empty();
+}
+
+bool GMDXRegionCapture::isRunning()
+{
+    const Stage st = GMDXRegionCaptureState::get().stage;
+    return st == Stage::Prepare || st == Stage::Render;
+}
+
+void GMDXRegionCapture::cancelCapture()
+{
+    if (isRunning()) GMDXRegionCaptureState::get().stop("cancelled");
+}
+
+void GMDXRegionCapture::requestStop(const std::string& why)
+{
+    GMDXRegionCaptureState& s = GMDXRegionCaptureState::get();
+    if (isRunning() && s.stop_request.empty()) s.stop_request = why;
+}
+
+void GMDXRegionCapture::frameTick()
+{
+    GMDXRegionCaptureState& s = GMDXRegionCaptureState::get();
+    s.pruneMaps();
+    if (s.stage != Stage::Prepare && s.stage != Stage::Render) return;
+    LLViewerRegion* region = LLWorld::getInstance()->getRegionFromHandle(s.handle);
+    std::string why;
+    bool prefs = false;
+    if (!s.stop_request.empty()) why = s.stop_request;
+    else if (LLApp::isExiting() || gDisconnected || LLStartUp::getStartupState() < STATE_STARTED
+        || LLAppViewer::instance()->logoutRequestSent())
+        why = "you logged out";
+    else if (gAgent.getTeleportState() != LLAgent::TELEPORT_NONE) why = "you teleported";
+    else if (!region || gAgent.getRegion() != region) why = "you left the region";
+    else if (openGraphicsWindow())
+    {
+        prefs = true;
+        why = "Preferences or a graphics settings window was opened (it would have saved the capture's temporary "
+              "settings as yours)";
+    }
+    else why = GMDXRegionCaptureState::blocked();
+    if (!why.empty())
+    {
+        s.stop(why);
+        if (prefs)
+            if (LLFloaterPreference* p = LLFloaterReg::findTypedInstance<LLFloaterPreference>("preferences"))
+                p->saveSettings();
+        return;
+    }
+    if (s.stage == Stage::Prepare) s.prepareTick(region);
+    else s.renderTick(region);
+}
+
 void GMDXRegionCapture::shutdown()
 {
-    GMDXRegionCaptureState::get().maps.clear();
+    GMDXRegionCaptureState& s = GMDXRegionCaptureState::get();
+    s.restoreAll();
+    s.image = nullptr;
+    s.progress.reset();
+    s.maps.clear();
+    s.stage = Stage::Idle;
     forEachWorldMapTexture(nullptr, nullptr);   // (the World Map's textures)
 }
 
@@ -233,7 +1125,7 @@ bool GMDXRegionCapture::hasCapture(const LLViewerRegion* region)
 
 void GMDXRegionCapture::deleteCapture(const LLViewerRegion* region)
 {
-    if (!region) return;
+    if (!region || isRunning()) return;
     const U64 handle = region->getHandle();
     LLFile::remove(GMDXRegionCaptureState::mapPath(handle, "j2c"), ENOENT);
     LLFile::remove(GMDXRegionCaptureState::mapPath(handle, "png"), ENOENT);
@@ -696,4 +1588,10 @@ LLViewerTexture* GMDXRegionCapture::getMinimapTexture(const LLViewerRegion* regi
         s.loadMinimap(region, it->second);
     }
     return it->second.tex.get();
+}
+
+bool GMDXRegionCapture::getCapturedImage(const LLViewerRegion* region, LLPointer<LLImageRaw>& out)
+{
+    out = region ? GMDXRegionCaptureState::loadMap(GMDXRegionCaptureState::mapFile(region->getHandle())) : nullptr;
+    return out.notNull();
 }

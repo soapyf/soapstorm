@@ -31,6 +31,7 @@
 #include "llviewerobjectlist.h"
 #include "llvosurfacepatch.h"
 #include "llsurface.h"
+#include "llminimapterrain.h"
 #include "pipeline.h"
 #include "llagent.h"
 #include "llsky.h"
@@ -1035,6 +1036,7 @@ void LLSurfacePatch::updateGL()
     LLVLComposition* comp = regionp->getComposition();
 
     updateCompositionStats();
+    mSurfacep->getMinimapTerrain().dirtyPatch(this);
     F32 tex_patch_size = meters_per_grid*grids_per_patch_edge;
 
     mSTexUpdate = false;

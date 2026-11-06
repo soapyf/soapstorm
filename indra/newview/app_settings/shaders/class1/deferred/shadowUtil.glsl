@@ -50,6 +50,7 @@ uniform float spot_shadow_offset;
 uniform mat4 inv_proj;
 uniform vec2 screen_res;
 uniform int sun_up_factor;
+uniform int cube_snapshot;
 
 float pcfShadow(sampler2DShadow shadowMap, vec3 norm, vec4 stc, float bias_mul, vec2 pos_screen, vec3 light_dir)
 {
@@ -197,6 +198,11 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
 {
 #if defined(SPOT_SHADOW)
+    if (cube_snapshot == 1)
+    {
+        return 1.0f;
+    }
+
     float shadow = 0.0f;
     pos += norm * spot_shadow_offset;
 
@@ -217,12 +223,12 @@ float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
             if (index == 0)
             {
                 lpos = shadow_matrix[4]*spos;
-                shadow += pcfSpotShadow(shadowMap4, lpos, 0.8, spos.xy)*w;
+                shadow += pcfSpotShadow(shadowMap4, lpos, 0.8, pos_screen)*w;
             }
             else
             {
                 lpos = shadow_matrix[5]*spos;
-                shadow += pcfSpotShadow(shadowMap5, lpos, 0.8, spos.xy)*w;
+                shadow += pcfSpotShadow(shadowMap5, lpos, 0.8, pos_screen)*w;
             }
             weight += w;
             shadow += max((pos.z+shadow_clip.z)/(shadow_clip.z-shadow_clip.w)*2.0-1.0, 0.0);

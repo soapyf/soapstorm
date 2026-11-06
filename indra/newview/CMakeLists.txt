@@ -598,6 +598,7 @@ set(viewer_SOURCE_FILES
     llmenuoptionpathfindingrebakenavmesh.cpp
     llmeshrepository.cpp
     llmimetypes.cpp
+    llminimapterrain.cpp
     llmodelpreview.cpp
     llmorphview.cpp
     llmoveview.cpp
@@ -1523,6 +1524,7 @@ set(viewer_HEADER_FILES
     llmenuoptionpathfindingrebakenavmesh.h
     llmeshrepository.h
     llmimetypes.h
+    llminimapterrain.h
     llmodelpreview.h
     llmorphview.h
     llmoveview.h
@@ -1664,6 +1666,7 @@ set(viewer_HEADER_FILES
     llheroprobemanager.h
     llregioninfomodel.h
     llregionposition.h
+    llregionmapcapture.h
     llremoteparcelrequest.h
     llresourcedata.h
     llrootview.h

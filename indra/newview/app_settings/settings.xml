@@ -322,16 +322,82 @@
     <key>Value</key>
     <integer>0</integer>
   </map>
-  <key>FSAutoPerspectiveOnCameraMove</key>
+  <key>SLMiniMapTerrainLook</key>
   <map>
     <key>Comment</key>
-    <string>Automatically switch from orthographic view back to 3D perspective when the camera moves (Blender-style Auto Perspective).</string>
+    <string>Mini-map background painted by the viewer in the OCOL map look: the terrain at a 64 m texture repeat, lit by a north-west sun with cast shadows and contact shading, and the water coloured by its depth with a shore band. Off: LL's pre-2024 painted terrain. Not used while a world map tile is shown (SLMiniMapUseMapTile).</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
     <string>Boolean</string>
     <key>Value</key>
     <integer>1</integer>
+  </map>
+  <key>SLMiniMapUseMapTile</key>
+  <map>
+    <key>Comment</key>
+    <string>Mini-map background. Off: painted by the viewer from the region's terrain and water, as LL and Firestorm drew it before 2024 (the terrain textures, or the PBR terrain materials' colours). On: the region's world map tile from the server, with the painted terrain shown while the tile is loading or when the region has no tile.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
+  <key>SLRegionMapUseCaptured</key>
+  <map>
+    <key>Comment</key>
+    <string>Use a high-resolution captured 3D region map as the mini-map background when one is available.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>1</integer>
+  </map>
+  <key>SLRegionMapShadows</key>
+  <map>
+    <key>Comment</key>
+    <string>Region map capture: render the map with sun shadows. Off, nothing casts a shadow (flat, even daylight). Set in the Capture Region Map window.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>1</integer>
+  </map>
+  <key>SLRegionMapOcolWater</key>
+  <map>
+    <key>Comment</key>
+    <string>Region map capture: paint the water in a map look (deep to shallow by depth, shore band, foam) instead of capturing the in-world water. Set in the Capture Region Map window.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>1</integer>
+  </map>
+  <key>SLRegionMapLossless</key>
+  <map>
+    <key>Comment</key>
+    <string>Region map capture: save maps exactly lossless (JPEG 2000 reversible, about 27 MB for 4096 px) instead of visually lossless (about 14 MB). Set in the Capture Region Map window.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
+  <key>SLRegionMapCeilingOffset</key>
+  <map>
+    <key>Comment</key>
+    <string>Region map capture: the map shows what is below your altitude plus this many metres (never below the region's highest hill). 50 m clears most roofs and trees on the ground; lower it in a skybox so the roof stays out. Set in the Capture Region Map window.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>Real</string>
+    <key>Value</key>
+    <real>50.0</real>
   </map>
   <key>FSShowIMInChatHistory</key>
   <map>

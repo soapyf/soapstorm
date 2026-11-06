@@ -270,6 +270,7 @@ public:
 
     // 3D world area, in raw unscaled pixels
     LLRect          getWorldViewRectRaw() const     { return mWorldViewRectRaw; }
+    void            setWorldViewRectRaw(const LLRect& rect) { mWorldViewRectRaw = rect; }
     S32             getWorldViewHeightRaw() const;
     S32             getWorldViewWidthRaw() const;
 

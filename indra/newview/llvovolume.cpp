@@ -31,6 +31,7 @@
 #include <utility> // </FS:Beq> Move shared matrix ownership into a new draw batch.
 
 #include "llvovolume.h"
+#include "gmdxregioncapture.h"
 
 #include <sstream>
 
@@ -1812,6 +1813,14 @@ bool LLVOVolume::calcLOD()
     else
     {
         cur_detail = computeLODDetail(ll_round(distance, 0.01f), ll_round(radius, 0.01f), lod_factor);
+    }
+
+    // REGION MAP CAPTURE: everything standing in the region being mapped
+    // loads its highest LOD while the capture runs (not avatars, attachments or HUDs).
+    if (cur_detail < 3 && !isAttachment() && !mDrawable->isState(LLDrawable::RIGGED)
+        && GMDXRegionCapture::forceMaxLOD(mDrawable->getPositionAgent(), mDrawable->getRadius()))
+    {
+        cur_detail = 3;
     }
 
     if (gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_TRIANGLE_COUNT) && mDrawable->getFace(0))

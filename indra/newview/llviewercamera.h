@@ -111,11 +111,13 @@ public:
 
     void setOrtho(bool ortho);
     void toggleOrtho();
+    void setOrthoFocusDist(F32 dist) { mOrthoFocusDist = dist; }
+    void setOrthoMode(bool ortho, F32 dist = 3.5f) { mIsOrtho = ortho; mOrthoFocusDist = dist; }
     bool getOrtho() const { return mIsOrtho; }
     F32 getOrthoFocusDist() const { return mOrthoFocusDist; }
+    void calcProjection(const F32 far_distance) const;
 
 protected:
-    void calcProjection(const F32 far_distance) const;
 
     static LLTrace::CountStatHandle<> sVelocityStat;
     static LLTrace::CountStatHandle<> sAngularVelocityStat;
@@ -135,7 +137,6 @@ protected:
     S16                 mZoomSubregion;
     bool                mIsOrtho{ false };
     mutable F32         mOrthoFocusDist{ 3.5f };
-    mutable U32         mOrthoFrameCountdown{ 0 };
 
 public:
 };

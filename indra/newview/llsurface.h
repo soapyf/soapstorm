@@ -53,6 +53,7 @@ const S32 ABOVE_WATERLINE_ALPHA = 32;  // The alpha of water when the land eleva
 
 class LLViewerRegion;
 class LLSurfacePatch;
+class LLMinimapTerrain;
 class LLBitPack;
 class LLGroupHeader;
 
@@ -125,6 +126,7 @@ public:
     F32 getWaterHeight() const;
 
     LLViewerTexture *getSTexture();
+    LLMinimapTerrain& getMinimapTerrain();
 
     bool hasZData() const                           { return mHasZData; }
 
@@ -214,6 +216,7 @@ private:
     LLViewerRegion *mRegionp; // Patch whose coordinate system this surface is using.
     static S32  sTextureSize;               // Size of the surface texture
     LLTimer     mTimer; // timer to throttle initial requests until the mSTexture is fully fetched
+    std::unique_ptr<LLMinimapTerrain> mMinimapTerrain;
 };
 
 extern template bool LLSurface::idleUpdate</*PBR=*/false>(F32 max_update_time);

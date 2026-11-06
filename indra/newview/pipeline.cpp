@@ -11610,30 +11610,46 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
             update_min_max(min, max, fp[i]);
         }
 
-        near_clip    = llclamp(-max.mV[2], 0.01f, 4.0f);
-        F32 far_clip = llclamp(-min.mV[2]*2.f, 16.0f, 512.0f);
-
-        //far_clip = llmin(far_clip, 128.f);
-        far_clip = llmin(far_clip, camera.getFar());
-
-        F32 range = far_clip-near_clip;
-
-        LLVector3 split_exp = RenderShadowSplitExponent;
-
-        F32 da = 1.f-llmax( fabsf(lightDir*up), fabsf(lightDir*camera.getLeftAxis()) );
-
-        da = powf(da, split_exp.mV[2]);
-
-        F32 sxp = split_exp.mV[1] + (split_exp.mV[0]-split_exp.mV[1])*da;
-
-        for (U32 i = 0; i < 4; ++i)
+        const bool is_ortho = LLViewerCamera::getInstance()->getOrtho();
+        if (is_ortho)
         {
-            F32 x = (F32)(i+1)/4.f;
-            x = powf(x, sxp);
-            mSunClipPlanes.mV[i] = near_clip+range*x;
+            near_clip = llmax(0.01f, -max.mV[2] * 0.9f);
+            F32 far_clip = llmin(camera.getFar(), llmax(-min.mV[2] * 1.1f, near_clip + 16.0f));
+            F32 range = far_clip - near_clip;
+            for (U32 i = 0; i < 4; ++i)
+            {
+                F32 x = (F32)(i + 1) / 4.f;
+                mSunClipPlanes.mV[i] = near_clip + range * x;
+            }
+            mSunClipPlanes.mV[0] *= 1.25f;
         }
+        else
+        {
+            near_clip    = llclamp(-max.mV[2], 0.01f, 4.0f);
+            F32 far_clip = llclamp(-min.mV[2]*2.f, 16.0f, 512.0f);
 
-        mSunClipPlanes.mV[0] *= 1.25f; //bump back first split for transition padding
+            //far_clip = llmin(far_clip, 128.f);
+            far_clip = llmin(far_clip, camera.getFar());
+
+            F32 range = far_clip-near_clip;
+
+            LLVector3 split_exp = RenderShadowSplitExponent;
+
+            F32 da = 1.f-llmax( fabsf(lightDir*up), fabsf(lightDir*camera.getLeftAxis()) );
+
+            da = powf(da, split_exp.mV[2]);
+
+            F32 sxp = split_exp.mV[1] + (split_exp.mV[0]-split_exp.mV[1])*da;
+
+            for (U32 i = 0; i < 4; ++i)
+            {
+                F32 x = (F32)(i+1)/4.f;
+                x = powf(x, sxp);
+                mSunClipPlanes.mV[i] = near_clip+range*x;
+            }
+
+            mSunClipPlanes.mV[0] *= 1.25f; //bump back first split for transition padding
+        }
     }
 
     if (gCubeSnapshot)
@@ -11684,15 +11700,35 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
 
             LLVector3 min, max;
 
-            //construct 8 corners of split frustum section
-            for (U32 i = 0; i < 4; i++)
+            const bool is_ortho = LLViewerCamera::getInstance()->getOrtho();
+        if (is_ortho)
             {
-                LLVector3 delta = frust[i+4]-eye;
-                delta += (frust[i+4]-frust[(i+2)%4+4])*0.05f;
-                delta.normVec();
-                F32 dp = delta*pn;
-                frust[i] = eye + (delta*dist[j]*0.75f)/dp;
-                frust[i+4] = eye + (delta*dist[j+1]*1.25f)/dp;
+                // In orthographic projection, rays through frustum corners are parallel to view direction pn
+                // and do not converge to eye.
+                LLVector3 near_center = (frust[0] + frust[1] + frust[2] + frust[3]) * 0.25f;
+                LLVector3 lateral[4];
+                for (U32 i = 0; i < 4; ++i)
+                {
+                    lateral[i] = (frust[i] - near_center) * 1.05f;
+                }
+                for (U32 i = 0; i < 4; ++i)
+                {
+                    frust[i]     = eye + lateral[i] + pn * (dist[j] * 0.75f);
+                    frust[i + 4] = eye + lateral[i] + pn * (dist[j + 1] * 1.25f);
+                }
+            }
+            else
+            {
+                //construct 8 corners of split frustum section
+                for (U32 i = 0; i < 4; i++)
+                {
+                    LLVector3 delta = frust[i+4]-eye;
+                    delta += (frust[i+4]-frust[(i+2)%4+4])*0.05f;
+                    delta.normVec();
+                    F32 dp = delta*pn;
+                    frust[i] = eye + (delta*dist[j]*0.75f)/dp;
+                    frust[i+4] = eye + (delta*dist[j+1]*1.25f)/dp;
+                }
             }
 
             shadow_cam.calcAgentFrustumPlanes(frust);
@@ -11845,7 +11881,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
                 mShadowError.mV[j] /= wpf.size();
                 mShadowError.mV[j] /= size.mV[0];
 
-                if (mShadowError.mV[j] > RenderShadowErrorCutoff)
+                if (mShadowError.mV[j] > RenderShadowErrorCutoff || is_ortho)
                 { //just use ortho projection
                     mShadowFOV.mV[j] = -1.f;
                     origin.clearVec();

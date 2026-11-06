@@ -50,6 +50,7 @@ class LLTerrainMaterials : public LLModifyRegion
 {
 public:
     friend class LLDrawPoolTerrain;
+    friend class LLMinimapTerrain;
 
     LLTerrainMaterials() {}
     virtual ~LLTerrainMaterials();
@@ -145,6 +146,7 @@ public:
 
     friend class LLVOSurfacePatch;
     friend class LLDrawPoolTerrain;
+    friend class LLMinimapTerrain;
     void setParamsReady()       { mParamsReady = true; }
     bool getParamsReady() const { return mParamsReady; }
 

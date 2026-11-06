@@ -47,6 +47,7 @@ uniform vec4 waterFogColor;
 uniform vec3 waterFogColorLinear;
 uniform float waterFogKS;
 uniform vec2 screenRes;
+uniform vec2 screen_res;
 
 //bigWave is (refCoord.w, view.w);
 in vec4 refCoord;
@@ -60,7 +61,7 @@ void mirrorClip(vec3 position);
 void main()
 {
     mirrorClip(vary_position);
-    vec2 screen_tc = (refCoord.xy/refCoord.z) * 0.5 + 0.5;
+    vec2 screen_tc = (screen_res.x > 0.0) ? (gl_FragCoord.xy / screen_res) : ((refCoord.xy/refCoord.z) * 0.5 + 0.5);
     float water_mask = texture(exclusionTex, screen_tc).r;
 
     vec4 color;

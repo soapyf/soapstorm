@@ -45,6 +45,7 @@
 #include "llviewerregion.h"
 #include "lldrawpoolterrain.h"
 #include "llworldmipmap.h"
+#include "llminimapterrain.h"
 
 extern LLPipeline gPipeline;
 extern bool gShiftFrame;
@@ -243,6 +244,15 @@ void LLSurface::createSTexture()
     grid_from_region_handle(handle, &grid_x, &grid_y);
 
     mSTexturep = LLWorldMipmap::loadObjectsTile(grid_x, grid_y, 1);
+}
+
+LLMinimapTerrain& LLSurface::getMinimapTerrain()
+{
+    if (!mMinimapTerrain)
+    {
+        mMinimapTerrain = std::make_unique<LLMinimapTerrain>(this);
+    }
+    return *mMinimapTerrain;
 }
 
 void LLSurface::initTextures()

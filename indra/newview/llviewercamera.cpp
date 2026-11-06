@@ -88,7 +88,6 @@ LLViewerCamera::LLViewerCamera() : LLCamera()
 
     mIsOrtho = false;
     mOrthoFocusDist = 3.5f;
-    mOrthoFrameCountdown = 0;
 
     LLPointer<LLControlVariable> ortho_ptr = gSavedSettings.getControl("FSCameraOrtho");
     if (ortho_ptr.notNull())
@@ -121,7 +120,6 @@ void LLViewerCamera::setOrtho(bool ortho)
             }
         }
         mOrthoFocusDist = llclamp(focus_dist, 0.5f, 5000.f);
-        mOrthoFrameCountdown = 6;
     }
 
     if (gSavedSettings.controlExists("FSCameraOrtho") && gSavedSettings.getBOOL("FSCameraOrtho") != mIsOrtho)
@@ -212,22 +210,6 @@ bool LLViewerCamera::updateCameraLocation(const LLVector3 &center, const LLVecto
     mAverageSpeed = (F32)LLTrace::get_frame_recording().getPeriodMeanPerSec(sVelocityStat, 50);
     mAverageAngularSpeed = (F32)LLTrace::get_frame_recording().getPeriodMeanPerSec(sAngularVelocityStat);
     mCosHalfCameraFOV = cosf(0.5f * getView() * llmax(1.0f, getAspect()));
-
-    if (mIsOrtho)
-    {
-        if (mOrthoFrameCountdown > 0)
-        {
-            --mOrthoFrameCountdown;
-        }
-        else
-        {
-            static LLCachedControl<bool> auto_perspective(gSavedSettings, "FSAutoPerspectiveOnCameraMove", true);
-            if (auto_perspective() && ((std::isfinite(dpos) && dpos > 0.005f) || (std::isfinite(drot) && drot > 0.002f)))
-            {
-                setOrtho(false);
-            }
-        }
-    }
 
     // update pixel meter ratio using default fov, not modified one
     mPixelMeterRatio = (F32)(getViewHeightInPixels()/ (2.f*tanf(mCameraFOVDefault*0.5f)));

@@ -71,6 +71,16 @@ uniform float size; // light_size
 uniform mat4 inv_proj;
 uniform vec2 screen_res;
 
+bool isOrthoProjection()
+{
+    return abs(inv_proj[2][3]) < 0.0001;
+}
+
+vec3 getViewDir(vec3 pos)
+{
+    return isOrthoProjection() ? vec3(0.0, 0.0, -1.0) : normalize(pos);
+}
+
 const float M_PI = 3.14159265;
 const float ONE_OVER_PI = 0.3183098861;
 

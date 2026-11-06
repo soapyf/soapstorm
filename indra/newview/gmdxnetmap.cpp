@@ -520,6 +520,10 @@ void LLNetMap::addGMDXMenuCallbacks(LLUICtrl::CommitCallbackRegistry::ScopedRegi
     commitRegistrar.add("Minimap.Opacity.Set", [](LLUICtrl*, const LLSD& param)
         { gSavedSettings.setF32("GMDXMiniMapOpacity", (F32)param.asReal()); });
     // Region Map: save the map image; export / import a map file; delete this region's map, open the folder
+    commitRegistrar.add("Minimap.RegionMap.Capture", [](LLUICtrl*, const LLSD&) { GMDXRegionCapture::openWindow(); });
+    enableRegistrar.add("Minimap.RegionMap.CanCapture", [](LLUICtrl*, const LLSD&) { return GMDXRegionCapture::canCapture(); });
+    commitRegistrar.add("Minimap.RegionMap.CancelCapture", [](LLUICtrl*, const LLSD&) { GMDXRegionCapture::cancelCapture(); });
+    enableRegistrar.add("Minimap.RegionMap.IsCapturing", [](LLUICtrl*, const LLSD&) { return GMDXRegionCapture::isRunning(); });
     commitRegistrar.add("Minimap.SaveImage", [](LLUICtrl*, const LLSD&) { gmdx_save_region_map_image(); });
     enableRegistrar.add("Minimap.RegionMap.HasCapture", [](LLUICtrl*, const LLSD&) { return GMDXRegionCapture::hasCapture(gAgent.getRegion()); });
     commitRegistrar.add("Minimap.RegionMap.Delete", [](LLUICtrl*, const LLSD&) { GMDXRegionCapture::deleteCapture(gAgent.getRegion()); });

@@ -25,6 +25,8 @@
 
 #define FLT_MAX 3.402823466e+38
 
+vec3 getViewDir(vec3 pos);
+
 #if defined(SSR)
 float tapScreenSpaceReflection(int totalSamples, vec2 tc, vec3 viewPos, vec3 n, inout vec4 collectedColor, sampler2D source, float glossiness);
 #endif
@@ -701,7 +703,7 @@ void tapHeroProbe(inout vec3 glossenv, vec3 pos, vec3 norm, float glossiness)
     float w = 0;
     float dw = 0;
     float falloffMult = 10;
-    vec3 refnormpersp = reflect(pos.xyz, norm.xyz);
+    vec3 refnormpersp = reflect(getViewDir(pos.xyz), norm.xyz);
     if (heroShape < 1)
     {
         float d = 0;
@@ -739,7 +741,7 @@ void doProbeSample(inout vec3 ambenv, inout vec3 glossenv,
     // TODO - don't hard code lods
     float reflection_lods = max_probe_lod;
 
-    vec3 refnormpersp = reflect(pos.xyz, norm.xyz);
+    vec3 refnormpersp = reflect(getViewDir(pos.xyz), norm.xyz);
 
     ambenv = amblit;
 
@@ -845,7 +847,7 @@ void sampleReflectionProbesLegacy(inout vec3 ambenv, inout vec3 glossenv, inout 
     float reflection_lods = max_probe_lod;
     preProbeSample(pos);
 
-    vec3 refnormpersp = reflect(pos.xyz, norm.xyz);
+    vec3 refnormpersp = reflect(getViewDir(pos.xyz), norm.xyz);
 
     ambenv = amblit;
 

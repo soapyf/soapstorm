@@ -29,6 +29,8 @@
 
 out vec4 frag_color;
 
+vec3 getViewDir(vec3 pos);
+
 #ifdef HAS_SUN_SHADOW
 float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen);
 #endif
@@ -99,6 +101,7 @@ uniform float kd;
 uniform vec3 normScale;
 uniform float fresnelScale;
 uniform float fresnelOffset;
+uniform vec2  screen_res;
 
 //bigWave is (refCoord.w, view.w);
 in vec4 refCoord;
@@ -192,7 +195,7 @@ void main()
     float dist = length(pos.xyz);
 
     //normalize view vector
-    vec3 viewVec = normalize(pos.xyz);
+    vec3 viewVec = getViewDir(pos.xyz);
 
     // Setup our waves.
 
@@ -203,7 +206,7 @@ void main()
     generateWaveNormals(wave1, wave2, wave3);
 
     float dmod = sqrt(dist);
-    vec2 distort = (refCoord.xy/refCoord.z) * 0.5 + 0.5;
+    vec2 distort = (screen_res.x > 0.0) ? (gl_FragCoord.xy / screen_res) : ((refCoord.xy/refCoord.z) * 0.5 + 0.5);
 
     vec3 wavef = (wave1 + wave2 * 0.4 + wave3 * 0.6) * 0.5;
 
@@ -306,7 +309,7 @@ void main()
     vec3 specular_linear = srgb_to_linear(specular);
     calcDiffuseSpecular(specular_linear, metallic, diffuseColor, specularColor);
 
-    vec3 v = -normalize(pos.xyz);
+    vec3 v = -getViewDir(pos.xyz);
 
     vec3 colorEmissive = vec3(0);
     float ao = 1.0;

@@ -91,6 +91,7 @@
 
 // newview includes
 #include "fscommon.h"
+#include "gmdxregioncapture.h"
 #include "llaccordionctrl.h"
 #include "llbox.h"
 #include "llchicletbar.h"
@@ -7328,7 +7329,16 @@ void LLViewerWindow::setup3DRender()
 {
     // setup perspective camera
     // <SS:Nexii> MAX_FAR_CLIP is the projection far plane itself now (2048, constant - see llcamera.h); the interim getRenderFarPlane() that chased the draw distance is gone.
-    LLViewerCamera::getInstance()->setPerspective(NOT_FOR_SELECTION, mWorldViewRectRaw.mLeft, mWorldViewRectRaw.mBottom,  mWorldViewRectRaw.getWidth(), mWorldViewRectRaw.getHeight(), false, LLViewerCamera::getInstance()->getNear(), MAX_FAR_CLIP);
+    F32 z_far = MAX_FAR_CLIP;
+    if (GMDXRegionCapture::isRunning())
+    {
+        z_far = LLViewerCamera::getInstance()->getFar();
+    }
+    else if (LLViewerCamera::getInstance()->getOrtho())
+    {
+        z_far = llmax(MAX_FAR_CLIP, LLViewerCamera::getInstance()->getFar());
+    }
+    LLViewerCamera::getInstance()->setPerspective(NOT_FOR_SELECTION, mWorldViewRectRaw.mLeft, mWorldViewRectRaw.mBottom,  mWorldViewRectRaw.getWidth(), mWorldViewRectRaw.getHeight(), false, LLViewerCamera::getInstance()->getNear(), z_far);
     setup3DViewport();
 }
 

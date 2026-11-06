@@ -85,6 +85,7 @@
 #include "llvograss.h"
 #include "llworld.h"
 #include "pipeline.h"
+#include "gmdxregioncapture.h"
 
 #include <boost/json.hpp>
 // [RLVa:KB] - Checked: 2011-05-22 (RLVa-1.3.1a)
@@ -257,7 +258,7 @@ void display_update_camera()
         final_far = llmax(32.f, final_far / mem_factor);
     }
 // <FS:CR> Aurora sim
-    if (LLWorld::getInstance()->getLockedDrawDistance())
+    if (LLWorld::getInstance()->getLockedDrawDistance() || GMDXRegionCapture::isRunning())
     {
         //Reset the draw distance and do not update with the new val
         final_far = LLViewerCamera::getInstance()->getFar();

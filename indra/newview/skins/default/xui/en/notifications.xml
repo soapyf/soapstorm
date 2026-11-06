@@ -16214,5 +16214,70 @@ You already have a map of [REGION]. Replace it with the imported one?
      notext="Keep Mine"
      yestext="Replace"/>
   </notification>
+  <notification
+   icon="alertmodal.tga"
+   label="Capture Region Map"
+   name="RegionMapConfirm"
+   type="alertmodal">
+Capture a map of [REGION]?
+
+While the capture runs, everything in the region loads at its highest level of detail (terrain and tree detail at maximum) and the draw distance goes to [DISTANCE] m so the whole region loads; ambient occlusion, reflections, fog and god rays are turned off, and the map itself has no bloom, lens effects or auto exposure. Your settings are restored afterwards; nothing is saved. Keep Preferences and the graphics settings windows closed meanwhile: opening one stops the capture.
+
+Loading can take a few minutes and the viewer may stutter. Avatars and particles are left out, and so is everything above [CEILING] m.[PARTIAL]
+    <tag>confirm</tag>
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Cancel"
+     yestext="Capture"/>
+  </notification>
+  <notification
+   icon="notify.tga"
+   name="RegionMapProgress"
+   fade_toast="false"
+   type="notify">
+Mapping [REGION]: [PHASE]
+    <form name="form">
+      <button
+       index="0"
+       name="Cancel"
+       text="Cancel capture"/>
+    </form>
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="RegionMapNight"
+   type="notifytip">
+Region maps need daylight: the sun is down in [REGION]. Capture the map when the sun is up.
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="RegionMapStopped"
+   type="notifytip">
+The map of [REGION] was not made: [REASON]. Your settings are as they were.
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="RegionMapSaved"
+   type="notifytip">
+Map of [REGION] saved: [PATH]
+  </notification>
+  <notification
+   icon="alertmodal.tga"
+   name="RegionMapUpload"
+   type="alertmodal">
+Upload the map of [REGION] to your inventory as a [SIZE] x [SIZE] px texture for L$[COST]?
+
+Give the texture to anyone with Slipstream, Soapstorm or GunMetal-DX: in their inventory, right-click it and choose Use as Region Map. Keep its description as it is: it tells the viewer which region the map is of.
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Cancel"
+     yestext="Upload"/>
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="RegionMapMessage"
+   type="notifytip">
+[MESSAGE]
+  </notification>
   <!-- </GMDX> -->
 </notifications>

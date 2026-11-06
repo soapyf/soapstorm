@@ -1010,6 +1010,23 @@
       </menu_item_check>
       <menu_item_separator />
       <menu_item_call
+       label="Capture Region Map..."
+       name="Capture Region Map">
+        <menu_item_call.on_click
+         function="Minimap.RegionMap.Capture" />
+        <menu_item_call.on_enable
+         function="Minimap.RegionMap.CanCapture" />
+      </menu_item_call>
+      <menu_item_call
+       label="Cancel Region Map Capture"
+       name="Cancel Region Map Capture">
+        <menu_item_call.on_click
+         function="Minimap.RegionMap.CancelCapture" />
+        <menu_item_call.on_visible
+         function="Minimap.RegionMap.IsCapturing" />
+      </menu_item_call>
+      <menu_item_separator />
+      <menu_item_call
        label="Save Map Image As..."
        name="Save Map Image As">
         <menu_item_call.on_click

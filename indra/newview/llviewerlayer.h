@@ -31,6 +31,7 @@
 
 class LLViewerLayer
 {
+    friend class LLMinimapTerrain;
 public:
     LLViewerLayer(const S32 width, const F32 scale = 1.f);
     virtual ~LLViewerLayer();
