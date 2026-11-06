@@ -36,6 +36,8 @@
 #include "llfloaterreg.h"
 #include "lllocalcliprect.h"
 #include "llpanelblockedlist.h"
+#include "llmutelist.h"
+#include "llcachename.h"
 #include "lltrans.h"
 // <FS:Ansariel> [FS communication UI]
 //#include "llfloaterimnearbychat.h"
@@ -121,6 +123,43 @@ public:
                 const std::string object_name = params[2].asString();
                 LLMute mute(object_id, object_name, LLMute::OBJECT);
                 LLMuteList::getInstance()->remove(mute);
+            }
+            return true;
+        }
+        if (verb == "blockgroup")
+        {
+            if (params.size() > 2)
+            {
+                LLUUID group_id(params[2].asString());
+                if (group_id.notNull())
+                {
+                    std::string group_name;
+                    if (!gCacheName || !gCacheName->getGroupName(group_id, group_name) || group_name.empty())
+                    {
+                        group_name = LLTrans::getString("MuteGroup");
+                    }
+                    LLMute mute(group_id, group_name, LLMute::GROUP);
+                    LLMuteList::getInstance()->add(mute);
+                    LLPanelBlockedList::showPanelAndSelect(group_id);
+                }
+            }
+            return true;
+        }
+        if (verb == "unblockgroup")
+        {
+            if (params.size() > 2)
+            {
+                LLUUID group_id(params[2].asString());
+                if (group_id.notNull())
+                {
+                    std::string group_name;
+                    if (gCacheName)
+                    {
+                        gCacheName->getGroupName(group_id, group_name);
+                    }
+                    LLMute mute(group_id, group_name, LLMute::GROUP);
+                    LLMuteList::getInstance()->remove(mute);
+                }
             }
             return true;
         }

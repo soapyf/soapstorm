@@ -1184,16 +1184,32 @@ protected:
             if (menu)
             {
                 mPopupMenuHandleObject = menu->getHandle();
-                menu->updateParent(LLMenuGL::sMenuContainer);
-                LLMenuGL::showPopup(this, menu, x, y);
             }
             else
             {
                 LL_WARNS() << " Failed to create menu_object_icon.xml" << LL_ENDL;
             }
         }
-        else
+
+        if (menu)
         {
+            bool is_blocked = LLMuteList::getInstance()->isMuted(getAvatarId(), mFrom, LLMute::flagTextChat);
+            menu->setItemVisible("Block", !is_blocked);
+            menu->setItemVisible("Unblock", is_blocked);
+
+            LLUUID owner_id = mObjectData["owner_id"].asUUID();
+            bool is_group = isGroupOwned() && owner_id.notNull();
+            bool is_group_blocked = is_group && LLMuteList::getInstance()->isMuted(owner_id, LLMute::flagTextChat);
+
+            menu->setItemVisible("Block Group Objects", is_group && !is_group_blocked);
+            menu->setItemVisible("Unblock Group Objects", is_group && is_group_blocked);
+
+            LLUUID obj_id = mObjectData["object_id"];
+            LLViewerObject* object = obj_id.notNull() ? gObjectList.findObject(obj_id) : nullptr;
+            menu->setItemEnabled("zoom_in", object && object->isReachable());
+
+            menu->buildDrawLabels();
+            menu->updateParent(LLMenuGL::sMenuContainer);
             LLMenuGL::showPopup(this, menu, x, y);
         }
     }
@@ -1432,6 +1448,7 @@ FSChatHistory::FSChatHistory(const FSChatHistory::Params& p)
     mUseColor = true;
 
     setIsObjectBlockedCallback(boost::bind(&LLMuteList::isMuted, LLMuteList::getInstance(), _1, _2, 0));
+    setIsObjectGroupBlockedCallback(&LLViewerChat::checkObjectGroupStatus);
     setIsObjectReachableCallback([](const LLUUID& obj_id)
         {
             LLViewerObject* object = gObjectList.findObject(obj_id);

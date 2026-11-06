@@ -92,6 +92,10 @@ public:
     static void reportAbuseObj(std::string url);
     static void blockObject(std::string url);
     static void unblockObject(std::string url);
+    static std::string getOwnerId(std::string url);
+    static bool isGroupOwned(std::string url);
+    static void blockGroup(std::string url);
+    static void unblockGroup(std::string url);
 
     // <FS:Ansariel> FSSlurlCommand support
     static LLUUID extractUuidFromSlurl(const std::string& url);

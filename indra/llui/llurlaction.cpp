@@ -298,6 +298,50 @@ void LLUrlAction::unblockObject(std::string url)
     }
 }
 
+std::string LLUrlAction::getOwnerId(std::string url)
+{
+    LLURI uri(url);
+    LLSD query_map = uri.queryMap();
+    std::string owner_id;
+    if (query_map.has("owner"))
+    {
+        owner_id = query_map["owner"].asString();
+    }
+    return owner_id;
+}
+
+bool LLUrlAction::isGroupOwned(std::string url)
+{
+    LLURI uri(url);
+    LLSD query_map = uri.queryMap();
+    if (query_map.has("groupowned"))
+    {
+        std::string val = query_map["groupowned"].asString();
+        return (val == "true" || val == "1");
+    }
+    return false;
+}
+
+void LLUrlAction::blockGroup(std::string url)
+{
+    std::string object_id = getObjectId(url);
+    std::string owner_id = getOwnerId(url);
+    if (LLUUID::validate(owner_id))
+    {
+        executeSLURL("secondlife:///app/object/" + object_id + "/blockgroup/" + owner_id);
+    }
+}
+
+void LLUrlAction::unblockGroup(std::string url)
+{
+    std::string object_id = getObjectId(url);
+    std::string owner_id = getOwnerId(url);
+    if (LLUUID::validate(owner_id))
+    {
+        executeSLURL("secondlife:///app/object/" + object_id + "/unblockgroup/" + owner_id);
+    }
+}
+
 // <FS:Ansariel> FSSlurlCommand support
 LLUUID LLUrlAction::extractUuidFromSlurl(const std::string& url)
 {

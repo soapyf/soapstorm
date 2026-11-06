@@ -24,6 +24,20 @@
          function="Url.Unblock" />
     </menu_item_call>
     <menu_item_call
+     label="Block All Objects Deeded to Group..."
+     layout="topleft"
+     name="block_group_objects">
+        <menu_item_call.on_click
+         function="Url.BlockGroup" />
+    </menu_item_call>
+    <menu_item_call
+     label="Unblock Deeded Objects from Group"
+     layout="topleft"
+     name="unblock_group_objects">
+        <menu_item_call.on_click
+         function="Url.UnblockGroup" />
+    </menu_item_call>
+    <menu_item_call
      label="Report Abuse..."
      layout="topleft"
      name="Report Abuse">

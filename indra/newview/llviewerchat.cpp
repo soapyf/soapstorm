@@ -42,6 +42,10 @@
 #include "rlvhandler.h"
 
 #include "lfsimfeaturehandler.h"    // <FS:CR> Opensim
+#include "llviewerobjectlist.h"
+#include "llcachename.h"
+#include "llmutelist.h"
+#include "llurlaction.h"
 
 
 // LLViewerChat
@@ -352,6 +356,33 @@ std::string LLViewerChat::getObjectImSLURL(const LLChat& chat, const LLSD& args)
     // </FS:Ansariel>
     url += "&owner=" + chat.mOwnerID.asString();
 
+    bool is_group_owned = chat.mOwnerIsGroup;
+    if (!is_group_owned)
+    {
+        LLViewerObject* obj = gObjectList.findObject(chat.mFromID);
+        if (obj && (obj->flagObjectGroupOwned() || obj->permGroupOwner()))
+        {
+            is_group_owned = true;
+        }
+        else if (chat.mOwnerID.notNull() && gAgent.isInGroup(chat.mOwnerID))
+        {
+            is_group_owned = true;
+        }
+        else if (chat.mOwnerID.notNull() && gCacheName)
+        {
+            std::string temp;
+            bool is_group = false;
+            if (gCacheName->getIfThere(chat.mOwnerID, temp, is_group) && is_group)
+            {
+                is_group_owned = true;
+            }
+        }
+    }
+    if (is_group_owned)
+    {
+        url += "&groupowned=true";
+    }
+
     std::string slurl = args["slurl"].asString();
     if (slurl.empty())
     {
@@ -366,6 +397,60 @@ std::string LLViewerChat::getObjectImSLURL(const LLChat& chat, const LLSD& args)
     url += "&slurl=" + LLURI::escape(slurl);
 
     return url;
+}
+
+//static
+U32 LLViewerChat::checkObjectGroupStatus(const std::string& url)
+{
+    LLURI uri(url);
+    LLSD query_map = uri.queryMap();
+    LLUUID owner_id;
+    if (query_map.has("owner"))
+    {
+        owner_id = query_map["owner"].asUUID();
+    }
+    LLUUID object_id = LLUUID(LLUrlAction::getObjectId(url));
+
+    bool is_group = false;
+    if (query_map.has("groupowned"))
+    {
+        std::string val = query_map["groupowned"].asString();
+        is_group = (val == "true" || val == "1");
+    }
+
+    if (!is_group && object_id.notNull())
+    {
+        LLViewerObject* obj = gObjectList.findObject(object_id);
+        if (obj && (obj->flagObjectGroupOwned() || obj->permGroupOwner()))
+        {
+            is_group = true;
+        }
+    }
+
+    if (!is_group && owner_id.notNull())
+    {
+        std::string group_name;
+        bool cache_is_group = false;
+        if (gCacheName && gCacheName->getIfThere(owner_id, group_name, cache_is_group) && cache_is_group)
+        {
+            is_group = true;
+        }
+        else if (gAgent.isInGroup(owner_id))
+        {
+            is_group = true;
+        }
+    }
+
+    if (!is_group || owner_id.isNull())
+    {
+        return 0; // Not group owned
+    }
+
+    if (LLMuteList::getInstance()->isMuted(owner_id, LLMute::flagTextChat))
+    {
+        return 2; // Group owned and blocked
+    }
+    return 1; // Group owned and not blocked
 }
 
 //static

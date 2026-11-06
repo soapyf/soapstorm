@@ -211,6 +211,7 @@ LLTextBase::LLTextBase(const LLTextBase::Params &p)
     mURLClickSignal(NULL),
     mIsFriendSignal(NULL),
     mIsObjectBlockedSignal(NULL),
+    mIsObjectGroupBlockedSignal(NULL),
     mIsObjectReachableSignal(NULL),
     mMaxTextByteLength( p.max_text_length ),
     mFont(p.font),
@@ -328,6 +329,7 @@ LLTextBase::~LLTextBase()
     delete mURLClickSignal;
     delete mIsFriendSignal;
     delete mIsObjectBlockedSignal;
+    delete mIsObjectGroupBlockedSignal;
     delete mIsObjectReachableSignal;
 }
 
@@ -2471,6 +2473,8 @@ void LLTextBase::createUrlContextMenu(S32 x, S32 y, const std::string &in_url)
     registrar.add("Url.Execute", boost::bind(&LLUrlAction::executeSLURL, url, true));
     registrar.add("Url.Block", boost::bind(&LLUrlAction::blockObject, url));
     registrar.add("Url.Unblock", boost::bind(&LLUrlAction::unblockObject, url));
+    registrar.add("Url.BlockGroup", boost::bind(&LLUrlAction::blockGroup, url));
+    registrar.add("Url.UnblockGroup", boost::bind(&LLUrlAction::unblockGroup, url));
     registrar.add("Url.Teleport", boost::bind(&LLUrlAction::teleportToLocation, url));
     registrar.add("Url.ShowProfile", boost::bind(&LLUrlAction::showProfile, url));
     registrar.add("Url.AddFriend", boost::bind(&LLUrlAction::addFriend, url));
@@ -2582,6 +2586,25 @@ void LLTextBase::createUrlContextMenu(S32 x, S32 y, const std::string &in_url)
             {
                 blockButton->setVisible(!is_blocked);
                 unblockButton->setVisible(is_blocked);
+            }
+        }
+
+        LLView* blockGroupButton = menu->findChild<LLView>("block_group_objects");
+        LLView* unblockGroupButton = menu->findChild<LLView>("unblock_group_objects");
+        if (blockGroupButton || unblockGroupButton)
+        {
+            U32 group_status = 0;
+            if (mIsObjectGroupBlockedSignal)
+            {
+                group_status = *(*mIsObjectGroupBlockedSignal)(url);
+            }
+            if (blockGroupButton)
+            {
+                blockGroupButton->setVisible(group_status == 1);
+            }
+            if (unblockGroupButton)
+            {
+                unblockGroupButton->setVisible(group_status == 2);
             }
         }
 
@@ -3855,6 +3878,15 @@ boost::signals2::connection LLTextBase::setIsObjectBlockedCallback(const is_bloc
         mIsObjectBlockedSignal = new is_blocked_signal_t();
     }
     return mIsObjectBlockedSignal->connect(cb);
+}
+
+boost::signals2::connection LLTextBase::setIsObjectGroupBlockedCallback(const is_object_group_blocked_signal_t::slot_type& cb)
+{
+    if (!mIsObjectGroupBlockedSignal)
+    {
+        mIsObjectGroupBlockedSignal = new is_object_group_blocked_signal_t();
+    }
+    return mIsObjectGroupBlockedSignal->connect(cb);
 }
 
 boost::signals2::connection LLTextBase::setIsObjectReachableCallback(const is_obj_reachable_signal_t::slot_type& cb)

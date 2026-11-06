@@ -47,6 +47,7 @@
 //#include "llfloaterimsession.h"
 #include "fsfloaterim.h"
 #include "llmutelist.h"
+#include "llviewerchat.h"
 // </FS:Ansariel> [FS communication UI]
 
 const S32 BOTTOM_PAD = VPAD * 3;
@@ -355,6 +356,7 @@ void LLToastNotifyPanel::init( LLRect rect, bool show_images )
     mTextBox->setValue(mNotification->getMessage());
     mTextBox->setIsFriendCallback(LLAvatarActions::isFriend);
     mTextBox->setIsObjectBlockedCallback(boost::bind(&LLMuteList::isMuted, LLMuteList::getInstance(), _1, _2, 0));
+    mTextBox->setIsObjectGroupBlockedCallback(&LLViewerChat::checkObjectGroupStatus);
 
     // <FS:Ansariel> Script dialog colors
     if (mIsScriptDialog)
