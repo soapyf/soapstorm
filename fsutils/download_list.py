@@ -108,17 +108,25 @@ def unzip_file(zip_file, unzip_dir):
 
 def flatten_tree(tree_root):
     print(f"Flattening tree {tree_root}")
+    abs_tree_root = os.path.abspath(tree_root)
     for root, flatten_dirs, files in os.walk(tree_root, topdown=False):
+        if os.path.abspath(root) == abs_tree_root:
+            continue
         for file in files:
             # Construct the full path to the file
             file_path = os.path.join(root, file)
+            dest_path = os.path.join(tree_root, file)
+            if os.path.exists(dest_path):
+                if os.path.abspath(file_path) == os.path.abspath(dest_path):
+                    continue
+                os.remove(dest_path)
             # Move the file to the root directory
-            shutil.move(file_path, tree_root)
+            shutil.move(file_path, dest_path)
         for dir in flatten_dirs:
             # Construct the full path to the subdirectory
             subdir_path = os.path.join(root, dir)
             # Delete the subdirectory and its contents
-            shutil.rmtree(subdir_path)
+            shutil.rmtree(subdir_path, ignore_errors=True)
 
 def get_build_variables():
     """

@@ -676,8 +676,6 @@ jobs:
           path: | 
             build-linux-*/newview/*.xz
             build-linux-*/newview/*.bz2
-            ${{ runner.temp }}/*.xz
-            ${{ runner.temp }}/*.bz2
 
       - name: publish MacOS artifacts
         if: always() && runner.os == 'macOS' && steps.build.outcome == 'success'
