@@ -676,6 +676,8 @@ jobs:
           path: | 
             build-linux-*/newview/*.xz
             build-linux-*/newview/*.bz2
+            ${{ runner.temp }}/*.xz
+            ${{ runner.temp }}/*.bz2
 
       - name: publish MacOS artifacts
         if: always() && runner.os == 'macOS' && steps.build.outcome == 'success'
@@ -742,6 +744,9 @@ jobs:
           fi
           echo "FS_RELEASE_FOLDER=${FS_RELEASE_FOLDER}" >> $GITHUB_ENV
           echo "FS_BUILD_WEBHOOK_URL=${FS_BUILD_WEBHOOK_URL}" >> $GITHUB_ENV
+
+      - name: Ensure deploy directory exists
+        run: mkdir -p "${{steps.download.outputs.download-path || 'to_deploy'}}"
 
       - name: List artifacts download
         run: ls -R

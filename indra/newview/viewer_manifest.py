@@ -2425,6 +2425,11 @@ class LinuxManifest(ViewerManifest):
                 self.run_command(['tar', '-C', self.get_build_prefix(),
                                   '--numeric-owner', self.fs_linux_tar_excludes(), '-caf',
                                  tarName, installer_name])
+                if RUNNER_TEMP:
+                    # Also keep archive in build tree so workflows expecting it there find it
+                    dest_in_build = versionedName + ".tar.xz"
+                    if not os.path.exists(dest_in_build):
+                        shutil.copy2(tarName, dest_in_build)
                 #self.set_github_output_path('viewer_app', tarName)
             else:
                 print("Skipping %s.tar.xz for non-Release build (%s)" % \
