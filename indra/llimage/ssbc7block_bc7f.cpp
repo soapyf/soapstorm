@@ -1,12 +1,12 @@
 /**
  * @file ssbc7block_bc7f.cpp
- * @brief BC7 block backend: Binomial's bc7f, the analytical one-shot encoder inside the Basis Universal transcoder - see doc/super_compressed_textures.md
+ * @brief BC7 block backend: Binomial's bc7f, the analytical one-shot encoder inside the Basis Universal transcoder - see doc/viewer/super_compressed_textures.md
  *
  * This file is Soapstorm's own code and carries Soapstorm's licence. It only calls bc7f through the
  * transcoder's public header; no Basis Universal source is copied here. The transcoder itself lives
  * unmodified in indra/llimage/basis_universal/ under the Apache Licence 2.0, with its LICENSE and
  * NOTICE kept verbatim beside it, and is recorded in indra/newview/licenses-*.txt alongside the other
- * third party components the viewer links. See doc/super_compressed_textures.md for why it is kept at
+ * third party components the viewer links. See doc/viewer/super_compressed_textures.md for why it is kept at
  * arm's length rather than merged into this module.
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
@@ -24,7 +24,7 @@
 
 // bc7f replaces the portable mode 6 encoder in ssbc7block_mode6.cpp, and the two are alternatives: exactly one is compiled in, selected by indra/llimage/CMakeLists.txt through SS_BC7F. Both implement the same seam, so nothing above this file knows which one it got.
 //
-// bc7f is an analytical encoder: it predicts the best BC7 configuration for a block from its statistics and encodes that one configuration, rather than searching. Measured against the portable backend (doc/super_compressed_textures.md, "bc7f and bc7e_scalar, measured 2026-09-09") it is better on every content class and 10-15x faster on textured content, and it is plain C++ with no SIMD, so every platform and every build gets it without any toolchain beyond the compiler.
+// bc7f is an analytical encoder: it predicts the best BC7 configuration for a block from its statistics and encodes that one configuration, rather than searching. Measured against the portable backend (doc/viewer/super_compressed_textures.md, "bc7f and bc7e_scalar, measured 2026-09-09") it is better on every content class and 10-15x faster on textured content, and it is plain C++ with no SIMD, so every platform and every build gets it without any toolchain beyond the compiler.
 
 namespace
 {

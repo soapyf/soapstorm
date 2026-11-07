@@ -1,6 +1,6 @@
 /**
  * @file ssbc7serve.cpp
- * @brief Squeeze BC7 read path - probes the sidecar store, reads a mip prefix off the reader pool and uploads it in place of a J2C decode, see doc/super_compressed_textures.md
+ * @brief Squeeze BC7 read path - probes the sidecar store, reads a mip prefix off the reader pool and uploads it in place of a J2C decode, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code

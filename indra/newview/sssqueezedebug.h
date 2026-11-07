@@ -1,6 +1,6 @@
 /**
  * @file sssqueezedebug.h
- * @brief Squeeze P0 self test - synthetic BC7 upload and VRAM accounting proof, see doc/super_compressed_textures.md
+ * @brief Squeeze P0 self test - synthetic BC7 upload and VRAM accounting proof, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code

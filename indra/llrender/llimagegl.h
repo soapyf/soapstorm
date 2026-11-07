@@ -155,7 +155,7 @@ public:
     // Squeeze - the store classifies alpha shape from the source pixels at encode time, because BC7 blocks cannot be scanned byte-wise and calcAlphaChannelOffsetAndStride therefore forces mIsMask false for BPTC. This is how that answer reaches the alpha-MASK render path in llface.cpp; there is no other way in, mIsMask having no setter.
     void setIsAlphaMask(bool is_mask) { mIsMask = is_mask; }
 
-    // Coarsest discard level whose "not a mask" verdict from analyzeAlpha is trusted (finer levels are also trusted; coarser uploads are provisional). doc/alpha_mask_verdict.md
+    // Coarsest discard level whose "not a mask" verdict from analyzeAlpha is trusted (finer levels are also trusted; coarser uploads are provisional). doc/viewer/alpha_mask_verdict.md
     static S32 sSSAlphaMaskTrustedDiscard;
     // </SS:Nexii>
 
@@ -312,7 +312,7 @@ public:
     static LLImageGL* sDefaultGLTexture ;
     static bool sAutomatedTest;
     static bool sCompressTextures;          //use GL texture compression
-    // <SS:Nexii> Squeeze - sSqueezeEnabled mirrors the SSSqueezeEnabled setting; canUseSqueeze() also requires gGLManager.mHasBPTC so callers fall back to the ordinary uncompressed path in silence, see doc/super_compressed_textures.md
+    // <SS:Nexii> Squeeze - sSqueezeEnabled mirrors the SSSqueezeEnabled setting; canUseSqueeze() also requires gGLManager.mHasBPTC so callers fall back to the ordinary uncompressed path in silence, see doc/viewer/super_compressed_textures.md
     static bool sSqueezeEnabled;
     static bool canUseSqueeze();
     // </SS:Nexii>

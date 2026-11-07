@@ -1,6 +1,6 @@
 /**
  * @file ssbc7encodequeue.cpp
- * @brief Squeeze BC7 encode pool - the demand-path hook that turns a freshly decoded full resolution texture into a stored sidecar, see doc/super_compressed_textures.md
+ * @brief Squeeze BC7 encode pool - the demand-path hook that turns a freshly decoded full resolution texture into a stored sidecar, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code
@@ -361,7 +361,7 @@ ESSBC7EncodeVerdict ssBC7EncodeConsider(const LLUUID& id,
         return record(st, SSBC7_DECLINE_NOT_READY);
     }
 
-    // Excluded kinds. Bakes churn a fresh uuid on every outfit change, map tiles and local files are not world content, and anything wanting the aux channel is a bump or sculpt source whose consumer needs the raw rather than a compressed upload. See doc/super_compressed_textures.md for the full list and the reasoning behind each.
+    // Excluded kinds. Bakes churn a fresh uuid on every outfit change, map tiles and local files are not world content, and anything wanting the aux channel is a bump or sculpt source whose consumer needs the raw rather than a compressed upload. See doc/viewer/super_compressed_textures.md for the full list and the reasoning behind each.
     if (ftype != FTT_DEFAULT || needs_aux || in_local_cache)
     {
         return record(st, SSBC7_DECLINE_TYPE);

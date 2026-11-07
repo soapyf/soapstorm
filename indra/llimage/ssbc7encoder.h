@@ -1,6 +1,6 @@
 /**
  * @file ssbc7encoder.h
- * @brief Squeeze BC7 encoder - one full resolution image to a complete BC7 mip chain in store order, see doc/super_compressed_textures.md
+ * @brief Squeeze BC7 encoder - one full resolution image to a complete BC7 mip chain in store order, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code

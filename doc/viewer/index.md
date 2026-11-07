@@ -14,8 +14,10 @@ Deconstruction of how the Soapstorm viewer (Firestorm-derived SL viewer) works, 
 | [network_login.md](network_login.md) | UDP message system + decode cost, HTTP/caps/event poll, login STATE machine, disconnect/relogin, object updates |
 | [soapstorm_layer.md](soapstorm_layer.md) | Soapstorm fork features and conventions |
 | [perf_opportunities.md](perf_opportunities.md) | Ranked improvement list: compressed GPU textures, cache consolidation, off-main-thread work, external UI feasibility |
-
-Related, outside this folder: `doc/render_glow_pipeline.md` (verified glow trace), `doc/region_object_cache.md`, `doc/super_compressed_textures.md`.
+| [alpha_mask_verdict.md](alpha_mask_verdict.md) | Coarse mip mask analysis, provisional verdicts, and SSAlphaMaskTrustedDiscard |
+| [eep_atmosphere_reference.md](eep_atmosphere_reference.md) | EEP atmosphere math, Rayleigh/Mie equations, and frontend/backend parameter units |
+| [render_glow_pipeline.md](render_glow_pipeline.md) | Verified glow/bloom render pass trace, render targets, and buffer flow |
+| [super_compressed_textures.md](super_compressed_textures.md) | Squeeze BC7 encoder design, BC7 modes, and texture compression benchmarks |
 
 ## How it fits together (one frame)
 

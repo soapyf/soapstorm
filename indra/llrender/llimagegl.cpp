@@ -2502,7 +2502,7 @@ bool LLImageGL::analyzeAlphaData(
         is_mask = true; // is a mask
     }
 
-    // <SS:Nexii> A coarse mip cannot prove soft alpha: decimation smears hard cutout edges into midrange values and the 2x2 box copy above skews the histogram further, so "not a mask" from a discard coarser than sSSAlphaMaskTrustedDiscard is provisional. When all but 1/48 of the samples sit in the top bucket the texture is treated as a mask until a trusted discard settles it, which keeps a mostly-solid texture out of the blended alpha pass (no depth write, distance-sorted) while it is still fetching; LLViewerFetchedTexture::ssSyncAlphaMaskVerdict rebuilds the faces if a finer discard overturns the guess. doc/alpha_mask_verdict.md
+    // <SS:Nexii> A coarse mip cannot prove soft alpha: decimation smears hard cutout edges into midrange values and the 2x2 box copy above skews the histogram further, so "not a mask" from a discard coarser than sSSAlphaMaskTrustedDiscard is provisional. When all but 1/48 of the samples sit in the top bucket the texture is treated as a mask until a trusted discard settles it, which keeps a mostly-solid texture out of the blended alpha pass (no depth write, distance-sorted) while it is still fetching; LLViewerFetchedTexture::ssSyncAlphaMaskVerdict rebuilds the faces if a finer discard overturns the guess. doc/viewer/alpha_mask_verdict.md
     if (!is_mask && sSSAlphaMaskTrustedDiscard >= 0 && discard_level > sSSAlphaMaskTrustedDiscard && (length - sample[15]) <= length/48)
     {
         is_mask = true;

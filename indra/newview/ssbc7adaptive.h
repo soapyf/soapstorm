@@ -1,6 +1,6 @@
 /**
  * @file ssbc7adaptive.h
- * @brief Squeeze adaptive encode quality - measures what the encode pool is actually achieving and picks the encoder profile that matches the backlog, see doc/super_compressed_textures.md
+ * @brief Squeeze adaptive encode quality - measures what the encode pool is actually achieving and picks the encoder profile that matches the backlog, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code

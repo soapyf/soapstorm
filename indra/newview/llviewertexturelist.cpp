@@ -690,7 +690,7 @@ LLViewerFetchedTexture* LLViewerTextureList::createImage(const LLUUID &image_id,
         imagep->forceActive() ;
     }
 
-    // <SS:Nexii> Squeeze - STAGE 1 of the read path, and it has to happen HERE, after the boost level is set and before fast-cache enrolment. After, because half the exclusions are keyed on boost; before, because a fast cache hit is a 16x16 raw that goes straight to addToCreateTexture and would clobber a BC7 upload with a thumbnail. One map find under the store's map mutex, no file IO, microseconds - safe on the frame thread. See doc/super_compressed_textures.md.
+    // <SS:Nexii> Squeeze - STAGE 1 of the read path, and it has to happen HERE, after the boost level is set and before fast-cache enrolment. After, because half the exclusions are keyed on boost; before, because a fast cache hit is a 16x16 raw that goes straight to addToCreateTexture and would clobber a BC7 upload with a thumbnail. One map find under the store's map mutex, no file IO, microseconds - safe on the frame thread. See doc/viewer/super_compressed_textures.md.
     const bool bc7_known = (ssBC7ServeProbe(imagep) == SSBC7_SERVE_HIT);
     // </SS:Nexii>
 

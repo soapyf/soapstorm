@@ -1,6 +1,6 @@
 /**
  * @file ssbc7promotepolicy.cpp
- * @brief Squeeze promotion engine - the decisions, with no viewer attached, see doc/super_compressed_textures.md
+ * @brief Squeeze promotion engine - the decisions, with no viewer attached, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code

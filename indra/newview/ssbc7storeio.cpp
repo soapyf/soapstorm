@@ -1,6 +1,6 @@
 /**
  * @file ssbc7storeio.cpp
- * @brief Squeeze BC7 sidecar store, IO half - directories, handles, recovery and the disk budget, see doc/super_compressed_textures.md
+ * @brief Squeeze BC7 sidecar store, IO half - directories, handles, recovery and the disk budget, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code

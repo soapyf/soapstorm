@@ -1,6 +1,6 @@
 /**
  * @file ssbc7encodequeue.h
- * @brief Squeeze BC7 encode pool - the demand-path hook that turns a freshly decoded full resolution texture into a stored sidecar, see doc/super_compressed_textures.md
+ * @brief Squeeze BC7 encode pool - the demand-path hook that turns a freshly decoded full resolution texture into a stored sidecar, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code
@@ -31,7 +31,7 @@ enum ESSBC7EncodeVerdict
     SSBC7_ENQUEUED = 0,
     SSBC7_DECLINE_OFF,              // SSSqueezeEnabled or SSSqueezeBackgroundEncode is off, or the GPU has no BPTC so there would be nothing to serve the record to
     SSBC7_DECLINE_NOT_READY,        // the store never came up, is a read-only second instance, or shutdown has begun
-    SSBC7_DECLINE_TYPE,             // an excluded texture kind - see doc/super_compressed_textures.md for why each one is excluded
+    SSBC7_DECLINE_TYPE,             // an excluded texture kind - see doc/viewer/super_compressed_textures.md for why each one is excluded
     SSBC7_DECLINE_PARTIAL,          // not full resolution, which is the whole point of full-res-only; the uuid goes on the want list for the promotion engine instead
     SSBC7_DECLINE_GEOMETRY,         // non power of two, below the minimum size, or a component count BC7 cannot represent
     SSBC7_DECLINE_ALREADY,          // already stored, or already being encoded by another worker

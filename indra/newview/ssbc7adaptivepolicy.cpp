@@ -1,6 +1,6 @@
 /**
  * @file ssbc7adaptivepolicy.cpp
- * @brief Squeeze adaptive encode quality - the moving window and the control law, with no viewer attached, see doc/super_compressed_textures.md
+ * @brief Squeeze adaptive encode quality - the moving window and the control law, with no viewer attached, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code

@@ -1,6 +1,6 @@
 /**
  * @file ssbc7store.cpp
- * @brief Squeeze BC7 sidecar store, format half - every byte the store puts on disk, and nothing that touches a disk, see doc/super_compressed_textures.md
+ * @brief Squeeze BC7 sidecar store, format half - every byte the store puts on disk, and nothing that touches a disk, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code

@@ -1,6 +1,6 @@
 /**
  * @file ssbc7storeevict.cpp
- * @brief Squeeze BC7 sidecar store, eviction half - what dies, why, and the accounting that makes SSBC7CacheSize mean something, see doc/super_compressed_textures.md
+ * @brief Squeeze BC7 sidecar store, eviction half - what dies, why, and the accounting that makes SSBC7CacheSize mean something, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code

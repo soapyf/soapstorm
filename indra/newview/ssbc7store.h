@@ -1,6 +1,6 @@
 /**
  * @file ssbc7store.h
- * @brief Squeeze BC7 sidecar store - append-only index plus capped data segments, see doc/super_compressed_textures.md
+ * @brief Squeeze BC7 sidecar store - append-only index plus capped data segments, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code

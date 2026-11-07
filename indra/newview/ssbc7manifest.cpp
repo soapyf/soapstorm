@@ -1,6 +1,6 @@
 /**
  * @file ssbc7manifest.cpp
- * @brief Squeeze region texture manifests - records what mattered in a region and pre-warms its BC7 off the local disk on returning, see doc/super_compressed_textures.md
+ * @brief Squeeze region texture manifests - records what mattered in a region and pre-warms its BC7 off the local disk on returning, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code

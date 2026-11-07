@@ -1,6 +1,6 @@
 /**
  * @file ssbc7manifest.h
- * @brief Squeeze region texture manifests - remembers which texture uuids mattered in a region and, on returning, puts their BC7 in video memory off the local disk before anything asks, see doc/super_compressed_textures.md
+ * @brief Squeeze region texture manifests - remembers which texture uuids mattered in a region and, on returning, puts their BC7 in video memory off the local disk before anything asks, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code
@@ -18,7 +18,7 @@
 
 // THE GAP THIS CLOSES. The BC7 store only ever helps once something ASKS for a uuid: the interest list has to reach the object, the fetcher has to want the texture and the pipeline has to decide it is wanted, and only then is the store consulted. On arriving somewhere you have been before, the bytes are already on the local disk in the exact form the GPU wants them, and the viewer sits waiting for the network to tell it something it already knows.
 //
-// A MANIFEST IS A LIST OF UUIDS, NEVER A COPY OF THE BYTES, and that is the whole design (doc/super_compressed_textures.md, "Q1: why manifests beat physical region/agent data files"). The same bodies, kits and building textures recur across regions, so a physical per-region file would multiply the store by the number of places a texture is seen, for nothing a list of uuids does not already deliver. Sixteen bytes per uuid buys the teleport warm-up, the semantic eviction pin and shared-asset correctness all at once.
+// A MANIFEST IS A LIST OF UUIDS, NEVER A COPY OF THE BYTES, and that is the whole design (doc/viewer/super_compressed_textures.md, "Q1: why manifests beat physical region/agent data files"). The same bodies, kits and building textures recur across regions, so a physical per-region file would multiply the store by the number of places a texture is seen, for nothing a list of uuids does not already deliver. Sixteen bytes per uuid buys the teleport warm-up, the semantic eviction pin and shared-asset correctness all at once.
 //
 // SCOPE. Region manifests only. Agent manifests are the same mechanism keyed by avatar uuid and hooked at processAvatarAppearance instead of region change, and are deliberately NOT built here - the read path, the cap policy and the file format below are all key-agnostic, so adding them later is a second filename prefix and a second recorder rather than a second design.
 

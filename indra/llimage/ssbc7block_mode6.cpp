@@ -1,6 +1,6 @@
 /**
  * @file ssbc7block_mode6.cpp
- * @brief BC7 block backend: a real mode 6 encoder - see doc/super_compressed_textures.md
+ * @brief BC7 block backend: a real mode 6 encoder - see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code

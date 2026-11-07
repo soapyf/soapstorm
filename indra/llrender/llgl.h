@@ -102,7 +102,7 @@ public:
     bool mHasDebugOutput = false;
     bool mHasTransformFeedback = false;
     bool mHasAnisotropic = false;
-    // <SS:Nexii> GL_ARB_texture_compression_bptc, core in GL 4.2 - gates every BC7 texture upload, see doc/super_compressed_textures.md
+    // <SS:Nexii> GL_ARB_texture_compression_bptc, core in GL 4.2 - gates every BC7 texture upload, see doc/viewer/super_compressed_textures.md
     bool mHasBPTC = false;
     // </SS:Nexii>
 

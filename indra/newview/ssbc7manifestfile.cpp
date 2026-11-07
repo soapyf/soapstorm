@@ -1,6 +1,6 @@
 /**
  * @file ssbc7manifestfile.cpp
- * @brief Squeeze region texture manifests - the file format and the cap policy, with no viewer attached, see doc/super_compressed_textures.md
+ * @brief Squeeze region texture manifests - the file format and the cap policy, with no viewer attached, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code

@@ -1,6 +1,6 @@
 /**
  * @file ssbc7adaptive.cpp
- * @brief Squeeze adaptive encode quality - the live controller: measurement from the workers, one decision every couple of seconds on the main thread, see doc/super_compressed_textures.md
+ * @brief Squeeze adaptive encode quality - the live controller: measurement from the workers, one decision every couple of seconds on the main thread, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code

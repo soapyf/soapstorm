@@ -424,7 +424,7 @@ public:
 
     virtual bool scaleDown() { return false; };
 
-    // <SS:Nexii> Squeeze - the BC7 residency ladder, see doc/super_compressed_textures.md. It lives on this class and not on LLImageGL for three reasons drawn from the code: this is the only object that survives the whole fetch/create cycle, updateFetch has to be able to see the state to decide whether to spend network on the J2C copy, and both of the edges verification found bugs on - RESIDENT to raw-needed and RESIDENT to uncompressed-upgrade - are member functions here.
+    // <SS:Nexii> Squeeze - the BC7 residency ladder, see doc/viewer/super_compressed_textures.md. It lives on this class and not on LLImageGL for three reasons drawn from the code: this is the only object that survives the whole fetch/create cycle, updateFetch has to be able to see the state to decide whether to spend network on the J2C copy, and both of the edges verification found bugs on - RESIDENT to raw-needed and RESIDENT to uncompressed-upgrade - are member functions here.
     //
     // DECLINED is a fifth, terminal value beyond the four the design named, and it carries the reason. Without it a texture excluded for sculpt or raw-consumer reasons would be re-probed every frame, and the log could not tell "never considered" from "considered and refused" - the exact failure the encode side already paid for and fixed with ESSBC7EncodeVerdict.
     enum ESSBC7Residency
@@ -455,7 +455,7 @@ public:
     // An uncompressed create is queued or already running for this texture. Both flags are needed: mCreatePending is the main-thread queue and mNeedsCreateTexture covers the LLImageGLThread route, which does the GL work on a worker and would otherwise be touching the same LLImageGL as a BC7 upload. Not const because LLAtomicBase's conversion operator is not.
     bool ssBC7CreateInFlight()            { return mNeedsCreateTexture || mCreatePending; }
 
-    // Re-reads the alpha-mask verdict after an upload and dirties every face when it differs from the one the faces were built with; canRenderAsMask is baked into the pass assignment at genDrawInfo time, so a verdict that flips between discard levels reaches nothing without this. Main thread only. doc/alpha_mask_verdict.md
+    // Re-reads the alpha-mask verdict after an upload and dirties every face when it differs from the one the faces were built with; canRenderAsMask is baked into the pass assignment at genDrawInfo time, so a verdict that flips between discard levels reaches nothing without this. Main thread only. doc/viewer/alpha_mask_verdict.md
     void ssSyncAlphaMaskVerdict();
 
     // Uploads a stored BC7 mip prefix. Mirrors by hand what LLGLTexture::createGLTexture(discard, imageraw, ...) does around the raw overload, because there is no LLGLTexture wrapper for the data_hasmips form and processTextureStats divides by mTexelsPerImage.

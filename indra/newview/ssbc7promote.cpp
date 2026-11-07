@@ -1,6 +1,6 @@
 /**
  * @file ssbc7promote.cpp
- * @brief Squeeze promotion engine - fills the BC7 tier from J2C already on disk first, and only then from the network, see doc/super_compressed_textures.md
+ * @brief Squeeze promotion engine - fills the BC7 tier from J2C already on disk first, and only then from the network, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code

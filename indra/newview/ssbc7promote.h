@@ -1,6 +1,6 @@
 /**
  * @file ssbc7promote.h
- * @brief Squeeze promotion engine - drains the BC7 want list, first from J2C already complete on this disk and then, under a hard throttle, by completing partial J2C over the network, see doc/super_compressed_textures.md
+ * @brief Squeeze promotion engine - drains the BC7 want list, first from J2C already complete on this disk and then, under a hard throttle, by completing partial J2C over the network, see doc/viewer/super_compressed_textures.md
  *
  * $LicenseInfo:firstyear=2026&license=fsviewerlgpl$
  * Soapstorm Viewer Source Code

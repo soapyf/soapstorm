@@ -1777,7 +1777,7 @@ bool LLViewerFetchedTexture::createTexture(S32 usename/*= 0*/)
     return res;
 }
 
-// <SS:Nexii> Squeeze - the BC7 read path's half of the create cycle, see doc/super_compressed_textures.md
+// <SS:Nexii> Squeeze - the BC7 read path's half of the create cycle, see doc/viewer/super_compressed_textures.md
 bool LLViewerFetchedTexture::ssBC7NeedsRawCallback() const
 {
     for (const LLLoadedCallbackEntry* entryp : mLoadedCallbackList)
@@ -1890,7 +1890,7 @@ bool LLViewerFetchedTexture::ssBC7UploadFromStore(const U8* data_in, S32 serve_d
     return true;
 }
 
-// <SS:Nexii> Dirties the faces when the alpha-mask verdict has changed since they were last built. doc/alpha_mask_verdict.md
+// <SS:Nexii> Dirties the faces when the alpha-mask verdict has changed since they were last built. doc/viewer/alpha_mask_verdict.md
 void LLViewerFetchedTexture::ssSyncAlphaMaskVerdict()
 {
     if (mGLTexturep.isNull() || mComponents != 4)
