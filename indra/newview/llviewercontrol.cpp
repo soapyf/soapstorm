@@ -193,6 +193,10 @@ BandwidthUpdater sBandwidthUpdater;
 static bool handleRenderAvatarMouselookChanged(const LLSD& newvalue)
 {
     LLVOAvatar::sVisibleInFirstPerson = newvalue.asBoolean();
+    if (isAgentAvatarValid())
+    {
+        gAgentAvatarp->updateAttachmentVisibility(gAgentCamera.getCameraMode());
+    }
     return true;
 }
 

@@ -3665,7 +3665,15 @@ void LLAgentCamera::updateFlycamCursorVisibility(LLGameControl::AgentControlMode
 
 bool LLAgentCamera::isHidingAvatarForFirstPerson() const
 {
-    return cameraMouselook() && (!mUsingFlycam || mFlycamHidingAvatar);
+    if (cameraOTS())
+    {
+        return false;
+    }
+
+    const bool in_first_person = (mCameraMode == CAMERA_MODE_MOUSELOOK)
+        && (!mCameraAnimating || mLastCameraMode == CAMERA_MODE_MOUSELOOK || mLastCameraMode == CAMERA_MODE_OTS);
+
+    return in_first_person && (!mUsingFlycam || mFlycamHidingAvatar);
 }
 
 //-----------------------------------------------------------------------------
