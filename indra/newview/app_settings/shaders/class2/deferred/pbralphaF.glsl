@@ -49,9 +49,7 @@ out vec4 frag_color;
 
 in vec3 vary_fragcoord;
 
-#ifdef HAS_SUN_SHADOW
-  uniform vec2 screen_res;
-#endif
+uniform vec2 screen_res;
 
 in vec3 vary_position;
 
