@@ -993,7 +993,7 @@ class Windows_x86_64_Manifest(ViewerManifest):
         # Check if we should use Velopack instead of NSIS
         # Note: as of 2026.01's release, we will be building with Velopack's one click install.
         # We maintain the legacy NSIS packaging mainly for TPVs at this point.
-        if self.args.get('velopack', 'OFF') == 'ON':
+        if str(self.args.get('velopack', 'OFF')).upper() in ('ON', 'TRUE', '1', 'YES'):
             self.velopack_package_finish()
             return
 
@@ -2062,7 +2062,7 @@ class Darwin_x86_64_Manifest(ViewerManifest):
         # Generate Velopack update packages if enabled
         # This creates the nupkg and RELEASES files needed for auto-updates
         # Distribution is still via DMG, but updates use Velopack
-        if self.args.get('velopack', 'OFF') == 'ON':
+        if str(self.args.get('velopack', 'OFF')).upper() in ('ON', 'TRUE', '1', 'YES'):
             self.velopack_package_finish()
 
     def velopack_package_finish(self):

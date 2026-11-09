@@ -893,8 +893,8 @@ jobs:
           # 5. macOS DMG images
           find "$DOWNLOAD_DIR" -type f -name "*.dmg" -exec cp -f {} release_assets/ \;
 
-          # 6. Linux packages (tar.xz and tar.bz2)
-          find "$DOWNLOAD_DIR" -type f \( -name "*.tar.xz" -o -name "*.tar.bz2" \) -exec cp -f {} release_assets/ \;
+          # 6. Linux packages (tar.xz and tar.bz2, excluding debug symbols)
+          find "$DOWNLOAD_DIR" -type f \( -name "*.tar.xz" -o -name "*.tar.bz2" \) ! -name "*symbols*" ! -name "*pdbsym*" -exec cp -f {} release_assets/ \;
 
           echo "Staged release assets:"
           ls -la release_assets/
