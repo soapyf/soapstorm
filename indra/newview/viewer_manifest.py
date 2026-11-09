@@ -1022,11 +1022,12 @@ class Windows_x86_64_Manifest(ViewerManifest):
         # Channel-specific icon for the Velopack installer.
         # CMake copies icons/{channel}/secondlife.ico to res/ll_icon.ico at configure time.
         # Try the CMake-generated copy first, fall back to the source icon.
-        # <FS:TJ> Use Firestorms icon path
-        #icon_path = os.path.join(self.get_src_prefix(), 'res', 'll_icon.ico')
-        #if not os.path.exists(icon_path):
-        #    icon_path = os.path.join(self.get_src_prefix(), self.icon_path(), 'secondlife.ico')
-        icon_path = os.path.join(self.get_src_prefix(), self.icon_path(), 'firestorm_icon.ico')
+        # <FS:TJ> Use SoapStorm icon path
+        icon_path = os.path.join(self.get_src_prefix(), self.icon_path(), 'soapstorm_icon.ico')
+        if not os.path.exists(icon_path):
+            icon_path = os.path.join(self.get_src_prefix(), self.icon_path(), 'firestorm_icon.ico')
+        if not os.path.exists(icon_path):
+            icon_path = os.path.join(self.get_src_prefix(), self.icon_path(), 'secondlife.ico')
         # </FS:TJ>
 
         # In CI, defer Velopack packaging to the sign step only if DEFER_VELOPACK_SIGNING is set.
@@ -1069,6 +1070,9 @@ class Windows_x86_64_Manifest(ViewerManifest):
             # shortcuts in llvelopack.cpp on_after_install hook instead.
             '--shortcuts', '',
         ]
+
+        if self.args.get('arch') == 'x86_64':
+            vpk_args.extend(['--runtime', 'win-x64'])
 
         # Add icon — CMake copies the channel-appropriate secondlife.ico to res/ll_icon.ico
         if os.path.exists(icon_path):

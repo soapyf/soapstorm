@@ -414,6 +414,10 @@ void LLAutoUpdateChecker::checkUpdateCoro()
     {
         LL_INFOS("AutoUpdate") << "User has skipped version " << remoteVersion << LL_ENDL;
         mCheckInProgress = false;
+        if (mIsManualCheck)
+        {
+            showUpToDateNotification();
+        }
         return;
     }
 
