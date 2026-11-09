@@ -26,7 +26,7 @@ public:
 
     // Static convenience methods for update flows
     static void show(const std::string& version = "");
-    static void setProgress(F32 percent, const std::string& statusText = "", bool canCreep = false, F32 creepLimit = 0.0f);
+    static void setProgress(F32 percent, const std::string& statusText = "");
     static void hide();
 
     // Set the download information
@@ -36,7 +36,7 @@ public:
     void updateProgress();
 
     // Explicit progress and status control
-    void setProgressPercent(F32 percent, const std::string& statusText = "", bool canCreep = false, F32 creepLimit = 0.0f);
+    void setProgressPercent(F32 percent, const std::string& statusText = "");
     void setUpdateText(const std::string& text);
 
 private:
@@ -50,8 +50,6 @@ private:
 
     F32 mCurrentPercent;
     F32 mTargetPercent;
-    bool mCreepActive;
-    F32 mCreepLimit;
     LLFrameTimer mAnimTimer;
 };
 

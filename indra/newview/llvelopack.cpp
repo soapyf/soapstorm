@@ -1112,7 +1112,7 @@ static void on_progress(void* user_data, size_t progress)
 
     LLAppViewer::instance()->postToMainCoro([mappedProgress, text]()
     {
-        LLFloaterUpdateProgress::setProgress(mappedProgress, text, false, 0.0f);
+        LLFloaterUpdateProgress::setProgress(mappedProgress, text);
     });
 
     if (sProgressCallback)
@@ -1130,42 +1130,12 @@ static void on_vpk_log(void* p_user_data,
 
     if (sIsDownloading.load())
     {
-        if (msg.find("Extracting base package") != std::string::npos)
-        {
-            LLAppViewer::instance()->postToMainCoro([]()
-            {
-                LLFloaterUpdateProgress::setProgress(50.0f, "Preparing base package...", true, 65.0f);
-            });
-        }
-        else if (msg.find("Base package extracted") != std::string::npos ||
-                 msg.find("applying zsdiff patch") != std::string::npos)
-        {
-            LLAppViewer::instance()->postToMainCoro([]()
-            {
-                LLFloaterUpdateProgress::setProgress(70.0f, "Applying differential patch...", true, 80.0f);
-            });
-        }
-        else if (msg.find("Asembling output package") != std::string::npos ||
-                 msg.find("Assembling output package") != std::string::npos)
-        {
-            LLAppViewer::instance()->postToMainCoro([]()
-            {
-                LLFloaterUpdateProgress::setProgress(85.0f, "Assembling update package...", true, 95.0f);
-            });
-        }
-        else if (msg.find("Successfully applied") != std::string::npos)
-        {
-            LLAppViewer::instance()->postToMainCoro([]()
-            {
-                LLFloaterUpdateProgress::setProgress(98.0f, "Verifying package...", false, 0.0f);
-            });
-        }
-        else if (msg.find("Falling back to full update") != std::string::npos)
+        if (msg.find("Falling back to full update") != std::string::npos)
         {
             sDownloadIsDelta = false;
             LLAppViewer::instance()->postToMainCoro([]()
             {
-                LLFloaterUpdateProgress::setProgress(0.0f, "Falling back to full download...", false, 0.0f);
+                LLFloaterUpdateProgress::setProgress(0.0f, "Falling back to full download...");
             });
         }
     }
@@ -1372,6 +1342,27 @@ bool velopack_is_available()
     return sUpdateManager != nullptr;
 }
 
+static std::string get_velopack_log_path()
+{
+#if LL_WINDOWS
+    std::string cache_dir = gDirUtilp->getOSCacheDir();
+    if (!cache_dir.empty())
+    {
+        std::string app_name = ll_convert<std::string>(get_app_name());
+        return gDirUtilp->add(cache_dir, "velopack", "velopack_" + app_name + ".log");
+    }
+#elif LL_DARWIN
+    std::string cache_dir = gDirUtilp->getOSCacheDir();
+    if (!cache_dir.empty())
+    {
+        std::string app_name = LLVersionInfo::instance().getChannel();
+        app_name.erase(std::remove(app_name.begin(), app_name.end(), ' '), app_name.end());
+        return gDirUtilp->add(cache_dir, "velopack", "velopack_" + app_name + ".log");
+    }
+#endif
+    return "";
+}
+
 // Downloads the update that was found during the check phase.
 // Operates on sPendingCheckInfo which was set by velopack_check_for_updates.
 static bool velopack_download_pending_update()
@@ -1390,7 +1381,102 @@ static bool velopack_download_pending_update()
     LL_CONT << LL_ENDL;
     LL_INFOS("Velopack") << "Downloading update via Velopack (deltas will be prioritized)..." << LL_ENDL;
 
-    if (vpkc_download_updates(sUpdateManager, sPendingCheckInfo, on_progress, nullptr))
+    std::atomic<bool> stopWatcher{false};
+    std::thread logWatcher;
+
+    if (sDownloadIsDelta)
+    {
+        std::string logPath = get_velopack_log_path();
+        logWatcher = std::thread([logPath, &stopWatcher]()
+        {
+            std::streampos lastPos = 0;
+            if (!logPath.empty() && LLFile::isfile(logPath))
+            {
+                std::ifstream initFile(logPath, std::ios::in | std::ios::binary);
+                if (initFile.is_open())
+                {
+                    initFile.seekg(0, std::ios::end);
+                    lastPos = initFile.tellg();
+                }
+            }
+
+            int lastMilestone = 0;
+
+            while (!stopWatcher.load())
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(250));
+                if (stopWatcher.load()) break;
+
+                if (logPath.empty() || !LLFile::isfile(logPath))
+                    continue;
+
+                std::ifstream logFile(logPath, std::ios::in | std::ios::binary);
+                if (!logFile.is_open())
+                    continue;
+
+                logFile.seekg(lastPos);
+                std::string line;
+                while (std::getline(logFile, line))
+                {
+                    if (line.empty()) continue;
+
+                    if (lastMilestone < 1 && line.find("Extracting base package") != std::string::npos)
+                    {
+                        lastMilestone = 1;
+                        LLAppViewer::instance()->postToMainCoro([]()
+                        {
+                            LLFloaterUpdateProgress::setProgress(50.0f, "Extracting base package...");
+                        });
+                    }
+                    else if (lastMilestone < 2 && (line.find("Base package extracted") != std::string::npos ||
+                                                   line.find("extracting apply delta patch") != std::string::npos))
+                    {
+                        lastMilestone = 2;
+                        LLAppViewer::instance()->postToMainCoro([]()
+                        {
+                            LLFloaterUpdateProgress::setProgress(65.0f, "Preparing differential patch...");
+                        });
+                    }
+                    else if (lastMilestone < 3 && line.find("applying zsdiff patch") != std::string::npos)
+                    {
+                        lastMilestone = 3;
+                        LLAppViewer::instance()->postToMainCoro([]()
+                        {
+                            LLFloaterUpdateProgress::setProgress(75.0f, "Applying differential patch...");
+                        });
+                    }
+                    else if (lastMilestone < 4 && (line.find("Asembling output package") != std::string::npos ||
+                                                   line.find("Assembling output package") != std::string::npos))
+                    {
+                        lastMilestone = 4;
+                        LLAppViewer::instance()->postToMainCoro([]()
+                        {
+                            LLFloaterUpdateProgress::setProgress(85.0f, "Assembling updated package...");
+                        });
+                    }
+                    else if (lastMilestone < 5 && line.find("Successfully applied") != std::string::npos)
+                    {
+                        lastMilestone = 5;
+                        LLAppViewer::instance()->postToMainCoro([]()
+                        {
+                            LLFloaterUpdateProgress::setProgress(98.0f, "Verifying package...");
+                        });
+                    }
+                }
+                lastPos = logFile.tellg();
+            }
+        });
+    }
+
+    bool downloadSuccess = vpkc_download_updates(sUpdateManager, sPendingCheckInfo, on_progress, nullptr);
+
+    stopWatcher = true;
+    if (logWatcher.joinable())
+    {
+        logWatcher.join();
+    }
+
+    if (downloadSuccess)
     {
         if (sPendingUpdate && sPendingUpdate != sPendingCheckInfo)
         {

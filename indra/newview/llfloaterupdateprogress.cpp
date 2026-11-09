@@ -20,9 +20,7 @@ LLFloaterUpdateProgress::LLFloaterUpdateProgress(const LLSD& key)
     mProgressText(NULL),
     mExpectedSize(0),
     mCurrentPercent(0.0f),
-    mTargetPercent(0.0f),
-    mCreepActive(false),
-    mCreepLimit(0.0f)
+    mTargetPercent(0.0f)
 {
 }
 
@@ -74,21 +72,13 @@ void LLFloaterUpdateProgress::draw()
     }
     else
     {
-        // Smooth interpolation for explicit/Velopack progress
+        // Smooth interpolation to target milestone
         if (mCurrentPercent < mTargetPercent)
         {
             F32 diff = mTargetPercent - mCurrentPercent;
             F32 step = diff * dt * 5.0f;
             if (step < 1.0f * dt) step = 1.0f * dt;
             mCurrentPercent = llmin(mCurrentPercent + step, mTargetPercent);
-            if (mProgressBar)
-            {
-                mProgressBar->setValue(mCurrentPercent);
-            }
-        }
-        else if (mCreepActive && mCurrentPercent < mCreepLimit)
-        {
-            mCurrentPercent = llmin(mCurrentPercent + (0.5f * dt), mCreepLimit);
             if (mProgressBar)
             {
                 mProgressBar->setValue(mCurrentPercent);
@@ -113,16 +103,16 @@ void LLFloaterUpdateProgress::show(const std::string& version)
         {
             self->setUpdateText("Updating SoapStorm...");
         }
-        self->setProgressPercent(0.0f, "Connecting...", false, 0.0f);
+        self->setProgressPercent(0.0f, "Connecting...");
     }
 }
 
-void LLFloaterUpdateProgress::setProgress(F32 percent, const std::string& statusText, bool canCreep, F32 creepLimit)
+void LLFloaterUpdateProgress::setProgress(F32 percent, const std::string& statusText)
 {
     LLFloaterUpdateProgress* self = LLFloaterReg::findTypedInstance<LLFloaterUpdateProgress>("update_progress");
     if (self)
     {
-        self->setProgressPercent(percent, statusText, canCreep, creepLimit);
+        self->setProgressPercent(percent, statusText);
     }
 }
 
@@ -131,7 +121,7 @@ void LLFloaterUpdateProgress::hide()
     LLFloaterReg::hideInstance("update_progress");
 }
 
-void LLFloaterUpdateProgress::setProgressPercent(F32 percent, const std::string& statusText, bool canCreep, F32 creepLimit)
+void LLFloaterUpdateProgress::setProgressPercent(F32 percent, const std::string& statusText)
 {
     mTargetPercent = llclamp(percent, 0.0f, 100.0f);
     if (mTargetPercent < mCurrentPercent || mTargetPercent >= 100.0f)
@@ -142,9 +132,6 @@ void LLFloaterUpdateProgress::setProgressPercent(F32 percent, const std::string&
             mProgressBar->setValue(mCurrentPercent);
         }
     }
-
-    mCreepActive = canCreep;
-    mCreepLimit = llclamp(creepLimit, mTargetPercent, 100.0f);
 
     if (mProgressText && !statusText.empty())
     {
