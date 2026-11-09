@@ -408,16 +408,12 @@ void LLAutoUpdateChecker::checkUpdateCoro()
         mUpdateInfo["required"] = true;
     }
 
-    // Check if user skipped this version (cannot skip if update is required)
+    // Check if user skipped this version (cannot skip if update is required, or if user explicitly clicked "Check for Updates Now")
     std::string skippedVersion = gSavedSettings.getString("FSSkippedUpdateVersion");
-    if (remoteVersion == skippedVersion && !mUpdateRequired)
+    if (remoteVersion == skippedVersion && !mUpdateRequired && !mIsManualCheck)
     {
         LL_INFOS("AutoUpdate") << "User has skipped version " << remoteVersion << LL_ENDL;
         mCheckInProgress = false;
-        if (mIsManualCheck)
-        {
-            showUpToDateNotification();
-        }
         return;
     }
 
@@ -500,7 +496,16 @@ void LLAutoUpdateChecker::showUpdateNotification()
     
     if (mUpdateInfo.has("file_size_mb"))
     {
-        args["SIZE"] = llformat("%.1f MB", mUpdateInfo["file_size_mb"].asReal());
+#if LL_VELOPACK
+        if (velopack_is_available())
+        {
+            args["SIZE"] = llformat("Full: %.1f MB (Differential patch: ~14 MB)", mUpdateInfo["file_size_mb"].asReal());
+        }
+        else
+#endif
+        {
+            args["SIZE"] = llformat("%.1f MB", mUpdateInfo["file_size_mb"].asReal());
+        }
     }
     else
     {

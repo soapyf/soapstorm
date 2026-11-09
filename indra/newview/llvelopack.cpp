@@ -1289,7 +1289,7 @@ bool velopack_initialize()
 #endif
 
     vpkc_set_logger(on_log_message, nullptr);
-    vpkc_app_set_auto_apply_on_startup(false);
+    vpkc_app_set_auto_apply_on_startup(true);
 
 #if LL_WINDOWS || LL_DARWIN
     vpkc_app_set_hook_first_run(on_first_run);
@@ -1324,7 +1324,7 @@ static bool velopack_download_pending_update()
 
     if (vpkc_download_updates(sUpdateManager, sPendingCheckInfo, on_progress, nullptr))
     {
-        if (sPendingUpdate)
+        if (sPendingUpdate && sPendingUpdate != sPendingCheckInfo)
         {
             vpkc_free_update_info(sPendingUpdate);
         }
@@ -1368,8 +1368,17 @@ static void dismiss_downloading_notification()
     }
 }
 
+static std::atomic<bool> sIsDownloading{false};
+
 void velopack_start_download(bool is_required, std::function<void(bool success)> completion_cb)
 {
+    if (sIsDownloading.exchange(true))
+    {
+        LL_WARNS("Velopack") << "Download already in progress, ignoring duplicate start request" << LL_ENDL;
+        if (completion_cb) completion_cb(false);
+        return;
+    }
+
     sIsRequired = is_required;
 
     // If we don't have pending check info yet, run an update check first
@@ -1378,6 +1387,7 @@ void velopack_start_download(bool is_required, std::function<void(bool success)>
         ensure_update_manager(false);
         if (!sUpdateManager)
         {
+            sIsDownloading = false;
             if (completion_cb) completion_cb(false);
             return;
         }
@@ -1387,6 +1397,7 @@ void velopack_start_download(bool is_required, std::function<void(bool success)>
         if (result != UPDATE_AVAILABLE || !update_info)
         {
             LL_WARNS("Velopack") << "No update available during start_download (result=" << result << ")" << LL_ENDL;
+            sIsDownloading = false;
             if (completion_cb) completion_cb(false);
             return;
         }
@@ -1404,13 +1415,15 @@ void velopack_start_download(bool is_required, std::function<void(bool success)>
         bool success = velopack_download_pending_update();
         LLAppViewer::instance()->postToMainCoro([is_required, success, completion_cb]()
         {
+            sIsDownloading = false;
             dismiss_downloading_notification();
             if (success)
             {
                 if (is_required)
                 {
-                    LL_INFOS("Velopack") << "Required update downloaded, quitting to apply" << LL_ENDL;
+                    LL_INFOS("Velopack") << "Required update downloaded, applying update and restarting" << LL_ENDL;
                     velopack_request_restart_after_update();
+                    velopack_apply_pending_update(true);
                     LLAppViewer::instance()->requestQuit();
                 }
                 else
@@ -1425,7 +1438,9 @@ void velopack_start_download(bool is_required, std::function<void(bool success)>
                             S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
                             if (option == 0) // Install Now
                             {
+                                LL_INFOS("Velopack") << "User chose Install Now, applying update and restarting" << LL_ENDL;
                                 velopack_request_restart_after_update();
+                                velopack_apply_pending_update(true);
                                 LLAppViewer::instance()->requestQuit();
                             }
                         });
@@ -1579,7 +1594,23 @@ std::string velopack_get_current_version()
 
 bool velopack_is_update_pending()
 {
-    return sPendingUpdate != nullptr;
+    if (sPendingUpdate != nullptr)
+    {
+        return true;
+    }
+    if (sUpdateManager)
+    {
+        vpkc_asset_t* asset = nullptr;
+        if (vpkc_update_pending_restart(sUpdateManager, &asset))
+        {
+            if (asset)
+            {
+                vpkc_free_asset(asset);
+            }
+            return true;
+        }
+    }
+    return false;
 }
 
 bool velopack_is_required_update_in_progress()
@@ -1604,18 +1635,55 @@ void velopack_request_restart_after_update()
 
 void velopack_apply_pending_update(bool restart)
 {
-    if (!sUpdateManager || !sPendingUpdate || !sPendingUpdate->TargetFullRelease)
+    if (!sUpdateManager)
     {
-        LL_WARNS("Velopack") << "Cannot apply update: no pending update or manager" << LL_ENDL;
+        LL_WARNS("Velopack") << "Cannot apply update: no update manager" << LL_ENDL;
         return;
     }
 
-    LL_INFOS("Velopack") << "Applying pending update (restart=" << restart << ")" << LL_ENDL;
-    vpkc_wait_exit_then_apply_updates(sUpdateManager,
-                                       sPendingUpdate->TargetFullRelease,
-                                       false,
-                                       restart,
-                                       nullptr, 0);
+    vpkc_asset_t* asset = nullptr;
+    bool should_free_asset = false;
+
+    if (sPendingUpdate && sPendingUpdate->TargetFullRelease)
+    {
+        asset = sPendingUpdate->TargetFullRelease;
+    }
+    else
+    {
+        if (vpkc_update_pending_restart(sUpdateManager, &asset))
+        {
+            should_free_asset = true;
+        }
+    }
+
+    if (!asset)
+    {
+        LL_WARNS("Velopack") << "Cannot apply update: no pending asset found" << LL_ENDL;
+        return;
+    }
+
+    LL_INFOS("Velopack") << "Applying pending update (restart=" << restart 
+                         << ", asset=" << (asset->FileName ? asset->FileName : "unknown") << ")" << LL_ENDL;
+    bool success = vpkc_wait_exit_then_apply_updates(sUpdateManager,
+                                                     asset,
+                                                     false,
+                                                     restart,
+                                                     nullptr, 0);
+    if (!success)
+    {
+        char descr[512];
+        vpkc_get_last_error(descr, sizeof(descr));
+        LL_WARNS("Velopack") << "vpkc_wait_exit_then_apply_updates failed: " << ll_safe_string((const char*)descr) << LL_ENDL;
+    }
+    else
+    {
+        LL_INFOS("Velopack") << "Update application dispatched successfully to Velopack updater" << LL_ENDL;
+    }
+
+    if (should_free_asset && asset)
+    {
+        vpkc_free_asset(asset);
+    }
 }
 
 void velopack_cleanup()
