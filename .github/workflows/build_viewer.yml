@@ -130,17 +130,12 @@ jobs:
           sudo rm -rf /usr/local/lib/android || true
           sudo rm -rf /usr/local/share/android-sdk || true
 
-          # 5. Delete .NET / dotnet (~3-5 GB)
-          sudo rm -rf /usr/local/share/dotnet || true
-          sudo rm -rf /usr/share/dotnet || true
-          sudo rm -rf ~/.dotnet || true
-
-          # 6. Delete Haskell / GHC / other tools
+          # 5. Delete Haskell / GHC / other tools
           sudo rm -rf /opt/ghc || true
           sudo rm -rf /usr/local/.ghcup || true
           sudo rm -rf ~/.ghcup || true
 
-          # 7. Clean Homebrew cache
+          # 6. Clean Homebrew cache
           brew cleanup -s --prune=all 2>/dev/null || true
           sudo rm -rf "$(brew --cache)" 2>/dev/null || true
 
@@ -151,7 +146,6 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Remove-Item -Recurse -Force "C:\Program Files\dotnet" -ErrorAction SilentlyContinue
           Remove-Item -Recurse -Force "C:\Program Files (x86)\Android" -ErrorAction SilentlyContinue
           Remove-Item -Recurse -Force "C:\hostedtoolcache\windows\Ruby" -ErrorAction SilentlyContinue
           Remove-Item -Recurse -Force "C:\hostedtoolcache\windows\Go" -ErrorAction SilentlyContinue
@@ -237,6 +231,19 @@ jobs:
           EOF
         shell: bash
 
+
+      - name: Setup .NET for Velopack
+        if: runner.os == 'Windows' || runner.os == 'macOS'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install Velopack CLI
+        if: runner.os == 'Windows' || runner.os == 'macOS'
+        shell: bash
+        run: |
+          dotnet tool install -g vpk || dotnet tool update -g vpk
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       - name: Install GCC 14.1
         if: runner.os == 'Linux'
@@ -667,6 +674,7 @@ jobs:
           path: |
             build-*/newview/Release/*Setup.exe
             build-*/newview/Release/*.xz
+            build-*/newview/Releases/*
 
       - name: publish Linux artifacts
         if: runner.os == 'Linux'
@@ -685,6 +693,7 @@ jobs:
           path: |
             build-darwin-*/newview/*.dmg
             build-darwin-*/newview/*.bz2
+            build-darwin-*/newview/Releases/*
   deploy:
     runs-on: ubuntu-latest
     needs: build_matrix

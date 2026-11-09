@@ -204,7 +204,11 @@ No tutorial is currently available.
    icon="alertmodal.tga"
    name="FoundLegacyNsisInstallation"
    type="alertmodal">
-      [APP_NAME] found an installation of an older version [VERSION]. To uninstall the older version, please follow [https://community.secondlife.com/knowledgebase/english/how-to-uninstall-and-reinstall-second-life-r524 this manual].
+      [APP_NAME] has upgraded to a new auto-updating system and detected an older installation in Program Files (v[VERSION]).
+
+Your settings and chat logs are safe and already migrated. You can safely uninstall the older version from Windows Settings → Installed Apps at any time to free up disk space.
+
+For more details, see [https://github.com/soapyf/soapstorm/blob/master/doc/INSTALLATION.md the installation guide].
       <usetemplate
        name="okbutton"
        yestext="OK"/>

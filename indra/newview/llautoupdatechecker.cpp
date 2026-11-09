@@ -15,6 +15,10 @@
 #include "llappviewer.h"
 #include <boost/json.hpp>
 
+#if LL_VELOPACK
+#include "llvelopack.h"
+#endif
+
 #include <sstream>
 
 #include <algorithm>
@@ -23,10 +27,27 @@
 // Update check URL
 const std::string UPDATE_CHECK_URL = "https://api.github.com/repos/soapyf/soapstorm/releases/latest";
 
+static std::string extract_version_from_tag(const std::string& tagName)
+{
+    if (tagName.empty()) return {};
+    std::string ver = tagName;
+    size_t vPos = ver.find_last_of('v');
+    if (vPos != std::string::npos && vPos + 1 < ver.length() && std::isdigit(static_cast<unsigned char>(ver[vPos + 1])))
+    {
+        return ver.substr(vPos + 1);
+    }
+    else if (ver[0] == 'v')
+    {
+        return ver.substr(1);
+    }
+    return ver;
+}
+
 LLAutoUpdateChecker::LLAutoUpdateChecker()
 :   mUpdateAvailable(false),
     mUpdateRequired(false),
-    mCheckInProgress(false)
+    mCheckInProgress(false),
+    mIsManualCheck(false)
 {
     LL_INFOS("AutoUpdate") << "Auto-update checker initialized" << LL_ENDL;
 }
@@ -35,7 +56,7 @@ LLAutoUpdateChecker::~LLAutoUpdateChecker()
 {
 }
 
-void LLAutoUpdateChecker::checkForUpdate()
+void LLAutoUpdateChecker::checkForUpdate(bool is_manual)
 {
     // Don't check if already checking
     if (mCheckInProgress)
@@ -43,6 +64,8 @@ void LLAutoUpdateChecker::checkForUpdate()
         LL_DEBUGS("AutoUpdate") << "Update check already in progress" << LL_ENDL;
         return;
     }
+
+    mIsManualCheck = is_manual;
 
     // SkoomaStorm party build: never check for updates. The feed only
     // knows Soapstorm builds, so any offer would "upgrade" this install
@@ -70,7 +93,14 @@ void LLAutoUpdateChecker::checkUpdateCoro()
     LLCore::HttpOptions::ptr_t httpOpts = std::make_shared<LLCore::HttpOptions>();
     httpOpts->setFollowRedirects(true);
 
-    LL_INFOS("AutoUpdate") << "Fetching update info from: " << UPDATE_CHECK_URL << LL_ENDL;
+    bool check_beta = gSavedSettings.getBOOL("UpdaterWillingToTest");
+
+    std::string update_check_url = check_beta
+        ? "https://api.github.com/repos/soapyf/soapstorm/releases?per_page=10"
+        : "https://api.github.com/repos/soapyf/soapstorm/releases/latest";
+
+    LL_INFOS("AutoUpdate") << "Fetching update info from: " << update_check_url
+                           << " (include_beta=" << (check_beta ? "true" : "false") << ")" << LL_ENDL;
 
     // Add headers for User-Agent (required by GitHub API) and JSON format
     LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>();
@@ -79,7 +109,7 @@ void LLAutoUpdateChecker::checkUpdateCoro()
     headers->append(HTTP_OUT_HEADER_CONTENT_TYPE, "application/json");
 
     // Use getRawAndSuspend to get raw JSON instead of getAndSuspend which expects LLSD format
-    LLSD result = httpAdapter->getRawAndSuspend(httpRequest, UPDATE_CHECK_URL, httpOpts, headers);
+    LLSD result = httpAdapter->getRawAndSuspend(httpRequest, update_check_url, httpOpts, headers);
 
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result);
     
@@ -108,41 +138,82 @@ void LLAutoUpdateChecker::checkUpdateCoro()
         return;
     }
     
-    if (!jsonVal.is_object())
+    boost::json::object jsonObj;
+    if (jsonVal.is_array())
     {
-        LL_WARNS("AutoUpdate") << "Parsed JSON is not an object" << LL_ENDL;
+        const auto& arr = jsonVal.as_array();
+        if (arr.empty())
+        {
+            LL_WARNS("AutoUpdate") << "Releases array is empty" << LL_ENDL;
+            mCheckInProgress = false;
+            return;
+        }
+
+        std::string bestVersion;
+        const boost::json::object* bestObj = nullptr;
+
+        for (const auto& item : arr)
+        {
+            if (!item.is_object()) continue;
+            const auto& obj = item.as_object();
+
+            bool isPrerelease = false;
+            if (obj.contains("prerelease") && obj.at("prerelease").is_bool())
+            {
+                isPrerelease = obj.at("prerelease").as_bool();
+            }
+
+            if (isPrerelease && !check_beta)
+            {
+                continue; // Skip pre-releases if user didn't opt in
+            }
+
+            if (!obj.contains("tag_name") || !obj.at("tag_name").is_string())
+            {
+                continue;
+            }
+
+            std::string ver = extract_version_from_tag(obj.at("tag_name").as_string().c_str());
+            if (ver.empty()) continue;
+
+            if (bestObj == nullptr || isNewerVersion(ver, bestVersion))
+            {
+                bestVersion = ver;
+                bestObj = &obj;
+            }
+        }
+
+        if (!bestObj)
+        {
+            LL_INFOS("AutoUpdate") << "No suitable releases found in feed" << LL_ENDL;
+            mCheckInProgress = false;
+            if (mIsManualCheck)
+            {
+                showUpToDateNotification();
+            }
+            return;
+        }
+        jsonObj = *bestObj;
+    }
+    else if (jsonVal.is_object())
+    {
+        jsonObj = jsonVal.as_object();
+    }
+    else
+    {
+        LL_WARNS("AutoUpdate") << "Parsed JSON is neither an object nor an array" << LL_ENDL;
         mCheckInProgress = false;
         return;
     }
-
-    const auto& jsonObj = jsonVal.as_object();
     
     LLSD updateData;
     std::string remoteVersion;
     std::string downloadUrl;
     double fileSizeMB = 0.0;
     
-    if (jsonObj.contains("tag_name"))
+    if (jsonObj.contains("tag_name") && jsonObj.at("tag_name").is_string())
     {
-        std::string tagName;
-        if (jsonObj.at("tag_name").is_string())
-        {
-            tagName = jsonObj.at("tag_name").as_string().c_str();
-        }
-        
-        if (!tagName.empty())
-        {
-            remoteVersion = tagName;
-            size_t vPos = remoteVersion.find_last_of('v');
-            if (vPos != std::string::npos && vPos + 1 < remoteVersion.length() && std::isdigit(static_cast<unsigned char>(remoteVersion[vPos + 1])))
-            {
-                remoteVersion = remoteVersion.substr(vPos + 1);
-            }
-            else if (remoteVersion[0] == 'v')
-            {
-                remoteVersion = remoteVersion.substr(1);
-            }
-        }
+        remoteVersion = extract_version_from_tag(jsonObj.at("tag_name").as_string().c_str());
     }
     
     // Choose appropriate file extension based on client OS
@@ -337,9 +408,9 @@ void LLAutoUpdateChecker::checkUpdateCoro()
         mUpdateInfo["required"] = true;
     }
 
-    // Check if user skipped this version (cannot skip if update is required)
+    // Check if user skipped this version (cannot skip if update is required, or if user explicitly clicked "Check for Updates Now")
     std::string skippedVersion = gSavedSettings.getString("FSSkippedUpdateVersion");
-    if (remoteVersion == skippedVersion && !mUpdateRequired)
+    if (remoteVersion == skippedVersion && !mUpdateRequired && !mIsManualCheck)
     {
         LL_INFOS("AutoUpdate") << "User has skipped version " << remoteVersion << LL_ENDL;
         mCheckInProgress = false;
@@ -353,7 +424,11 @@ void LLAutoUpdateChecker::checkUpdateCoro()
                                << (mUpdateRequired ? " [REQUIRED]" : " [OPTIONAL]") << LL_ENDL;
         mUpdateAvailable = true;
 
-        if (!mUpdateRequired && !gSavedSettings.getBOOL("FSAutoUpdateCheck"))
+        if (!mUpdateRequired && !mIsManualCheck && gSavedSettings.getBOOL("FSNoUpdateReminders"))
+        {
+            LL_INFOS("AutoUpdate") << "Optional update available, but user suppressed update reminders" << LL_ENDL;
+        }
+        else if (!mUpdateRequired && !mIsManualCheck && !gSavedSettings.getBOOL("FSAutoUpdateCheck"))
         {
             LL_DEBUGS("AutoUpdate") << "Optional update available, but auto-update check disabled in preferences" << LL_ENDL;
         }
@@ -366,6 +441,10 @@ void LLAutoUpdateChecker::checkUpdateCoro()
     {
         LL_INFOS("AutoUpdate") << "No update available" << LL_ENDL;
         mUpdateAvailable = false;
+        if (mIsManualCheck)
+        {
+            showUpToDateNotification();
+        }
     }
     
     mCheckInProgress = false;
@@ -417,7 +496,16 @@ void LLAutoUpdateChecker::showUpdateNotification()
     
     if (mUpdateInfo.has("file_size_mb"))
     {
-        args["SIZE"] = llformat("%.1f MB", mUpdateInfo["file_size_mb"].asReal());
+#if LL_VELOPACK
+        if (velopack_is_available())
+        {
+            args["SIZE"] = llformat("Full: %.1f MB (Differential patch: ~14 MB)", mUpdateInfo["file_size_mb"].asReal());
+        }
+        else
+#endif
+        {
+            args["SIZE"] = llformat("%.1f MB", mUpdateInfo["file_size_mb"].asReal());
+        }
     }
     else
     {
@@ -436,9 +524,17 @@ void LLAutoUpdateChecker::showUpdateNotification()
                 
                 if (option == 0) // Update Now
                 {
+#if LL_VELOPACK
+                    if (velopack_is_available())
+                    {
+                        LL_INFOS("AutoUpdate") << "Starting Velopack download for required update" << LL_ENDL;
+                        velopack_start_download(true);
+                        return;
+                    }
+#endif
                     openDownloadPage();
                 }
-                // Both "Update Now" and "Exit" (or closing the dialog) quit the application
+                // Both "Update Now" (if Velopack unavailable) and "Exit" quit the application
                 LLAppViewer::instance()->forceQuit();
             });
     }
@@ -451,6 +547,14 @@ void LLAutoUpdateChecker::showUpdateNotification()
                 
                 if (option == 0) // Download Now
                 {
+#if LL_VELOPACK
+                    if (velopack_is_available())
+                    {
+                        LL_INFOS("AutoUpdate") << "Starting Velopack download for optional update" << LL_ENDL;
+                        velopack_start_download(false);
+                        return;
+                    }
+#endif
                     openDownloadPage();
                 }
                 else if (option == 1) // Remind Later
@@ -463,6 +567,13 @@ void LLAutoUpdateChecker::showUpdateNotification()
                 }
             });
     }
+}
+
+void LLAutoUpdateChecker::showUpToDateNotification()
+{
+    LLSD args;
+    args["MESSAGE"] = "You are currently running the latest version of SoapStorm (" + LLVersionInfo::instance().getVersion() + ").";
+    LLNotificationsUtil::add("GenericAlertOK", args);
 }
 
 void LLAutoUpdateChecker::openDownloadPage()

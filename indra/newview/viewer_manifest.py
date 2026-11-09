@@ -1022,17 +1022,17 @@ class Windows_x86_64_Manifest(ViewerManifest):
         # Channel-specific icon for the Velopack installer.
         # CMake copies icons/{channel}/secondlife.ico to res/ll_icon.ico at configure time.
         # Try the CMake-generated copy first, fall back to the source icon.
-        # <FS:TJ> Use Firestorms icon path
-        #icon_path = os.path.join(self.get_src_prefix(), 'res', 'll_icon.ico')
-        #if not os.path.exists(icon_path):
-        #    icon_path = os.path.join(self.get_src_prefix(), self.icon_path(), 'secondlife.ico')
-        icon_path = os.path.join(self.get_src_prefix(), self.icon_path(), 'firestorm_icon.ico')
+        # <FS:TJ> Use SoapStorm icon path
+        icon_path = os.path.join(self.get_src_prefix(), self.icon_path(), 'soapstorm_icon.ico')
+        if not os.path.exists(icon_path):
+            icon_path = os.path.join(self.get_src_prefix(), self.icon_path(), 'firestorm_icon.ico')
+        if not os.path.exists(icon_path):
+            icon_path = os.path.join(self.get_src_prefix(), self.icon_path(), 'secondlife.ico')
         # </FS:TJ>
 
-        # In CI, defer Velopack packaging to the sign step where Azure credentials
-        # are available. Emit metadata as GitHub outputs so the sign step can run
-        # vpk pack with --signTemplate, producing a package with signed executables.
-        if os.getenv('GITHUB_ACTIONS'):
+        # In CI, defer Velopack packaging to the sign step only if DEFER_VELOPACK_SIGNING is set.
+        # Otherwise, run vpk pack directly to generate the Velopack packages.
+        if os.getenv('GITHUB_ACTIONS') and os.getenv('DEFER_VELOPACK_SIGNING'):
             # Copy the icon into pack_dir so it's included in the Windows-app artifact
             icon_filename = ''
             if os.path.exists(icon_path):
@@ -1070,6 +1070,9 @@ class Windows_x86_64_Manifest(ViewerManifest):
             # shortcuts in llvelopack.cpp on_after_install hook instead.
             '--shortcuts', '',
         ]
+
+        if self.args.get('arch') == 'x86_64':
+            vpk_args.extend(['--runtime', 'win-x64'])
 
         # Add icon — CMake copies the channel-appropriate secondlife.ico to res/ll_icon.ico
         if os.path.exists(icon_path):
@@ -2088,10 +2091,9 @@ class Darwin_x86_64_Manifest(ViewerManifest):
             elif os.path.exists(os.path.join(app_bundle, "Contents", "MacOS", CHANNEL_VENDOR_BASE)):
                 main_exe = CHANNEL_VENDOR_BASE
 
-        # In CI, defer Velopack packaging to the sign step where code signing
-        # credentials are available. Emit metadata as GitHub outputs so the
-        # sign step can run vpk pack after signing the app bundle.
-        if os.getenv('GITHUB_ACTIONS'):
+        # In CI, defer Velopack packaging to the sign step only if DEFER_VELOPACK_SIGNING is set.
+        # Otherwise, run vpk pack directly to generate the Velopack packages.
+        if os.getenv('GITHUB_ACTIONS') and os.getenv('DEFER_VELOPACK_SIGNING'):
             self.set_github_output('velopack_mac_pack_id', pack_id)
             self.set_github_output('velopack_mac_pack_version', pack_version)
             self.set_github_output('velopack_mac_pack_title', pack_title)
