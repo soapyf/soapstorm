@@ -1592,8 +1592,14 @@ std::string velopack_get_current_version()
     return "";
 }
 
+static bool sApplyDispatched = false;
+
 bool velopack_is_update_pending()
 {
+    if (sApplyDispatched)
+    {
+        return false;
+    }
     if (sPendingUpdate != nullptr)
     {
         return true;
@@ -1635,6 +1641,12 @@ void velopack_request_restart_after_update()
 
 void velopack_apply_pending_update(bool restart)
 {
+    if (sApplyDispatched)
+    {
+        LL_WARNS("Velopack") << "Update application already dispatched, ignoring duplicate call" << LL_ENDL;
+        return;
+    }
+
     if (!sUpdateManager)
     {
         LL_WARNS("Velopack") << "Cannot apply update: no update manager" << LL_ENDL;
@@ -1664,6 +1676,7 @@ void velopack_apply_pending_update(bool restart)
 
     LL_INFOS("Velopack") << "Applying pending update (restart=" << restart 
                          << ", asset=" << (asset->FileName ? asset->FileName : "unknown") << ")" << LL_ENDL;
+    sApplyDispatched = true;
     bool success = vpkc_wait_exit_then_apply_updates(sUpdateManager,
                                                      asset,
                                                      false,
@@ -1688,6 +1701,7 @@ void velopack_apply_pending_update(bool restart)
 
 void velopack_cleanup()
 {
+    sApplyDispatched = false;
     if (sUpdateManager)
     {
         vpkc_free_update_manager(sUpdateManager);
