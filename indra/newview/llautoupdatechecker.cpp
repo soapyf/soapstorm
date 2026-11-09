@@ -94,13 +94,6 @@ void LLAutoUpdateChecker::checkUpdateCoro()
     httpOpts->setFollowRedirects(true);
 
     bool check_beta = gSavedSettings.getBOOL("UpdaterWillingToTest");
-    std::string channel = LLVersionInfo::instance().getChannel();
-    if (channel.find("Beta") != std::string::npos ||
-        channel.find("Preview") != std::string::npos ||
-        channel.find("Test") != std::string::npos)
-    {
-        check_beta = true;
-    }
 
     std::string update_check_url = check_beta
         ? "https://api.github.com/repos/soapyf/soapstorm/releases?per_page=10"

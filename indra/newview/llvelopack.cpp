@@ -1140,13 +1140,6 @@ static bool sLastPrereleaseState = false;
 static void ensure_update_manager(bool allow_downgrade)
 {
     bool include_prereleases = gSavedSettings.getBOOL("UpdaterWillingToTest");
-    std::string channel = LLVersionInfo::instance().getChannel();
-    if (channel.find("Beta") != std::string::npos ||
-        channel.find("Preview") != std::string::npos ||
-        channel.find("Test") != std::string::npos)
-    {
-        include_prereleases = true;
-    }
 
     if (sUpdateManager && sLastPrereleaseState != include_prereleases)
     {
