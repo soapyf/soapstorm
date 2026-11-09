@@ -27,6 +27,22 @@
 // Update check URL
 const std::string UPDATE_CHECK_URL = "https://api.github.com/repos/soapyf/soapstorm/releases/latest";
 
+static std::string extract_version_from_tag(const std::string& tagName)
+{
+    if (tagName.empty()) return {};
+    std::string ver = tagName;
+    size_t vPos = ver.find_last_of('v');
+    if (vPos != std::string::npos && vPos + 1 < ver.length() && std::isdigit(static_cast<unsigned char>(ver[vPos + 1])))
+    {
+        return ver.substr(vPos + 1);
+    }
+    else if (ver[0] == 'v')
+    {
+        return ver.substr(1);
+    }
+    return ver;
+}
+
 LLAutoUpdateChecker::LLAutoUpdateChecker()
 :   mUpdateAvailable(false),
     mUpdateRequired(false),
@@ -87,7 +103,7 @@ void LLAutoUpdateChecker::checkUpdateCoro()
     }
 
     std::string update_check_url = check_beta
-        ? "https://api.github.com/repos/soapyf/soapstorm/releases?per_page=1"
+        ? "https://api.github.com/repos/soapyf/soapstorm/releases?per_page=10"
         : "https://api.github.com/repos/soapyf/soapstorm/releases/latest";
 
     LL_INFOS("AutoUpdate") << "Fetching update info from: " << update_check_url
@@ -132,13 +148,59 @@ void LLAutoUpdateChecker::checkUpdateCoro()
     boost::json::object jsonObj;
     if (jsonVal.is_array())
     {
-        if (jsonVal.as_array().empty() || !jsonVal.as_array()[0].is_object())
+        const auto& arr = jsonVal.as_array();
+        if (arr.empty())
         {
-            LL_WARNS("AutoUpdate") << "Releases array is empty or invalid" << LL_ENDL;
+            LL_WARNS("AutoUpdate") << "Releases array is empty" << LL_ENDL;
             mCheckInProgress = false;
             return;
         }
-        jsonObj = jsonVal.as_array()[0].as_object();
+
+        std::string bestVersion;
+        const boost::json::object* bestObj = nullptr;
+
+        for (const auto& item : arr)
+        {
+            if (!item.is_object()) continue;
+            const auto& obj = item.as_object();
+
+            bool isPrerelease = false;
+            if (obj.contains("prerelease") && obj.at("prerelease").is_bool())
+            {
+                isPrerelease = obj.at("prerelease").as_bool();
+            }
+
+            if (isPrerelease && !check_beta)
+            {
+                continue; // Skip pre-releases if user didn't opt in
+            }
+
+            if (!obj.contains("tag_name") || !obj.at("tag_name").is_string())
+            {
+                continue;
+            }
+
+            std::string ver = extract_version_from_tag(obj.at("tag_name").as_string().c_str());
+            if (ver.empty()) continue;
+
+            if (bestObj == nullptr || isNewerVersion(ver, bestVersion))
+            {
+                bestVersion = ver;
+                bestObj = &obj;
+            }
+        }
+
+        if (!bestObj)
+        {
+            LL_INFOS("AutoUpdate") << "No suitable releases found in feed" << LL_ENDL;
+            mCheckInProgress = false;
+            if (mIsManualCheck)
+            {
+                showUpToDateNotification();
+            }
+            return;
+        }
+        jsonObj = *bestObj;
     }
     else if (jsonVal.is_object())
     {
@@ -156,27 +218,9 @@ void LLAutoUpdateChecker::checkUpdateCoro()
     std::string downloadUrl;
     double fileSizeMB = 0.0;
     
-    if (jsonObj.contains("tag_name"))
+    if (jsonObj.contains("tag_name") && jsonObj.at("tag_name").is_string())
     {
-        std::string tagName;
-        if (jsonObj.at("tag_name").is_string())
-        {
-            tagName = jsonObj.at("tag_name").as_string().c_str();
-        }
-        
-        if (!tagName.empty())
-        {
-            remoteVersion = tagName;
-            size_t vPos = remoteVersion.find_last_of('v');
-            if (vPos != std::string::npos && vPos + 1 < remoteVersion.length() && std::isdigit(static_cast<unsigned char>(remoteVersion[vPos + 1])))
-            {
-                remoteVersion = remoteVersion.substr(vPos + 1);
-            }
-            else if (remoteVersion[0] == 'v')
-            {
-                remoteVersion = remoteVersion.substr(1);
-            }
-        }
+        remoteVersion = extract_version_from_tag(jsonObj.at("tag_name").as_string().c_str());
     }
     
     // Choose appropriate file extension based on client OS
