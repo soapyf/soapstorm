@@ -4,45 +4,45 @@
  can_close="false"
  can_minimize="false"
  can_resize="false"
- title="Downloading Update"
+ title="Updating SoapStorm"
  height="120"
  layout="topleft"
  name="floater_update_progress"
- width="400">
+ width="420">
  
  <text
   type="string"
   length="1"
-  follows="left|top"
+  follows="left|top|right"
   height="20"
   layout="topleft"
-  left="10"
+  left="15"
   name="update_text"
-  top="30"
-  width="380">
+  top="25"
+  width="390">
 Downloading SoapStorm update...
  </text>
  
  <progress_bar
-  height="16"
+  height="18"
   follows="left|top|right"
   layout="topleft"
-  left="10"
+  left="15"
   name="progress_bar"
-  top_pad="10"
-  width="380" />
+  top_pad="8"
+  width="390" />
  
  <text
   type="string"
   length="1"
-  follows="left|top"
+  follows="left|top|right"
   height="20"
   layout="topleft"
-  left="10"
+  left="15"
   name="progress_text"
-  top_pad="10"
-  width="380">
-0.0 MB / 0.0 MB
+  top_pad="8"
+  width="390">
+Starting download...
  </text>
  
 </floater>

@@ -21,13 +21,23 @@ public:
     virtual ~LLFloaterUpdateProgress();
 
     /*virtual*/ bool postBuild();
+    /*virtual*/ void onOpen(const LLSD& key);
     /*virtual*/ void draw();
+
+    // Static convenience methods for update flows
+    static void show(const std::string& version = "");
+    static void setProgress(F32 percent, const std::string& statusText = "", bool canCreep = false, F32 creepLimit = 0.0f);
+    static void hide();
 
     // Set the download information
     void setDownloadInfo(const std::string& installerPath, S64 expectedSize);
     
     // Update progress based on current file size
     void updateProgress();
+
+    // Explicit progress and status control
+    void setProgressPercent(F32 percent, const std::string& statusText = "", bool canCreep = false, F32 creepLimit = 0.0f);
+    void setUpdateText(const std::string& text);
 
 private:
     LLProgressBar* mProgressBar;
@@ -37,6 +47,12 @@ private:
     std::string mInstallerPath;
     S64 mExpectedSize;
     LLFrameTimer mUpdateTimer;
+
+    F32 mCurrentPercent;
+    F32 mTargetPercent;
+    bool mCreepActive;
+    F32 mCreepLimit;
+    LLFrameTimer mAnimTimer;
 };
 
 #endif // LL_LLFLOATERUPDATEPROGRESS_H

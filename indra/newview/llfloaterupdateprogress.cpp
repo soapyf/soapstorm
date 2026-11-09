@@ -18,7 +18,11 @@ LLFloaterUpdateProgress::LLFloaterUpdateProgress(const LLSD& key)
     mProgressBar(NULL),
     mUpdateText(NULL),
     mProgressText(NULL),
-    mExpectedSize(0)
+    mExpectedSize(0),
+    mCurrentPercent(0.0f),
+    mTargetPercent(0.0f),
+    mCreepActive(false),
+    mCreepLimit(0.0f)
 {
 }
 
@@ -37,6 +41,11 @@ bool LLFloaterUpdateProgress::postBuild()
     {
         mProgressBar->setValue(0.0f);
     }
+
+    if (mProgressText)
+    {
+        mProgressText->setText(std::string("Starting download..."));
+    }
     
     // Center the floater
     center();
@@ -44,16 +53,112 @@ bool LLFloaterUpdateProgress::postBuild()
     return true;
 }
 
+void LLFloaterUpdateProgress::onOpen(const LLSD& key)
+{
+    center();
+    mAnimTimer.reset();
+}
+
 void LLFloaterUpdateProgress::draw()
 {
-    // Update progress every frame
-    if (mUpdateTimer.getElapsedTimeF32() > 0.25f) // Update every 250ms
+    F32 dt = mAnimTimer.getElapsedTimeAndResetF32();
+    if (dt > 0.1f) dt = 0.1f;
+
+    if (!mInstallerPath.empty() && mExpectedSize > 0)
     {
-        updateProgress();
-        mUpdateTimer.reset();
+        if (mUpdateTimer.getElapsedTimeF32() > 0.25f)
+        {
+            updateProgress();
+            mUpdateTimer.reset();
+        }
+    }
+    else
+    {
+        // Smooth interpolation for explicit/Velopack progress
+        if (mCurrentPercent < mTargetPercent)
+        {
+            F32 diff = mTargetPercent - mCurrentPercent;
+            F32 step = diff * dt * 5.0f;
+            if (step < 1.0f * dt) step = 1.0f * dt;
+            mCurrentPercent = llmin(mCurrentPercent + step, mTargetPercent);
+            if (mProgressBar)
+            {
+                mProgressBar->setValue(mCurrentPercent);
+            }
+        }
+        else if (mCreepActive && mCurrentPercent < mCreepLimit)
+        {
+            mCurrentPercent = llmin(mCurrentPercent + (0.5f * dt), mCreepLimit);
+            if (mProgressBar)
+            {
+                mProgressBar->setValue(mCurrentPercent);
+            }
+        }
     }
     
     LLFloater::draw();
+}
+
+void LLFloaterUpdateProgress::show(const std::string& version)
+{
+    LLFloaterUpdateProgress* self = LLFloaterReg::showTypedInstance<LLFloaterUpdateProgress>("update_progress");
+    if (self)
+    {
+        self->center();
+        if (!version.empty())
+        {
+            self->setUpdateText(llformat("Updating to SoapStorm %s...", version.c_str()));
+        }
+        else
+        {
+            self->setUpdateText("Updating SoapStorm...");
+        }
+        self->setProgressPercent(0.0f, "Connecting...", false, 0.0f);
+    }
+}
+
+void LLFloaterUpdateProgress::setProgress(F32 percent, const std::string& statusText, bool canCreep, F32 creepLimit)
+{
+    LLFloaterUpdateProgress* self = LLFloaterReg::findTypedInstance<LLFloaterUpdateProgress>("update_progress");
+    if (self)
+    {
+        self->setProgressPercent(percent, statusText, canCreep, creepLimit);
+    }
+}
+
+void LLFloaterUpdateProgress::hide()
+{
+    LLFloaterReg::hideInstance("update_progress");
+}
+
+void LLFloaterUpdateProgress::setProgressPercent(F32 percent, const std::string& statusText, bool canCreep, F32 creepLimit)
+{
+    mTargetPercent = llclamp(percent, 0.0f, 100.0f);
+    if (mTargetPercent < mCurrentPercent || mTargetPercent >= 100.0f)
+    {
+        mCurrentPercent = mTargetPercent;
+        if (mProgressBar)
+        {
+            mProgressBar->setValue(mCurrentPercent);
+        }
+    }
+
+    mCreepActive = canCreep;
+    mCreepLimit = llclamp(creepLimit, mTargetPercent, 100.0f);
+
+    if (mProgressText && !statusText.empty())
+    {
+        mProgressText->setText(statusText);
+    }
+    mAnimTimer.reset();
+}
+
+void LLFloaterUpdateProgress::setUpdateText(const std::string& text)
+{
+    if (mUpdateText && !text.empty())
+    {
+        mUpdateText->setText(text);
+    }
 }
 
 void LLFloaterUpdateProgress::setDownloadInfo(const std::string& installerPath, S64 expectedSize)

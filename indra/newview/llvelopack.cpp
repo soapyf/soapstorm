@@ -38,6 +38,7 @@
 #include <fstream>
 #include <unordered_map>
 #include "llnotificationsutil.h"
+#include "llfloaterupdateprogress.h"
 #include "llviewercontrol.h"
 #include "llappviewer.h"
 #include "llcoros.h"
@@ -1088,14 +1089,35 @@ static void on_log_message(void* user_data, const char* level, const char* messa
 #endif // LL_WINDOWS / LL_DARWIN
 
 //
-// Common progress callback
+// Common progress callback and state
 //
+
+static std::atomic<bool> sIsDownloading{false};
+static std::atomic<bool> sDownloadIsDelta{false};
+static std::atomic<int> sLastReportedPercent{-1};
 
 static void on_progress(void* user_data, size_t progress)
 {
+    int p = static_cast<int>(progress);
+    if (sLastReportedPercent.exchange(p) == p)
+    {
+        return;
+    }
+
+    bool isDelta = sDownloadIsDelta.load();
+    F32 mappedProgress = isDelta ? ((F32)p * 0.45f) : (F32)p;
+    std::string text = isDelta
+        ? llformat("Downloading differential patch: %d%%", p)
+        : llformat("Downloading update: %d%%", p);
+
+    LLAppViewer::instance()->postToMainCoro([mappedProgress, text]()
+    {
+        LLFloaterUpdateProgress::setProgress(mappedProgress, text, false, 0.0f);
+    });
+
     if (sProgressCallback)
     {
-        sProgressCallback(static_cast<int>(progress));
+        sProgressCallback(p);
     }
 }
 
@@ -1103,7 +1125,50 @@ static void on_vpk_log(void* p_user_data,
     const char* psz_level,
     const char* psz_message)
 {
-    LL_DEBUGS("Velopack") << ll_safe_string(psz_message) << LL_ENDL;
+    std::string msg = psz_message ? psz_message : "";
+    LL_DEBUGS("Velopack") << msg << LL_ENDL;
+
+    if (sIsDownloading.load())
+    {
+        if (msg.find("Extracting base package") != std::string::npos)
+        {
+            LLAppViewer::instance()->postToMainCoro([]()
+            {
+                LLFloaterUpdateProgress::setProgress(50.0f, "Preparing base package...", true, 65.0f);
+            });
+        }
+        else if (msg.find("Base package extracted") != std::string::npos ||
+                 msg.find("applying zsdiff patch") != std::string::npos)
+        {
+            LLAppViewer::instance()->postToMainCoro([]()
+            {
+                LLFloaterUpdateProgress::setProgress(70.0f, "Applying differential patch...", true, 80.0f);
+            });
+        }
+        else if (msg.find("Asembling output package") != std::string::npos ||
+                 msg.find("Assembling output package") != std::string::npos)
+        {
+            LLAppViewer::instance()->postToMainCoro([]()
+            {
+                LLFloaterUpdateProgress::setProgress(85.0f, "Assembling update package...", true, 95.0f);
+            });
+        }
+        else if (msg.find("Successfully applied") != std::string::npos)
+        {
+            LLAppViewer::instance()->postToMainCoro([]()
+            {
+                LLFloaterUpdateProgress::setProgress(98.0f, "Verifying package...", false, 0.0f);
+            });
+        }
+        else if (msg.find("Falling back to full update") != std::string::npos)
+        {
+            sDownloadIsDelta = false;
+            LLAppViewer::instance()->postToMainCoro([]()
+            {
+                LLFloaterUpdateProgress::setProgress(0.0f, "Falling back to full download...", false, 0.0f);
+            });
+        }
+    }
 }
 
 //
@@ -1317,6 +1382,9 @@ static bool velopack_download_pending_update()
         return false;
     }
 
+    sDownloadIsDelta = (sPendingCheckInfo->DeltasToTargetCount > 0);
+    sLastReportedPercent = -1;
+
     LL_DEBUGS("Velopack") << "Setting up detailed logging";
     vpkc_set_logger(on_vpk_log, nullptr);
     LL_CONT << LL_ENDL;
@@ -1354,21 +1422,18 @@ static void on_downloading_closed(const LLSD& notification, const LLSD& response
 
 static void show_downloading_notification(const std::string& version)
 {
-    LLSD args;
-    args["VERSION"] = version;
-    sDownloadingNotification = LLNotificationsUtil::add("DownloadingUpdate", args, LLSD(), on_downloading_closed);
+    LLFloaterUpdateProgress::show(version);
 }
 
 static void dismiss_downloading_notification()
 {
+    LLFloaterUpdateProgress::hide();
     if (sDownloadingNotification)
     {
         LLNotificationsUtil::cancel(sDownloadingNotification);
         sDownloadingNotification = nullptr;
     }
 }
-
-static std::atomic<bool> sIsDownloading{false};
 
 void velopack_start_download(bool is_required, std::function<void(bool success)> completion_cb)
 {
@@ -1723,6 +1788,7 @@ void velopack_cleanup()
         sPendingCheckInfo = nullptr;
     }
     sAssetUrlMap.clear();
+    LLFloaterUpdateProgress::hide();
 }
 
 void velopack_set_update_url(const std::string& url)
