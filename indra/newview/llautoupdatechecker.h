@@ -22,7 +22,7 @@ class LLAutoUpdateChecker : public LLSingleton<LLAutoUpdateChecker>
 
 public:
     // Main entry point - checks for updates
-    void checkForUpdate();
+    void checkForUpdate(bool is_manual = false);
     
     // Open browser to download the update installer
     void openDownloadPage();
@@ -42,6 +42,9 @@ public:
     // Show update notification to user
     void showUpdateNotification();
 
+    // Show "you are up to date" message for manual checks
+    void showUpToDateNotification();
+
 private:
     // Coroutine for checking updates
     void checkUpdateCoro();
@@ -57,6 +60,7 @@ private:
     bool mUpdateAvailable;
     bool mUpdateRequired;
     bool mCheckInProgress;
+    bool mIsManualCheck;
 };
 
 #endif // LL_LLAUTOUPDATECHECKER_H

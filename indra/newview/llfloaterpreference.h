@@ -277,6 +277,8 @@ public:
     void onClickBrowseSplashImage();
     // Login bar logo replacement picker
     void onClickBrowseLoginLogo();
+    // Manual check for updates button
+    void onClickCheckForUpdates();
 
     // <FS:Ansariel> Improved graphics preferences
     void updateSliderText(LLSliderCtrl* ctrl, LLTextBox* text_box);

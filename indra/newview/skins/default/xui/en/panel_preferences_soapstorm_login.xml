@@ -140,5 +140,28 @@
      tool_tip="Suppress optional update prompts. Required updates will still prompt, and automatic installation (if selected in Preferences) still works."
      top_pad="8"
      width="500" />
+    <check_box
+     control_name="UpdaterWillingToTest"
+     follows="left|top"
+     height="16"
+     label="Include beta / pre-release updates"
+     layout="topleft"
+     left="10"
+     name="updater_willing_to_test_prefs"
+     tool_tip="If checked, the updater will check for both pre-release beta builds and official releases."
+     top_pad="4"
+     width="500" />
+    <button
+     follows="left|top"
+     height="22"
+     label="Check for Updates Now"
+     layout="topleft"
+     left="10"
+     name="check_for_updates_btn"
+     top_pad="6"
+     width="180">
+        <button.commit_callback
+         function="Pref.CheckForUpdates" />
+    </button>
 
 </panel>

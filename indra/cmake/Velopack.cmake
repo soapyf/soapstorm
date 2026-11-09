@@ -5,7 +5,11 @@
 include_guard()
 
 # USE_VELOPACK controls whether to use Velopack for installer packaging (instead of NSIS/DMG)
-option(USE_VELOPACK "Use Velopack for installer packaging" OFF)
+if (WINDOWS OR DARWIN)
+    option(USE_VELOPACK "Use Velopack for installer packaging" ON)
+else()
+    option(USE_VELOPACK "Use Velopack for installer packaging" OFF)
+endif()
 
 if (USE_VELOPACK) # <FS:TJ/> Only include and link Velopack if it is being used
     if (WINDOWS)

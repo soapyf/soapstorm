@@ -34,6 +34,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloaterpreference.h"
+#include "llautoupdatechecker.h"
 
 #include "message.h"
 #include "llfloaterautoreplacesettings.h"
@@ -528,6 +529,7 @@ LLFloaterPreference::LLFloaterPreference(const LLSD& key)
     mCommitCallbackRegistrar.add("Pref.CustomizeHitSymbols",        boost::bind(&LLFloaterPreference::onClickCustomizeHitSymbols, this));
     mCommitCallbackRegistrar.add("Pref.BrowseSplashImage",          boost::bind(&LLFloaterPreference::onClickBrowseSplashImage, this));
     mCommitCallbackRegistrar.add("Pref.BrowseLoginLogo",            boost::bind(&LLFloaterPreference::onClickBrowseLoginLogo, this));
+    mCommitCallbackRegistrar.add("Pref.CheckForUpdates",            boost::bind(&LLFloaterPreference::onClickCheckForUpdates, this));
     mCommitCallbackRegistrar.add("Pref.SetCache",               boost::bind(&LLFloaterPreference::onClickSetCache, this));
     mCommitCallbackRegistrar.add("Pref.ResetCache",             boost::bind(&LLFloaterPreference::onClickResetCache, this));
 //  mCommitCallbackRegistrar.add("Pref.ClickSkin",              boost::bind(&LLFloaterPreference::onClickSkin, this,_1, _2));
@@ -1833,6 +1835,11 @@ void LLFloaterPreference::onClickBrowseLoginLogo()
             }
         },
         LLFilePicker::FFLOAD_IMAGE, false);
+}
+
+void LLFloaterPreference::onClickCheckForUpdates()
+{
+    LLAutoUpdateChecker::instance().checkForUpdate(true /* is_manual */);
 }
 
 // Called when user changes language via the combobox.

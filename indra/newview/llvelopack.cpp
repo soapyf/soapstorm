@@ -41,6 +41,7 @@
 #include "llviewercontrol.h"
 #include "llappviewer.h"
 #include "llcoros.h"
+#include <thread>
 
 #include "Velopack.h"
 
@@ -79,7 +80,7 @@ static std::string sTargetVersion;                           // Velopack's actua
 static void show_required_update_prompt();
 static void show_downloading_notification(const std::string& version);
 static void ensure_update_manager(bool allow_downgrade);
-static void velopack_download_pending_update();
+static bool velopack_download_pending_update();
 static std::unordered_map<std::string, std::string> sAssetUrlMap; // basename -> original absolute URL
 
 //
@@ -313,9 +314,21 @@ static std::wstring get_app_name()
     //    channel.replace(channel.size() - release_suffix.size(), release_suffix.size(), L" Viewer");
     //}
     //return channel;
-    std::wstring prefix = L"Firestorm";
-    if (channel.starts_with(prefix))
-        channel.erase(0, prefix.size());
+    // <FS:TJ> Get correct SoapStorm/Firestorm app name
+    std::wstring prefix = L"Soapstorm";
+    if (channel.starts_with(L"Soapstorm"))
+    {
+        channel.erase(0, 9);
+    }
+    else if (channel.starts_with(L"SoapStorm"))
+    {
+        channel.erase(0, 9);
+    }
+    else if (channel.starts_with(L"Firestorm"))
+    {
+        prefix = L"Firestorm";
+        channel.erase(0, 9);
+    }
 #ifdef OPENSIM
     prefix.append(L"OS");
 #endif
@@ -358,7 +371,7 @@ static std::wstring get_app_user_model_id()
     // 2. Shortcut property (IPropertyStore::SetValue with PKEY_AppUserModel_ID)
     // 3. Runtime process ID (SetCurrentProcessExplicitAppUserModelID if needed)
     // Must be consistent across all uses for proper taskbar grouping.
-    return L"LindenLab." + get_app_name_oneword();
+    return L"SoapStorm." + get_app_name_oneword();
 }
 
 static HRESULT create_shortcut(const std::wstring& shortcut_path,
@@ -859,33 +872,21 @@ static void register_uninstall_info(const std::wstring& install_dir,
         RegSetValueExW(hkey, L"DisplayVersion", 0, REG_SZ,
                       (BYTE*)version.c_str(), (DWORD)((version.size() + 1) * sizeof(wchar_t)));
         RegSetValueExW(hkey, L"Publisher", 0, REG_SZ,
-                      // <FS:TJ> Use Firestorm installation information
-                      //(BYTE*)L"Linden Research, Inc.", 44);
-                      (BYTE*)L"The Phoenix Firestorm Project, Inc.", 72);
-                      // </FS:TJ>
+                      (BYTE*)L"SoapStorm Project", 36);
         RegSetValueExW(hkey, L"UninstallString", 0, REG_SZ,
                       (BYTE*)uninstall_cmd.c_str(), (DWORD)((uninstall_cmd.size() + 1) * sizeof(wchar_t)));
         RegSetValueExW(hkey, L"DisplayIcon", 0, REG_SZ,
                       (BYTE*)exe_path.c_str(), (DWORD)((exe_path.size() + 1) * sizeof(wchar_t)));
 
-        // <FS:TJ> Use Firestorm installation information
-        //std::wstring link_url = L"https://support.secondlife.com/contact-support/";
-        std::wstring link_url = L"https://www.firestormviewer.org/support";
-        // </FS:TJ>
+        std::wstring link_url = L"https://github.com/soapyf/soapstorm/issues";
         RegSetValueExW(hkey, L"HelpLink", 0, REG_SZ,
             (BYTE*)link_url.c_str(), (DWORD)((link_url.size() + 1) * sizeof(wchar_t)));
 
-        // <FS:TJ> Use Firestorm installation information
-        //link_url = L"https://secondlife.com/whatis/";
-        link_url = L"https://www.firestormviewer.org";
-        // </FS:TJ>
+        link_url = L"https://github.com/soapyf/soapstorm";
         RegSetValueExW(hkey, L"URLInfoAbout", 0, REG_SZ,
             (BYTE*)link_url.c_str(), (DWORD)((link_url.size() + 1) * sizeof(wchar_t)));
 
-        // <FS:TJ> Use Firestorm installation information
-        //link_url = L"https://secondlife.com/support/downloads/";
-        link_url = L"https://www.firestormviewer.org/downloads";
-        // </FS:TJ>
+        link_url = L"https://github.com/soapyf/soapstorm/releases";
         RegSetValueExW(hkey, L"URLUpdateInfo", 0, REG_SZ,
             (BYTE*)link_url.c_str(), (DWORD)((link_url.size() + 1) * sizeof(wchar_t)));
 
@@ -1134,10 +1135,36 @@ static int compare_running_version(const std::string& vvm_version)
 // Update manager lifecycle
 //
 
+static bool sLastPrereleaseState = false;
+
 static void ensure_update_manager(bool allow_downgrade)
 {
+    bool include_prereleases = gSavedSettings.getBOOL("UpdaterWillingToTest");
+    std::string channel = LLVersionInfo::instance().getChannel();
+    if (channel.find("Beta") != std::string::npos ||
+        channel.find("Preview") != std::string::npos ||
+        channel.find("Test") != std::string::npos)
+    {
+        include_prereleases = true;
+    }
+
+    if (sUpdateManager && sLastPrereleaseState != include_prereleases)
+    {
+        LL_INFOS("Velopack") << "Prerelease preference changed to " << (include_prereleases ? "true" : "false")
+                             << ", recreating Velopack update manager" << LL_ENDL;
+        vpkc_free_update_manager(sUpdateManager);
+        sUpdateManager = nullptr;
+        if (sUpdateSource)
+        {
+            vpkc_free_source(sUpdateSource);
+            sUpdateSource = nullptr;
+        }
+    }
+
     if (sUpdateManager)
         return;
+
+    sLastPrereleaseState = include_prereleases;
 
     vpkc_update_options_t options = {};
     options.AllowVersionDowngrade = allow_downgrade;
@@ -1145,11 +1172,23 @@ static void ensure_update_manager(bool allow_downgrade)
 
     if (!sUpdateSource)
     {
-        sUpdateSource = vpkc_new_source_custom_callback(
-            custom_get_release_feed,
-            custom_free_release_feed,
-            custom_download_asset,
-            nullptr);
+        std::string repo_url = sUpdateUrl.empty() ? "https://github.com/soapyf/soapstorm" : sUpdateUrl;
+        if (repo_url.find("github.com") != std::string::npos)
+        {
+            LL_INFOS("Velopack") << "Creating GitHub update source for " << repo_url 
+                                 << " (prerelease=" << (include_prereleases ? "true" : "false") << ")" << LL_ENDL;
+            sUpdateSource = vpkc_new_source_github(repo_url.c_str(), nullptr, include_prereleases);
+        }
+        else if (repo_url.rfind("http://", 0) == 0 || repo_url.rfind("https://", 0) == 0)
+        {
+            LL_INFOS("Velopack") << "Creating HTTP update source for " << repo_url << LL_ENDL;
+            sUpdateSource = vpkc_new_source_http_url(repo_url.c_str());
+        }
+        else
+        {
+            LL_INFOS("Velopack") << "Creating file update source for " << repo_url << LL_ENDL;
+            sUpdateSource = vpkc_new_source_file(repo_url.c_str());
+        }
     }
 
     vpkc_locator_config_t* locator_ptr = nullptr;
@@ -1269,51 +1308,27 @@ bool velopack_initialize()
     return true;
 }
 
+bool velopack_is_available()
+{
+    ensure_update_manager(false);
+    return sUpdateManager != nullptr;
+}
+
 // Downloads the update that was found during the check phase.
 // Operates on sPendingCheckInfo which was set by velopack_check_for_updates.
-static void velopack_download_pending_update()
+static bool velopack_download_pending_update()
 {
     if (!sUpdateManager || !sPendingCheckInfo)
     {
         LL_WARNS("Velopack") << "No pending check info to download" << LL_ENDL;
-        return;
+        return false;
     }
 
     LL_DEBUGS("Velopack") << "Setting up detailed logging";
     vpkc_set_logger(on_vpk_log, nullptr);
     LL_CONT << LL_ENDL;
-    LL_INFOS("Velopack") << "Downloading update..." << LL_ENDL;
+    LL_INFOS("Velopack") << "Downloading update via Velopack (deltas will be prioritized)..." << LL_ENDL;
 
-    // Pre-download the nupkg at the coroutine level where getRawAndSuspend works.
-    // The download callback inside the Rust FFI cannot use coroutine HTTP.
-    std::string asset_filename = sPendingCheckInfo->TargetFullRelease->FileName
-        ? sPendingCheckInfo->TargetFullRelease->FileName : "";
-    std::string asset_url;
-    auto url_it = sAssetUrlMap.find(asset_filename);
-    if (url_it != sAssetUrlMap.end())
-    {
-        asset_url = url_it->second;
-    }
-    else
-    {
-        std::string base = sUpdateUrl;
-        if (!base.empty() && base.back() == '/')
-            base.pop_back();
-        asset_url = base + "/" + asset_filename;
-    }
-
-    sPreDownloadedAssetPath = gDirUtilp->getExpandedFilename(LL_PATH_TEMP, asset_filename);
-    LL_INFOS("Velopack") << "Pre-downloading " << asset_url
-        << " to " << sPreDownloadedAssetPath << LL_ENDL;
-
-    if (!download_url_to_file(asset_url, sPreDownloadedAssetPath))
-    {
-        LL_WARNS("Velopack") << "Failed to pre-download update asset" << LL_ENDL;
-        sPreDownloadedAssetPath.clear();
-        return;
-    }
-
-    LL_INFOS("Velopack") << "Pre-download complete, handing to Velopack" << LL_ENDL;
     if (vpkc_download_updates(sUpdateManager, sPendingCheckInfo, on_progress, nullptr))
     {
         if (sPendingUpdate)
@@ -1322,13 +1337,15 @@ static void velopack_download_pending_update()
         }
         sPendingUpdate = sPendingCheckInfo;
         sPendingCheckInfo = nullptr; // Ownership transferred
-        LL_INFOS("Velopack") << "Update downloaded and pending" << LL_ENDL;
+        LL_INFOS("Velopack") << "Update downloaded and pending application" << LL_ENDL;
+        return true;
     }
     else
     {
         char descr[512];
         vpkc_get_last_error(descr, sizeof(descr));
         LL_WARNS("Velopack") << "Failed to download update: " << ll_safe_string((const char*)descr) << LL_ENDL;
+        return false;
     }
 }
 
@@ -1358,21 +1375,86 @@ static void dismiss_downloading_notification()
     }
 }
 
+void velopack_start_download(bool is_required, std::function<void(bool success)> completion_cb)
+{
+    sIsRequired = is_required;
+
+    // If we don't have pending check info yet, run an update check first
+    if (!sPendingCheckInfo)
+    {
+        ensure_update_manager(false);
+        if (!sUpdateManager)
+        {
+            if (completion_cb) completion_cb(false);
+            return;
+        }
+
+        vpkc_update_info_t* update_info = nullptr;
+        vpkc_update_check_t result = vpkc_check_for_updates(sUpdateManager, &update_info);
+        if (result != UPDATE_AVAILABLE || !update_info)
+        {
+            LL_WARNS("Velopack") << "No update available during start_download (result=" << result << ")" << LL_ENDL;
+            if (completion_cb) completion_cb(false);
+            return;
+        }
+        sPendingCheckInfo = update_info;
+        if (update_info->TargetFullRelease && update_info->TargetFullRelease->Version)
+        {
+            sTargetVersion = update_info->TargetFullRelease->Version;
+        }
+    }
+
+    show_downloading_notification(sTargetVersion);
+
+    std::thread([is_required, completion_cb]()
+    {
+        bool success = velopack_download_pending_update();
+        LLAppViewer::instance()->postToMainCoro([is_required, success, completion_cb]()
+        {
+            dismiss_downloading_notification();
+            if (success)
+            {
+                if (is_required)
+                {
+                    LL_INFOS("Velopack") << "Required update downloaded, quitting to apply" << LL_ENDL;
+                    velopack_request_restart_after_update();
+                    LLAppViewer::instance()->requestQuit();
+                }
+                else
+                {
+                    LL_INFOS("Velopack") << "Optional update downloaded, notifying user" << LL_ENDL;
+                    LLSD args;
+                    args["VERSION"] = sTargetVersion;
+                    args["URL"] = sReleaseNotesUrl;
+                    LLNotificationsUtil::add("FSUpdateDownloadComplete", args, LLSD(),
+                        [](const LLSD& notification, const LLSD& response)
+                        {
+                            S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
+                            if (option == 0) // Install Now
+                            {
+                                velopack_request_restart_after_update();
+                                LLAppViewer::instance()->requestQuit();
+                            }
+                        });
+                }
+            }
+            else
+            {
+                LLNotificationsUtil::add("FSUpdateDownloadFailed");
+            }
+
+            if (completion_cb)
+            {
+                completion_cb(success);
+            }
+        });
+    }).detach();
+}
+
 static void on_required_update_response(const LLSD& notification, const LLSD& response)
 {
     LL_INFOS("Velopack") << "Required update acknowledged, starting download" << LL_ENDL;
-    show_downloading_notification(sTargetVersion);
-    LLCoros::instance().launch("VelopackRequiredUpdate", []()
-    {
-        velopack_download_pending_update();
-        dismiss_downloading_notification();
-        if (velopack_is_update_pending())
-        {
-            LL_INFOS("Velopack") << "Required update downloaded, quitting to apply" << LL_ENDL;
-            velopack_request_restart_after_update();
-            LLAppViewer::instance()->requestQuit();
-        }
-    });
+    velopack_start_download(true);
 }
 
 static void on_optional_update_response(const LLSD& notification, const LLSD& response)
@@ -1381,18 +1463,7 @@ static void on_optional_update_response(const LLSD& notification, const LLSD& re
     if (option == 0) // "Install"
     {
         LL_INFOS("Velopack") << "User accepted optional update, starting download" << LL_ENDL;
-        show_downloading_notification(sTargetVersion);
-        LLCoros::instance().launch("VelopackOptionalUpdate", []()
-        {
-            velopack_download_pending_update();
-            dismiss_downloading_notification();
-            if (velopack_is_update_pending())
-            {
-                LL_INFOS("Velopack") << "Optional update downloaded, quitting to apply" << LL_ENDL;
-                velopack_request_restart_after_update();
-                LLAppViewer::instance()->requestQuit();
-            }
-        });
+        velopack_start_download(false);
     }
     else
     {
@@ -1418,8 +1489,7 @@ void velopack_check_for_updates(const std::string& required_version, const std::
 {
     if (sUpdateUrl.empty())
     {
-        LL_DEBUGS("Velopack") << "No update URL set, skipping update check" << LL_ENDL;
-        return;
+        sUpdateUrl = "https://github.com/soapyf/soapstorm";
     }
 
     // Allow downgrades only for rollbacks: VVM requires a version that's
@@ -1476,7 +1546,7 @@ void velopack_check_for_updates(const std::string& required_version, const std::
         // "Install each update automatically" - download silently, apply on quit
         LL_INFOS("Velopack") << "Optional update to " << target_version
                              << ", downloading automatically (UpdaterServiceSetting=3)" << LL_ENDL;
-        velopack_download_pending_update();
+        velopack_start_download(false);
         return;
     }
 
