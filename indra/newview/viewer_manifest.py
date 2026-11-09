@@ -1057,8 +1057,16 @@ class Windows_x86_64_Manifest(ViewerManifest):
             return
 
         # Local builds: run vpk pack directly (unsigned)
+        vpk_bin = shutil.which('vpk')
+        if not vpk_bin:
+            dot_vpk = os.path.expanduser('~/.dotnet/tools/vpk.exe')
+            if os.path.exists(dot_vpk):
+                vpk_bin = dot_vpk
+            else:
+                vpk_bin = 'vpk'
+
         vpk_args = [
-            'vpk', 'pack',
+            vpk_bin, 'pack',
             '--packId', pack_id,
             '--packVersion', pack_version,
             '--packDir', pack_dir,
@@ -1068,7 +1076,7 @@ class Windows_x86_64_Manifest(ViewerManifest):
             '-xy', # <FS:TJ/> Overwrite any existing velopack package of the same Id instead of erroring
             # Suppress Velopack's built-in shortcut creation; we create our own
             # shortcuts in llvelopack.cpp on_after_install hook instead.
-            '--shortcuts', '',
+            '--shortcuts', 'None',
         ]
 
         if self.args.get('arch') == 'x86_64':
@@ -1105,16 +1113,16 @@ class Windows_x86_64_Manifest(ViewerManifest):
         self.package_file = installer_base + '_Setup.exe'
         our_setup = os.path.join(pack_dir, self.package_file)
         if os.path.exists(velopack_setup):
-            shutil.move(velopack_setup, our_setup)
-            print("Moved %s to %s" % (velopack_setup, our_setup))
+            shutil.copy2(velopack_setup, our_setup)
+            print("Copied %s to %s" % (velopack_setup, our_setup))
 
         # Rename the portable zip to include the version number
         # Velopack creates: {packId}-win-Portable.zip
         velopack_portable = os.path.join(releases_dir, '%s-win-Portable.zip' % pack_id)
         if os.path.exists(velopack_portable):
             our_portable = os.path.join(releases_dir, installer_base + '_Portable.zip')
-            shutil.move(velopack_portable, our_portable)
-            print("Moved %s to %s" % (velopack_portable, our_portable))
+            shutil.copy2(velopack_portable, our_portable)
+            print("Copied %s to %s" % (velopack_portable, our_portable))
 
         # Output the Releases directory path for artifact upload (contains nupkg, RELEASES for updates)
         # <FS:TJ> Undo Github-Build stuff - I don't think we need this

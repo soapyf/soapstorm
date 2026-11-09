@@ -6070,6 +6070,15 @@ void LLAppViewer::purgeCache()
     LLVOCache::getInstance()->removeCache(LL_PATH_CACHE);
     SSROCStore::instance().purgeAll(); // <SS:Nexii> a region cache records where the user has been, so it must die with every other cache
     LLViewerShaderMgr::instance()->clearShaderCache();
+    if (LLDiskCache::instanceExists())
+    {
+        LLDiskCache::getInstance()->clearCache();
+    }
+    else
+    {
+        gDirUtilp->deleteDirAndContents(gDirUtilp->getExpandedFilename(LL_PATH_CACHE, "cache"));
+    }
+    gDirUtilp->deleteDirAndContents(gDirUtilp->getExpandedFilename(LL_PATH_CACHE, "lslpreproc"));
     purgeCefStaleCaches();
     gDirUtilp->deleteFilesInDir(gDirUtilp->getExpandedFilename(LL_PATH_CACHE, ""), "*");
 }
@@ -6077,7 +6086,7 @@ void LLAppViewer::purgeCache()
 //purge cache immediately, do not wait until the next login.
 void LLAppViewer::purgeCacheImmediate()
 {
-    LL_INFOS("AppCache") << "Purging Object Cache and Texture Cache immediately..." << LL_ENDL;
+    LL_INFOS("AppCache") << "Purging Cache immediately..." << LL_ENDL;
     LLAppViewer::getTextureCache()->purgeCache(LL_PATH_CACHE, false);
     SSROCStore::instance().purgeAll(); // <SS:Nexii> mid-session cache clear must cascade here too, not only at the next login
     if (LLVOCache::instanceExists())
@@ -6087,11 +6096,25 @@ void LLAppViewer::purgeCacheImmediate()
     else if (!mSecondInstance)
     {
         // LLVOCache requires parameters to be initialized, if it's not there, try manually
-        std::string mask = "*";
         std::string cache_dir = gDirUtilp->getExpandedFilename(LL_PATH_CACHE, "objectcache");
         LL_INFOS() << "Removing cache at " << cache_dir << LL_ENDL;
-        gDirUtilp->deleteFilesInDir(cache_dir, mask); //delete all files
-        LLFile::remove(cache_dir);
+        gDirUtilp->deleteDirAndContents(cache_dir);
+        LLFile::mkdir(cache_dir);
+    }
+    if (LLDiskCache::instanceExists())
+    {
+        LLDiskCache::getInstance()->clearCache();
+    }
+    LLViewerShaderMgr::instance()->clearShaderCache();
+    gDirUtilp->deleteDirAndContents(gDirUtilp->getExpandedFilename(LL_PATH_CACHE, "lslpreproc"));
+    gDirUtilp->deleteFilesInDir(gDirUtilp->getExpandedFilename(LL_PATH_CACHE, ""), "*");
+    if (gCacheName)
+    {
+        gCacheName->clear();
+    }
+    if (LLAvatarNameCache::instanceExists())
+    {
+        LLAvatarNameCache::getInstance()->clearCache();
     }
 }
 

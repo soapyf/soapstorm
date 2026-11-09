@@ -1077,9 +1077,7 @@ void LLShaderMgr::clearShaderCache()
 {
     std::string shader_cache = gDirUtilp->getExpandedFilename(LL_PATH_CACHE, "shader_cache");
     LL_INFOS("ShaderMgr") << "Removing shader cache at " << shader_cache << LL_ENDL;
-    const std::string mask = "*";
-    gDirUtilp->deleteFilesInDir(shader_cache, mask);
-    LLFile::remove(shader_cache);
+    gDirUtilp->deleteDirAndContents(shader_cache);
     LLFile::mkdir(shader_cache);
     mShaderBinaryCache.clear();
 }

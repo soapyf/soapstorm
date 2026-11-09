@@ -561,7 +561,8 @@ void LLDiskCache::clearCache()
         {
             if (boost::filesystem::is_regular_file(*iter, ec) && !ec.failed())
             {
-                if (ss_utf8_path((*iter).path()).find(CACHE_FILENAME_PREFIX) != std::string::npos)
+                const std::string file_path_str = ss_utf8_path((*iter).path());
+                if (file_path_str.find(SSSTRATA_DIR_NAME) == std::string::npos)
                 {
                     boost::filesystem::remove(*iter, ec);
                     if (ec.failed())

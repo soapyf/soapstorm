@@ -1281,11 +1281,9 @@ void LLVOCache::removeCache(ELLPath location, bool started)
 
     LL_INFOS() << "about to remove the object cache due to settings." << LL_ENDL ;
 
-    std::string mask = "*";
     std::string cache_dir = gDirUtilp->getExpandedFilename(location, object_cache_dirname);
     LL_INFOS() << "Removing cache at " << cache_dir << LL_ENDL;
-    gDirUtilp->deleteFilesInDir(cache_dir, mask); //delete all files
-    LLFile::remove(cache_dir);
+    gDirUtilp->deleteDirAndContents(cache_dir);
 
     clearCacheInMemory();
     mInitialized = false;

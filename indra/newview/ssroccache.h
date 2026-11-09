@@ -15,6 +15,7 @@
 
 #include <utility>
 #include "v3math.h"
+#include <boost/signals2.hpp>
 
 #include <atomic>
 #include <condition_variable>
@@ -429,6 +430,7 @@ private:
     mutable std::mutex      mDrainMutex;
     std::condition_variable mDrainCV;
     Metrics                 mMetrics;
+    boost::signals2::scoped_connection mBudgetSignalConnection;
 };
 
 #endif // SS_ROCCACHE_H
