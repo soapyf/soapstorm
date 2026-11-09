@@ -2116,11 +2116,9 @@ class Darwin_x86_64_Manifest(ViewerManifest):
         # and where the Releases directory will be created
         work_dir = os.path.dirname(app_bundle)
 
-        # Output directory for releases - clean it first to avoid version conflicts
+        # Output directory for releases - ensure it exists without wiping prior packages (needed for delta generation)
         releases_dir = os.path.join(work_dir, 'Releases')
-        if os.path.exists(releases_dir):
-            print("Cleaning existing Releases directory: %s" % releases_dir)
-            shutil.rmtree(releases_dir)
+        os.makedirs(releases_dir, exist_ok=True)
 
         # Build vpk command for macOS
         # See: https://docs.velopack.io/reference/cli/content/vpk-osx
