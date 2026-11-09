@@ -286,7 +286,10 @@ bool callback_clear_cache(const LLSD& notification, const LLSD& response)
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     if ( option == 0 ) // YES
     {
-        // flag client texture cache for clearing next time the client runs
+        // Clear immediately so files and folders disappear right away
+        LLAppViewer::instance()->purgeCacheImmediate();
+
+        // Also flag cache for thorough sweep on next startup
         gSavedSettings.setBOOL("PurgeCacheOnNextStartup", true);
         LLNotificationsUtil::add("CacheWillClear");
     }

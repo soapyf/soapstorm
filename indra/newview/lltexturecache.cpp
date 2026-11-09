@@ -1647,6 +1647,10 @@ void LLTextureCache::purgeAllTextures(bool purge_directories)
     {
         SSBC7Store::instance().purgeAll();
     }
+    else if (!mReadOnly)
+    {
+        gDirUtilp->deleteDirAndContents(mTexturesDirName + gDirUtilp->getDirDelimiter() + "bc7cache");
+    }
     // </SS:Nexii>
 
     // <SS:Nexii> Strata - and the body volumes with it, for the same reason and with the same urgency. The non-directory branch below only calls deleteFilesInDir on this directory, which does not descend into the `strata` child at all, so without this line a "clear cache" driven by a header version mismatch would leave every volume standing and the next session would open an index describing bodies whose entries no longer exist.
@@ -1715,7 +1719,7 @@ void LLTextureCache::purgeAllTextures(bool purge_directories)
         gDirUtilp->deleteFilesInDir(mTexturesDirName, mask); // headers, fast cache
         if (purge_directories)
         {
-            LLFile::remove(mTexturesDirName);
+            gDirUtilp->deleteDirAndContents(mTexturesDirName);
         }
         // <FS:Ansariel> Only delete folder if it actually exist
         }

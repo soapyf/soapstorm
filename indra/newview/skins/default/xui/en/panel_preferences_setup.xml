@@ -484,6 +484,46 @@
 		 height="10"
 		 layout="topleft"
 		 left="15"
+		 mouse_opaque="false"
+		 name="roc_cache_size_label_l"
+		 top_delta="30"
+		 width="500">
+		   Region Object Cache Size:
+		</text>
+		<slider
+		 can_edit_text="true"
+		 control_name="SSROCDiskBudgetMB"
+		 decimal_digits="0"
+		 follows="left|top"
+		 height="15"
+		 increment="256"
+		 initial_value="2048"
+		 layout="topleft"
+		 max_val="16384"
+		 min_val="256"
+		 top_pad="10"
+		 name="roc_cache_size"
+		 width="279" />
+		<text
+		 type="string"
+		 length="1"
+		 follows="left|top"
+		 height="10"
+		 layout="topleft"
+		 left_pad="6"
+		 top_delta="1"
+		 mouse_opaque="false"
+		 name="roc_text_box5"
+		 width="40">
+			MB
+		</text>
+		<text
+		 type="string"
+		 length="1"
+		 follows="left|top"
+		 height="10"
+		 layout="topleft"
+		 left="15"
 		 name="Cache location"
 		 top_delta="25"
 		 width="300">

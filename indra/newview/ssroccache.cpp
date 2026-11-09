@@ -13,6 +13,8 @@
 
 #include "llapp.h"
 #include "llappviewer.h"
+#include "llagent.h"
+#include "llviewerregion.h"
 #include "llcrc.h"
 #include "lldir.h"
 #include "lldiriterator.h"
@@ -758,6 +760,12 @@ void SSROCStore::initStore()
     mInitialized = true;
     mShuttingDown = false;
 
+    if (LLControlVariable* ctrl = gSavedSettings.getControl("SSROCDiskBudgetMB"))
+    {
+        mBudgetSignalConnection = ctrl->getCommitSignal()->connect(
+            [this](LLControlVariable*, const LLSD&, const LLSD&) { enforceDiskBudget(); });
+    }
+
     refreshDiskUsage();
 
     LL_INFOS("SSROC") << "Region object cache store at " << mStoreDir
@@ -783,6 +791,7 @@ void SSROCStore::shutdownStore()
     if (!mInitialized) return;
 
     mShuttingDown = true;
+    mBudgetSignalConnection.disconnect();
 
     // Saves are posted to a worker that outlives nothing in particular, so quitting has to wait for them here rather than hope: the pool and LLVOCache are torn down immediately after this returns.
     std::unique_lock<std::mutex> lock(mDrainMutex);
@@ -1321,6 +1330,10 @@ void SSROCStore::saveRegionAsync(SSROCFilePtr file)
             mMetrics.mBytesWritten += bytes.size();
             mDiskBytesUsed += bytes.size();
             ++mMetrics.mSavesOk;
+            if (!mShuttingDown)
+            {
+                enforceDiskBudget();
+            }
         }
         else
         {
@@ -1353,8 +1366,12 @@ void SSROCStore::saveRegionAsync(SSROCFilePtr file)
             }
             return ok;
         },
-        [](bool)
+        [this](bool ok)
         {
+            if (ok && !mShuttingDown)
+            {
+                enforceDiskBudget();
+            }
         });
 
     // A rejected post means the write never happens; without this the pending count never returns to zero and every subsequent quit burns the full drain timeout.
@@ -1428,6 +1445,13 @@ void SSROCStore::enforceDiskBudget()
     refreshDiskUsage();
     if (mDiskBytesUsed <= budget) return;
 
+    U64 current_handle = 0;
+    if (gAgent.isInitialized() && gAgent.getRegion())
+    {
+        current_handle = gAgent.getRegion()->getHandle();
+    }
+    const std::string current_region_path = current_handle ? regionFilePath(current_handle) : "";
+
     // Lax watermark, matching the BC7 tier's policy: nothing is touched until the budget is actually approached, and then whole region files are dropped least-recently-visited first. Last-visit time is a drop-priority signal, never an expiry.
     struct Victim { std::string mPath; U64 mSize; time_t mTime; };
     std::vector<Victim> files;
@@ -1451,6 +1475,7 @@ void SSROCStore::enforceDiskBudget()
     for (const Victim& v : files)
     {
         if (used <= budget) break;
+        if (!current_region_path.empty() && v.mPath == current_region_path) continue;
         if (LLFile::remove(v.mPath, ENOENT) == 0)
         {
             used -= llmin(used, v.mSize);

@@ -43,6 +43,7 @@
 
 #include <fcntl.h>      //_O_APPEND
 #include <io.h>         //_open_osfhandle()
+#include <filesystem>
 #include <psapi.h> // <FS:Beq/> [FIRE-36494] Image allocation failure telemetry
 #include <WERAPI.H>     // for WerAddExcludedApplication()
 #include <process.h>    // _spawnl()
@@ -1897,54 +1898,32 @@ std::string LLAppViewerWin32::generateSerialNumber()
 // The cache dir will be search for directories named *.old_texturecache, then each of this directories
 // will be deleted.
 // The thread will be started each time the viewer starts, just in case there is directories so huge,
-// the user quit the viewer before the old cache was fully cleared.
-void deleteFilesInDirectory( std::wstring aDir )
+void deleteCacheDirectory( const std::wstring& aDir )
 {
     if( aDir == L"." || aDir == L".." || aDir.empty() )
         return;
 
-    if( aDir[ aDir.size() -1 ] != '\\' || aDir[ aDir.size() -1 ] != '/' )
-        aDir += L"\\";
-
-    WIN32_FIND_DATA oFindData;
-    HANDLE hFindHandle = ::FindFirstFile( (aDir + L"*.*").c_str(), &oFindData );
-
-    if( INVALID_HANDLE_VALUE == hFindHandle )
+    std::error_code ec;
+    std::filesystem::path dirPath(aDir);
+    if (!std::filesystem::exists(dirPath, ec))
         return;
 
-    do
+    // Remove read-only attributes from all files so remove_all doesn't fail on them
+    for (auto it = std::filesystem::recursive_directory_iterator(dirPath, std::filesystem::directory_options::skip_permission_denied, ec);
+         it != std::filesystem::recursive_directory_iterator() && !ec;
+         it.increment(ec))
     {
-        if( ! (oFindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ) )
+        if (it->is_regular_file(ec))
         {
-            std::wstring strFile = aDir + oFindData.cFileName;
-            if( oFindData.dwFileAttributes & FILE_ATTRIBUTE_READONLY )
-                ::SetFileAttributes( strFile.c_str(), FILE_ATTRIBUTE_NORMAL );
-
-            ::DeleteFile( ( aDir + oFindData.cFileName ).c_str() );
+            std::filesystem::permissions(it->path(), std::filesystem::perms::all, std::filesystem::perm_options::add, ec);
         }
-    } while( ::FindNextFile( hFindHandle, &oFindData ) );
-
-    ::FindClose( hFindHandle );
-}
-
-void deleteCacheDirectory( std::wstring aDir )
-{
-    if( aDir == L"." || aDir == L".." || aDir.empty() )
-        return;
-
-    if( aDir[ aDir.size() -1 ] != '\\' || aDir[ aDir.size() -1 ] != '/' )
-        aDir += L"\\";
-
-    wchar_t aCacheDirs[] = L"0123456789abcdef";
-
-    for( int i = 0; i < _countof( aCacheDirs ); ++i )
-    {
-        deleteFilesInDirectory( aDir + aCacheDirs[i] );
-        ::RemoveDirectory( (aDir + aCacheDirs[i]).c_str() );
     }
 
-    deleteFilesInDirectory( aDir );
-    ::RemoveDirectory( aDir.c_str() );
+    std::filesystem::remove_all(dirPath, ec);
+    if (ec)
+    {
+        LL_WARNS("LLDiskCache") << "Failed to remove cache directory " << dirPath.string() << ": " << ec.message() << LL_ENDL;
+    }
 }
 
 DWORD WINAPI purgeThread( LPVOID lpParameter )
@@ -1959,7 +1938,7 @@ DWORD WINAPI purgeThread( LPVOID lpParameter )
     if( strPath.empty() )
         return 0;
 
-    if( strPath[ strPath.size() -1 ] != '\\' || strPath[ strPath.size() -1 ] != '/' )
+    if( strPath.back() != L'\\' && strPath.back() != L'/' )
         strPath += L"\\";
 
     WIN32_FIND_DATA oFindData;
@@ -1967,20 +1946,20 @@ DWORD WINAPI purgeThread( LPVOID lpParameter )
 
     std::vector< std::wstring > vctDirs;
 
-    if( INVALID_HANDLE_VALUE == hFindHandle )
-        return 0;
-
-    do
+    if( INVALID_HANDLE_VALUE != hFindHandle )
     {
-        if( oFindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
-            vctDirs.push_back( strPath + oFindData.cFileName );
-    } while( ::FindNextFile( hFindHandle, &oFindData ) );
+        do
+        {
+            if( oFindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
+                vctDirs.push_back( strPath + oFindData.cFileName );
+        } while( ::FindNextFile( hFindHandle, &oFindData ) );
 
-    ::FindClose( hFindHandle );
+        ::FindClose( hFindHandle );
+    }
 
-    for( auto dir : vctDirs )
+    for( const auto& dir : vctDirs )
     {
-        LL_INFOS("LLDiskCache") << "Removing an old cache" << LL_ENDL; // <FS:Beq/> consistent tagging to help searching log files
+        LL_INFOS("LLDiskCache") << "Removing an old cache: " << std::filesystem::path(dir).string() << LL_ENDL; // <FS:Beq/> consistent tagging to help searching log files
         deleteCacheDirectory( dir );
     }
 
