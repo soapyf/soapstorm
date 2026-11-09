@@ -36,6 +36,7 @@
 
 #include <boost/json.hpp>
 #include <fstream>
+#include <sstream>
 #include <unordered_map>
 #include "llnotificationsutil.h"
 #include "llfloaterupdateprogress.h"
@@ -1389,15 +1390,11 @@ static bool velopack_download_pending_update()
         std::string logPath = get_velopack_log_path();
         logWatcher = std::thread([logPath, &stopWatcher]()
         {
-            std::streampos lastPos = 0;
-            if (!logPath.empty() && LLFile::isfile(logPath))
+            S64 lastOffset = 0;
+            llstat initStat;
+            if (!logPath.empty() && LLFile::stat(logPath, &initStat) == 0)
             {
-                std::ifstream initFile(logPath, std::ios::in | std::ios::binary);
-                if (initFile.is_open())
-                {
-                    initFile.seekg(0, std::ios::end);
-                    lastPos = initFile.tellg();
-                }
+                lastOffset = initStat.st_size;
             }
 
             int lastMilestone = 0;
@@ -1407,16 +1404,30 @@ static bool velopack_download_pending_update()
                 std::this_thread::sleep_for(std::chrono::milliseconds(250));
                 if (stopWatcher.load()) break;
 
-                if (logPath.empty() || !LLFile::isfile(logPath))
+                if (logPath.empty())
+                    continue;
+
+                llstat fileStat;
+                if (LLFile::stat(logPath, &fileStat) != 0)
+                    continue;
+
+                S64 currentSize = fileStat.st_size;
+                if (currentSize <= lastOffset)
                     continue;
 
                 std::ifstream logFile(logPath, std::ios::in | std::ios::binary);
                 if (!logFile.is_open())
                     continue;
 
-                logFile.seekg(lastPos);
+                logFile.seekg(lastOffset);
+                size_t bytesToRead = static_cast<size_t>(currentSize - lastOffset);
+                std::string buffer(bytesToRead, '\0');
+                logFile.read(&buffer[0], bytesToRead);
+                lastOffset = currentSize;
+
+                std::istringstream stream(buffer);
                 std::string line;
-                while (std::getline(logFile, line))
+                while (std::getline(stream, line))
                 {
                     if (line.empty()) continue;
 
@@ -1463,7 +1474,6 @@ static bool velopack_download_pending_update()
                         });
                     }
                 }
-                lastPos = logFile.tellg();
             }
         });
     }
