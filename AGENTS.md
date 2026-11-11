@@ -3,7 +3,7 @@
 This file provides critical guidelines, architectural context, and procedural instructions for AI agents working in this repository.
 
 ---
-
+ 
 
 ## 1. Auto-Update Architecture (Velopack)
 
