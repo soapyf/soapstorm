@@ -164,7 +164,7 @@ Hover your mouse over the options for more help.
     <name_list
      left="0"
      top_pad="4"
-     height="83"
+     height="68"
      column_padding="0"
      draw_heading="true"
      heading_height="23"
@@ -237,7 +237,7 @@ Hover your mouse over the options for more help.
      name="group_preferences_layout"
      top_pad="4"
      right="-1"
-     height="131"
+     height="146"
      orientation="horizontal"
      follows="bottom|left|right"
      layout="topleft">
@@ -271,7 +271,7 @@ Hover your mouse over the options for more help.
          left="0"
          name="list_groups_in_profile"
          tool_tip="Sets whether you want to show this group in your profile"
-         top_pad="4"
+         top_pad="3"
          width="295" />
 
         <check_box
@@ -282,7 +282,7 @@ Hover your mouse over the options for more help.
          left="0"
          name="receive_notices"
          tool_tip="Sets whether you want to receive Notices from this group.  Uncheck this box if this group is spamming you."
-         top_pad="4"
+         top_pad="3"
          width="300" />
 
         <!-- <exodus> -->
@@ -294,7 +294,7 @@ Hover your mouse over the options for more help.
          left="0"
          name="receive_chat"
          tool_tip="Sets whether you want to participate in group chat for this group."
-         top_pad="5"
+         top_pad="3"
          width="300" />
         <!-- </exodus> -->
 
@@ -306,13 +306,13 @@ Hover your mouse over the options for more help.
          left="0"
          name="receive_deeded_chat"
          tool_tip="Sets whether you want to receive chat and messages from objects deeded to this group."
-         top_pad="5"
+         top_pad="3"
          width="300" />
 
          <text
          name="active_title_label"
          left="0"
-         top_pad="9"
+         top_pad="6"
          width="200"
          height="12"
          type="string"

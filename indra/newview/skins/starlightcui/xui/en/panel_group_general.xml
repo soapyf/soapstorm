@@ -107,7 +107,7 @@ Hover your mouse over the options for more help.
      draw_heading="true"
      follows="left|top|right"
      heading_height="23"
-     height="104"
+     height="83"
      layout="topleft"
      left="0"
      name="visible_members"
