@@ -4,6 +4,7 @@ This file provides critical guidelines, architectural context, and procedural in
 
 ---
 
+
 ## 1. Auto-Update Architecture (Velopack)
 
 SoapStorm uses **Velopack** for differential auto-updates on Windows and macOS:
