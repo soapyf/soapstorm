@@ -104,8 +104,6 @@ LLUrlRegistry::LLUrlRegistry()
     // <FS:Ansariel> Wear folder SLUrl
     mUrlEntryWear = new FSUrlEntryWear();
     registerUrl(mUrlEntryWear);
-    mUrlEntryGameController = new LLUrlEntryGameController();
-    registerUrl(mUrlEntryGameController);
     //LLUrlEntrySL and LLUrlEntrySLLabel have more common pattern,
     //so it should be registered in the end of list
     registerUrl(new LLUrlEntrySL());
