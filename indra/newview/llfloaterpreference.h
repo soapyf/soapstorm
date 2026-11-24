@@ -102,8 +102,6 @@ public:
 
     static void refreshInstance();
 
-    static void refreshInstance();
-
     // static data update, called from message handler
     // <FS:Ansariel> Show email address in preferences (FIRE-1071) and keep for OpenSim
     //static void updateUserInfo(const std::string& visibility);

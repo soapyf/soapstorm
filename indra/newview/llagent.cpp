@@ -93,6 +93,7 @@
 #include "llurlentry.h"
 #include "llviewercontrol.h"
 #include "llviewerdisplay.h"
+#include "llviewerjoystick.h"
 #include "llviewermediafocus.h"
 #include "llviewermenu.h"
 #include "llviewernetwork.h" // <FS:PP> For FIRE-10718: llGetSimulatorHostname() is causing LSL Bridge to sleep for 10 seconds
