@@ -35,6 +35,7 @@
 
 #include "llfloaterpreference.h"
 #include "llautoupdatechecker.h"
+#include "llchatservicehistory.h"
 
 #include "message.h"
 #include "llfloaterautoreplacesettings.h"
@@ -949,7 +950,9 @@ void LLFloaterPreference::onShowGroupNoticesTopRightChanged()
 
 void LLFloaterPreference::updateDeleteTranscriptsButton()
 {
-    mDeleteTranscriptsBtn->setEnabled(LLLogChat::transcriptFilesExist());
+    const bool history_exists =
+        LLLogChat::transcriptFilesExist() || LLChatServiceHistory::localHistoryExists();
+    mDeleteTranscriptsBtn->setEnabled(!mDeleteTranscriptsPending && history_exists);
 }
 
 void LLFloaterPreference::onDoNotDisturbResponseChanged()
@@ -1043,12 +1046,13 @@ void LLFloaterPreference::apply()
 
     LLTabContainer* tabcontainer = getChild<LLTabContainer>("pref core");
 /*
- if (sSkin != gSavedSettings.getString("SkinCurrent"))
+    if (sSkin != gSavedSettings.getString("SkinCurrent"))
     {
         LLNotificationsUtil::add("ChangeSkin");
         refreshSkin(this);
     }
 */
+
     // Call apply() on all panels that derive from LLPanelPreference
     for (LLView* view : *tabcontainer->getChildList())
     {
@@ -1170,6 +1174,15 @@ void LLFloaterPreference::cancel(const std::vector<std::string> settings_to_skip
 
 void LLFloaterPreference::onOpen(const LLSD& key)
 {
+    LLTabContainer* tabcontainer = getChild<LLTabContainer>("pref core");
+    for (LLView* view : *tabcontainer->getChildList())
+    {
+        if (LLPanelPreference* panel = dynamic_cast<LLPanelPreference*>(view))
+        {
+            panel->onOpen(key);
+        }
+    }
+
     // this variable and if that follows it are used to properly handle do not disturb mode response message
     static bool initialized = false;
     // if user is logged in and we haven't initialized do not disturb mode response yet, do it
@@ -1282,7 +1295,7 @@ void LLFloaterPreference::onOpen(const LLSD& key)
     buildPopupList();
     // </FS:Zi>
 
-    //get the options that were checked
+    // get the options that were checked
     // <FS:CR> [CHUI MERGE]
     // We don't use these in FS Communications UI, should we in the future? Disabling for now.
     //onNotificationsChange("FriendIMOptions");
@@ -1315,19 +1328,6 @@ void LLFloaterPreference::onOpen(const LLSD& key)
     LLScrollListItem* groupmute_item = getChild<LLScrollListCtrl>("restore_per_account_files_list")->getItem(LLSD("groupmutes"));
     groupmute_item->setEnabled(in_opensim);
     groupmute_item->getColumn(0)->setEnabled(in_opensim);
-    // </FS:Ansariel>
-
-    // <FS:Ansariel> Call onOpen on all panels for additional initialization on open
-    // Call onOpen() on all panels that derive from LLPanelPreference
-    LLTabContainer* tabcontainer = getChild<LLTabContainer>("pref core");
-    for (child_list_t::const_iterator iter = tabcontainer->getChildList()->begin();
-        iter != tabcontainer->getChildList()->end(); ++iter)
-    {
-        LLView* view = *iter;
-        LLPanelPreference* panel = dynamic_cast<LLPanelPreference*>(view);
-        if (panel)
-            panel->onOpen(key);
-    }
     // </FS:Ansariel>
 
     // Make sure the current state of prefs are saved away when
@@ -2518,7 +2518,7 @@ void LLFloaterPreference::refresh()
             break;
         }
     }
-    LLPanel::refresh();
+    LLFloater::refresh();
 
     // <FS:Ansariel> Improved graphics preferences
     getChild<LLUICtrl>("fsaa")->setValue((LLSD::Integer)gSavedSettings.getU32("RenderFSAAType"));
@@ -3284,17 +3284,31 @@ void LLFloaterPreference::onDeleteTranscriptsResponse(const LLSD& notification, 
 {
     if (0 == LLNotificationsUtil::getSelectedOption(notification, response))
     {
-        LLLogChat::deleteTranscripts();
+        // Disable repeated requests immediately. The weak handle keeps the
+        // main-queue completion safe if Preferences closes during the durable sweep.
+        LLHandle<LLFloaterPreference> handle = getDerivedHandle<LLFloaterPreference>();
+        mDeleteTranscriptsPending = true;
         updateDeleteTranscriptsButton();
+
+        if (!LLChatServiceHistory::deleteTranscriptsAsync(
+                [handle](bool)
+                {
+                    if (LLFloaterPreference* floater = handle.get())
+                    {
+                        floater->mDeleteTranscriptsPending = false;
+                        floater->updateDeleteTranscriptsButton();
+                    }
+                }))
+        {
+            mDeleteTranscriptsPending = false;
+            updateDeleteTranscriptsButton();
+        }
     }
 }
 
 void LLFloaterPreference::onLogChatHistorySaved()
 {
-    if (!mDeleteTranscriptsBtn->getEnabled())
-    {
-        mDeleteTranscriptsBtn->setEnabled(true);
-    }
+    updateDeleteTranscriptsButton();
 }
 
 // <FS:PP> Load UI Sounds tabs settings
@@ -3746,7 +3760,6 @@ bool LLPanelPreference::postBuild()
     }
     // </FS:Ansariel>
 
-    apply();
     return true;
 }
 
@@ -4041,7 +4054,7 @@ public:
     }
 
     // <FS:Ansariel> Send inventory item on autoresponse
-    /*virtual*/ void apply()
+    void apply() override
     {
         LLPanelPreference::apply();
         if (LLStartUp::getStartupState() == STATE_STARTED)
@@ -4052,7 +4065,7 @@ public:
     // </FS:Ansariel>
 
     // <FS:Ansariel> DebugLookAt checkbox status not working properly
-    /*virtual*/ bool postBuild()
+    bool postBuild() override
     {
         getChild<LLUICtrl>("showlookat")->setCommitCallback(boost::bind(&LLPanelPreferencePrivacy::onClickDebugLookAt, this, _2));
         gSavedPerAccountSettings.getControl("DebugLookAt")->getSignal()->connect(boost::bind(&LLPanelPreferencePrivacy::onChangeDebugLookAt, this));
@@ -4067,7 +4080,7 @@ public:
     // </FS:Ansariel>
 
     // <FS:Ansariel> Send inventory item on autoresponse
-    /* virtual */ void onOpen(const LLSD& key)
+    void onOpen(const LLSD& key) override
     {
         LLButton* clear_item_btn = getChild<LLButton>("clear_autoresponse_item");
         clear_item_btn->setEnabled(false);
@@ -4335,6 +4348,7 @@ void LLPanelPreferenceGraphics::cancel(const std::vector<std::string> settings_t
 void LLPanelPreferenceGraphics::saveSettings()
 {
     resetDirtyChilds();
+
     // <FS:Ansariel> Improved graphics preferences; We don't need this
     //std::string preset_graphic_active = gSavedSettings.getString("PresetGraphicActive");
     //if (preset_graphic_active.empty())
@@ -4347,6 +4361,7 @@ void LLPanelPreferenceGraphics::saveSettings()
     //  }
     //}
     // </FS:Ansariel>
+
     LLPanelPreference::saveSettings();
 }
 

@@ -193,6 +193,7 @@ public:
     const LLVector3& getCameraUpVector() const { return mCameraUpVector; }
 private:
     LLVector3       getAvatarRootPosition();
+    void            setCameraSmoothingLastPositionGlobal(const LLVector3d& camera_position_global);
 
     F32             mCurrentCameraDistance;         // Current camera offset from avatar
     F32             mTargetCameraDistance;          // Target camera offset from avatar
@@ -204,6 +205,8 @@ private:
     LLVector3       mCameraVirtualPositionAgent;    // Camera virtual position (target) before performing FOV zoom
     LLVector3d      mCameraSmoothingLastPositionGlobal;
     LLVector3d      mCameraSmoothingLastPositionAgent;
+    LLVector3d      mCameraSmoothingLastFocusGlobal;
+    bool            mCameraSmoothingLastFocusValid;
     bool            mCameraSmoothingStop;
     LLVector3       mCameraLag;                     // Third person camera lag
     LLVector3       mCameraUpVector;                // Camera's up direction in world coordinates (determines the 'roll' of the view)
@@ -213,6 +216,7 @@ private:
     //--------------------------------------------------------------------
 public:
     bool            isfollowCamLocked();
+    void            notifyFollowCamParamsCleared();
 private:
     LLFollowCam     mFollowCam;             // Ventrella
     // Fractional scrollCamera() clicks not yet applied to mFollowCam, whose
@@ -372,6 +376,7 @@ private:
     LLVector3d      mCameraFocusOffsetTarget;       // Target towards which we are lerping the camera's focus offset
     bool            mFocusOnAvatar;
     bool            mAllowChangeToFollow;
+    F64             mLastValidFollowCamParamsTime;
     LLVector3d      mFocusGlobal;
     LLVector3d      mFocusTargetGlobal;
     LLPointer<LLViewerObject> mFocusObject;
@@ -412,16 +417,14 @@ public:
     void            cameraOrbitAround(const F32 radians);   // Rotate camera CCW radians about build focus point
     void            cameraOrbitOver(const F32 radians);     // Rotate camera forward radians over build focus point
     void            cameraOrbitIn(const F32 meters);        // Move camera in toward build focus point
-// <FS:Chanayane> Camera roll (from Alchemy)
     void            cameraRollOver(const F32 radians);      // Roll the camera
+// <FS:Chanayane> Camera roll (from Alchemy)
     F32             getRollAngle() const { return mRollAngle; }
     void            setRollAngle(F32 radians) { mRollAngle = radians; }
 // </FS:Chanayane>
     void            resetCameraOrbit();
     void            resetOrbitDiff();
-// <FS:Chanayane> Camera roll (from Alchemy)
     void            resetCameraRoll();
-// </FS:Chanayane>
     //--------------------------------------------------------------------
     // Zoom
     //--------------------------------------------------------------------
@@ -533,10 +536,8 @@ public:
     F32             getOrbitDownKey() const     { return mOrbitDownKey; }
     F32             getOrbitInKey() const       { return mOrbitInKey; }
     F32             getOrbitOutKey() const      { return mOrbitOutKey; }
-// <FS:Chanayane> Camera roll (from Alchemy)
     F32             getRollLeftKey() const      { return mRollLeftKey; }
     F32             getRollRightKey() const     { return mRollRightKey; }
-// </FS:Chanayane>
 
     void            setOrbitLeftKey(F32 mag)    { mOrbitLeftKey = mag; }
     void            setOrbitRightKey(F32 mag)   { mOrbitRightKey = mag; }
@@ -544,10 +545,8 @@ public:
     void            setOrbitDownKey(F32 mag)    { mOrbitDownKey = mag; }
     void            setOrbitInKey(F32 mag)      { mOrbitInKey = mag; }
     void            setOrbitOutKey(F32 mag)     { mOrbitOutKey = mag; }
-// <FS:Chanayane> Camera roll (from Alchemy)
-    void            setRollLeftKey(F32 mag)     { mRollLeftKey = mag; }
-    void            setRollRightKey(F32 mag)    { mRollRightKey = mag; }
-// </FS:Chanayane>
+    void            setRollLeftKey(F32 mag) { mRollLeftKey = mag; }
+    void            setRollRightKey(F32 mag) { mRollRightKey = mag; }
 
     void            clearOrbitKeys();
 private:
@@ -561,11 +560,9 @@ private:
     F32             mOrbitAroundRadians;
     F32             mOrbitOverAngle;
 
-// <FS:Chanayane> Camera roll (from Alchemy)
     F32             mRollLeftKey;
     F32             mRollRightKey;
     F32             mRollAngle = 0.f;
-// </FS:Chanayane>
 
     //--------------------------------------------------------------------
     // Pan
@@ -599,7 +596,6 @@ private:
 /**                    Keys
  **                                                                            **
  *******************************************************************************/
-
 // <FS:Ansariel> FIRE-7758: Save/load camera position feature
 public:
     void            storeCameraPosition();

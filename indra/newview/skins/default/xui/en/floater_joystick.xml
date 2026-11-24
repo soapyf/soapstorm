@@ -3,9 +3,9 @@
  legacy_header_height="18"
  height="500"
  layout="topleft"
- name="Joystick"
+ name="3Dconnexion Device"
  help_topic="joystick"
- title="Joystick Configuration"
+ title="3Dconnexion Configuration"
  width="569">
     <floater.string
      name="JoystickDisabled">

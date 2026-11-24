@@ -47,6 +47,7 @@
 #include "llagentcamera.h"
 #include "llframetimer.h" // <SS:Nexii> pinned device retry
 #include "llfocusmgr.h"
+#include "llgamecontrol.h"
 #include "llmoveview.h"
 #include "llgamecontrol.h"
 
@@ -155,6 +156,15 @@ BOOL CALLBACK di8_devices_callback(LPCDIDEVICEINSTANCE device_instance_ptr, LPVO
     if (device_instance_ptr)
     {
         std::string product_name = ll_convert<std::string>(std::wstring(device_instance_ptr->tszProductName));
+
+        // Only 3Dconnexion devices are handled by ndof: generic game controllers
+        // belong to LLGameControl (SDL), and opening them here too would feed the
+        // same physical input into the flycam twice.
+        if (!LLViewerJoystick::is3DConnexionDevice(product_name))
+        {
+            LL_DEBUGS("Joystick") << "Skipping non-3Dconnexion device: " << product_name << LL_ENDL;
+            return DIENUM_CONTINUE;
+        }
 
         LLSD guid = LLViewerJoystick::getInstance()->getDeviceUUID();
 
@@ -639,6 +649,9 @@ bool LLViewerJoystick::initDevice(void * preffered_device /* LPDIRECTINPUTDEVICE
     {
         return acceptInitializedDevice();
     }
+    LL_INFOS("Joystick") << "Ignoring non-3Dconnexion device: " << ll_safe_string(mNdofDev->product) << LL_ENDL;
+    // Leave the state as INITIALIZING so callers still report "no matching device"
+    mDriverState = JDS_INITIALIZING;
 #endif
     return false;
 }
@@ -683,29 +696,18 @@ void LLViewerJoystick::updateStatus()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_INPUT;
 #if LIB_NDOF
-
-    // <FS:Zi> FIRE-32004 - fix crash when opening joystick config and the device structure
-    //                      is not yet initialized or missing the necessary data inside
-    if (!mNdofDev || !mNdofDev->private_data)
-    {
-        return;
-    }
-    // </FS:Zi>
-
-    if (mDriverState == JDS_INITIALIZED)
+    if (mNdofDev != NULL && mDriverState == JDS_INITIALIZED)
     {
         ndof_update(mNdofDev);
-
         // <FS:Zi> FIRE-14344 - Add button preview and allow for more than 6 axes
-        // for (int i=0; i<6; i++)
-        for (int i = 0; i < MAX_JOYSTICK_AXES; i++)
+        //for (int i=0; i<6; i++)
+        for (int i=0; i<MAX_JOYSTICK_AXES; i++)
         {
             mAxes[i] = (F32) mNdofDev->axes[i] / mNdofDev->axes_max;
         }
-
         // <FS:Zi> FIRE-14344 - Add button preview and allow for more than 6 axes
-        // for (int i=0; i<16; i++)
-        for (int i = 0; i < MAX_JOYSTICK_BUTTONS; i++)
+        //for (int i=0; i<16; i++)
+        for (int i=0; i<MAX_JOYSTICK_BUTTONS; i++)
         {
             mBtn[i] = mNdofDev->buttons[i];
         }
@@ -1461,10 +1463,15 @@ bool LLViewerJoystick::toggleFlycam()
 void LLViewerJoystick::scanJoystick()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_INPUT;
+
     // <FS:PP> Speed optimisation
-    // if (mDriverState != JDS_INITIALIZED || !gSavedSettings.getBOOL("JoystickEnabled"))
+    //if (mDriverState != JDS_INITIALIZED
+    //        || !gSavedSettings.getBOOL("JoystickEnabled")
+    //        || !mDeviceIs3DConnexion)
     static LLCachedControl<bool> joystick_enabled(gSavedSettings, "JoystickEnabled");
-    if (mDriverState != JDS_INITIALIZED || !joystick_enabled())
+    if (mDriverState != JDS_INITIALIZED
+            || !joystick_enabled()
+            || !mDeviceIs3DConnexion)
     // </FS:PP>
     {
         // <SS:Nexii> The device the user pinned is wanted but not live: retry on a slow timer. Devices are not always enumerable by the time LLAppViewer runs the startup init() - a SpaceMouse whose service is still starting is the usual case - and the ndof hot plug callbacks do not fire on Windows, so without this the only way back is opening the floater and picking the device by hand.

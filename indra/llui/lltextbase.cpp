@@ -1032,7 +1032,10 @@ void LLTextBase::drawText()
         }
 
         LLRectf text_rect((F32)line.mRect.mLeft, (F32)line.mRect.mTop, (F32)line.mRect.mRight, (F32)line.mRect.mBottom);
-        text_rect.mRight = (F32)mDocumentView->getRect().getWidth(); // clamp right edge to document extents
+        // <FS:TJ> Fix nearby chat bar cutting off the last letter as you type
+        //text_rect.mRight = (F32)mDocumentView->getRect().getWidth(); // clamp right edge to document extents
+        text_rect.mRight = (F32)(mDocumentView->getRect().getWidth() + mHPad); // clamp right edge to document extents
+        // </FS:TJ>
         text_rect.translate((F32)mDocumentView->getRect().mLeft, (F32)mDocumentView->getRect().mBottom); // adjust by scroll position
 
         // draw a single line of text
@@ -1731,9 +1734,9 @@ void LLTextBase::draw()
         // - LLScrollContainer::getContentWindowRect()
         // - LLScrollContainer::localRectToOtherView()
         // - LLRect::intersectWith()
-        if(text_rect.mTop>2)
+        if (mScroller && !mScroller->isAtTop() && text_rect.mTop > 2)
         {
-            text_rect.mTop-=2;
+            text_rect.mTop -= 2;
         }
         // push the modified text_rect as a GL clipping scissor on the stack
         LLLocalClipRect clip(text_rect, should_clip);

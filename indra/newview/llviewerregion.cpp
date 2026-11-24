@@ -3617,6 +3617,8 @@ void LLViewerRegionImpl::buildCapabilityNames(LLSD& capabilityNames)
     capabilityNames.append("AvatarRenderInfo");
     capabilityNames.append("CharacterProperties");
     capabilityNames.append("ChatSessionRequest");
+    capabilityNames.append("PersistentChatConversationsRequest");
+    capabilityNames.append("PersistentChatHistoryRequest");
     capabilityNames.append("CopyInventoryFromNotecard");
     capabilityNames.append("CreateInventoryCategory");
     capabilityNames.append("DeclineFriendship");
@@ -4165,6 +4167,12 @@ bool LLViewerRegion::avatarHoverHeightEnabled() const
 {
     return ( mSimulatorFeatures.has("AvatarHoverHeightEnabled") &&
              mSimulatorFeatures["AvatarHoverHeightEnabled"].asBoolean());
+}
+
+bool LLViewerRegion::groupChatPostLinksEnabled() const
+{
+    return ( mSimulatorFeatures.has("GroupChatPostLinksEnabled") &&
+             mSimulatorFeatures["GroupChatPostLinksEnabled"].asBoolean());
 }
 
 bool LLViewerRegion::gameControlEnabled() const

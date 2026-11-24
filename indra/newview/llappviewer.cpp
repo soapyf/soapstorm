@@ -288,6 +288,7 @@
 #include "lldrawpoolbump.h"
 #include "llvieweraudio.h"
 #include "llimview.h"
+#include "llchatservicehistory.h"
 #include "llviewerthrottle.h"
 #include "llparcel.h"
 #include "llavatariconctrl.h"
@@ -1562,6 +1563,7 @@ bool LLAppViewer::init()
     LLWorld::createInstance();
     LLViewerStatsRecorder::createInstance();
     LLSelectMgr::createInstance();
+    LLToolCamera::createInstance();
     LLViewerCamera::createInstance();
     LL::GLTFSceneManager::createInstance();
 
@@ -1881,14 +1883,10 @@ bool LLAppViewer::doFrame()
                     gKeyboard->scanKeyboard();
                     gViewerInput.scanMouse();
 
-                    // <FS:Ansariel> Chalice Yao's crouch toggle
-                    static LLCachedControl<bool> fsCrouchToggle(gSavedPerAccountSettings, "FSCrouchToggle");
-                    static LLCachedControl<bool> fsCrouchToggleStatus(gSavedPerAccountSettings, "FSCrouchToggleStatus");
-                    if (fsCrouchToggle && fsCrouchToggleStatus)
+                    if (gAgent.isCrouching())
                     {
                         gAgent.moveUp(-1);
                     }
-                    // </FS:Ansariel>
                 }
             }
 
@@ -2603,7 +2601,7 @@ bool LLAppViewer::cleanup()
     }
 
     LLGameControl::terminate();
-#if !LL_SDL
+#if !LL_SDL_WINDOW
     // Windows and macOS start SDL3 for the controllers only; the Linux SDL window shuts it down itself
     quit_sdl();
 #endif
@@ -3282,21 +3280,27 @@ bool LLAppViewer::initConfiguration()
     bool success = LLXMLNode::parseFile(settings_file_list, root, NULL);
     if (!success)
     {
-        LL_WARNS() << "Cannot load default configuration file " << settings_file_list << LL_ENDL;
+        std::string parse_error = LLXMLNode::getLastFileError();
+        const std::string& run_context = gDirUtilp->getRunContextDescription();
+
+        LL_WARNS() << "Cannot load default configuration file " << settings_file_list
+            << (parse_error.empty() ? "" : (" - " + parse_error)) << LL_ENDL;
         LLError::LLUserWarningMsg::showMissingFiles();
         if (gDirUtilp->fileExists(settings_file_list))
         {
             LL_ERRS() << "Cannot load default configuration file settings_files.xml. "
                 << "Please reinstall viewer from https://www.firestormviewer.org/choose-your-platform/ "
-                << "and contact https://www.firestormviewer.org/support if issue persists after reinstall."
+                << "and contact https://www.firestormviewer.org/support if issue persists after reinstall. "
+                << "Reason: " << (parse_error.empty() ? "unknown (file is present but could not be parsed)" : parse_error)
+                << ". Install type: " << run_context
                 << LL_ENDL;
         }
         else
         {
             LL_ERRS() << "Default configuration file settings_files.xml not found. "
                 << "Please reinstall viewer from https://www.firestormviewer.org/choose-your-platform/ "
-                << "and contact https://www.firestormviewer.org/support if issue persists after reinstall."
-                << LL_ENDL;
+                << "and contact https://www.firestormviewer.org/support if issue persists after reinstall. "
+                << "Install type: " << run_context                << LL_ENDL;
         }
     }
 
@@ -5893,7 +5897,10 @@ bool LLAppViewer::initCache()
     startCachePurge(cache_purge_path);
     // </FS:ND>
 
-    LLSplashScreen::update(LLTrans::getString("StartupInitializingTextureCache"));
+    if (!gGPUBenchmarkMode)
+    {
+        LLSplashScreen::update(LLTrans::getString("StartupInitializingTextureCache"));
+    }
 
     // Init the texture cache
     // Allocate the remaining percent which is not allocated to the disk cache
@@ -6501,7 +6508,7 @@ void LLAppViewer::idle()
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_NETWORK("network"); //LL_RECORD_BLOCK_TIME(FTM_NETWORK);
         // Update spaceserver timeinfo
-        LLWorld::getInstance()->setSpaceTimeUSec(LLWorld::getInstance()->getSpaceTimeUSec() + LLUnits::Seconds::fromValue(dt_raw));
+        LLWorld::getInstance()->setSpaceTimeUSec(LLWorld::getInstance()->getSpaceTimeUSec() + (U64)(dt_raw * USEC_PER_SEC));
 
 
         //////////////////////////////////////
@@ -6549,6 +6556,7 @@ void LLAppViewer::idle()
             S32 pixel_x = llclamp(cursor_pos.mX, 0, rect_width);
             S32 pixel_y = llclamp(rect_height - cursor_pos.mY, 0, rect_height);
             LLGameControl::setMouseCursorPosition(pixel_x, pixel_y, rect_width, rect_height);
+            LLGameControl::setMouseCursorButtons(gViewerWindow->getLeftMouseDown(), gViewerWindow->getRightMouseDown());
         }
 
         // OCOL: buttons bound to viewer actions or gestures don't drive their
@@ -7058,6 +7066,8 @@ void LLAppViewer::idleShutdown()
     // All floaters are closed.  Tell server we want to quit.
     if (!logoutRequestSent())
     {
+        // Fence outstanding history work before logout tears down its account and capability context.
+        LLChatServiceHistory::stop();
         sendLogoutRequest();
 
         // Wait for a LogoutReply message
@@ -7452,6 +7462,9 @@ void LLAppViewer::idleNetwork()
 
 void LLAppViewer::disconnectViewer()
 {
+    // This is idempotent and also covers disconnect paths that bypass the normal logout request.
+    LLChatServiceHistory::stop();
+
     if (gDisconnected)
     {
         return;
@@ -7902,6 +7915,8 @@ void LLAppViewer::handleLoginComplete()
         gDebugInfo["MainloopTimeoutState"] = LLAppViewer::instance()->mMainloopTimeout->getState();
     }
 
+    // Start only after login has established the per-account storage and region capability context.
+    LLChatServiceHistory::start();
     mOnLoginCompleted();
 
     // <FS:TT> Window Title Access

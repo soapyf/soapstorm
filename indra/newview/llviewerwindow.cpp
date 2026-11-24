@@ -1216,6 +1216,14 @@ bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK m
             mLeftMouseDown = down;
             buttonname = "Left Double Click";
             break;
+        case CLICK_DOUBLERIGHT:
+            mRightMouseDown = down;
+            buttonname = "Right Double Click";
+            break;
+        case CLICK_DOUBLEMIDDLE:
+            mMiddleMouseDown = down;
+            buttonname = "Middle Double Click";
+            break;
         case CLICK_BUTTON4:
             buttonname = "Button 4";
             break;
@@ -1279,6 +1287,12 @@ bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK m
                 handlePieMenu(x, y, mask);
                 r = true;
             }
+            else if (down && clicktype == CLICK_DOUBLERIGHT && gMenuHolder)
+            {
+                // UI doesn't support double right click at the moment, but world does
+                // Just close menus.
+                gMenuHolder->hideMenus();
+            }
             return r;
         }
 
@@ -1332,6 +1346,12 @@ bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK m
         handlePieMenu(x, y, mask);
         return true;
     }
+    if (down && clicktype == CLICK_DOUBLERIGHT && gMenuHolder)
+    {
+        // UI doesn't support double right click at the moment, but world does
+        // Just close menus.
+        gMenuHolder->hideMenus();
+    }
 
     // If we got this far on a down-click, it wasn't handled.
     // Up-clicks, though, are always handled as far as the OS is concerned.
@@ -1355,7 +1375,7 @@ bool LLViewerWindow::handleMouseDown(LLWindow *window,  LLCoordGL pos, MASK mask
     return gViewerInput.handleMouse(window, pos, mask, CLICK_LEFT, down);
 }
 
-bool LLViewerWindow::handleDoubleClick(LLWindow *window,  LLCoordGL pos, MASK mask)
+bool LLViewerWindow::handleLeftMouseDoubleClick(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
     // try handling as a double-click first, then a single-click if that
     // wasn't handled.
@@ -1365,6 +1385,40 @@ bool LLViewerWindow::handleDoubleClick(LLWindow *window,  LLCoordGL pos, MASK ma
         return true;
     }
     return handleMouseDown(window, pos, mask);
+}
+
+bool LLViewerWindow::handleRightMouseDoubleClick(LLWindow* window, LLCoordGL pos, MASK mask)
+{
+    // try handling as a double-click first, then a single-click if that
+    // wasn't handled.
+    bool down = true;
+    if (gViewerInput.handleMouse(window, pos, mask, CLICK_DOUBLERIGHT, down))
+    {
+        return true;
+    }
+
+    // If right-double is bound, don't fall back to single-right menu behavior.
+    // Note that by default CLICK_RIGHT can't be bound.
+    const S32 mode = gViewerInput.getMode();
+    const bool has_double_right = gViewerInput.isMouseBindUsed(CLICK_DOUBLERIGHT, mask, mode);
+    if (has_double_right)
+    {
+        return true;
+    }
+
+    return handleRightMouseDown(window, pos, mask);
+}
+
+bool LLViewerWindow::handleMiddleMouseDoubleClick(LLWindow* window, LLCoordGL pos, MASK mask)
+{
+    // try handling as a double-click first, then a single-click if that
+    // wasn't handled.
+    bool down = true;
+    if (gViewerInput.handleMouse(window, pos, mask, CLICK_DOUBLEMIDDLE, down))
+    {
+        return true;
+    }
+    return handleMiddleMouseDown(window, pos, mask);
 }
 
 bool LLViewerWindow::handleMouseUp(LLWindow *window,  LLCoordGL pos, MASK mask)
@@ -3160,6 +3214,12 @@ void LLViewerWindow::draw()
         LLView::sDirtyRect = getWindowRectScaled();
     }
 
+    // Draw all nested UI views.
+    // No translation needed, this view is glued to 0,0
+
+    gUIProgram.bind();
+    gGL.color4f(1, 1, 1, 1);
+
     // HACK for timecode debugging
     //if (gSavedSettings.getBOOL("DisplayTimecode"))
     static LLCachedControl<bool> displayTimecode(gSavedSettings, "DisplayTimecode");
@@ -3178,12 +3238,6 @@ void LLViewerWindow::draw()
             LLColor4( 1.f, 1.f, 1.f, 1.f ),
             LLFontGL::LEFT, LLFontGL::TOP);
     }
-
-    // Draw all nested UI views.
-    // No translation needed, this view is glued to 0,0
-
-    gUIProgram.bind();
-    gGL.color4f(1, 1, 1, 1);
 
     gGL.pushMatrix();
     LLUI::pushMatrix();
@@ -5133,6 +5187,10 @@ void renderOnePhysicsShape(LLViewerObject* objectp)
     }
 
     LLVOVolume* vovolume = drawable->getVOVolume();
+    if (!vovolume)
+    {
+        return;
+    }
 
     // phsyics_type is the user selected prim property (None, Prim, Convex)
     U8 physics_type = vovolume->getPhysicsShapeType();
@@ -5507,7 +5565,9 @@ void LLViewerWindow::renderSelections( bool for_gl_pick, bool pick_parcel_walls,
                 {
                     virtual bool apply(LLViewerObject* object)
                     {
+                        gGL.pushMatrix();
                         renderOnePhysicsShape(object);
+                        gGL.popMatrix();
                         return true;
                     }
                 } func;
@@ -6606,8 +6666,8 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
             // </FS:Ansariel>
             if (scratch_space.allocate(image_width, image_height, color_fmt, true))
             {
-                original_width = gPipeline.mRT->deferredScreen.getWidth();
-                original_height = gPipeline.mRT->deferredScreen.getHeight();
+                original_width = (S32)gPipeline.mRT->width;
+                original_height = (S32)gPipeline.mRT->height;
 
                 if (gPipeline.allocateScreenBuffer(image_width, image_height))
                 {
@@ -6977,8 +7037,8 @@ bool LLViewerWindow::simpleSnapshot(LLImageRaw* raw, S32 image_width, S32 image_
 
     LLRect window_rect = getWorldViewRectRaw();
 
-    S32 original_width = LLPipeline::sRenderDeferred ? gPipeline.mRT->deferredScreen.getWidth() : gViewerWindow->getWorldViewWidthRaw();
-    S32 original_height = LLPipeline::sRenderDeferred ? gPipeline.mRT->deferredScreen.getHeight() : gViewerWindow->getWorldViewHeightRaw();
+    S32 original_width = LLPipeline::sRenderDeferred ? (S32)gPipeline.mRT->width : gViewerWindow->getWorldViewWidthRaw();
+    S32 original_height = LLPipeline::sRenderDeferred ? (S32)gPipeline.mRT->height : gViewerWindow->getWorldViewHeightRaw();
 
     LLRenderTarget scratch_space;
     U32 color_fmt = GL_RGBA;

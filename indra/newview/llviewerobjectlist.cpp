@@ -1731,10 +1731,11 @@ void LLViewerObjectList::killAnimatedObjects()
 
         if (objectp->isAnimatedObject())
         {
+            LLViewerRegion* obj_region = objectp->getRegion();
             killObject(objectp);
-            if (LLViewerRegion::sVOCacheCullingEnabled && objectp->getRegion())
+            if (LLViewerRegion::sVOCacheCullingEnabled && obj_region)
             {
-                objectp->getRegion()->killCacheEntry(objectp->getLocalID());
+                obj_region->killCacheEntry(objectp->getLocalID());
             }
         }
     }

@@ -311,6 +311,8 @@ set(viewer_SOURCE_FILES
     llchathistory.cpp
     llchatitemscontainerctrl.cpp
     llchatmsgbox.cpp
+    llchatservicehistory.cpp
+    llchatservicehistorycore.cpp
     llchiclet.cpp
     llchicletbar.cpp
     llclassifiedinfo.cpp
@@ -435,6 +437,7 @@ set(viewer_SOURCE_FILES
     llfloaterinspect.cpp
     llfloaterinventorysettings.cpp
     llfloaterinventorythumbnailshelper.cpp
+    llfloaterjoin.cpp
     llfloaterjoystick.cpp
     llfloaterlagmeter.cpp
     llfloaterland.cpp
@@ -507,6 +510,7 @@ set(viewer_SOURCE_FILES
     llfloaterurlentry.cpp
     llfloatervoicevolume.cpp
     llfloaterwebcontent.cpp
+    llfloaterwebmodal.cpp
     llfloaterwhitelistentry.cpp
     llfloaterwindowsize.cpp
     llfloaterworldmap.cpp
@@ -1236,6 +1240,8 @@ set(viewer_HEADER_FILES
     llchathistory.h
     llchatitemscontainerctrl.h
     llchatmsgbox.h
+    llchatservicehistory.h
+    llchatservicehistorycore.h
     llchiclet.h
     llchicletbar.h
     llclassifiedinfo.h
@@ -1363,6 +1369,7 @@ set(viewer_HEADER_FILES
     llfloaterinspect.h
     llfloaterinventorysettings.h
     llfloaterinventorythumbnailshelper.h
+    llfloaterjoin.h
     llfloaterjoystick.h
     llfloaterlagmeter.h
     llfloaterland.h
@@ -1436,6 +1443,7 @@ set(viewer_HEADER_FILES
     llfloaterurlentry.h
     llfloatervoicevolume.h
     llfloaterwebcontent.h
+    llfloaterwebmodal.h
     llfloaterwhitelistentry.h
     llfloaterwindowsize.h
     llfloaterworldmap.h
@@ -3186,11 +3194,18 @@ if (PACKAGE AND (RELEASE_CRASH_REPORTING OR NON_RELEASE_CRASH_REPORTING) AND VIE
 endif ()
 
 if (LL_TESTS)
+  # <FS:Beq> regression test NVidia thread optimization settings on Linux.
+  if (LINUX)
+    add_subdirectory(linux_tools/tests)
+  endif ()
+  # </FS:Beq>
   # To add a viewer unit test, just add the test .cpp file below
   # This creates a separate test project per file listed.
   include(LLAddBuildTest)
   SET(viewer_TEST_SOURCE_FILES
     llagentaccess.cpp
+    llchatservicehistorycore.cpp
+    llconversationlog.cpp
     lldateutil.cpp
 #    llmediadataclient.cpp
     lllogininstance.cpp
@@ -3242,7 +3257,7 @@ if (LL_TESTS)
   set_property(SOURCE
     ${viewer_TEST_SOURCE_FILES}
     PROPERTY
-    LL_TEST_ADDITIONAL_LIBRARIES 
+    LL_TEST_ADDITIONAL_LIBRARIES
     ${test_libs}
   )
 
@@ -3280,6 +3295,21 @@ if (LL_TESTS)
   )
 
   LL_ADD_PROJECT_UNIT_TESTS(${VIEWER_BINARY_NAME} "${viewer_TEST_SOURCE_FILES}")
+
+  # The conversation formatter caches the clock setting, so exercise each mode
+  # in its own process. Serialize them because the runner uses one log filename.
+  set(conversation_test PROJECT_${VIEWER_BINARY_NAME}_TEST_llconversationlog)
+  set_tests_properties(${conversation_test} PROPERTIES
+    ENVIRONMENT "LL_CONVERSATIONLOG_TEST_CLOCK=24"
+    RESOURCE_LOCK conversation_log_test)
+  SET_TEST_PATH(conversation_test_libpath)
+  LL_TEST_COMMAND(conversation_test_command "${conversation_test_libpath}"
+    $<TARGET_FILE:${conversation_test}> --sourcedir=${CMAKE_CURRENT_SOURCE_DIR})
+  add_test(NAME ${conversation_test}_12h COMMAND ${conversation_test_command})
+  set_tests_properties(${conversation_test}_12h PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    ENVIRONMENT "LL_CONVERSATIONLOG_TEST_CLOCK=12"
+    RESOURCE_LOCK conversation_log_test)
 
   #set(TEST_DEBUG on)
   LL_ADD_INTEGRATION_TEST(cppfeatures

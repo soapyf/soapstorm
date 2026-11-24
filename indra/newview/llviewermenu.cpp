@@ -3457,10 +3457,12 @@ void derenderObject(bool permanent)
 
             select_mgr->deselectObjectOnly(objp);
             gObjectList.addDerenderedItem(id, permanent);
+
+            LLViewerRegion* obj_region = objp->getRegion();
             gObjectList.killObject(objp);
-            if (LLViewerRegion::sVOCacheCullingEnabled && objp->getRegion())
+            if (LLViewerRegion::sVOCacheCullingEnabled && obj_region)
             {
-                objp->getRegion()->killCacheEntry(objp->getLocalID());
+                obj_region->killCacheEntry(objp->getLocalID());
             }
 
             LLTool* tool = LLToolMgr::getInstance()->getCurrentTool();
@@ -8504,6 +8506,14 @@ class LLWorldCreateLandmark : public view_listener_t
         if (gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC))
             return true;
 // [/RLVa:KB]
+
+        // <FS:Trish> The toolbar button doesn't do this check, run it before attempting to add a landmark.
+        if (LLLandmarkActions::landmarkAlreadyExists())
+        {
+            LLNotificationsUtil::add("LandmarkAlreadyExists");
+            return true;
+        }
+        // </FS:Trish>
 
         LLFloaterReg::showInstance("add_landmark");
 

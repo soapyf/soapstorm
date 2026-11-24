@@ -92,13 +92,15 @@ public:
     void apply();
     void cancel(const std::vector<std::string> settings_to_skip = {});
     // <FS:Zi> FIRE-19539 - Include the alert messages in Prefs>Notifications>Alerts in preference Search.
-    // /*virtual*/ void draw();
+    // virtual void draw() override;
     // </FS:Zi>
-    /*virtual*/ bool postBuild();
-    /*virtual*/ void onOpen(const LLSD& key);
-    /*virtual*/ void onClose(bool app_quitting);
-    /*virtual*/ void changed();
-    /*virtual*/ void changed(const LLUUID& session_id, U32 mask) {};
+    virtual bool postBuild() override;
+    virtual void onOpen(const LLSD& key) override;
+    virtual void onClose(bool app_quitting) override;
+    virtual void changed() override;
+    virtual void changed(const LLUUID& session_id, U32 mask) override {};
+
+    static void refreshInstance();
 
     static void refreshInstance();
 
@@ -362,6 +364,9 @@ private:
     LLScrollListCtrl* mEnabledPopups = nullptr;
     LLScrollListCtrl* mDisabledPopups = nullptr;
     LLButton*       mDeleteTranscriptsBtn = nullptr;
+
+    // Prevent duplicate account-wide deletion requests while the durable sweep runs.
+    bool            mDeleteTranscriptsPending = false;
     LLButton*       mEnablePopupBtn = nullptr;
     LLButton*       mDisablePopupBtn = nullptr;
     LLComboBox*     mTimeFormatCombobox = nullptr;

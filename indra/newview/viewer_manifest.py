@@ -731,6 +731,9 @@ class Windows_x86_64_Manifest(ViewerManifest):
             self.path_optional("vcruntime140_1.dll")
             self.path_optional("vcruntime140_threads.dll")
 
+            # SDL3
+            self.path("SDL3.dll")
+
             # <FS:TJ> Keep Vivox only for OpenSim viewers
             if self.fs_is_opensim():
                 # SLVoice executable

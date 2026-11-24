@@ -54,6 +54,7 @@
 #include "llviewercamera.h"
 #include "llinitparam.h"
 #include "llselectmgr.h"
+#include "llviewercamera.h"
 #include "llfloaterwebcontent.h"
 #include "fsfloatersearch.h"
 #include "llvoiceclient.h"
@@ -142,21 +143,9 @@ bool agent_push_down( const LLKeyPressState& s )
     //gAgent.moveUp(-1);
     else if (KEYSTATE_DOWN == s.mState && !gAgent.getFlying() && !gAgentAvatarp->isSitting() && gSavedPerAccountSettings.getBOOL("FSCrouchToggle"))
     {
-        if (gSavedPerAccountSettings.getBOOL("FSCrouchToggleStatus"))
-        {
-            gSavedPerAccountSettings.setBOOL("FSCrouchToggleStatus", false);
-        }
-        else
-        {
-            gSavedPerAccountSettings.setBOOL("FSCrouchToggleStatus", true);
-            gAgent.moveUp(-1);
-        }
+        gAgent.toggleCrouch();
     }
-    else
-    {
-        gAgent.moveUp(-1);
-    }
-    // </FS:Ansariel>
+    gAgent.moveUp(-1);
     return true;
 }
 
@@ -1390,6 +1379,16 @@ bool LLViewerInput::mouseFromString(const std::string& string, EMouseClickType *
         *mode = CLICK_DOUBLELEFT;
         return true;
     }
+    else if (string == "Double RMB")
+    {
+        *mode = CLICK_DOUBLERIGHT;
+        return true;
+    }
+    else if (string == "Double MMB")
+    {
+        *mode = CLICK_DOUBLEMIDDLE;
+        return true;
+    }
     else if (string == "MMB")
     {
         *mode = CLICK_MIDDLE;
@@ -2355,18 +2354,44 @@ bool LLViewerInput::handleMouse(LLWindow *window_impl, LLCoordGL pos, MASK mask,
         // If UI doesn't handle double click, LMB click is issued, so supres LMB 'down' when doubleclick is set
         // handle !down as if we are handling doubleclick
 
-        bool double_click_sp = (clicktype == CLICK_LEFT
-            && (mMouseLevel[CLICK_DOUBLELEFT] != MOUSE_STATE_SILENT)
-            && mMouseLevel[CLICK_LEFT] == MOUSE_STATE_SILENT);
+        bool double_click_sp = false;
+        EMouseClickType replace_clcktype = CLICK_NONE;
+        switch(clicktype)
+        {
+            case CLICK_LEFT:
+            {
+                double_click_sp = (mMouseLevel[CLICK_DOUBLELEFT] != MOUSE_STATE_SILENT)
+                    && mMouseLevel[CLICK_LEFT] == MOUSE_STATE_SILENT;
+                replace_clcktype = CLICK_DOUBLELEFT;
+                break;
+            }
+            case CLICK_RIGHT:
+            {
+                double_click_sp = (mMouseLevel[CLICK_DOUBLERIGHT] != MOUSE_STATE_SILENT)
+                    && mMouseLevel[CLICK_RIGHT] == MOUSE_STATE_SILENT;
+                replace_clcktype = CLICK_DOUBLERIGHT;
+                break;
+            }
+            case CLICK_MIDDLE:
+            {
+                double_click_sp = (mMouseLevel[CLICK_DOUBLEMIDDLE] != MOUSE_STATE_SILENT)
+                    && mMouseLevel[CLICK_MIDDLE] == MOUSE_STATE_SILENT;
+                replace_clcktype = CLICK_DOUBLEMIDDLE;
+                break;
+            }
+            default:
+                break;
+        }
+
         if (double_click_sp && !down)
         {
             // Process doubleclick instead
-            clicktype = CLICK_DOUBLELEFT;
+            clicktype = replace_clcktype;
         }
 
         // If the first LMB click is handled by the menu, skip the following double click
         static bool skip_double_click = false;
-        if (clicktype == CLICK_LEFT && down)
+        if ((clicktype == CLICK_LEFT) && down)
         {
             skip_double_click = is_toolmgr_action ? false : handled;
         }
@@ -2374,9 +2399,10 @@ bool LLViewerInput::handleMouse(LLWindow *window_impl, LLCoordGL pos, MASK mask,
         if (double_click_sp && down)
         {
             // Consume click.
-            // Due to handling, double click that is not handled will be immediately followed by LMB click
+            // Due to handling, double click that is not handled will be immediately followed by LMB/RMB/MMB click
         }
-        else if (clicktype == CLICK_DOUBLELEFT && skip_double_click)
+        else if ((clicktype == CLICK_DOUBLELEFT)
+                 && skip_double_click)
         {
             handled = true;
         }

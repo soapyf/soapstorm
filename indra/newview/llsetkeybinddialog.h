@@ -80,7 +80,7 @@ public:
     static void onCancel(void* user_data);
     static void onBlank(void* user_data);
     static void onDefault(void* user_data);
-    static void onClickTimeout(void* user_data, MASK mask);
+    static void onClickTimeout(void* user_data, EMouseClickType clicktype, MASK mask);
 
     static bool isRecording() { return sRecordKeys; }
     // <SS:GameControl> A key press also arrives as a typed character, after the key itself
@@ -104,6 +104,7 @@ private:
     KEY mLastMaskKey;
     U32 mLastControllerButtons; // OCOL
     U32 mLastControllerAxes; // OCOL: bit per half-axis past the threshold
+    EMouseClickType mPendingMouseClick;
 
     static bool sRecordKeys; // for convinience and not to check instance each time
     static U32 sRecordedKeyFrame; // <SS:GameControl/> frame of the last recorded key-down

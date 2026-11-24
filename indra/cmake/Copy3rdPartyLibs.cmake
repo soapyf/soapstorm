@@ -200,6 +200,7 @@ elseif(DARWIN)
     set(release_files
         libGLOD.dylib # <FS:Beq> restore GLOD
         libndofdev.dylib
+        libSDL3.dylib
         libgrowl.dylib
         libgrowl++.dylib
         libSDL3.dylib # game controllers (LLGameControl)

@@ -400,17 +400,14 @@ bool LLToolCamera::handleMouseUp(S32 x, S32 y, MASK mask)
     return true;
 }
 
-static bool right_hold_mouse_walk = false;//<FS:JL> Mouse movement by Singularity
 
 bool LLToolCamera::handleHover(S32 x, S32 y, MASK mask)
 {
-    //<FS:JL> Mouse movement by Singularity
-    if (right_hold_mouse_walk)
+    if (gViewerWindow->getRightMouseDown())
     {
         mKeyState.mState = KEYSTATE_LEVEL;
         agent_push_forward(mKeyState);
     }
-    //</FS:JL>
 
     S32 dx = gViewerWindow->getCurrentMouseDX();
     S32 dy = gViewerWindow->getCurrentMouseDY();
@@ -555,14 +552,12 @@ bool LLToolCamera::handleHover(S32 x, S32 y, MASK mask)
     return true;
 }
 
-//<FS:JL> Mouse movement by Singularity
 bool LLToolCamera::handleRightMouseDown(S32 x, S32 y, MASK mask)
 {
-    if (mMouseSteering)
+    if(mMouseSteering)
     {
         mKeyState.mState = KEYSTATE_DOWN;
         agent_push_forward(mKeyState);
-        right_hold_mouse_walk = true;
         return true;
     }
     else
@@ -573,11 +568,10 @@ bool LLToolCamera::handleRightMouseDown(S32 x, S32 y, MASK mask)
 
 bool LLToolCamera::handleRightMouseUp(S32 x, S32 y, MASK mask)
 {
-    if (mMouseSteering || right_hold_mouse_walk)
+    if (mMouseSteering)
     {
         mKeyState.mState = KEYSTATE_UP;
         agent_push_forward(mKeyState);
-        right_hold_mouse_walk = false;
         return true;
     }
     else
@@ -585,11 +579,9 @@ bool LLToolCamera::handleRightMouseUp(S32 x, S32 y, MASK mask)
         return false;
     }
 }
-//</FS:JL>
 
 void LLToolCamera::onMouseCaptureLost()
 {
     releaseMouse();
-    // <FS:Ansariel> Mouse movement by Singularity
-    handleRightMouseUp(0,0,0);
+    handleRightMouseUp(0, 0, 0);
 }

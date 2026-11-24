@@ -89,6 +89,7 @@ const F32 CAMERA_FUDGE_FROM_OBJECT = 16.f;
 const F32 MAX_CAMERA_SMOOTH_DISTANCE = 50.0f;
 
 const F32 HEAD_BUFFER_SIZE = 0.3f;
+const F64 FOLLOW_CAM_PARAM_LOSS_GRACE_PERIOD = 3.0;
 
 const F32 CUSTOMIZE_AVATAR_CAMERA_ANIM_SLOP = 0.1f;
 
@@ -158,12 +159,15 @@ LLAgentCamera::LLAgentCamera() :
     mSitCameraEnabled(false),
     mCameraSmoothingLastPositionGlobal(),
     mCameraSmoothingLastPositionAgent(),
+    mCameraSmoothingLastFocusGlobal(),
+    mCameraSmoothingLastFocusValid(false),
     mCameraSmoothingStop(false),
 
     mCameraUpVector(LLVector3::z_axis), // default is straight up
 
     mFocusOnAvatar(true),
     mAllowChangeToFollow(false),
+    mLastValidFollowCamParamsTime(0.0),
     mFocusGlobal(),
     mFocusTargetGlobal(),
     mFocusObject(NULL),
@@ -191,10 +195,8 @@ LLAgentCamera::LLAgentCamera() :
     mPanRightKey(0.f),
     mPanInKey(0.f),
     mPanOutKey(0.f),
-// <FS:Chanayane> Camera roll (from Alchemy)
     mRollLeftKey(0.f),
     mRollRightKey(0.f),
-// </FS:Chanayane>
     mPointAtObject(NULL)
 {
     mFollowCam.setMaxCameraDistantFromSubject( MAX_CAMERA_DISTANCE_FROM_AGENT );
@@ -205,9 +207,7 @@ LLAgentCamera::LLAgentCamera() :
 
     resetPanDiff();
     resetOrbitDiff();
-// <FS:Chanayane> Camera roll (from Alchemy)
     resetCameraRoll();
-// </FS:Chanayane>
 }
 
 // Requires gSavedSettings to be initialized.
@@ -394,9 +394,8 @@ void LLAgentCamera::resetView(bool reset_camera, bool change_camera, bool moveme
         setFocusOnAvatar(true, ANIMATE);
 
         mCameraFOVZoomFactor = 0.f;
-// <FS:Chanayane> Camera roll (from Alchemy)
+
         resetCameraRoll();
-// </FS:Chanayane>
     }
     resetPanDiff();
     resetOrbitDiff();
@@ -981,7 +980,6 @@ void LLAgentCamera::cameraOrbitOver(const F32 angle)
     }
 }
 
-// <FS:Chanayane> Camera roll (from Alchemy)
 //-----------------------------------------------------------------------------
 // cameraRollOver()
 //-----------------------------------------------------------------------------
@@ -994,7 +992,7 @@ void LLAgentCamera::resetCameraRoll()
 {
     mRollAngle = 0.f;
 }
-// </FS:Chanayane>
+
 void LLAgentCamera::resetCameraOrbit()
 {
     LLVector3 camera_offset_unit(mCameraFocusOffsetTarget);
@@ -1016,9 +1014,7 @@ void LLAgentCamera::resetCameraOrbit()
 
     cameraZoomIn(1.f);
     resetOrbitDiff();
-// <FS:Chanayane> Camera roll (from Alchemy)
     resetCameraRoll();
-// </FS:Chanayane>
 }
 
 void LLAgentCamera::resetOrbitDiff()
@@ -1180,6 +1176,13 @@ void LLAgentCamera::cameraOrbitIn(const F32 meters)
     }
 }
 
+void LLAgentCamera::setCameraSmoothingLastPositionGlobal(const LLVector3d& camera_position_global)
+{
+    mCameraSmoothingLastPositionGlobal = camera_position_global;
+    mCameraSmoothingLastFocusGlobal = mFocusGlobal;
+    mCameraSmoothingLastFocusValid = true;
+}
+
 //-----------------------------------------------------------------------------
 // cameraPanIn()
 //-----------------------------------------------------------------------------
@@ -1195,7 +1198,7 @@ void LLAgentCamera::cameraPanIn(F32 meters)
     // don't enforce zoom constraints as this is the only way for users to get past them easily
     updateFocusOffset();
     // NOTE: panning movements expect the camera to move exactly with the focus target, not animated behind -Nyx
-    mCameraSmoothingLastPositionGlobal = calcCameraPositionTargetGlobal();
+    setCameraSmoothingLastPositionGlobal(calcCameraPositionTargetGlobal());
 }
 
 //-----------------------------------------------------------------------------
@@ -1217,7 +1220,7 @@ void LLAgentCamera::cameraPanLeft(F32 meters)
     cameraZoomIn(1.f);
     updateFocusOffset();
     // NOTE: panning movements expect the camera to move exactly with the focus target, not animated behind - Nyx
-    mCameraSmoothingLastPositionGlobal = calcCameraPositionTargetGlobal();
+    setCameraSmoothingLastPositionGlobal(calcCameraPositionTargetGlobal());
 }
 
 //-----------------------------------------------------------------------------
@@ -1239,7 +1242,7 @@ void LLAgentCamera::cameraPanUp(F32 meters)
     cameraZoomIn(1.f);
     updateFocusOffset();
     // NOTE: panning movements expect the camera to move exactly with the focus target, not animated behind -Nyx
-    mCameraSmoothingLastPositionGlobal = calcCameraPositionTargetGlobal();
+    setCameraSmoothingLastPositionGlobal(calcCameraPositionTargetGlobal());
 }
 
 void LLAgentCamera::resetCameraPan()
@@ -1252,7 +1255,7 @@ void LLAgentCamera::resetCameraPan()
     cameraZoomIn(1.f);
     updateFocusOffset();
 
-    mCameraSmoothingLastPositionGlobal = calcCameraPositionTargetGlobal();
+    setCameraSmoothingLastPositionGlobal(calcCameraPositionTargetGlobal());
 
     resetPanDiff();
 }
@@ -1448,9 +1451,7 @@ void LLAgentCamera::updateCamera()
     const F32 ORBIT_OVER_RATE = 90.f * DEG_TO_RAD;          // radians per second
     const F32 ORBIT_AROUND_RATE = 90.f * DEG_TO_RAD;        // radians per second
     const F32 PAN_RATE = 5.f;                               // meters per second
-// <FS:Chanayane> Camera roll (from Alchemy)
     const F32 ROLL_RATE = 45.f * DEG_TO_RAD;                // radians per second
-// </FS:Chanayane>
 
     if (gAgentCamera.getOrbitUpKey() || gAgentCamera.getOrbitDownKey())
     {
@@ -1492,13 +1493,11 @@ void LLAgentCamera::updateCamera()
         cameraPanUp(input_rate * PAN_RATE / gFPSClamped );
     }
 
-// <FS:Chanayane> Camera roll (from Alchemy)
     if (getRollLeftKey() || getRollRightKey())
     {
         F32 input_rate = getRollRightKey() - getRollLeftKey();
         cameraRollOver(input_rate * ROLL_RATE / gFPSClamped);
     }
-// </FS:Chanayane>
 
     // Clear camera keyboard keys.
     gAgentCamera.clearOrbitKeys();
@@ -1525,11 +1524,26 @@ void LLAgentCamera::updateCamera()
                 mFollowCam.copyParams(*current_cam);
                 mFollowCam.setSubjectPositionAndRotation( gAgentAvatarp->getRenderPosition(), avatarRotationForFollowCam );
                 mFollowCam.update();
+                mLastValidFollowCamParamsTime = LLFrameTimer::getTotalSeconds();
                 LLViewerJoystick::getInstance()->setCameraNeedsUpdate(true);
             }
             else
             {
-                changeCameraToThirdPerson(true);
+                const F64 now = LLFrameTimer::getTotalSeconds();
+                if (mLastValidFollowCamParamsTime > 0.0 &&
+                    (now - mLastValidFollowCamParamsTime) < FOLLOW_CAM_PARAM_LOSS_GRACE_PERIOD)
+                {
+                    // Keep the last valid scripted follow-cam briefly to avoid
+                    // temporary source drops at parcel borders.
+                    mFollowCam.setSubjectPositionAndRotation(gAgentAvatarp->getRenderPosition(), avatarRotationForFollowCam);
+                    mFollowCam.update();
+                    LLViewerJoystick::getInstance()->setCameraNeedsUpdate(true);
+                }
+                else
+                {
+                    mLastValidFollowCamParamsTime = 0.0;
+                    changeCameraToThirdPerson(true);
+                }
             }
         }
     }
@@ -1663,6 +1677,23 @@ void LLAgentCamera::updateCamera()
                     camera_pos_global = camera_pos_agent + agent_pos;
                 }
             }
+            else if (mTrackFocusObject && mFocusObject.notNull())
+            {
+                // Keep tracked-object translation exact and smooth only changes
+                // to the camera offset, as is done in avatar-relative mode.
+                // Skip during the focus-change pan indicated by mCameraAnimating, see #6467.
+                LLVector3d camera_pos_focus = camera_pos_global - mFocusGlobal;
+                LLVector3d last_camera_pos_focus =
+                    mCameraSmoothingLastPositionGlobal - mCameraSmoothingLastFocusGlobal;
+                LLVector3d delta = camera_pos_focus - last_camera_pos_focus;
+                if (!mCameraAnimating &&
+                    mCameraSmoothingLastFocusValid &&
+                    delta.magVec() < MAX_CAMERA_SMOOTH_DISTANCE)
+                {
+                    camera_pos_focus = lerp(last_camera_pos_focus, camera_pos_focus, smoothing);
+                    camera_pos_global = camera_pos_focus + mFocusGlobal;
+                }
+            }
             else
             {
                 LLVector3d delta = camera_pos_global - mCameraSmoothingLastPositionGlobal;
@@ -1673,7 +1704,7 @@ void LLAgentCamera::updateCamera()
             }
         }
 
-        mCameraSmoothingLastPositionGlobal = camera_pos_global;
+        setCameraSmoothingLastPositionGlobal(camera_pos_global);
         mCameraSmoothingLastPositionAgent = camera_pos_agent;
         mCameraSmoothingStop = false;
     }
@@ -1726,24 +1757,53 @@ void LLAgentCamera::updateCamera()
         LLVector3 chest_scale = chest_joint->getScale();
 
         // shorten avatar skeleton to avoid foot interpenetration
-        // <FS:Ansariel> FIRE-10574: Attachments in mouselook glitching up
-        //if (!gAgentAvatarp->mInAir)
-        //{
-        //  LLVector3 chest_offset = LLVector3(0.f, 0.f, chest_joint->getPosition().mV[VZ]) * torso_joint->getWorldRotation();
-        //  F32 z_compensate = llclamp(-diff.mV[VZ], -0.2f, 1.f);
-        //  F32 scale_factor = llclamp(1.f - ((z_compensate * 0.5f) / chest_offset.mV[VZ]), 0.5f, 1.2f);
-        //  torso_joint->setScale(LLVector3(1.f, 1.f, scale_factor));
+#if 0 // This screws up mouselook attachments
+        if (!gAgentAvatarp->mInAir)
+        {
+            LLVector3 chest_offset = LLVector3(0.f, 0.f, chest_joint->getPosition().mV[VZ]) * torso_joint->getWorldRotation();
+            F32 z_compensate = llclamp(-diff.mV[VZ], -0.2f, 1.f);
+            F32 scale_factor = llclamp(1.f - ((z_compensate * 0.5f) / chest_offset.mV[VZ]), 0.5f, 1.2f);
+            torso_joint->setScale(LLVector3(1.f, 1.f, scale_factor));
 
-        //  LLJoint* neck_joint = gAgentAvatarp->mNeckp;
-        //  LLVector3 neck_offset = LLVector3(0.f, 0.f, neck_joint->getPosition().mV[VZ]) * chest_joint->getWorldRotation();
-        //  scale_factor = llclamp(1.f - ((z_compensate * 0.5f) / neck_offset.mV[VZ]), 0.5f, 1.2f);
-        //  chest_joint->setScale(LLVector3(1.f, 1.f, scale_factor));
-        //  diff.mV[VZ] = 0.f;
-        //}
-        // </FS:Ansariel>
+            LLJoint* neck_joint = gAgentAvatarp->mNeckp;
+            LLVector3 neck_offset = LLVector3(0.f, 0.f, neck_joint->getPosition().mV[VZ]) * chest_joint->getWorldRotation();
+            scale_factor = llclamp(1.f - ((z_compensate * 0.5f) / neck_offset.mV[VZ]), 0.5f, 1.2f);
+            chest_joint->setScale(LLVector3(1.f, 1.f, scale_factor));
+            diff.mV[VZ] = 0.f;
+        }
+#endif
+        // <FS:Ansariel> Why was this set to false instead of adding adding the debug setting???
+        //bool useRealisticMouselook = false;
+        static LLCachedControl<bool> useRealisticMouselook(gSavedSettings, "RealisticMouselook", false);
+        if (useRealisticMouselook)
+        {
+            auto frame_agent = gAgent.getFrameAgent();
+            LLQuaternion agent_rot(frame_agent.getQuaternion());
+            auto avatarp_parent = (LLViewerObject*)gAgentAvatarp->getParent();
+            if(avatarp_parent)
+            {
+                auto avatarp_root = (LLViewerObject*)gAgentAvatarp->getRoot();
+                if(avatarp_root)
+                {
+                    auto decoupled = avatarp_root->flagCameraDecoupled();
+                    if(decoupled)
+                    {
+                        agent_rot *= avatarp_parent->getRenderRotation();
+                    }
 
-        // SL-315
-        gAgentAvatarp->mPelvisp->setPosition(gAgentAvatarp->mPelvisp->getPosition() + diff);
+                }
+            }
+
+            LLViewerCamera::getInstance()->updateCameraLocation(head_pos,
+                                                               mCameraUpVector,
+                                                               gAgentAvatarp->mHeadp->getWorldPosition() +
+                                                                   LLVector3(1.0, 0.0, 0.0) * agent_rot);
+        }
+        else
+        {
+            // SL-315
+            gAgentAvatarp->mPelvisp->setPosition(gAgentAvatarp->mPelvisp->getPosition() + diff);
+        }
 
         gAgentAvatarp->mRoot->updateWorldMatrixChildren();
 
@@ -1770,20 +1830,19 @@ void LLAgentCamera::updateCamera()
         torso_joint->setScale(torso_scale);
         chest_joint->setScale(chest_scale);
     }
-// <FS:Chanayane> Camera roll (from Alchemy)
+
     //     We have do this at the very end to make sure it takes all previous calculations into
     //     account and then applies our roll on top of it, besides it wouldn't even work otherwise.
-    LLQuaternion rot_quat = LLViewerCamera::getInstance()->getQuaternion();
+    LLQuaternion rot_quat = LLViewerCamera::instance().getQuaternion();
     LLMatrix3 rot_mat(mRollAngle, 0.f, 0.f);
     rot_quat = LLQuaternion(rot_mat)*rot_quat;
 
     LLMatrix3 mat(rot_quat);
 
-    LLViewerCamera::getInstance()->mXAxis = LLVector3(mat.mMatrix[0]);
-    LLViewerCamera::getInstance()->mYAxis = LLVector3(mat.mMatrix[1]);
-    LLViewerCamera::getInstance()->mZAxis = LLVector3(mat.mMatrix[2]);
+    LLViewerCamera::instance().mXAxis = LLVector3(mat.mMatrix[0]);
+    LLViewerCamera::instance().mYAxis = LLVector3(mat.mMatrix[1]);
+    LLViewerCamera::instance().mZAxis = LLVector3(mat.mMatrix[2]);
 }
-// </FS:Chanayane>
 
 void LLAgentCamera::updateLastCamera()
 {
@@ -1878,33 +1937,8 @@ LLVector3d LLAgentCamera::calcFocusPositionTargetGlobal()
     {
         if (mFocusObject.notNull() && !mFocusObject->isDead() && mFocusObject->mDrawable.notNull())
         {
-            LLDrawable* drawablep = mFocusObject->mDrawable;
-
-            if (mTrackFocusObject &&
-                drawablep &&
-                drawablep->isActive())
-            {
-                if (!mFocusObject->isAvatar())
-                {
-                    if (mFocusObject->isSelected())
-                    {
-                        gPipeline.updateMoveNormalAsync(drawablep);
-                    }
-                    else
-                    {
-                        if (drawablep->isState(LLDrawable::MOVE_UNDAMPED))
-                        {
-                            gPipeline.updateMoveNormalAsync(drawablep);
-                        }
-                        else
-                        {
-                            gPipeline.updateMoveDampedAsync(drawablep);
-                        }
-                    }
-                }
-            }
             // if not tracking object, update offset based on new object position
-            else
+            if (!mTrackFocusObject)
             {
                 updateFocusOffset();
             }
@@ -2699,6 +2733,7 @@ void LLAgentCamera::changeCameraToMouselook(bool animate)
 
     // visibility changes at end of animation
     gViewerWindow->getWindow()->resetBusyCount();
+    mLastValidFollowCamParamsTime = 0.0;
 
     // Menus should not remain open on switching to mouselook...
     LLMenuGL::sMenuContainer->hideMenus();
@@ -2844,6 +2879,7 @@ void LLAgentCamera::changeCameraToFollow(bool animate)
 
     if(mCameraMode != CAMERA_MODE_FOLLOW)
     {
+        mLastValidFollowCamParamsTime = 0.0;
         if (mCameraMode == CAMERA_MODE_MOUSELOOK)
         {
             animate = false;
@@ -2900,6 +2936,7 @@ void LLAgentCamera::changeCameraToThirdPerson(bool animate)
     }
 
     gViewerWindow->getWindow()->resetBusyCount();
+    mLastValidFollowCamParamsTime = 0.0;
 
     mCameraZoomFraction = INITIAL_ZOOM_FRACTION;
 
@@ -3079,9 +3116,7 @@ void LLAgentCamera::switchCameraPreset(ECameraPreset preset)
 
     resetPanDiff();
     resetOrbitDiff();
-// <FS:Chanayane> Camera roll (from Alchemy)
     resetCameraRoll();
-// </FS:Chanayane>
 
     gSavedSettings.setU32("CameraPresetType", mCameraPreset);
 }
@@ -3298,10 +3333,9 @@ void LLAgentCamera::setCameraPosAndFocusGlobal(const LLVector3d& camera_pos, con
 
     if (mCameraAnimating)
     {
-        const F64 ANIM_METERS_PER_SECOND = 10.0;
+        const F64 ANIM_METERS_PER_SECOND = 25.0;
         const F64 MIN_ANIM_SECONDS = 0.5;
-        //const F64 MAX_ANIM_SECONDS = 10.0;
-        F64 MAX_ANIM_SECONDS = 1.0; // Andromeda radar cam patch, make camming faster
+        const F64 MAX_ANIM_SECONDS = 1.0;
         F64 anim_duration = llmax( MIN_ANIM_SECONDS, sqrt(focus_delta_squared) / ANIM_METERS_PER_SECOND );
         anim_duration = llmin( anim_duration, MAX_ANIM_SECONDS );
         setAnimationDuration( (F32)anim_duration );
@@ -3526,6 +3560,11 @@ void LLAgentCamera::lookAtLastChat()
 bool LLAgentCamera::isfollowCamLocked()
 {
     return mFollowCam.getPositionLocked();
+}
+
+void LLAgentCamera::notifyFollowCamParamsCleared()
+{
+    mLastValidFollowCamParamsTime = 0.0;
 }
 
 //-----------------------------------------------------------------------------
@@ -3934,6 +3973,7 @@ void LLAgentCamera::updateFlycam(F32 delta_time)
 
     updateFlycamAvatarVisibility();
 }
+
 bool LLAgentCamera::setPointAt(EPointAtType target_type, LLViewerObject *object, LLVector3 position)
 {
     // <FS:Ansariel> Remember the current object point pointed at - we might need it later
@@ -4014,10 +4054,8 @@ void LLAgentCamera::clearOrbitKeys()
     mOrbitDownKey       = 0.f;
     mOrbitInKey         = 0.f;
     mOrbitOutKey        = 0.f;
-// <FS:Chanayane> Camera roll (from Alchemy)
     mRollLeftKey        = 0.f;
     mRollRightKey       = 0.f;
-// </FS:Chanayane>
 }
 
 void LLAgentCamera::clearPanKeys()

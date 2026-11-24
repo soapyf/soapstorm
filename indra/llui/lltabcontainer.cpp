@@ -2557,12 +2557,22 @@ S32 LLTabContainer::getTotalTabWidth() const
 
 void LLTabContainer::setTabVisibility( LLPanel const *aPanel, bool aVisible )
 {
-    for( tuple_list_t::const_iterator itr = mTabList.begin(); itr != mTabList.end(); ++itr )
+    S32 num_tabs = S32(mTabList.size());
+    for (S32 i = 0; i < num_tabs; ++i)
     {
-        LLTabTuple const *pTT = *itr;
-        if( pTT->mTabPanel == aPanel )
+        LLTabTuple* tuple = mTabList[i];
+        if( tuple->mTabPanel == aPanel )
         {
-            pTT->mVisible = aVisible;
+            if (tuple->mVisible != aVisible)
+            {
+                tuple->mVisible = aVisible;
+                if (aVisible)
+                {
+                    this->selectTab(i);
+                    this->setVisible(true);
+                }
+                updateMaxScrollPos();
+            }
             break;
         }
     }
@@ -2578,11 +2588,7 @@ void LLTabContainer::setTabVisibility( LLPanel const *aPanel, bool aVisible )
             break;
         }
     }
-
-    if( foundTab )
-        this->setVisible( true );
-    else
-        this->setVisible( false );
+    this->setVisible( foundTab );
 
     updateMaxScrollPos();
 }

@@ -2202,7 +2202,7 @@ bool FSPanelAreaSearchList::onContextMenuItemClick(const LLSD& userdata)
                     // *TODO: Re-enable joystick flycam if we disabled it earlier...  Have to find some form of callback as re-enabling at this point causes the camera motion to not happen. ~Cron
                     //if (fly_cam_status)
                     //{
-                    //  LLViewerJoystick::getInstance()->toggleFlycam();
+                    //  gAgentCamera.toggleFlycam();
                     //}
                 }
                 break;

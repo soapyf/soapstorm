@@ -261,14 +261,13 @@ LLFolderView::LLFolderView(const Params& p)
 // Destroys the object
 LLFolderView::~LLFolderView( void )
 {
-    cancelRenaming();
-
     // The release focus call can potentially call the
     // scrollcontainer, which can potentially be called with a partly
     // destroyed scollcontainer. Just null it out here, and no worries
     // about calling into the invalid scroll container.
     // Same with the renamer.
     mScrollContainer = NULL;
+    cancelRenaming();
     mRenameItem = NULL;
     mRenamer = NULL;
     mStatusTextBox = NULL;
@@ -800,8 +799,8 @@ void LLFolderView::removeSelectedItems()
 {
     if(getVisible() && getEnabled())
     {
-        // just in case we're removing the renaming item.
-        mRenameItem = NULL;
+        // Cancel active rename in case the renaming item is among the selected items
+        cancelRenaming();
 
         // create a temporary structure which we will use to remove
         // items, since the removal will futz with internal data
