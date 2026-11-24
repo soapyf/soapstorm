@@ -25,8 +25,8 @@ Hover your mouse over the options for more help.
    <panel
     name="group_general_panel"
     left="3"
-    top="-408"
-    height="408"
+    top="2"
+    height="440"
     width="467"
     follows="all"
     layout="topleft">
