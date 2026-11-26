@@ -66,7 +66,7 @@ S32 encode_vorbis_file(const std::string& in_fname, const std::string& out_fname
 // </FS:Ansariel>
 
 // <SS:Nexii> splits an over-long PCM wav into temp wav segments no longer than max_clip_time each; equal_splits cuts near-equal parts instead of max-length parts with a shorter tail; encoder fades then de-click the cut points
-S32 split_wav_file(const std::string& in_fname, F32 max_clip_time, bool equal_splits, std::vector<std::string>& out_fnames);
+S32 split_wav_file(const std::string& in_fname, F32 max_clip_time, bool equal_splits, std::vector<std::string>& out_fnames, std::vector<F32>* out_durations = nullptr);
 
 #endif
 

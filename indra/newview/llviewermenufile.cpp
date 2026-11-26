@@ -509,7 +509,8 @@ static void upload_split_sound(const std::string& filename, const LLUUID& dest)
     F32 max_time = LLGridManager::instance().isInSecondLife() ? LLVORBIS_CLIP_MAX_TIME : LLVORBIS_CLIP_MAX_TIME_OPENSIM;
     static LLCachedControl<bool> equal_splits(gSavedSettings, "FSLongSoundUploadEqualSplits", false);
     std::vector<std::string> segments;
-    if (split_wav_file(filename, max_time, equal_splits, segments) != LLVORBISENC_NOERR || segments.empty())
+    std::vector<F32> durations;
+    if (split_wav_file(filename, max_time, equal_splits, segments, &durations) != LLVORBISENC_NOERR || segments.empty())
     {
         LLSD args;
         args["FILE"] = filename;
@@ -528,10 +529,11 @@ static void upload_split_sound(const std::string& filename, const LLUUID& dest)
     for (size_t i = 0; i < segments.size(); ++i)
     {
         std::string part_name = asset_name + llformat(" %02d", (S32)(i + 1));
+        std::string part_desc = (i < durations.size()) ? llformat("%.3fs", durations[i]) : part_name;
         std::shared_ptr<LLNewFileResourceUploadInfo> fileInfo = std::make_shared<LLNewFileResourceUploadInfo>(
             segments[i],
             part_name,
-            part_name, 0,
+            part_desc, 0,
             LLFolderType::FT_NONE, LLInventoryType::IT_NONE,
             LLFloaterPerms::getNextOwnerPerms("Uploads"),
             LLFloaterPerms::getGroupPerms("Uploads"),

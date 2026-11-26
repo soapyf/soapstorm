@@ -520,7 +520,7 @@ S32 encode_vorbis_file(const std::string& in_fname, const std::string& out_fname
 }
 
 // <SS:Nexii> long sound upload: split an over-long PCM wav into temp wav segments, each under max_clip_time; max-length parts by default, near-equal parts when equal_splits
-S32 split_wav_file(const std::string& in_fname, F32 max_clip_time, bool equal_splits, std::vector<std::string>& out_fnames)
+S32 split_wav_file(const std::string& in_fname, F32 max_clip_time, bool equal_splits, std::vector<std::string>& out_fnames, std::vector<F32>* out_durations)
 {
     U16 num_channels = 0;
     U32 sample_rate = 0;
@@ -531,6 +531,10 @@ S32 split_wav_file(const std::string& in_fname, F32 max_clip_time, bool equal_sp
     unsigned char wav_header[44];       /*Flawfinder: ignore*/
 
     out_fnames.clear();
+    if (out_durations)
+    {
+        out_durations->clear();
+    }
 
     LLAPRFile infile;
     infile.open(in_fname, LL_APR_RB);
@@ -641,6 +645,10 @@ S32 split_wav_file(const std::string& in_fname, F32 max_clip_time, bool equal_sp
         }
 
         out_fnames.push_back(out_fname);
+        if (out_durations)
+        {
+            out_durations->push_back((F32)((F64)seg_frames / (F64)sample_rate));
+        }
     }
 
     infile.close();
