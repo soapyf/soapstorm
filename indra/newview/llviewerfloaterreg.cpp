@@ -160,6 +160,7 @@
 #include "llfloatertranslationsettings.h"
 #include "llfloateruipreview.h"
 #include "llfloaterupdateprogress.h"
+#include "ssfloaterimportsettings.h"
 #include "llfloaterwebcontent.h"
 #include "llfloaterwebmodal.h"
 #include "llfloatervoicevolume.h"
@@ -644,6 +645,7 @@ void LLViewerFloaterReg::registerFloaters()
     LLFloaterReg::add("upload_sound", "floater_sound_preview.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSoundPreview>, "upload");
     
     LLFloaterReg::add("update_progress", "floater_update_progress.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterUpdateProgress>);
+    LLFloaterReg::add("import_settings", "floater_import_settings.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<SSFloaterImportSettings>);
 
     LLFloaterReg::add("web_content", "floater_web_content.xml", (LLFloaterBuildFunc)&LLFloaterWebContent::create);
     LLFloaterReg::add("web_modal", "floater_web_modal.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterWebModal>);

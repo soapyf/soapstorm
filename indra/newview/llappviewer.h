@@ -409,6 +409,7 @@ private:
     // <FS:Zi> Backup Settings
 public:
     void setSaveSettingsOnExit(bool state) {mSaveSettingsOnExit = state; };
+    bool isFirstRun() const { return mIsFirstRun; }
 
 private:
     bool mSaveSettingsOnExit;

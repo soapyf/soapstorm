@@ -184,6 +184,7 @@
 #include "llfloaterland.h"
 #include "llfloatertopobjects.h"
 #include "llfloaterworldmap.h"
+#include "ssfloaterimportsettings.h"
 #include "llgesturemgr.h"
 #include "llgroupmgr.h"
 #include "llhudeffecttrail.h"
@@ -1423,6 +1424,13 @@ bool idle_startup()
             //LLPanelLogin::giveFocus();
             FSPanelLogin::giveFocus();
             // </FS:Ansariel> [FS Login Panel]
+
+            static bool sCheckedImportPrompt = false;
+            if (!sCheckedImportPrompt)
+            {
+                sCheckedImportPrompt = true;
+                SSFloaterImportSettings::showIfNeeded();
+            }
 
 
 

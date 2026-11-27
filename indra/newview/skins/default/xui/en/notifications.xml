@@ -14273,6 +14273,30 @@ No valid Firestorm settings found in the selected folder. A Firestorm settings f
 
   <notification
    icon="alertmodal.tga"
+   name="ImportSettingsNotFound"
+   type="alertmodal">
+No valid viewer settings found in the selected folder. A settings folder must contain 'user_settings' or 'settings.xml'.
+    <usetemplate
+     name="okbutton"
+     yestext="OK"/>
+  </notification>
+
+  <notification
+   icon="alertmodal.tga"
+   name="ImportSettingsConfirm"
+   type="alertmodal">
+Importing settings from [DIRECTORY] will replace your current settings and requires a viewer restart.
+
+Do you want to import these settings and quit the viewer now?
+    <tag>confirm</tag>
+    <usetemplate
+     name="okcancelbuttons"
+     notext="Cancel"
+     yestext="OK"/>
+  </notification>
+
+  <notification
+   icon="alertmodal.tga"
    name="RestoreFinished"
    type="alertmodal">
 Restore complete! Please restart your viewer now.

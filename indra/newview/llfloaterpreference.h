@@ -617,8 +617,6 @@ protected:
     // </FS:Zi>
 
     void onClickImportFirestormSettings();
-    void doImportFirestormSettings(const LLSD& notification, const LLSD& response);
-    void changeImportFirestormSettingsPath(const std::vector<std::string>& filenames, std::string proposed_name);
 
 private:
     LOG_CLASS(FSPanelPreferenceBackup);

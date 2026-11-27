@@ -507,6 +507,7 @@ set(viewer_SOURCE_FILES
     llfloatertranslationsettings.cpp
     llfloateruipreview.cpp
     llfloaterupdateprogress.cpp
+    ssfloaterimportsettings.cpp
     llfloaterurlentry.cpp
     llfloatervoicevolume.cpp
     llfloaterwebcontent.cpp
@@ -1440,6 +1441,7 @@ set(viewer_HEADER_FILES
     llfloatertranslationsettings.h
     llfloateruipreview.h
     llfloaterupdateprogress.h
+    ssfloaterimportsettings.h
     llfloaterurlentry.h
     llfloatervoicevolume.h
     llfloaterwebcontent.h

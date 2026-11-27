@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater
+ legacy_header_height="18"
+ can_close="true"
+ can_minimize="false"
+ can_resize="false"
+ positioning="centered"
+ title="Import Settings"
+ height="260"
+ layout="topleft"
+ name="import_settings"
+ width="520">
+    <floater.string name="custom_source_label">
+        Custom Folder
+    </floater.string>
+    <floater.string name="first_run_desc">
+        No existing SoapStorm settings were found. Choose a Firestorm or previous SoapStorm settings folder to import, or start fresh:
+    </floater.string>
+    <floater.string name="manual_desc">
+        Choose a Firestorm or previous SoapStorm settings folder to import. This will replace your current settings and require a restart:
+    </floater.string>
+    <floater.string name="skip_btn_label">
+        Start Fresh
+    </floater.string>
+    <floater.string name="cancel_btn_label">
+        Cancel
+    </floater.string>
+    <floater.string name="no_sources_text">
+        No settings folders detected automatically. Click Browse... to choose one.
+    </floater.string>
+
+    <text
+     type="string"
+     length="1"
+     follows="left|top|right"
+     height="32"
+     layout="topleft"
+     left="14"
+     right="-14"
+     top="24"
+     word_wrap="true"
+     name="import_desc">
+        No existing SoapStorm settings were found. Choose a Firestorm or previous SoapStorm settings folder to import, or start fresh:
+    </text>
+
+    <scroll_list
+     draw_heading="true"
+     follows="all"
+     height="155"
+     layout="topleft"
+     left="14"
+     right="-14"
+     top_pad="8"
+     name="sources_list">
+        <scroll_list.columns
+         label="Source"
+         name="source"
+         width="165" />
+        <scroll_list.columns
+         label="Last Used"
+         name="modified"
+         width="110" />
+        <scroll_list.columns
+         label="Folder"
+         name="path"
+         width="215" />
+    </scroll_list>
+
+    <button
+     follows="left|bottom"
+     height="23"
+     label="Import Selected"
+     layout="topleft"
+     left="14"
+     top_pad="10"
+     width="125"
+     name="import_btn" />
+
+    <button
+     follows="left|bottom"
+     height="23"
+     label="Browse..."
+     layout="topleft"
+     left_pad="8"
+     top_delta="0"
+     width="95"
+     name="browse_btn" />
+
+    <button
+     follows="right|bottom"
+     height="23"
+     label="Start Fresh"
+     layout="topleft"
+     right="-14"
+     top_delta="0"
+     width="105"
+     name="skip_btn" />
+</floater>
