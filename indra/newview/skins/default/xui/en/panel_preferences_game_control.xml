@@ -11,7 +11,7 @@
 <panel
     border="true"
     follows="all"
-    height="460"
+    height="514"
     label="Game Controls"
     layout="topleft"
     left="102"

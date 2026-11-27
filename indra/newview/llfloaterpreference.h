@@ -258,6 +258,8 @@ public:
     void onClickInventoryClearCache();
     // <FS:Ansariel> Clear web browser cache button
     void onClickWebBrowserClearCache();
+    // <FS:Trish> FIRE-33025 Email notification settings button
+    void onClickOpenEmailSettings();
 
     // Hitmarker options floater
     void onClickHitMarkerSettings();

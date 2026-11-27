@@ -2,7 +2,7 @@
 <panel
  border="true"
  follows="all"
- height="480"
+ height="514"
  layout="topleft"
  left="1"
  top="1"
@@ -1651,6 +1651,14 @@
          tool_tip="When checked, you will be able to grab and move objects with your mouse and CTRL key."
          name="FSEnableGrab"
          control_name="EnableGrab"/>
+        <check_box
+         top_pad="8"
+         follows="left|top"
+         height="16"
+         label="Use Ctrl+mouse to move HUDs on screen"
+         tool_tip="When checked, you can hold Ctrl and drag a HUD you can modify to move it across the screen, without opening the build tools."
+         name="FSCtrlDragHUDs"
+         control_name="FSCtrlDragHUDs"/>
         <check_box
          top_pad="8"
          follows="left|top"

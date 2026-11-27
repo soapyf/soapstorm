@@ -180,6 +180,7 @@
 
 		<!-- Chat: Notices -->
 		<panel label="Benachrichtigung" name="ChatNotices">
+			<string name="email_settings_url">https://accounts.secondlife.com/change_email?lang=de-DE</string>
 			<text name="disable_toast_label">
 				Chat-Popups aktivieren für eingehende:
 			</text>
@@ -195,9 +196,7 @@
 			<check_box name="FSOpenIMContainerOnOfflineMessage" label="Gespräche öffnen, wenn eine Offline-Nachricht empfangen wurde"/>
 			<check_box name="FSRestoreOpenIMs" label="Beim Starten offene Instant Messages der letzten Sitzung wiederherstellen"/>
 			<check_box label="IMs per E-Mail zuschicken, wenn ich offline bin ([EMAIL])" name="send_im_to_email"/>
-			<text name="email_settings">
-				[https://accounts.secondlife.com/change_email?lang=de-DE Einstellungen für E-Mail-Benachrichtigungs für Offline-IMs öffnen]
-			</text>
+			<button name="email_settings" label="Einstellungen für E-Mail-Benachrichtigungs für Offline-IMs öffnen..."/>
 			<text name="email_settings_login_to_change">
 				Zum Anpassen der Offline-IM-Benachrichtigung per E-Mail einloggen
 			</text>
@@ -304,6 +303,10 @@
 			<text  name="FSCmdLinePasteCam_txt">
 				Kam.-param. setzen (cmd pos|focus|roll)
 			</text>
+			<text  name="FSCmdLineCamBookmark_txt">
+				Kamera-Lesezeichen (cmd add | go)
+			</text>
+			<line_editor tool_tip="cmd add [Name], cmd follow [Name], cmd followturn [Name]: Aktuelle Ansicht als Lesezeichen setzen. cmd go name: Zu Lesezeichen gehen. cmd print [Name]: Kamera-Link in Chat ausgeben. cmd tour [Name]: Eine Tour aspielen. cmd stop: Tour beenden. cmd list: Lesezeichen auflisten." name="FSCmdLineCamBookmark"/>
 			<text name="FSCmdLineAO_txt">
 				AO ein-/ausschalten (Befehl: cmd on/off)
 			</text>

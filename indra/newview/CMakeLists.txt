@@ -111,6 +111,7 @@ set(viewer_SOURCE_FILES
     fsavatarrenderpersistence.cpp
     fsavatarsearchmenu.cpp
     fsblocklistmenu.cpp
+    fscameralinks.cpp
     fschathistory.cpp
     fschatoptionsmenu.cpp
     fscommon.cpp
@@ -127,6 +128,7 @@ set(viewer_SOURCE_FILES
     fsfloateravatarrendersettings.cpp
     fsfloaterbigpreview.cpp
     fsfloaterblocklist.cpp
+    fsfloatercamerabookmarks.cpp
     fsfloatercontacts.cpp
     fsfloatercontactsetconfiguration.cpp
     fsfloaterexport.cpp
@@ -230,6 +232,7 @@ set(viewer_SOURCE_FILES
     fsscriptlibrary.cpp
     fsscrolllistctrl.cpp
     fsslurlcommand.cpp
+    fstoolhudmove.cpp
     fsvirtualtrackpad.cpp
     fsworldmapmessage.cpp
     lggbeamcolormapfloater.cpp
@@ -1041,6 +1044,7 @@ set(viewer_HEADER_FILES
     fsavatarrenderpersistence.h
     fsavatarsearchmenu.h
     fsblocklistmenu.h
+    fscameralinks.h
     fschathistory.h
     fschatoptionsmenu.h
     fschatparticipants.h
@@ -1058,6 +1062,7 @@ set(viewer_HEADER_FILES
     fsfloateravatarrendersettings.h
     fsfloaterbigpreview.h
     fsfloaterblocklist.h
+    fsfloatercamerabookmarks.h
     fsfloatercontacts.h
     fsfloatercontactsetconfiguration.h
     fsfloaterexport.h
@@ -1159,6 +1164,7 @@ set(viewer_HEADER_FILES
     fsscrolllistctrl.h
     fsslurl.h
     fsslurlcommand.h
+    fstoolhudmove.h
     fsvirtualtrackpad.h
     fsworldmapmessage.h
     lggbeamcolormapfloater.h

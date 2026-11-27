@@ -63,6 +63,7 @@
 #include "llattachmentsmgr.h"
 // [/SL:KB]
 #include "llcompilequeue.h"
+#include "fscameralinks.h" // <FS:Trish/>
 #include "llconsole.h"
 #include "lldebugview.h"
 #include "lldiskcache.h"
@@ -8013,14 +8014,15 @@ void handle_force_delete()
     LLSelectMgr::getInstance()->selectForceDelete();
 }
 
+// [RLVa:Trish] Flycam no longer needs a joystick to be toggled, but RLVa camera restrictions can still block turning it on
 class LLViewEnableJoystickFlycam : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
-        bool new_value = (gSavedSettings.getBOOL("JoystickEnabled") && gSavedSettings.getBOOL("JoystickFlycamEnabled"));
-        return new_value;
+        return LLViewerJoystick::getInstance()->getOverrideCamera() || LLViewerJoystick::isFlycamAllowedByRlv();
     }
 };
+// [/RLVa:Trish]
 
 class LLViewEnableLastChatter : public view_listener_t
 {
@@ -13340,7 +13342,9 @@ void initialize_menus()
     view_listener_t::addMenu(new LLViewCheckToggleUI(), "View.CheckToggleUI"); // <FS:Ansariel> Notification not showing if hiding the UI
 
     view_listener_t::addMenu(new LLViewEnableMouselook(), "View.EnableMouselook");
+// [RLVa:Trish]
     view_listener_t::addMenu(new LLViewEnableJoystickFlycam(), "View.EnableJoystickFlycam");
+// [/RLVa:Trish]
     view_listener_t::addMenu(new LLViewEnableLastChatter(), "View.EnableLastChatter");
 
     view_listener_t::addMenu(new LLViewCheckJoystickFlycam(), "View.CheckJoystickFlycam");
@@ -13435,6 +13439,7 @@ void initialize_menus()
     view_listener_t::addMenu(new LLToolsEnableReleaseKeys(), "Tools.EnableReleaseKeys");
     commit.add("Tools.LookAtSelection", boost::bind(&handle_look_at_selection, _2));
     commit.add("Tools.ScriptInfo",boost::bind(&handle_script_info));
+    commit.add("View.CopyCameraLink", boost::bind(&FSCameraLinks::copyCurrentViewLink)); // <FS:Trish/>
     commit.add("Tools.BuyOrTake", boost::bind(&handle_buy_or_take));
     commit.add("Tools.TakeCopy", boost::bind(&handle_take_copy));
     view_listener_t::addMenu(new LLToolsSaveToObjectInventory(), "Tools.SaveToObjectInventory");
