@@ -2505,7 +2505,7 @@ void LLFloater::updateTitleButtons()
             mButtons[BUTTON_PIN]->setImagePressed(mPinPressedImage);
         }
 
-        if (!getHost() && !isMinimized() && !isDocked())
+        if (!getHost() && !isMinimized() && !isDocked() && mCanPin)
         {
             if (mButtons[BUTTON_MINIMIZE])
             {
@@ -2756,7 +2756,13 @@ void LLFloaterView::reshape(S32 width, S32 height, bool called_from_parent)
             continue;
         }
 
-        if (!floaterp->isMinimized() && floaterp->getCanDrag())
+        // <FS:Zi> Add pin geometry to floater
+        //         There seems to be no can_drag=false floaters at all, so we should be
+        //         good to ignore the draggable status here. This fixes pinned floaters
+        //         behaving weird when the viewer's main window changes size.
+        // if (!floaterp->isMinimized() && floaterp->getCanDrag())
+        if (!floaterp->isMinimized())
+        // </FS:Zi>
         {
             LLRect old_rect = floaterp->getRect();
             floaterp->applyPositioning(NULL, false);
@@ -3771,6 +3777,7 @@ void LLFloater::initFromParams(const LLFloater::Params& p)
     setCanDock(p.can_dock);
     setCanResize(p.can_resize);
     setResizeLimits(p.min_width, p.min_height);
+    setCanPin(p.can_pin);   // <FS:Zi> Add pin geometry to floater
 
     mDragOnLeft = p.can_drag_on_left;
     mHeaderHeight = p.header_height;
