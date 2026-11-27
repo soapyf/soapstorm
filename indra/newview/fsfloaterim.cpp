@@ -137,8 +137,14 @@ FSFloaterIM::FSFloaterIM(const LLUUID& session_id)
     mUnreadMessagesNotificationTextBox(NULL),
     mApplyRect(true),
     mIMFloaterTimer(NULL),
+    mChatServiceLoadingHolder(nullptr),
+    mChatServiceDockedSpacer(nullptr),
     mChatServiceLoadingPanel(nullptr),
-    mChatLoadingVisible(false)
+    mChatServiceLoadingWheel(nullptr),
+    mChatServiceStatusIcon(nullptr),
+    mChatLoadingVisible(false),
+    mChatStatusVisible(false),
+    mChatStatusDocked(false)
 {
     initIMSession(session_id);
 
@@ -1059,7 +1065,14 @@ bool FSFloaterIM::postBuild()
 
     mRecentEmojisUpdatedCallbackConnection = LLFloaterEmojiPicker::setRecentEmojisUpdatedCallback([this](const std::list<llwchar>& recent_emojis_list) { initEmojiRecentPanel(); });
 
+    mChatServiceLoadingHolder = findChild<LLLayoutPanel>("chat_service_loading_lp");
+    mChatServiceDockedSpacer = findChild<LLLayoutPanel>("chat_service_docked_spacer");
     mChatServiceLoadingPanel = getChild<LLPanel>("chat_service_loading");
+    mChatServiceLoadingWheel = findChildView("chat_service_loading_wheel");
+    mChatServiceStatusIcon = findChildView("chat_service_status_icon");
+    mChatServiceSyncingTooltip = hasString("chat_service_syncing_tooltip") ? getString("chat_service_syncing_tooltip") : "Syncing IM chat history...";
+    mChatServiceSyncedTooltip = hasString("chat_service_synced_tooltip") ? getString("chat_service_synced_tooltip") : "IM chat history is synced";
+    updateChatServiceStatus(true);
 
     getChild<LLButton>("send_chat")->setCommitCallback(boost::bind(&FSFloaterIM::sendMsgFromInputEditor, this, CHAT_TYPE_NORMAL));
     getChild<LLButton>("chat_search_btn")->setCommitCallback(boost::bind(&FSFloaterIM::onChatSearchButtonClicked, this));
@@ -1882,24 +1895,67 @@ void FSFloaterIM::sendParticipantsAddedNotification(const uuid_vec_t& uuids)
     sendMsg(getString(uuids.size() > 1 ? "multiple_participants_added" : "participant_added", args));
 }
 
+void FSFloaterIM::updateChatServiceStatus(bool force)
+{
+    static LLCachedControl<bool> showLogHistory(gSavedPerAccountSettings, "LogShowHistory");
+    const bool show_status = mSession && mIsP2PChat && showLogHistory;
+    const bool docked = (getHost() != nullptr);
+    const bool loading =
+        show_status &&
+        (mSession->isChatHistoryLoading() ||
+            LLChatServiceHistory::getSnapshot(mSession->mOtherParticipantID).service_work_active);
+
+    if (!force &&
+        show_status == mChatStatusVisible &&
+        loading == mChatLoadingVisible &&
+        docked == mChatStatusDocked)
+    {
+        return;
+    }
+
+    mChatStatusVisible = show_status;
+    mChatLoadingVisible = loading;
+    mChatStatusDocked = docked;
+
+    if (mChatServiceLoadingHolder)
+    {
+        mChatServiceLoadingHolder->setVisible(show_status);
+    }
+    if (mChatServiceDockedSpacer)
+    {
+        mChatServiceDockedSpacer->setVisible(show_status && docked);
+    }
+
+    if (!mChatServiceLoadingPanel)
+    {
+        return;
+    }
+
+    // Legacy layout fallback (no toolbar holder/steady icon): show panel only while loading.
+    if (!mChatServiceLoadingHolder || !mChatServiceStatusIcon)
+    {
+        mChatServiceLoadingPanel->setVisible(loading);
+        return;
+    }
+
+    mChatServiceLoadingPanel->setVisible(show_status);
+    // The wheel animates inside draw(); hiding it when idle stops that work.
+    if (mChatServiceLoadingWheel)
+    {
+        mChatServiceLoadingWheel->setVisible(loading);
+    }
+    mChatServiceStatusIcon->setVisible(show_status && !loading);
+    if (show_status)
+    {
+        mChatServiceLoadingPanel->setToolTip(loading ? mChatServiceSyncingTooltip : mChatServiceSyncedTooltip);
+    }
+}
+
 void FSFloaterIM::draw()
 {
     // The floater presents both model-owned local reads and account-scoped service
     // work without scheduling either source from draw().
-    static LLCachedControl<bool> showLogHistory(gSavedPerAccountSettings, "LogShowHistory");
-    const bool loading =
-        mSession &&
-        mIsP2PChat &&
-        showLogHistory &&
-        (mSession->isChatHistoryLoading() ||
-            LLChatServiceHistory::getSnapshot(mSession->mOtherParticipantID).service_work_active);
-
-    if (loading != mChatLoadingVisible)
-    {
-        mChatLoadingVisible = loading;
-        // The widget animates in draw(); hiding its panel suspends that work.
-        mChatServiceLoadingPanel->setVisible(loading);
-    }
+    updateChatServiceStatus();
 
     LLFloater::draw();
 }

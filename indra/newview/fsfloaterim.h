@@ -228,6 +228,8 @@ private:
     // Remove the "User is typing..." indicator.
     void removeTypingIndicator(const LLUUID& from_id = LLUUID::null);
 
+    void updateChatServiceStatus(bool force = false);
+
     static void closeHiddenIMToasts();
 
     static void confirmLeaveCallCallback(const LLSD& notification, const LLSD& response);
@@ -275,7 +277,13 @@ private:
     LLLayoutPanel* mEmojiRecentPanel;
     LLTextBox* mEmojiRecentEmptyText;
     LLPanelEmojiComplete* mEmojiRecentIconsCtrl;
+    LLLayoutPanel* mChatServiceLoadingHolder;
+    LLLayoutPanel* mChatServiceDockedSpacer;
     LLPanel* mChatServiceLoadingPanel;
+    LLView* mChatServiceLoadingWheel;
+    LLView* mChatServiceStatusIcon;
+    std::string mChatServiceSyncingTooltip;
+    std::string mChatServiceSyncedTooltip;
 
     std::string mSavedTitle;
     LLUIString mTypingStart;
@@ -312,6 +320,8 @@ private:
     U32 mEmojiHelperLastCallbackFrame{ 0 };
 
     bool mChatLoadingVisible;
+    bool mChatStatusVisible;
+    bool mChatStatusDocked;
 };
 
 class FSFloaterIMTimer : public LLEventTimer
